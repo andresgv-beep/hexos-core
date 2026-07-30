@@ -1,5 +1,37 @@
 # CK v4 — EL NORTE (escrito el 2026-07-29, la noche que Héctor arrancó)
 
+## ✅ ESTADO REAL (actualizado 2026-07-31)
+
+**El proto-CK ya no es papel: es `helios_chat` (repo Hector-engine).**
+Construido y verificado el 2026-07-30:
+
+- Chat multi-turno con continuidad por KV (solo se prefillea el turno nuevo,
+  ~200-450 ms; la historia jamás se reprocesa)
+- System prompt de identidad, prefilleado una vez (el "prefijo permanente")
+- Thinking adaptativo nivel 1: triviales → /no_think; rienda de pensamiento
+  (techo 20/500/1000 + inyección forzada de </think>); rescate de turnos mudos
+- Presupuesto de respuesta por tipo (80/350/1500 visibles, corte en fin de frase)
+- Governor de ritmo: think a tope, texto visible a ritmo de lectura con
+  aceleración progresiva (18→40→libre); /fast
+- Penalty de repetición quirúrgico (jamás tokens especiales — lección: penalizar
+  </think> rompe el cierre del pensamiento)
+- **MEMORIA EPISÓDICA PERSISTENTE (nivel 1)**: al /salir el modelo destila su
+  resumen → ~/.helios/episodic.md con fecha; al arrancar entra al prefijo.
+  Verificado entre procesos: "Hola Andrés, recuerdo que eres el creador..."
+- Memoria explícita determinista: "guarda en memoria: X" y /recuerda escriben
+  a disco sin teatro del modelo; /memoria enseña el diario
+- Framing de confianza (el reflejo "no tengo acceso a datos personales" le
+  ganaba a la memoria cargada) + instrucciones privadas (anti-recitado)
+- Privacidad por capas: código publicable / dueño en ~/.helios/owner /
+  diario fuera de todo repo. Futuro: "exportar limpio" quita bloques 0x5/0x6
+- Motor: sampling 100% GPU (temp = greedy, ~85-95 tok/s), panel HEXOS honesto,
+  helios_chat anuncia COGNITIVE+INFERENCE en el blackboard
+
+Lección madre del día: **cada mecanismo nació de un fallo real en uso, no de
+especulación** — el camino inverso a los contratos v3.
+
+---
+
 ## La tesis (en palabras de Andrés)
 
 > No es hacerlo más listo en el sentido vitaminado a un 200B. Es que sepa en
