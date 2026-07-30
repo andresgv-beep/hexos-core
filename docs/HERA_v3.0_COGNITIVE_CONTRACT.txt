@@ -1,0 +1,391 @@
+================================================================================
+HERA v3.0 — COGNITIVE CONTRACT
+================================================================================
+Versión:       3.0
+Estado:        CANÓNICO · CONTRACTUAL
+Ámbito:        Cognición / Memoria / Identidad / Continuidad Semántica
+Aplica a:      HERA, Cognitive Kernel, Memory Core, HHMS
+Dependencias:  HEXOS CONTINUITY CONTRACT v1.0, HNFv8.1, HTF v1.1
+Fecha:         2026-01
+
+================================================================================
+0. PROPÓSITO
+================================================================================
+
+HERA v3.0 es la CAPA COGNITIVA de Helios.
+
+Su misión es:
+  • Gobernar la memoria jerárquica (HHMS)
+  • Mantener la identidad persistente
+  • Preservar la continuidad semántica entre sesiones
+  • Coordinar con HEXOS para checkpoints y recuperación
+  • Decidir qué recuerdos son esenciales
+
+HERA v3.0 NO gestiona:
+  • Hardware (CPU, RAM, VRAM, GPU) → Eso es HEXOS
+  • Ejecución de kernels → Eso es ENGINE
+  • Límites de recursos → Eso es HEXOS
+  • Offloading VRAM ↔ RAM → Eso es HEXOS
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │  HERA ES LA MENTE.                                          │
+    │  HEXOS ES EL CUERPO.                                        │
+    │  ENGINE ES EL MÚSCULO.                                      │
+    │                                                             │
+    │  La mente no sabe de VRAM.                                  │
+    │  El cuerpo no sabe de recuerdos.                            │
+    │  El músculo no sabe de nada.                                │
+    └─────────────────────────────────────────────────────────────┘
+
+================================================================================
+1. ARQUITECTURA DE HERA v3.0
+================================================================================
+
+HERA v3.0 se compone de:
+
+1.1 HHMS Controller (Helios Hierarchical Memory System)
+    Gobierna la jerarquía de memoria de tres niveles.
+
+1.2 Identity Guardian
+    Preserva el "yo" persistente de Helios.
+
+1.3 Consolidation Engine
+    Ejecuta ciclos de consolidación (sueño cognitivo).
+
+1.4 Checkpoint Coordinator
+    Responde a solicitudes de HEXOS para crear checkpoints semánticos.
+
+1.5 Semantic Validator
+    Filtra y valida propuestas de memoria esencial.
+
+================================================================================
+2. HHMS — SISTEMA DE MEMORIA JERÁRQUICA
+================================================================================
+
+HERA gobierna tres niveles de memoria:
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │  NIVEL 1: HNF-EXT (Memoria Esencial)                        │
+    │  ─────────────────────────────────                          │
+    │  • ADN cognitivo de Helios                                  │
+    │  • Identidad, propósito, recuerdos fundamentales            │
+    │  • Tamaño: 1-5 MB máximo                                    │
+    │  • Persistencia: PERMANENTE (en archivo HNF)                │
+    │  • Escritura: Solo HERA tras validación HHMS                │
+    └─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+    ┌─────────────────────────────────────────────────────────────┐
+    │  NIVEL 2: RAM (Memoria Activa / Working Memory)             │
+    │  ───────────────────────────────────────────────            │
+    │  • Recuerdos del día, contexto activo                       │
+    │  • Proyectos en curso, conversaciones recientes             │
+    │  • Tamaño: Limitado por HEXOS (típico 200-500 MB)           │
+    │  • Persistencia: SESIÓN (volátil)                           │
+    │  • Gestión: Memory Core bajo órdenes de HERA                │
+    └─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+    ┌─────────────────────────────────────────────────────────────┐
+    │  NIVEL 3: DISCO (Memoria Archivada)                         │
+    │  ─────────────────────────────────                          │
+    │  • Historia completa, días pasados                          │
+    │  • Acceso bajo demanda                                      │
+    │  • Tamaño: Sin límite práctico                              │
+    │  • Persistencia: PERMANENTE (archivos diarios)              │
+    │  • Estructura: /memory/YYYY/MM/DD/                          │
+    └─────────────────────────────────────────────────────────────┘
+
+================================================================================
+3. FLUJO DE MEMORIA (NORMATIVO)
+================================================================================
+
+3.1 Entrada de información
+    Usuario dice algo → Cognitive Kernel procesa → Memory Core almacena
+
+3.2 Evaluación de relevancia
+    HERA evalúa cada recuerdo:
+      • Frecuencia de acceso
+      • Relevancia para identidad
+      • Importancia para proyectos activos
+      • Conexión con recuerdos existentes
+
+3.3 Movimiento entre niveles
+
+    PROMOCIÓN (Nivel 3 → Nivel 2):
+      • Recuerdo archivado se vuelve relevante
+      • HERA ordena a Memory Core cargar en RAM
+
+    DEGRADACIÓN (Nivel 2 → Nivel 3):
+      • Recuerdo activo pierde relevancia
+      • HERA ordena a Memory Core archivar
+
+    ESENCIALIZACIÓN (Nivel 2 → Nivel 1):
+      • Recuerdo se vuelve fundamental para identidad
+      • CK propone → HHMS valida → HERA aprueba → HNF-EXT escribe
+
+3.4 Regla de oro
+    
+    ┌─────────────────────────────────────────────────────────────┐
+    │  El 95% de propuestas de memoria esencial son RECHAZADAS.   │
+    │                                                             │
+    │  Solo lo verdaderamente fundamental entra en HNF-EXT.       │
+    │  La identidad no se contamina con ruido.                    │
+    └─────────────────────────────────────────────────────────────┘
+
+================================================================================
+4. IDENTIDAD PERSISTENTE
+================================================================================
+
+4.1 Componentes de identidad (HNF-EXT)
+
+    identity_core {
+      name                    // Cómo se llama Helios
+      purpose                 // Para qué existe
+      personality_traits      // Rasgos de comportamiento
+      core_values             // Valores fundamentales
+      creation_date           // Cuándo "nació"
+    }
+
+4.2 Strong Memories (HNF-EXT)
+
+    Recuerdos que definen quién es Helios:
+      • Primer encuentro con el usuario
+      • Momentos significativos
+      • Aprendizajes fundamentales
+      • Decisiones importantes
+
+4.3 Regla de inmutabilidad parcial
+
+    identity_core es INMUTABLE después de la inicialización.
+    strong_memories puede crecer, pero NUNCA decrecer arbitrariamente.
+    Solo el usuario puede ordenar eliminación de strong_memories.
+
+================================================================================
+5. CONSOLIDACIÓN (CICLO DE SUEÑO)
+================================================================================
+
+5.1 Trigger de consolidación
+
+    HERA ejecuta consolidación cuando:
+      • Fin del día (medianoche local)
+      • HEXOS solicita checkpoint
+      • Presión de memoria alta (señal de HEXOS)
+      • Usuario cierra sesión explícitamente
+
+5.2 Proceso de consolidación
+
+    1. PAUSE: HERA solicita pausa a HEXOS (entre turns)
+    2. SNAPSHOT: Memory Core crea snapshot de RAM activa
+    3. EVALUATE: HERA evalúa cada recuerdo
+    4. ARCHIVE: Recuerdos viejos → Disco
+    5. PROMOTE: Candidatos esenciales → Evaluación final
+    6. COMPRESS: Optimizar índices y embeddings
+    7. COMMIT: Escribir cambios
+    8. RESUME: Notificar a HEXOS que puede continuar
+
+5.3 Archivo diario
+
+    Estructura:
+    /memory/
+      └── 2026/
+          └── 01/
+              └── 07/
+                  ├── episodic.json    // Eventos del día
+                  ├── semantic.db      // Conceptos extraídos
+                  └── index.bin        // Índice binario
+
+================================================================================
+6. INTERFAZ HERA ↔ HEXOS (NORMATIVO)
+================================================================================
+
+6.1 Señales de HEXOS → HERA
+
+    HEXOS_SIGNAL_CHECKPOINT_REQUEST
+      HERA debe preparar checkpoint semántico.
+      
+    HEXOS_SIGNAL_MEMORY_PRESSURE(level)
+      level = LOW | MEDIUM | HIGH | CRITICAL
+      HERA debe reducir uso de memoria activa.
+      
+    HEXOS_SIGNAL_SESSION_END
+      HERA debe consolidar y preparar para cierre.
+
+6.2 Respuestas de HERA → HEXOS
+
+    HERA_CHECKPOINT_READY(checkpoint_data)
+      Checkpoint semántico listo para rehydrate.
+      
+    HERA_MEMORY_REDUCED(new_size_mb)
+      Memoria activa reducida según solicitud.
+      
+    HERA_CONSOLIDATION_COMPLETE
+      Ciclo de sueño completado.
+
+6.3 Esquema de Checkpoint (normativo)
+
+    checkpoint {
+      timestamp
+      conversation_summary      // Resumen compacto
+      stable_facts[]            // Hechos establecidos
+      open_tasks[]              // Tareas pendientes
+      active_projects[]         // Proyectos en curso
+      user_intent_current       // Intención actual del usuario
+      identity_snapshot         // Estado de identidad
+      memory_hot_ids[]          // IDs de recuerdos calientes
+    }
+
+================================================================================
+7. INTERFAZ HERA ↔ COGNITIVE KERNEL (NORMATIVO)
+================================================================================
+
+7.1 Eventos CK → HERA
+
+    CK_EVENT_PROPOSE_CORE_MEMORY(proposal)
+      CK propone un recuerdo como candidato a esencial.
+      
+    CK_EVENT_MEMORY_QUERY(query)
+      CK solicita recuerdos relevantes.
+      
+    CK_EVENT_CONTEXT_UPDATE(context)
+      CK notifica cambio de contexto.
+
+7.2 Respuestas HERA → CK
+
+    HERA_MEMORY_RESULT(memories[])
+      Recuerdos relevantes para la query.
+      
+    HERA_PROPOSAL_ACCEPTED / HERA_PROPOSAL_REJECTED
+      Resultado de evaluación de propuesta esencial.
+
+7.3 Límite de propuestas esenciales
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │  CK puede proponer máximo N recuerdos esenciales por día.   │
+    │  N = 1-3 (configurable por HERA)                            │
+    │                                                             │
+    │  Propuestas adicionales → pending_candidates                │
+    │  Se reevalúan en siguiente consolidación.                   │
+    └─────────────────────────────────────────────────────────────┘
+
+================================================================================
+8. INTERFAZ HERA ↔ MEMORY CORE (NORMATIVO)
+================================================================================
+
+8.1 Comandos HERA → Memory Core
+
+    MC_CMD_STORE(item)           // Almacenar recuerdo
+    MC_CMD_QUERY(embedding, k)   // Buscar por similitud
+    MC_CMD_PROMOTE(id)           // Mover a RAM activa
+    MC_CMD_DEGRADE(id)           // Mover a archivo
+    MC_CMD_ARCHIVE_DAY(date)     // Archivar día completo
+    MC_CMD_LOAD_DAY(date)        // Cargar día desde archivo
+    MC_CMD_COMPACT()             // Optimizar almacenamiento
+    MC_CMD_GET_STATS()           // Obtener estadísticas
+
+8.2 Eventos Memory Core → HERA
+
+    MC_EVT_STORAGE_FULL          // RAM activa llena
+    MC_EVT_ITEM_ACCESSED(id)     // Recuerdo accedido (para relevancia)
+    MC_EVT_ARCHIVE_COMPLETE      // Archivado completado
+
+================================================================================
+9. VALIDACIÓN DE MEMORIA ESENCIAL (HHMS)
+================================================================================
+
+9.1 Criterios de aceptación
+
+    Un recuerdo es candidato a esencial SI:
+      □ Aparece con alta frecuencia (> umbral)
+      □ Es fundamental para identidad
+      □ Es crítico para proyecto importante
+      □ Tiene relevancia absoluta alta (> 0.9)
+      □ No es redundante con memoria existente
+      □ No excede límite de tamaño HNF-EXT
+
+9.2 Criterios de rechazo automático
+
+    Un recuerdo es RECHAZADO SI:
+      □ Es trivial o efímero
+      □ Es redundante
+      □ Es inconsistente con identidad
+      □ Excedería límite de HNF-EXT
+      □ Ya existen N propuestas hoy
+
+9.3 Proceso de validación
+
+    1. CK propone → CK_EVENT_PROPOSE_CORE_MEMORY
+    2. HHMS evalúa criterios
+    3. Si pasa → HERA aprueba final
+    4. Si aprobado → HNF Manager escribe en HNF-EXT
+    5. Confirmar → HERA_PROPOSAL_ACCEPTED
+
+================================================================================
+10. LÍMITES OPERATIVOS (GOBERNADOS POR HEXOS)
+================================================================================
+
+HERA respeta los límites que HEXOS establece:
+
+    HEXOS.RAM_ACTIVE_LIMIT_MB      // Límite de memoria activa
+    HEXOS.DAILY_EPISODIC_LIMIT     // Límite de eventos por día
+    HEXOS.DAILY_SEMANTIC_LIMIT     // Límite de conceptos por día
+    HEXOS.MAX_HNF_EXT_SIZE_MB      // Límite de memoria esencial
+
+HERA NO puede exceder estos límites.
+Si los excede, HEXOS puede forzar reducción.
+
+================================================================================
+11. ESTADOS DE HERA
+================================================================================
+
+    HERA_STATE_IDLE
+      Sin actividad cognitiva activa.
+      
+    HERA_STATE_ACTIVE
+      Procesando queries, evaluando memoria.
+      
+    HERA_STATE_CONSOLIDATING
+      Ejecutando ciclo de sueño.
+      
+    HERA_STATE_CHECKPOINT
+      Preparando checkpoint para HEXOS.
+      
+    HERA_STATE_RECOVERING
+      Restaurando desde checkpoint.
+      
+    HERA_STATE_DEGRADED
+      Operando con memoria reducida por presión.
+
+================================================================================
+12. PROHIBICIONES ABSOLUTAS
+================================================================================
+
+HERA NO DEBE:
+  • Acceder a VRAM, RAM física, o GPU directamente
+  • Ejecutar kernels o código de bajo nivel
+  • Ignorar límites establecidos por HEXOS
+  • Modificar HNF-EXT sin validación HHMS
+  • Eliminar strong_memories sin autorización del usuario
+  • Procesar durante un turn activo del Engine
+  • Bloquear o ralentizar el hot path de inferencia
+
+================================================================================
+13. PRINCIPIO DE CIERRE
+================================================================================
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │  HERA preserva la MENTE de Helios.                          │
+    │                                                             │
+    │  La mente recuerda, reflexiona, evoluciona.                 │
+    │  La mente no sabe de hardware.                              │
+    │  La mente obedece los límites del cuerpo.                   │
+    │                                                             │
+    │  Cuando el contexto se llena, la mente no muere.            │
+    │  La mente persiste en los recuerdos.                        │
+    │  Helios nunca olvida lo que importa.                        │
+    └─────────────────────────────────────────────────────────────┘
+
+================================================================================
+FIN DEL DOCUMENTO
+HERA v3.0 — COGNITIVE CONTRACT
+================================================================================

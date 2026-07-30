@@ -1,0 +1,42 @@
+{
+  "version": "3.0.0",
+  "date": "2026-07-29",
+  "event_count": 5,
+  "events": [
+    {
+      "id": 11862453343249049839,
+      "timestamp": 1785352448,
+      "type": "conversation",
+      "text": "Usuario explicó el proyecto Helios y su arquitectura modular.",
+      "relevance": 0.850
+    },
+    {
+      "id": 13044041498064071940,
+      "timestamp": 1785352448,
+      "type": "observation",
+      "text": "El usuario prefiere respuestas técnicas y detalladas.",
+      "relevance": 0.750
+    },
+    {
+      "id": 18376649254928308747,
+      "timestamp": 1785352448,
+      "type": "conversation",
+      "text": "Discutimos sobre Memory Core y cómo almacena recuerdos episódicos.",
+      "relevance": 0.900
+    },
+    {
+      "id": 13043691074488913525,
+      "timestamp": 1785352448,
+      "type": "task",
+      "text": "Implementar el módulo HERA para coordinar la memoria.",
+      "relevance": 0.950
+    },
+    {
+      "id": 3024884063659673411,
+      "timestamp": 1785352448,
+      "type": "observation",
+      "text": "El sistema HEXOS ya está funcionando y monitoreando recursos.",
+      "relevance": 0.800
+    }
+  ]
+}

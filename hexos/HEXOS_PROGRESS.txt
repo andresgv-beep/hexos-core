@@ -1,0 +1,542 @@
+================================================================================
+HEXOS - HELIOS EXECUTIVE OPERATING SYSTEM
+DOCUMENTO DE PROGRESO v2.5
+================================================================================
+
+Fecha: 2026-01-17
+Version: 2.5
+Autor: Andres / Claude
+
+"El cuerpo que protege la mente"
+
+================================================================================
+1. VISION GENERAL
+================================================================================
+
+HEXOS es el kernel ejecutivo del sistema HELIOS. Su funcion es:
+- Gestionar recursos de hardware (GPU, RAM, CPU)
+- Proporcionar telemetria en tiempo real
+- Coordinar modulos cognitivos via IPC
+- Reservar y administrar memoria VRAM/RAM
+
+HEXOS NO ejecuta inferencia directamente - es el "cuerpo" que protege
+y coordina los modulos cognitivos (Cognitive Kernel, Memory Core, etc).
+
+================================================================================
+2. ARQUITECTURA DE ARCHIVOS
+================================================================================
+
+hexos/
+├── include/
+│   ├── hexos.h              # API publica principal
+│   ├── hexos_types.h        # Estructuras y tipos (405 lineas)
+│   ├── hexos_hw.h           # API deteccion hardware
+│   ├── hexos_ipc.h          # API IPC Bus (202 lineas)
+│   ├── hexos_telemetry.h    # API telemetria
+│   └── hexos_log.h          # Sistema de logging
+├── src/
+│   ├── core/
+│   │   ├── main.c           # Boot sequence, REPL, dashboard (~750 lineas)
+│   │   └── log.c            # Implementacion logging
+│   ├── hw/
+│   │   ├── detect.c         # Deteccion general
+│   │   ├── cpu.c            # Deteccion CPU (real)
+│   │   ├── ram.c            # Deteccion RAM (real)
+│   │   ├── storage.c        # Deteccion storage (real)
+│   │   └── gpu_nvml.c       # Deteccion GPU via NVML (real)
+│   ├── telemetry/
+│   │   └── telemetry.c      # Telemetria threaded (real)
+│   └── ipc/
+│       └── ipc.c            # IPC Bus shared memory (real)
+├── tools/
+│   └── hexos_ipc_test.c     # Simulador Cognitive Kernel
+└── Makefile
+
+================================================================================
+3. COMPONENTES IMPLEMENTADOS (REAL)
+================================================================================
+
+------------------------------------------------------------------------------
+3.1 BOOT SEQUENCE (6 FASES)
+------------------------------------------------------------------------------
+Estado: IMPLEMENTADO Y FUNCIONAL
+
+Fase 1 - Hardware Detection:
+  - Deteccion CPU: vendor, modelo, cores, frecuencia, cache, AVX2/AVX512
+  - Deteccion RAM: total, disponible, tipo DDR4/DDR5
+  - Deteccion Storage: tipo (HDD/SSD/NVMe), espacio libre
+  - Deteccion GPU: via NVML (libnvidia-ml.so)
+    * Nombre, driver version
+    * VRAM total/libre
+    * Compute capability
+    * SM count, CUDA cores, Tensor cores
+    * PCIe gen/width/bandwidth
+    * Power limit, temp limit
+    * Caracteristicas: FP16, BF16, INT8, TF32
+
+Fase 2 - Hardware Contract:
+  - Genera contract_id unico (hash del hardware)
+  - Sella contrato (inmutable post-boot)
+  - Muestra resumen del sistema
+
+Fase 3 - Module Attestation:
+  - Verifica integridad de modulos (demo - lista fija)
+  - Modulos: hnf_loader, memory_core, cognitive_kernel, predictive_mem
+
+Fase 4 - Resource Allocation:
+  - Calcula VRAM budget segun perfil:
+    * BALANCED: 60% model, 30% KV, 8% workspace, 2% reserve
+    * LOW_VRAM: 70% model, 20% KV, 8% workspace, 2% reserve
+    * PERFORMANCE: 55% model, 35% KV, 8% workspace, 2% reserve
+  - Muestra barra visual del budget
+
+Fase 5 - Runtime Initialization:
+  - Inicializa IPC Bus (REAL - shared memory)
+  - CUDA Memory Pools (DEMO - no cudaMalloc real)
+  - Prepara interfaz Cognitive Kernel
+
+Fase 6 - HELIOS Activation:
+  - Muestra mensaje CONTINUITY (via IPC si disponible)
+  - Estado de modulos cognitivos
+
+------------------------------------------------------------------------------
+3.2 DETECCION DE HARDWARE
+------------------------------------------------------------------------------
+Estado: IMPLEMENTADO Y FUNCIONAL (100% REAL)
+
+CPU (src/hw/cpu.c):
+  - Lee /proc/cpuinfo
+  - Detecta vendor (Intel/AMD)
+  - Cuenta cores fisicos/logicos
+  - Lee frecuencias base/max
+  - Detecta AVX2, AVX512, AMX
+
+RAM (src/hw/ram.c):
+  - Lee /proc/meminfo
+  - Total, disponible, buffers, cached
+  - Calcula usable y spillover_max
+
+Storage (src/hw/storage.c):
+  - Usa statvfs() para espacio libre
+  - Detecta tipo via /sys/block/*/queue/rotational
+  - Clasifica: HDD, SSD, NVMe
+
+GPU (src/hw/gpu_nvml.c):
+  - Carga dinamica de libnvidia-ml.so (dlopen)
+  - No requiere CUDA SDK instalado
+  - Funciones NVML usadas:
+    * nvmlInit_v2
+    * nvmlDeviceGetCount_v2
+    * nvmlDeviceGetHandleByIndex_v2
+    * nvmlDeviceGetName
+    * nvmlDeviceGetMemoryInfo
+    * nvmlDeviceGetCudaComputeCapability
+    * nvmlDeviceGetNumGpuCores
+    * nvmlDeviceGetPciInfo_v3
+    * nvmlDeviceGetPowerManagementLimit
+    * nvmlDeviceGetTemperatureThreshold
+    * nvmlSystemGetDriverVersion
+  - Fallback simulado si NVML no disponible
+
+------------------------------------------------------------------------------
+3.3 TELEMETRIA EN TIEMPO REAL
+------------------------------------------------------------------------------
+Estado: IMPLEMENTADO Y FUNCIONAL (100% REAL)
+
+Arquitectura:
+  - Thread dedicado actualizando cada 500ms
+  - Mutex para acceso thread-safe
+  - Historial circular de 60 muestras
+
+Metricas GPU (via NVML):
+  - nvmlDeviceGetTemperature -> temperatura actual
+  - nvmlDeviceGetPowerUsage -> consumo watts
+  - nvmlDeviceGetUtilizationRates -> % utilizacion
+  - nvmlDeviceGetMemoryInfo -> VRAM usado/libre
+
+Metricas RAM:
+  - Lee /proc/meminfo en cada tick
+  - Total, usado, disponible
+
+Metricas CPU:
+  - Lee /proc/stat
+  - Calcula % utilizacion entre ticks
+
+Snapshot (telemetry_snapshot_t):
+  - gpu_temp_c, gpu_power_w, gpu_util_pct
+  - vram_used_mb, vram_total_mb
+  - ram_used_mb, ram_total_mb, ram_available_mb
+  - cpu_util_pct
+  - uptime_ms
+  - gpu_healthy, thermal_throttle
+  - engine_running, tokens_per_sec (via IPC)
+  - spillover_active, predictive_armed (via IPC)
+
+------------------------------------------------------------------------------
+3.4 IPC BUS (INTER-PROCESS COMMUNICATION)
+------------------------------------------------------------------------------
+Estado: IMPLEMENTADO Y FUNCIONAL (100% REAL)
+
+Ubicacion: /dev/shm/hexos_state (POSIX shared memory)
+
+Estructura compartida (hexos_shared_state_t):
+  Header:
+    - magic: 0x4845584F ("HEXO")
+    - version: 1
+    - last_update_ns: timestamp nanosegundos
+
+  HEXOS State:
+    - hexos_running: bool
+    - hexos_state: INIT/RUNNING/DEGRADED/etc
+    - profile: BALANCED/LOW_VRAM/PERFORMANCE
+    - modules_connected: bitmask
+
+  Cognitive Kernel State:
+    - running: bool
+    - state: IDLE/RUNNING/ERROR
+    - tokens_per_sec: float
+    - queue_depth: uint32
+    - active_ctx_id: uint32
+    - total_tokens: uint64
+
+  Memory Core State:
+    - initialized: bool
+    - spillover_active: bool
+    - episodic_count: uint32
+    - identity_hash: uint32
+    - continuity_text[256]: mensaje CONTINUITY
+
+  Resources:
+    - vram_pressure: 0-100
+    - ram_pressure: 0-100
+    - thermal_state: OK/WARM/HOT/CRITICAL
+    - vram_budget_model_mb
+    - vram_budget_kv_mb
+    - vram_budget_workspace_mb
+
+  Predictive:
+    - armed: bool
+    - active: bool
+    - predictions_queued: uint32
+    - hit_rate: float 0.0-1.0
+
+API:
+  - hexos_ipc_init(): HEXOS crea shared memory
+  - hexos_ipc_connect(): Modulos se conectan
+  - hexos_ipc_shutdown(): Limpieza
+  - hexos_ipc_update_cognitive(): Actualiza estado CK
+  - hexos_ipc_update_memory(): Actualiza estado MC
+  - hexos_ipc_update_predictive(): Actualiza predictive
+  - hexos_ipc_module_connected(): Verifica conexion
+
+Message Queue:
+  - Definido en header (hexos_message_t)
+  - Implementacion: PLACEHOLDER (no funcional aun)
+
+------------------------------------------------------------------------------
+3.5 DASHBOARD INTERACTIVO
+------------------------------------------------------------------------------
+Estado: IMPLEMENTADO Y FUNCIONAL
+
+Caracteristicas:
+  - Usa alternate screen buffer (\033[?1049h/l)
+  - Terminal en modo raw (sin echo, sin buffering)
+  - Refresco cada 500ms
+  - Ignora scroll, mouse, resize
+  - Solo responde a 'q' para salir
+
+Secciones mostradas:
+  - Header con uptime
+  - GPU: temp, power, util, state, VRAM con barra
+  - RAM: used/total con barra, spillover state
+  - CPU: util con barra, state
+  - RUNTIME: engine state, tokens/s, queue, predictive
+  - STATUS: nominal/throttle, GPU health, memory state
+
+Colores ANSI:
+  - Verde: valores normales
+  - Amarillo: warnings
+  - Rojo: errores/critico
+
+------------------------------------------------------------------------------
+3.6 REPL (COMMAND LINE)
+------------------------------------------------------------------------------
+Estado: IMPLEMENTADO Y FUNCIONAL
+
+Comandos disponibles:
+  help   - Muestra ayuda
+  status - Estado actual del sistema
+  dash   - Dashboard live (q para salir)
+  gpu    - Informacion detallada GPU
+  mem    - Informacion memoria VRAM/RAM
+  ipc    - Estado del IPC Bus y modulos conectados
+  quit   - Shutdown HEXOS
+
+------------------------------------------------------------------------------
+3.7 HERRAMIENTA DE TEST IPC
+------------------------------------------------------------------------------
+Estado: IMPLEMENTADO (tools/hexos_ipc_test.c)
+
+Funcion:
+  - Simula un Cognitive Kernel conectandose a HEXOS
+  - Se conecta al shared memory existente
+  - Actualiza tokens/s, queue_depth, engine_state
+  - Actualiza mensaje CONTINUITY
+  - Simula patrones de actividad (bursts)
+
+Uso:
+  Terminal 1: ./bin/hexos
+  Terminal 2: ./bin/hexos_ipc_test
+
+================================================================================
+4. COMPONENTES PENDIENTES (NO IMPLEMENTADOS)
+================================================================================
+
+------------------------------------------------------------------------------
+4.1 CUDA MEMORY POOLS
+------------------------------------------------------------------------------
+Estado: DEMO (solo calcula budget, no reserva memoria real)
+
+Pendiente:
+  - cudaMalloc() para reservar VRAM real
+  - Pool para model weights
+  - Pool para KV cache
+  - Pool para workspace
+  - Gestion de fragmentacion
+  - Spillover automatico RAM cuando VRAM llena
+
+Nota: Requiere CUDA toolkit instalado o usar driver API directamente
+
+------------------------------------------------------------------------------
+4.2 MODULE LOADER (DYNAMIC .so)
+------------------------------------------------------------------------------
+Estado: NO IMPLEMENTADO
+
+Pendiente:
+  - dlopen() para cargar modulos .so
+  - ABI versionado para compatibilidad
+  - Interfaz estandar de modulo:
+    * module_init()
+    * module_shutdown()
+    * module_get_info()
+  - Hot-reload de modulos
+  - Quarantine de modulos fallidos
+
+------------------------------------------------------------------------------
+4.3 MESSAGE QUEUE IPC
+------------------------------------------------------------------------------
+Estado: PLACEHOLDER (funciones definidas, no implementadas)
+
+Pendiente:
+  - Implementar con POSIX message queues (mq_open, mq_send, mq_receive)
+  - O Unix domain sockets
+  - Mensajes definidos:
+    * SHUTDOWN, PAUSE, RESUME
+    * PROFILE_CHANGE, VRAM_PRESSURE
+    * MODULE_READY, MODULE_ERROR
+    * INFERENCE_START, INFERENCE_DONE
+    * CONTEXT_SWITCH
+
+------------------------------------------------------------------------------
+4.4 NETWORK / REMOTE MONITORING
+------------------------------------------------------------------------------
+Estado: NO IMPLEMENTADO
+
+Pendiente:
+  - Socket TCP para monitoring remoto
+  - API REST o WebSocket
+  - Exportar metricas (Prometheus format?)
+
+------------------------------------------------------------------------------
+4.5 PERSISTENCE / LOGGING
+------------------------------------------------------------------------------
+Estado: NO IMPLEMENTADO
+
+Pendiente:
+  - Logging a archivo
+  - Rotacion de logs
+  - Crash dumps
+  - Estado persistente entre reinicios
+
+------------------------------------------------------------------------------
+4.6 MULTI-GPU
+------------------------------------------------------------------------------
+Estado: PARCIALMENTE IMPLEMENTADO
+
+Implementado:
+  - Deteccion de multiples GPUs
+  - Estructuras para 8 GPUs max
+
+Pendiente:
+  - Distribucion de carga entre GPUs
+  - NVLink detection y uso
+  - Peer-to-peer memory access
+  - Budget split entre GPUs
+
+------------------------------------------------------------------------------
+4.7 PERFILES DINAMICOS
+------------------------------------------------------------------------------
+Estado: PARCIALMENTE IMPLEMENTADO
+
+Implementado:
+  - Definicion de perfiles (BALANCED, LOW_VRAM, PERFORMANCE, STABLE_LONGCTX)
+  - Calculo de budget segun perfil
+
+Pendiente:
+  - Cambio de perfil en runtime
+  - Auto-ajuste segun carga
+  - Notificacion a modulos via IPC
+
+================================================================================
+5. DEPENDENCIAS
+================================================================================
+
+Compilacion:
+  - GCC con C11
+  - pthreads (-lpthread)
+  - librt (-lrt) para shared memory
+  - libdl (-ldl) para dlopen
+  - libm (-lm) solo para hexos_ipc_test
+
+Runtime:
+  - Linux (Ubuntu 24 testeado)
+  - libnvidia-ml.so (driver NVIDIA) - opcional, fallback simulado
+
+No requiere:
+  - CUDA Toolkit (usa NVML via dlopen)
+  - Python
+  - Dependencias externas
+
+================================================================================
+6. COMPILACION Y USO
+================================================================================
+
+Compilar:
+  cd hexos
+  make              # Compila hexos
+  make tools        # Compila hexos_ipc_test
+
+Ejecutar:
+  ./bin/hexos
+
+Comandos en REPL:
+  hexos> help
+  hexos> status
+  hexos> dash
+  hexos> gpu
+  hexos> mem
+  hexos> ipc
+  hexos> quit
+
+Test IPC (en otro terminal):
+  ./bin/hexos_ipc_test
+
+================================================================================
+7. ESTRUCTURAS DE DATOS PRINCIPALES
+================================================================================
+
+hexos_context_t:
+  - session_info_t session
+  - hardware_contract_t hw_contract
+  - vram_budget_t vram_budget
+  - dynamic_state_t dynamic
+  - boot_timing_t boot_timing
+  - module_info_t modules[16]
+  - hexos_event_t events[100]
+  - flags: initialized, running, console_active
+
+hardware_contract_t:
+  - cpu_info_t cpu
+  - ram_info_t ram
+  - gpu_info_t gpus[8]
+  - storage_info_t storage
+  - network_info_t network
+  - total_vram_mb, primary_gpu_idx
+  - flags: has_cuda, has_multi_gpu, has_nvlink, sealed
+
+hexos_shared_state_t (IPC):
+  - header (magic, version, timestamp)
+  - hexos state
+  - cognitive kernel state
+  - memory core state
+  - resource pressure
+  - predictive state
+
+telemetry_snapshot_t:
+  - GPU metrics (temp, power, util, vram)
+  - RAM metrics (used, available)
+  - CPU metrics (util)
+  - Runtime metrics (engine, tokens/s, queue)
+  - Health flags
+
+================================================================================
+8. INTEGRACION CON HELIOS
+================================================================================
+
+HEXOS es el componente base del stack HELIOS:
+
+  +---------------------------------------------------+
+  |                    HELIOS                         |
+  |  +---------------------------------------------+  |
+  |  |            Cognitive Kernel                 |  |
+  |  |  (inferencia, generacion, razonamiento)    |  |
+  |  +---------------------------------------------+  |
+  |  +---------------------------------------------+  |
+  |  |             Memory Core                     |  |
+  |  |  (HNF-EXT, episodic, CONTINUITY)           |  |
+  |  +---------------------------------------------+  |
+  |  +---------------------------------------------+  |
+  |  |           Predictive Memory                 |  |
+  |  |  (prediccion, cache, prefetch)             |  |
+  |  +---------------------------------------------+  |
+  |                       |                           |
+  |                   IPC Bus                         |
+  |                       |                           |
+  |  +---------------------------------------------+  |
+  |  |                 HEXOS                       |  |
+  |  |  (hardware, telemetry, resource mgmt)      |  |
+  |  +---------------------------------------------+  |
+  +---------------------------------------------------+
+                          |
+                      Hardware
+              (GPU, RAM, CPU, Storage)
+
+El Cognitive Kernel y Memory Core se conectan a HEXOS via IPC:
+  1. HEXOS inicia y crea /dev/shm/hexos_state
+  2. Modulos llaman hexos_ipc_connect()
+  3. Modulos actualizan su estado en shared memory
+  4. HEXOS lee estado para dashboard y monitoring
+  5. HEXOS envia mensajes de control (shutdown, pause, etc)
+
+================================================================================
+9. PROXIMOS PASOS RECOMENDADOS
+================================================================================
+
+Prioridad Alta:
+  1. CUDA Memory Pools reales (requiere CUDA o driver API)
+  2. Message Queue IPC funcional
+  3. Integracion con runtime Python existente
+
+Prioridad Media:
+  4. Module loader (.so)
+  5. Logging persistente
+  6. Cambio de perfil dinamico
+
+Prioridad Baja:
+  7. Multi-GPU load balancing
+  8. Remote monitoring
+  9. Hot-reload de modulos
+
+================================================================================
+10. NOTAS TECNICAS
+================================================================================
+
+- HEXOS corre 100% en CPU, no usa CUDA directamente
+- La telemetria GPU usa NVML (libreria de management, no compute)
+- El IPC usa POSIX shared memory (/dev/shm) - zero-copy
+- El dashboard usa escape sequences ANSI estandar
+- Compilado con -O2 para produccion, -g para debug
+
+================================================================================
+FIN DEL DOCUMENTO
+================================================================================

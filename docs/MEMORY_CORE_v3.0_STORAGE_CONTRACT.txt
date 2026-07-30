@@ -1,0 +1,492 @@
+================================================================================
+MEMORY CORE v3.0 — STORAGE CONTRACT
+================================================================================
+Versión:       3.0
+Estado:        CANÓNICO · CONTRACTUAL
+Ámbito:        Almacenamiento / Indexación / Archivo de Memoria
+Aplica a:      Memory Core, HERA, Cognitive Kernel
+Dependencias:  HERA v3.0, HEXOS CONTINUITY CONTRACT v1.0, HNFv8.1
+Fecha:         2026-01
+
+================================================================================
+0. PROPÓSITO
+================================================================================
+
+Memory Core es el SUBSISTEMA DE ALMACENAMIENTO de memoria de Helios.
+
+Su misión es:
+  • Almacenar eventos, conceptos y estados
+  • Indexar y organizar la memoria
+  • Ejecutar búsquedas semánticas
+  • Mover datos entre niveles (RAM ↔ Disco)
+  • Preparar candidatos de memoria esencial
+  • Mantener coherencia de datos
+
+Memory Core NO decide:
+  • Qué recuerdos son importantes → Eso es HERA
+  • Qué se promueve o degrada → Eso es HERA
+  • Qué entra en HNF-EXT → Eso es HERA
+  • Límites de recursos → Eso es HEXOS (vía HERA)
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │  Memory Core es el DISCO DURO de la mente.                  │
+    │  HERA es el SISTEMA OPERATIVO de la memoria.                │
+    │                                                             │
+    │  El disco almacena.                                         │
+    │  El SO decide qué guardar, qué borrar, qué mover.           │
+    └─────────────────────────────────────────────────────────────┘
+
+================================================================================
+1. ARQUITECTURA
+================================================================================
+
+    MemoryCore v3.0
+     │
+     ├── EpisodicStore        // Eventos explícitos (qué pasó)
+     │
+     ├── SemanticStore        // Conceptos y embeddings (qué significa)
+     │
+     ├── MemoryIndex          // Índice binario de navegación
+     │
+     ├── DayArchiveManager    // Gestión de archivos diarios
+     │
+     └── QueryEngine          // Motor de búsqueda semántica
+
+================================================================================
+2. NIVELES DE ALMACENAMIENTO
+================================================================================
+
+Memory Core implementa almacenamiento para los 3 niveles de HHMS:
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │  NIVEL 1: HNF-EXT (Solo lectura para Memory Core)           │
+    │  ─────────────────────────────────────────────              │
+    │  Memory Core PUEDE leer de HNF-EXT.                         │
+    │  Memory Core NO PUEDE escribir en HNF-EXT.                  │
+    │  Solo prepara candidatos → HERA decide → HNF Manager escribe│
+    └─────────────────────────────────────────────────────────────┘
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │  NIVEL 2: RAM (Memoria Activa)                              │
+    │  ──────────────────────────────                             │
+    │  Almacenamiento: En memoria del proceso                     │
+    │  Estructuras: EpisodicStore + SemanticStore + MemoryIndex   │
+    │  Persistencia: Volátil (se pierde si el proceso muere)      │
+    │  Límite: Definido por HEXOS.RAM_ACTIVE_LIMIT_MB             │
+    └─────────────────────────────────────────────────────────────┘
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │  NIVEL 3: DISCO (Memoria Archivada)                         │
+    │  ─────────────────────────────────                          │
+    │  Almacenamiento: Sistema de archivos                        │
+    │  Estructura: /memory/YYYY/MM/DD/                            │
+    │  Persistencia: Permanente                                   │
+    │  Límite: Sin límite práctico (espacio en disco)             │
+    └─────────────────────────────────────────────────────────────┘
+
+================================================================================
+3. ESTRUCTURAS DE DATOS
+================================================================================
+
+3.1 MemoryItem (unidad básica)
+────────────────────────────────────────────────────────────────────────────────
+
+    struct MemoryItem {
+        id:             u64         // ID único (hash)
+        type:           u8          // EPISODIC=0, SEMANTIC=1, PROJECT=2
+        timestamp:      i64         // Unix timestamp (creación)
+        last_access:    i64         // Unix timestamp (último acceso)
+        access_count:   u32         // Veces accedido
+        relevance:      f32         // 0.0 - 1.0
+        content_hash:   u64         // Hash del contenido
+        embedding_id:   u64         // Referencia a embedding (si existe)
+        flags:          u16         // Flags de estado
+        reserved:       u16         // Padding
+    }
+    
+    // sizeof(MemoryItem) = 48 bytes (alineado)
+
+    Flags:
+        FLAG_ACTIVE       = 0x0001  // En RAM activa
+        FLAG_ARCHIVED     = 0x0002  // En disco
+        FLAG_CANDIDATE    = 0x0004  // Candidato a esencial
+        FLAG_ESSENTIAL    = 0x0008  // Ya en HNF-EXT (solo referencia)
+        FLAG_PINNED       = 0x0010  // No degradar automáticamente
+        FLAG_DIRTY        = 0x0020  // Modificado, pendiente de sync
+
+3.2 MemoryIndex (index.bin)
+────────────────────────────────────────────────────────────────────────────────
+
+Archivo binario compacto para navegación rápida.
+
+    Header (64 bytes):
+        magic:          u32         // 0x4D494458 ("MIDX")
+        version:        u16         // 0x0300 (v3.0)
+        flags:          u16         // Reserved
+        item_count:     u64         // Número de items
+        created:        i64         // Timestamp creación
+        modified:       i64         // Timestamp última modificación
+        checksum:       u64         // CRC64 del contenido
+        reserved:       [u8; 24]    // Padding
+    
+    Body:
+        items:          [MemoryItem; item_count]
+
+3.3 EpisodicStore (episodic.json)
+────────────────────────────────────────────────────────────────────────────────
+
+Recuerdos de eventos explícitos.
+
+    {
+      "version": "3.0",
+      "date": "2026-01-07",
+      "events": [
+        {
+          "id": 12345678901234,
+          "timestamp": 1736265600,
+          "type": "conversation",
+          "text": "Usuario explicó el proyecto Helios...",
+          "tags": ["helios", "arquitectura", "hnf"],
+          "entities": ["Helios", "HNFv8.1", "HEXOS"],
+          "relevance": 0.85,
+          "context_id": "session_abc123"
+        }
+      ]
+    }
+
+3.4 SemanticStore (semantic.db)
+────────────────────────────────────────────────────────────────────────────────
+
+Base de datos de conceptos y embeddings.
+
+    Tablas lógicas:
+    
+    concepts:
+        id              u64 PRIMARY KEY
+        name            TEXT
+        category        TEXT
+        first_seen      i64
+        last_seen       i64
+        frequency       u32
+        importance      f32
+    
+    embeddings:
+        id              u64 PRIMARY KEY
+        vector          BLOB (f32 × dim)
+        source_id       u64  // Referencia a MemoryItem
+        model           TEXT // Modelo usado para generar
+    
+    relations:
+        source_id       u64
+        target_id       u64
+        relation_type   TEXT
+        strength        f32
+
+3.5 DayArchive (estructura de directorio)
+────────────────────────────────────────────────────────────────────────────────
+
+    /memory/
+      └── 2026/
+          └── 01/
+              └── 07/
+                  ├── index.bin       // MemoryIndex del día
+                  ├── episodic.json   // Eventos del día
+                  ├── semantic.db     // Conceptos del día
+                  ├── embeddings.bin  // Vectores comprimidos
+                  └── manifest.json   // Metadata del archivo
+
+    manifest.json:
+    {
+      "version": "3.0",
+      "date": "2026-01-07",
+      "item_count": 1234,
+      "episodic_count": 567,
+      "semantic_count": 890,
+      "size_bytes": 2456789,
+      "checksum": "abc123...",
+      "compressed": false
+    }
+
+================================================================================
+4. COMANDOS (HERA → Memory Core)
+================================================================================
+
+Memory Core recibe comandos de HERA y los ejecuta.
+
+4.1 Almacenamiento
+────────────────────────────────────────────────────────────────────────────────
+
+    MC_CMD_STORE(item: MemoryItem, content: bytes) → Result<u64>
+        Almacena un nuevo recuerdo.
+        Retorna: ID del item almacenado.
+    
+    MC_CMD_UPDATE(id: u64, updates: Partial<MemoryItem>) → Result<()>
+        Actualiza metadata de un recuerdo existente.
+    
+    MC_CMD_DELETE(id: u64) → Result<()>
+        Elimina un recuerdo (solo si HERA autoriza).
+
+4.2 Búsqueda
+────────────────────────────────────────────────────────────────────────────────
+
+    MC_CMD_QUERY_SEMANTIC(embedding: vec<f32>, top_k: u32) → Result<vec<MemoryItem>>
+        Búsqueda por similitud de embedding.
+    
+    MC_CMD_QUERY_TEMPORAL(start: i64, end: i64) → Result<vec<MemoryItem>>
+        Búsqueda por rango temporal.
+    
+    MC_CMD_QUERY_TAGS(tags: vec<str>) → Result<vec<MemoryItem>>
+        Búsqueda por tags.
+    
+    MC_CMD_GET_BY_ID(id: u64) → Result<Option<MemoryItem>>
+        Obtener item por ID.
+
+4.3 Movimiento entre niveles
+────────────────────────────────────────────────────────────────────────────────
+
+    MC_CMD_PROMOTE(id: u64) → Result<()>
+        Mover de Disco → RAM activa.
+        Carga el contenido completo en memoria.
+    
+    MC_CMD_DEGRADE(id: u64) → Result<()>
+        Mover de RAM → Disco.
+        Libera memoria, mantiene solo referencia en índice.
+    
+    MC_CMD_MARK_CANDIDATE(id: u64, proposal: CoreMemoryProposal) → Result<()>
+        Marcar como candidato a memoria esencial.
+        No escribe en HNF-EXT, solo prepara.
+
+4.4 Archivo
+────────────────────────────────────────────────────────────────────────────────
+
+    MC_CMD_ARCHIVE_DAY(date: Date) → Result<()>
+        Archivar todo el contenido de un día a disco.
+        Crea estructura /memory/YYYY/MM/DD/.
+    
+    MC_CMD_LOAD_DAY(date: Date) → Result<()>
+        Cargar día desde archivo a RAM.
+        Carga solo índice por defecto, contenido bajo demanda.
+    
+    MC_CMD_COMPACT(date: Date) → Result<()>
+        Compactar archivo de un día (eliminar duplicados, comprimir).
+    
+    MC_CMD_PRUNE(before: Date, policy: PrunePolicy) → Result<u64>
+        Eliminar archivos antiguos según política.
+        Retorna: número de items eliminados.
+
+4.5 Mantenimiento
+────────────────────────────────────────────────────────────────────────────────
+
+    MC_CMD_GET_STATS() → MemoryCoreStats
+        Obtener estadísticas de uso.
+    
+    MC_CMD_FLUSH() → Result<()>
+        Forzar escritura de datos pendientes a disco.
+    
+    MC_CMD_REBUILD_INDEX() → Result<()>
+        Reconstruir índice desde archivos.
+    
+    MC_CMD_VERIFY_INTEGRITY() → Result<IntegrityReport>
+        Verificar integridad de todos los datos.
+
+================================================================================
+5. EVENTOS (Memory Core → HERA)
+================================================================================
+
+Memory Core notifica a HERA de eventos relevantes.
+
+    MC_EVT_STORAGE_PRESSURE(level: PressureLevel, current_mb: u64, limit_mb: u64)
+        Presión de almacenamiento en RAM.
+        level = LOW | MEDIUM | HIGH | CRITICAL
+    
+    MC_EVT_ITEM_ACCESSED(id: u64, access_count: u32)
+        Un recuerdo fue accedido (para tracking de relevancia).
+    
+    MC_EVT_ARCHIVE_COMPLETE(date: Date, stats: ArchiveStats)
+        Archivado diario completado.
+    
+    MC_EVT_CANDIDATE_READY(id: u64, proposal: CoreMemoryProposal)
+        Candidato a memoria esencial preparado.
+    
+    MC_EVT_INTEGRITY_ERROR(id: u64, error: IntegrityError)
+        Error de integridad detectado.
+
+================================================================================
+6. ESTRUCTURAS AUXILIARES
+================================================================================
+
+6.1 CoreMemoryProposal
+────────────────────────────────────────────────────────────────────────────────
+
+    struct CoreMemoryProposal {
+        source_id:          u64         // ID del recuerdo origen
+        summary:            string      // Resumen compacto (max 500 chars)
+        concept:            string      // Concepto principal
+        category:           string      // identity | knowledge | project | event
+        relevance_absolute: f32         // 0.0 - 1.0
+        identity_weight:    f32         // Importancia para identidad
+        frequency:          u32         // Veces accedido
+        first_seen:         i64         // Cuándo apareció
+        justification:      string      // Por qué debería ser esencial
+    }
+
+6.2 MemoryCoreStats
+────────────────────────────────────────────────────────────────────────────────
+
+    struct MemoryCoreStats {
+        // RAM
+        active_items:       u64
+        active_size_mb:     u64
+        active_limit_mb:    u64
+        
+        // Disco
+        archived_days:      u32
+        archived_items:     u64
+        archived_size_mb:   u64
+        
+        // Índices
+        index_items:        u64
+        candidates_pending: u32
+        
+        // Performance
+        avg_query_ms:       f32
+        last_archive:       i64
+        last_compact:       i64
+    }
+
+6.3 PressureLevel
+────────────────────────────────────────────────────────────────────────────────
+
+    enum PressureLevel {
+        LOW,        // < 50% del límite
+        MEDIUM,     // 50-75% del límite
+        HIGH,       // 75-90% del límite
+        CRITICAL    // > 90% del límite
+    }
+
+================================================================================
+7. SOPORTE PARA CHECKPOINTS (HEXOS)
+================================================================================
+
+Cuando HEXOS solicita checkpoint (vía HERA), Memory Core participa:
+
+7.1 Checkpoint Request
+────────────────────────────────────────────────────────────────────────────────
+
+    HERA recibe: HEXOS_SIGNAL_CHECKPOINT_REQUEST
+    HERA ordena: MC_CMD_PREPARE_CHECKPOINT()
+    
+    Memory Core:
+      1. Flush todos los buffers pendientes
+      2. Crear snapshot de índice activo
+      3. Marcar items "hot" (accedidos recientemente)
+      4. Generar MemoryCheckpoint
+
+7.2 MemoryCheckpoint
+────────────────────────────────────────────────────────────────────────────────
+
+    struct MemoryCheckpoint {
+        timestamp:          i64
+        active_index:       bytes       // Copia del index.bin activo
+        hot_item_ids:       vec<u64>    // IDs de items calientes
+        pending_candidates: vec<u64>    // Candidatos a esencial pendientes
+        stats:              MemoryCoreStats
+    }
+
+7.3 Restore from Checkpoint
+────────────────────────────────────────────────────────────────────────────────
+
+    MC_CMD_RESTORE_CHECKPOINT(checkpoint: MemoryCheckpoint) → Result<()>
+    
+    Memory Core:
+      1. Limpiar estado actual
+      2. Restaurar índice
+      3. Cargar items hot desde archivo
+      4. Restaurar candidatos pendientes
+
+================================================================================
+8. LÍMITES OPERATIVOS
+================================================================================
+
+Memory Core respeta límites definidos por HEXOS (transmitidos por HERA):
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │  LÍMITE                      │  FUENTE     │  TÍPICO        │
+    ├─────────────────────────────────────────────────────────────┤
+    │  RAM_ACTIVE_LIMIT_MB         │  HEXOS      │  200-500 MB    │
+    │  DAILY_EPISODIC_LIMIT        │  HEXOS      │  10,000 items  │
+    │  DAILY_SEMANTIC_LIMIT        │  HEXOS      │  5,000 items   │
+    │  MAX_QUERY_RESULTS           │  Config     │  100 items     │
+    │  MAX_EMBEDDING_DIM           │  Config     │  4096          │
+    └─────────────────────────────────────────────────────────────┘
+
+Si se excede un límite:
+  1. Memory Core emite MC_EVT_STORAGE_PRESSURE(CRITICAL)
+  2. HERA decide qué degradar
+  3. Memory Core ejecuta degradación
+
+================================================================================
+9. INTEGRIDAD Y RECUPERACIÓN
+================================================================================
+
+9.1 Checksums
+────────────────────────────────────────────────────────────────────────────────
+
+    Todo archivo tiene checksum:
+      - index.bin: CRC64 en header
+      - episodic.json: SHA256 en manifest
+      - semantic.db: checksum por tabla
+      - embeddings.bin: CRC64 por bloque
+
+9.2 Verificación
+────────────────────────────────────────────────────────────────────────────────
+
+    MC_CMD_VERIFY_INTEGRITY() verifica:
+      □ Checksums de todos los archivos
+      □ Referencias cruzadas (IDs existen)
+      □ Embeddings tienen source válido
+      □ Índice es consistente con contenido
+
+9.3 Recuperación
+────────────────────────────────────────────────────────────────────────────────
+
+    Si se detecta corrupción:
+      1. Notificar HERA: MC_EVT_INTEGRITY_ERROR
+      2. Aislar datos corruptos
+      3. Intentar recuperar desde archivo
+      4. Si falla → marcar como irrecuperable
+
+================================================================================
+10. PROHIBICIONES ABSOLUTAS
+================================================================================
+
+Memory Core NO DEBE:
+  • Decidir qué recuerdos son importantes
+  • Escribir directamente en HNF-EXT
+  • Ignorar límites de HEXOS
+  • Eliminar datos sin autorización de HERA
+  • Bloquear durante operaciones largas (usar async)
+  • Acceder a recursos de hardware directamente
+  • Ejecutar durante hot path de inferencia
+
+================================================================================
+11. PRINCIPIO DE CIERRE
+================================================================================
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │  Memory Core es ALMACENAMIENTO PURO.                        │
+    │                                                             │
+    │  No piensa. No decide. No juzga.                            │
+    │  Almacena. Indexa. Busca. Mueve.                            │
+    │                                                             │
+    │  HERA le dice qué hacer.                                    │
+    │  Memory Core lo hace.                                       │
+    │                                                             │
+    │  Los recuerdos viven aquí.                                  │
+    │  Pero la memoria vive en HERA.                              │
+    └─────────────────────────────────────────────────────────────┘
+
+================================================================================
+FIN DEL DOCUMENTO
+MEMORY CORE v3.0 — STORAGE CONTRACT
+================================================================================

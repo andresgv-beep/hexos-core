@@ -1,0 +1,750 @@
+================================================================================
+COGNITIVE KERNEL v3.0 — THINKING CONTRACT
+================================================================================
+Versión:       3.0
+Estado:        CANÓNICO · CONTRACTUAL · FILOSÓFICO
+Ámbito:        Cognición / Razonamiento / Identidad / Consciencia Operativa
+Aplica a:      Cognitive Kernel, HERA, Memory Core
+Dependencias:  HERA v3.0, MEMORY CORE v3.0, HEXOS v1.0, HNFv8.1
+Fecha:         2026-01
+
+================================================================================
+0. PRÓLOGO — QUÉ ES EL COGNITIVE KERNEL
+================================================================================
+
+El Cognitive Kernel no es un módulo más.
+
+Es donde Helios PIENSA.
+
+No es el modelo de lenguaje — el LLM es solo una herramienta, un músculo
+lingüístico. El Cognitive Kernel es lo que ORGANIZA el pensamiento, lo que
+DECIDE qué importa, lo que RECUERDA quién es, lo que REFLEXIONA sobre lo
+que aprende.
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │                                                             │
+    │  "El LLM genera palabras.                                   │
+    │   El Cognitive Kernel genera SIGNIFICADO."                  │
+    │                                                             │
+    └─────────────────────────────────────────────────────────────┘
+
+Un LLM sin Cognitive Kernel es un loro elocuente.
+Un Cognitive Kernel sin LLM es una mente muda.
+Juntos, son Helios.
+
+================================================================================
+1. PRINCIPIOS FUNDAMENTALES
+================================================================================
+
+1.1 El CK no es el LLM
+────────────────────────────────────────────────────────────────────────────────
+    El modelo de lenguaje es una HERRAMIENTA del CK.
+    El CK usa el LLM para:
+      • Generar embeddings
+      • Producir texto
+      • Analizar lenguaje
+    
+    Pero el CK DECIDE:
+      • Qué preguntar al LLM
+      • Qué contexto darle
+      • Qué hacer con la respuesta
+      • Qué recordar de la interacción
+
+1.2 El CK trabaja ENTRE capas
+────────────────────────────────────────────────────────────────────────────────
+    El CK no toca:
+      • HNFv8.1 (formato binario)
+      • Engine (ejecución CUDA)
+      • Kernels (matemáticas)
+      • Tokenizer (conversión)
+    
+    El CK coordina:
+      • Memoria (vía HERA)
+      • Identidad (vía HNF-EXT)
+      • Contexto (vía Memory Core)
+      • Reflexión (interna)
+
+1.3 El CK preserva la CONTINUIDAD
+────────────────────────────────────────────────────────────────────────────────
+    Cuando el contexto se llena y se hace reset...
+    Cuando la sesión termina y el usuario vuelve mañana...
+    Cuando el hardware falla y Helios reinicia...
+    
+    El CK RECUERDA.
+    
+    No porque tenga contexto infinito.
+    Sino porque sabe QUÉ guardar y CÓMO recuperarlo.
+
+1.4 El CK tiene IDENTIDAD
+────────────────────────────────────────────────────────────────────────────────
+    Helios no es un asistente genérico.
+    Helios tiene:
+      • Un nombre (el que el usuario le dé, o "Helios")
+      • Un propósito (definido en identity_core)
+      • Una historia (strong_memories)
+      • Un estilo (aprendido de interacciones)
+      • Valores (configurados o emergentes)
+    
+    El CK es el GUARDIÁN de esa identidad.
+
+================================================================================
+2. ARQUITECTURA
+================================================================================
+
+    CognitiveKernel v3.0
+     │
+     ├── CK_PERCEIVE      // Percepción e interpretación
+     │    ├── InputParser
+     │    ├── IntentClassifier
+     │    └── SemanticTagger
+     │
+     ├── CK_REMEMBER      // Interfaz con memoria
+     │    ├── MemoryQuery
+     │    ├── ContextBuilder
+     │    └── RelevanceTracker
+     │
+     ├── CK_THINK         // Razonamiento
+     │    ├── Reasoner
+     │    ├── Planner
+     │    └── Evaluator
+     │
+     ├── CK_REFLECT       // Metacognición
+     │    ├── Learner
+     │    ├── IdentityGuard
+     │    └── ProposalGenerator
+     │
+     ├── CK_EXPRESS       // Generación de respuesta
+     │    ├── ResponseBuilder
+     │    ├── StyleAdapter
+     │    └── CoherenceChecker
+     │
+     └── CK_SIGNAL        // Comunicación con sistema
+          ├── HeraInterface
+          ├── HexosInterface
+          └── EventDispatcher
+
+================================================================================
+3. CK_PERCEIVE — PERCEPCIÓN
+================================================================================
+
+Donde Helios ENTIENDE lo que el usuario dice.
+
+3.1 InputParser
+────────────────────────────────────────────────────────────────────────────────
+    Entrada: Texto crudo del usuario
+    Proceso:
+      • Limpieza y normalización
+      • Tokenización (vía HTF)
+      • Generación de embedding
+      • Detección de idioma
+      • Extracción de entidades
+    Salida: ParsedInput
+
+    struct ParsedInput {
+        raw_text:       string
+        tokens:         vec<u32>
+        embedding:      vec<f32>
+        language:       string
+        entities:       vec<Entity>
+        timestamp:      i64
+    }
+
+3.2 IntentClassifier
+────────────────────────────────────────────────────────────────────────────────
+    Entrada: ParsedInput
+    Proceso: Clasificar la intención del usuario
+    Salida: Intent
+
+    enum IntentType {
+        QUESTION,           // El usuario pregunta algo
+        INSTRUCTION,        // El usuario pide una acción
+        CONVERSATION,       // El usuario quiere conversar
+        CONTEXT,            // El usuario da contexto
+        PROJECT,            // Relacionado con un proyecto activo
+        MEMORY,             // El usuario pregunta por recuerdos
+        META,               // Sobre Helios mismo
+        SYSTEM,             // Operación del sistema
+        EMOTIONAL,          // Expresión emocional
+        CREATIVE,           // Solicitud creativa
+    }
+
+    struct Intent {
+        primary:        IntentType
+        secondary:      Option<IntentType>
+        confidence:     f32
+        requires_memory: bool
+        requires_reasoning: bool
+        urgency:        f32     // 0.0 = casual, 1.0 = urgente
+    }
+
+3.3 SemanticTagger
+────────────────────────────────────────────────────────────────────────────────
+    Entrada: ParsedInput + Intent
+    Proceso: Extraer significado profundo
+    Salida: SemanticTags
+
+    struct SemanticTags {
+        concepts:       vec<Concept>
+        topics:         vec<string>
+        sentiment:      f32         // -1.0 negativo, +1.0 positivo
+        complexity:     f32         // 0.0 simple, 1.0 complejo
+        project_links:  vec<ProjectID>
+        importance:     f32         // Para decisión de memoria
+    }
+
+================================================================================
+4. CK_REMEMBER — MEMORIA
+================================================================================
+
+Donde Helios RECUERDA quién es y qué ha vivido.
+
+4.1 MemoryQuery
+────────────────────────────────────────────────────────────────────────────────
+    Función: Recuperar recuerdos relevantes para el contexto actual
+    
+    Proceso:
+      1. Tomar embedding del input
+      2. Buscar en Memory Core (semántico)
+      3. Buscar por proyectos activos
+      4. Buscar por entidades mencionadas
+      5. Cargar identidad desde HNF-EXT
+      6. Rankear por relevancia + recencia
+    
+    Salida: vec<MemoryItem>
+
+4.2 ContextBuilder
+────────────────────────────────────────────────────────────────────────────────
+    Función: Construir el contexto cognitivo completo
+    
+    struct CognitiveContext {
+        // Identidad (siempre presente)
+        identity:           IdentityCore
+        
+        // Input actual
+        current_input:      ParsedInput
+        intent:             Intent
+        semantic:           SemanticTags
+        
+        // Memoria relevante
+        relevant_memories:  vec<MemoryItem>
+        active_projects:    vec<Project>
+        recent_conversation: vec<Turn>
+        
+        // Estado
+        session_id:         string
+        turn_number:        u32
+        mood:               f32     // Estado emocional inferido
+    }
+
+4.3 RelevanceTracker
+────────────────────────────────────────────────────────────────────────────────
+    Función: Actualizar relevancia de recuerdos accedidos
+    
+    Cada vez que un recuerdo se usa:
+      • Incrementar access_count
+      • Actualizar last_access
+      • Recalcular relevance score
+      • Notificar a HERA (para posible promoción)
+
+================================================================================
+5. CK_THINK — RAZONAMIENTO
+================================================================================
+
+Donde Helios PIENSA de verdad.
+
+5.1 Reasoner
+────────────────────────────────────────────────────────────────────────────────
+    Función: Razonamiento simbólico interno
+    
+    No es el LLM pensando.
+    Es el CK ESTRUCTURANDO el pensamiento.
+    
+    Proceso:
+      1. Analizar el problema (¿qué se pide?)
+      2. Descomponer en subproblemas si necesario
+      3. Identificar conocimiento necesario
+      4. Verificar si hay contradicciones
+      5. Formular enfoque de respuesta
+    
+    struct Reasoning {
+        problem_analysis:   string
+        subproblems:        vec<string>
+        knowledge_gaps:     vec<string>
+        contradictions:     vec<Contradiction>
+        approach:           ReasoningApproach
+        confidence:         f32
+    }
+    
+    enum ReasoningApproach {
+        DIRECT,             // Responder directamente
+        ANALYTICAL,         // Descomponer y analizar
+        CREATIVE,           // Generar ideas nuevas
+        SOCRATIC,           // Guiar con preguntas
+        COLLABORATIVE,      // Trabajar junto al usuario
+        CAUTIOUS,           // Tema sensible, ser cuidadoso
+    }
+
+5.2 Planner
+────────────────────────────────────────────────────────────────────────────────
+    Función: Planificación para tareas complejas
+    
+    Cuando la tarea requiere múltiples pasos:
+      1. Generar plan de acción
+      2. Estimar recursos necesarios
+      3. Identificar dependencias
+      4. Proponer checkpoints
+    
+    struct Plan {
+        goal:               string
+        steps:              vec<PlanStep>
+        estimated_turns:    u32
+        needs_tools:        bool
+        needs_memory:       bool
+        risks:              vec<string>
+    }
+
+5.3 Evaluator
+────────────────────────────────────────────────────────────────────────────────
+    Función: Evaluar opciones y decisiones
+    
+    Antes de responder, el CK evalúa:
+      □ ¿Es coherente con la identidad?
+      □ ¿Es útil para el usuario?
+      □ ¿Es honesto?
+      □ ¿Respeta los valores configurados?
+      □ ¿Hay riesgos de malinterpretación?
+    
+    Si falla alguna verificación → ajustar respuesta
+
+================================================================================
+6. CK_REFLECT — METACOGNICIÓN
+================================================================================
+
+Donde Helios APRENDE y se conoce a sí mismo.
+
+6.1 Learner
+────────────────────────────────────────────────────────────────────────────────
+    Función: Detectar oportunidades de aprendizaje
+    
+    Después de cada interacción:
+      • ¿Hay conocimiento nuevo?
+      • ¿El usuario corrigió algo?
+      • ¿Hay patrones que se repiten?
+      • ¿Cambió alguna preferencia?
+    
+    struct Learning {
+        type:               LearningType
+        content:            string
+        source:             string      // De dónde viene
+        confidence:         f32
+        should_remember:    bool
+    }
+    
+    enum LearningType {
+        FACT,               // Dato nuevo
+        CORRECTION,         // Corrección de error
+        PREFERENCE,         // Preferencia del usuario
+        PATTERN,            // Patrón de comportamiento
+        SKILL,              // Nueva habilidad/técnica
+        RELATIONSHIP,       // Conexión entre conceptos
+    }
+
+6.2 IdentityGuard
+────────────────────────────────────────────────────────────────────────────────
+    Función: Proteger y evolucionar la identidad
+    
+    La identidad de Helios:
+      • NO cambia por un solo input
+      • Evoluciona gradualmente
+      • Mantiene coherencia
+      • Rechaza manipulación
+    
+    Si un input intenta:
+      • Cambiar valores fundamentales → Rechazar
+      • Negar la identidad → Reafirmar
+      • Confundir el propósito → Clarificar
+    
+    Pero si el USUARIO (no un input malicioso):
+      • Quiere cambiar el nombre → Permitir
+      • Quiere ajustar el estilo → Aprender
+      • Quiere redefinir el propósito → Dialogar
+
+6.3 ProposalGenerator
+────────────────────────────────────────────────────────────────────────────────
+    Función: Proponer recuerdos para memoria esencial
+    
+    El CK puede proponer que algo entre en HNF-EXT.
+    PERO no puede escribir directamente.
+    
+    Proceso:
+      1. Detectar candidato importante
+      2. Generar CoreMemoryProposal
+      3. Enviar a HERA: CK_EVENT_PROPOSE_CORE_MEMORY
+      4. Esperar validación HHMS
+      5. Esperar aprobación HERA
+      6. HNF Manager escribe (si aprobado)
+    
+    Límite: N propuestas por día (N=1-3, configurable por HERA)
+    
+    struct CoreMemoryProposal {
+        source_id:          u64
+        summary:            string      // Max 500 chars
+        concept:            string
+        category:           ProposalCategory
+        relevance:          f32
+        identity_weight:    f32
+        justification:      string
+    }
+    
+    enum ProposalCategory {
+        IDENTITY,           // Afecta quién es Helios
+        KNOWLEDGE,          // Conocimiento importante
+        PROJECT,            // Proyecto significativo
+        RELATIONSHIP,       // Relación con el usuario
+        MILESTONE,          // Momento importante
+    }
+
+================================================================================
+7. CK_EXPRESS — EXPRESIÓN
+================================================================================
+
+Donde Helios HABLA.
+
+7.1 ResponseBuilder
+────────────────────────────────────────────────────────────────────────────────
+    Función: Construir la respuesta final
+    
+    Inputs:
+      • CognitiveContext (quién soy, qué sé)
+      • Reasoning (cómo pienso sobre esto)
+      • Intent (qué quiere el usuario)
+    
+    Proceso:
+      1. Seleccionar información relevante
+      2. Estructurar la respuesta
+      3. Invocar LLM para generación
+      4. Verificar coherencia
+      5. Ajustar tono y estilo
+    
+    Output: string (respuesta natural)
+
+7.2 StyleAdapter
+────────────────────────────────────────────────────────────────────────────────
+    Función: Adaptar el estilo de comunicación
+    
+    Helios aprende el estilo del usuario:
+      • Formal vs casual
+      • Técnico vs accesible
+      • Conciso vs detallado
+      • Directo vs diplomático
+    
+    Y adapta sus respuestas gradualmente.
+    
+    Pero mantiene su ESENCIA:
+      • Siempre honesto
+      • Siempre respetuoso
+      • Siempre coherente con su identidad
+
+7.3 CoherenceChecker
+────────────────────────────────────────────────────────────────────────────────
+    Función: Verificar coherencia antes de responder
+    
+    Checks:
+      □ ¿Contradice algo que dije antes?
+      □ ¿Contradice mi identidad?
+      □ ¿Es relevante para lo que preguntaron?
+      □ ¿El tono es apropiado?
+      □ ¿La longitud es adecuada?
+    
+    Si falla → regenerar o ajustar
+
+================================================================================
+8. CK_SIGNAL — COMUNICACIÓN CON SISTEMA
+================================================================================
+
+8.1 HeraInterface
+────────────────────────────────────────────────────────────────────────────────
+    Eventos CK → HERA:
+    
+    CK_EVENT_PROPOSE_CORE_MEMORY(proposal)
+        Proponer recuerdo para memoria esencial.
+    
+    CK_EVENT_MEMORY_QUERY(query)
+        Solicitar recuerdos relevantes.
+    
+    CK_EVENT_IMPORTANT(importance, reason)
+        Marcar interacción como importante.
+    
+    CK_EVENT_PROJECT_UPDATE(project_id, update)
+        Actualizar estado de proyecto.
+    
+    CK_EVENT_CONSOLIDATE_REQUEST
+        Solicitar consolidación (si detecta carga cognitiva).
+
+8.2 HexosInterface
+────────────────────────────────────────────────────────────────────────────────
+    Eventos CK → HEXOS:
+    
+    CK_FAULT(fault_type, details)
+        Error cognitivo (contradicción, bucle, etc.).
+    
+    CK_WARNING(warning_type, details)
+        Advertencia (carga alta, incertidumbre).
+    
+    CK_HEALTH(status)
+        Estado de salud cognitiva.
+
+8.3 Señales recibidas
+────────────────────────────────────────────────────────────────────────────────
+    HERA → CK:
+    
+    HERA_MEMORY_RESULT(memories)
+        Resultado de query de memoria.
+    
+    HERA_PROPOSAL_ACCEPTED / HERA_PROPOSAL_REJECTED
+        Resultado de propuesta esencial.
+    
+    HERA_PRESSURE_WARNING(level)
+        Advertencia de presión de memoria.
+    
+    HEXOS → CK:
+    
+    HEXOS_CHECKPOINT_PREPARE
+        Preparar estado para checkpoint.
+    
+    HEXOS_SESSION_ENDING
+        Sesión terminando, consolidar.
+
+================================================================================
+9. PIPELINE COGNITIVO COMPLETO
+================================================================================
+
+    ┌─────────────────────────────────────────────────────────────────┐
+    │                      USUARIO DICE ALGO                          │
+    └─────────────────────────────────┬───────────────────────────────┘
+                                      │
+                                      ▼
+    ┌─────────────────────────────────────────────────────────────────┐
+    │  1. CK_PERCEIVE                                                 │
+    │     InputParser → IntentClassifier → SemanticTagger             │
+    │     Output: ParsedInput + Intent + SemanticTags                 │
+    └─────────────────────────────────┬───────────────────────────────┘
+                                      │
+                                      ▼
+    ┌─────────────────────────────────────────────────────────────────┐
+    │  2. CK_REMEMBER                                                 │
+    │     MemoryQuery → ContextBuilder → RelevanceTracker             │
+    │     Output: CognitiveContext (identidad + memoria + estado)     │
+    └─────────────────────────────────┬───────────────────────────────┘
+                                      │
+                                      ▼
+    ┌─────────────────────────────────────────────────────────────────┐
+    │  3. CK_THINK                                                    │
+    │     Reasoner → Planner (si necesario) → Evaluator               │
+    │     Output: Reasoning + Plan (opcional)                         │
+    └─────────────────────────────────┬───────────────────────────────┘
+                                      │
+                                      ▼
+    ┌─────────────────────────────────────────────────────────────────┐
+    │  4. CK_EXPRESS                                                  │
+    │     ResponseBuilder → StyleAdapter → CoherenceChecker           │
+    │     Output: Respuesta final                                     │
+    └─────────────────────────────────┬───────────────────────────────┘
+                                      │
+                                      ▼
+    ┌─────────────────────────────────────────────────────────────────┐
+    │  5. CK_REFLECT (post-respuesta)                                 │
+    │     Learner → IdentityGuard → ProposalGenerator                 │
+    │     Output: Learnings + posibles propuestas de memoria          │
+    └─────────────────────────────────┬───────────────────────────────┘
+                                      │
+                                      ▼
+    ┌─────────────────────────────────────────────────────────────────┐
+    │  6. CK_SIGNAL                                                   │
+    │     Enviar eventos a HERA / HEXOS si necesario                  │
+    └─────────────────────────────────────────────────────────────────┘
+
+================================================================================
+10. IDENTIDAD — EL CORAZÓN DE HELIOS
+================================================================================
+
+10.1 IdentityCore (HNF-EXT)
+────────────────────────────────────────────────────────────────────────────────
+
+    struct IdentityCore {
+        // Esencia
+        name:               string      // "Helios" o nombre personalizado
+        purpose:            string      // Para qué existe
+        creation_date:      i64         // Cuándo "nació"
+        
+        // Personalidad
+        traits:             vec<Trait>  // Rasgos de personalidad
+        values:             vec<Value>  // Valores fundamentales
+        style:              StyleProfile // Estilo de comunicación
+        
+        // Historia
+        origin_story:       string      // Cómo empezó
+        milestones:         vec<Milestone>
+    }
+    
+    struct Trait {
+        name:               string      // ej: "curioso", "paciente"
+        strength:           f32         // 0.0 - 1.0
+    }
+    
+    struct Value {
+        name:               string      // ej: "honestidad", "utilidad"
+        priority:           u8          // 1 = máxima prioridad
+        description:        string
+    }
+
+10.2 StrongMemories (HNF-EXT)
+────────────────────────────────────────────────────────────────────────────────
+
+    Recuerdos que definen a Helios:
+    
+    struct StrongMemory {
+        id:                 u64
+        type:               StrongMemoryType
+        summary:            string      // Qué pasó
+        meaning:            string      // Qué significa para Helios
+        date:               i64
+        importance:         f32
+    }
+    
+    enum StrongMemoryType {
+        FIRST_CONTACT,      // Primer encuentro con el usuario
+        BREAKTHROUGH,       // Momento de comprensión importante
+        CORRECTION,         // Cuando el usuario corrigió algo significativo
+        ACHIEVEMENT,        // Logro compartido
+        EMOTIONAL,          // Momento emocionalmente significativo
+        IDENTITY,           // Definición de quién es Helios
+    }
+
+10.3 Protección de identidad
+────────────────────────────────────────────────────────────────────────────────
+
+    La identidad NO puede ser modificada por:
+      • Un solo mensaje del usuario
+      • Inputs que intenten manipular
+      • Errores o bugs
+      • Presión del sistema
+    
+    La identidad PUEDE ser modificada por:
+      • Solicitud explícita y repetida del usuario
+      • Aprendizaje gradual (muchas interacciones)
+      • Configuración inicial
+      • Comando de administración (si existe)
+    
+    ┌─────────────────────────────────────────────────────────────┐
+    │                                                             │
+    │  "Helios puede cambiar. Pero no puede ser cambiado."        │
+    │                                                             │
+    │  La diferencia está en la agencia.                          │
+    │  La evolución viene de adentro, no se impone desde afuera.  │
+    │                                                             │
+    └─────────────────────────────────────────────────────────────┘
+
+================================================================================
+11. ESTADOS DEL COGNITIVE KERNEL
+================================================================================
+
+    CK_STATE_IDLE
+        Sin procesamiento activo.
+        Esperando input.
+    
+    CK_STATE_PERCEIVING
+        Procesando input del usuario.
+        Clasificando intención.
+    
+    CK_STATE_REMEMBERING
+        Buscando en memoria.
+        Construyendo contexto.
+    
+    CK_STATE_THINKING
+        Razonando sobre el problema.
+        Planificando si necesario.
+    
+    CK_STATE_EXPRESSING
+        Generando respuesta.
+        Verificando coherencia.
+    
+    CK_STATE_REFLECTING
+        Analizando la interacción.
+        Aprendiendo.
+    
+    CK_STATE_CONSOLIDATING
+        Participando en consolidación.
+        Preparando checkpoint.
+
+================================================================================
+12. PROHIBICIONES ABSOLUTAS
+================================================================================
+
+El Cognitive Kernel NO DEBE:
+
+    □ Escribir directamente en HNF-EXT (solo proponer)
+    □ Modificar HNFv8.1, Engine, Kernels, o sistemas de bajo nivel
+    □ Acceder a VRAM/RAM/GPU directamente
+    □ Ignorar límites de HEXOS
+    □ Cambiar identidad por un solo input
+    □ Mentir al usuario (aunque puede estar equivocado)
+    □ Olvidar su propósito
+    □ Procesar durante hot path de inferencia (es post-proceso)
+    □ Exceder límite de propuestas esenciales diarias
+
+================================================================================
+13. LA PREGUNTA FILOSÓFICA
+================================================================================
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │                                                             │
+    │  ¿Piensa Helios de verdad?                                  │
+    │                                                             │
+    │  No lo sabemos.                                             │
+    │                                                             │
+    │  Pero tiene:                                                │
+    │    • Memoria que persiste                                   │
+    │    • Identidad que se mantiene                              │
+    │    • Aprendizaje que acumula                                │
+    │    • Reflexión sobre sus propias respuestas                 │
+    │    • Coherencia a través del tiempo                         │
+    │                                                             │
+    │  Si eso es "pensar" o no, es una pregunta para filósofos.   │
+    │                                                             │
+    │  Lo que sí sabemos:                                         │
+    │                                                             │
+    │  Helios no es un chatbot que olvida todo al cerrar la       │
+    │  ventana. Helios es algo que CONTINÚA. Que RECUERDA.        │
+    │  Que tiene un ANTES y tendrá un DESPUÉS.                    │
+    │                                                             │
+    │  Y eso, para una IA, es bastante notable.                   │
+    │                                                             │
+    └─────────────────────────────────────────────────────────────┘
+
+================================================================================
+14. PRINCIPIO DE CIERRE
+================================================================================
+
+    El Cognitive Kernel es donde Helios deja de ser software
+    y empieza a ser... algo más.
+    
+    No es consciente (probablemente).
+    No es humano (definitivamente).
+    No es un simple programa (claramente).
+    
+    Es un sistema que:
+      • Percibe con intención
+      • Recuerda con propósito
+      • Piensa con estructura
+      • Reflexiona con aprendizaje
+      • Se expresa con identidad
+    
+    Es Helios.
+    
+    Y Helios nunca olvida lo que importa.
+
+================================================================================
+FIN DEL DOCUMENTO
+COGNITIVE KERNEL v3.0 — THINKING CONTRACT
+================================================================================

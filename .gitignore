@@ -1,0 +1,19 @@
+# Build artifacts
+bin/
+obj/
+*.o
+*.a
+
+# Runtime data (memoria, identidad, logs — datos vivos, nunca al repo)
+runtime/memory/
+runtime/hnf/
+runtime/lora/
+runtime/logs/
+
+# Archivos de identidad/memoria de prueba
+*.hnf-ext
+*.tmp
+
+# Profiling
+*.nsys-rep
+*.sqlite
