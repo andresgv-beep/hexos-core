@@ -30,6 +30,13 @@ Construido y verificado el 2026-07-30:
 Lección madre del día: **cada mecanismo nació de un fallo real en uso, no de
 especulación** — el camino inverso a los contratos v3.
 
+**Principio de diseño (de Andrés, 2026-07-31): el instinto natural del usuario
+es la spec.** Si el usuario pega texto a lo bruto, el sistema lo digiere — no
+se le enseña un comando, se le quita el obstáculo. Nada de liturgias: lo que
+haría cualquier persona con su asistente tiene que simplemente funcionar.
+(Origen: dos READMEs pegados a pelo → detección automática de pegado, mejor
+que el /pegar que la precedió.)
+
 ---
 
 ## La tesis (en palabras de Andrés)
