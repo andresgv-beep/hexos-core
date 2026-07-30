@@ -351,21 +351,36 @@ static void draw_main_modules(void) {
     ui_panel_print(&PANEL_MODULES, 1, 0, "HEXOS");
     ui_panel_print(&PANEL_MODULES, 18, 0, "[%sONLINE%s]", ANSI_GREEN, ANSI_RESET);
     
-    ui_panel_print(&PANEL_MODULES, 1, 1, "Memory Core");
-    ui_panel_print(&PANEL_MODULES, 18, 1, "[%sONLINE%s]", ANSI_GREEN, ANSI_RESET);
-    
-    ui_panel_print(&PANEL_MODULES, 1, 2, "HNF-EXT");
-    if (s_boot.hnf_ext_found) {
-        ui_panel_print(&PANEL_MODULES, 18, 2, "[%sLOADED%s]", ANSI_GREEN, ANSI_RESET);
-    } else {
-        ui_panel_print(&PANEL_MODULES, 15, 2, "[%sNOT FOUND%s]", ANSI_YELLOW, ANSI_RESET);
+    /* Estado REAL desde el blackboard: cada módulo enciende su bit en
+     * modules_connected al conectar. Sin decorado — lo que ves es lo que hay. */
+    {
+        hexos_ipc_ctx_t *ipc_mod = hexos_get_ipc();
+        uint32_t bits = (ipc_mod && ipc_mod->state)
+                        ? ipc_mod->state->modules_connected : 0;
+
+        ui_panel_print(&PANEL_MODULES, 1, 1, "Memory Core");
+        if (bits & (1u << HEXOS_MODULE_MEMORY))
+            ui_panel_print(&PANEL_MODULES, 18, 1, "[%sONLINE%s]", ANSI_GREEN, ANSI_RESET);
+        else
+            ui_panel_print(&PANEL_MODULES, 17, 1, "[%sOFFLINE%s]", ANSI_BRIGHT_BLACK, ANSI_RESET);
+
+        ui_panel_print(&PANEL_MODULES, 1, 2, "HNF-EXT");
+        if (s_boot.hnf_ext_found) {
+            ui_panel_print(&PANEL_MODULES, 18, 2, "[%sLOADED%s]", ANSI_GREEN, ANSI_RESET);
+        } else {
+            ui_panel_print(&PANEL_MODULES, 15, 2, "[%sNOT FOUND%s]", ANSI_YELLOW, ANSI_RESET);
+        }
+
+        /* HERA aún no tiene módulo corriendo ni id propio — honestidad */
+        ui_panel_print(&PANEL_MODULES, 1, 3, "HERA");
+        ui_panel_print(&PANEL_MODULES, 17, 3, "[%sOFFLINE%s]", ANSI_BRIGHT_BLACK, ANSI_RESET);
+
+        ui_panel_print(&PANEL_MODULES, 1, 4, "Cogn. Kernel");
+        if (bits & (1u << HEXOS_MODULE_COGNITIVE))
+            ui_panel_print(&PANEL_MODULES, 18, 4, "[%sONLINE%s]", ANSI_GREEN, ANSI_RESET);
+        else
+            ui_panel_print(&PANEL_MODULES, 20, 4, "[%sSTUB%s]", ANSI_BRIGHT_BLACK, ANSI_RESET);
     }
-    
-    ui_panel_print(&PANEL_MODULES, 1, 3, "HERA");
-    ui_panel_print(&PANEL_MODULES, 18, 3, "[%sACTIVE%s]", ANSI_GREEN, ANSI_RESET);
-    
-    ui_panel_print(&PANEL_MODULES, 1, 4, "Cogn. Kernel");
-    ui_panel_print(&PANEL_MODULES, 20, 4, "[%sSTUB%s]", ANSI_BRIGHT_BLACK, ANSI_RESET);
     
     /* CUDA Engine (Héctor): estado real desde el blackboard IPC.
      * El motor externo marca su bit en modules_connected y publica
