@@ -19,6 +19,8 @@ typedef struct {
     uint32_t gpu_temp_c;
     uint32_t gpu_power_w;
     uint32_t gpu_util_pct;
+    uint16_t gpu_clock_mhz;      /* reloj SM actual */
+    uint16_t gpu_clock_max_mhz;  /* boost maximo; 0 si NVML no lo da */
     uint32_t vram_used_mb;
     uint32_t vram_total_mb;
     

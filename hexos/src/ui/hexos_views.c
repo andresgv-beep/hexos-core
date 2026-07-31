@@ -197,8 +197,27 @@ static void draw_boot_telemetry(void) {
             snap.gpu_temp_c > 80 ? ANSI_RED : 
             snap.gpu_temp_c > 70 ? ANSI_YELLOW : ANSI_GREEN,
             snap.gpu_temp_c, ANSI_RESET, snap.gpu_power_w);
+
+        /* Reloj SM. Sin este dato un tok/s no se puede interpretar: la misma
+         * carga rinde un 35% menos con la GPU recortada.
+         *
+         * NO se muestra el maximo de NVML (aqui 3090 MHz): es un bin teorico
+         * que la tarjeta no sostiene nunca, y ponerlo al lado invita a leer
+         * "2600/3090" como un recorte que no existe. El aviso viene del
+         * driver, que es quien sabe si esta recortando y por que. */
+        if (snap.gpu_clock_mhz > 0) {
+            ui_panel_print(&PANEL_TELEMETRY, 1, 3, "SM   %s%4u MHz%s%s",
+                snap.thermal_throttle ? ANSI_YELLOW : ANSI_GREEN,
+                snap.gpu_clock_mhz, ANSI_RESET,
+                snap.thermal_throttle ? ANSI_YELLOW " RECORTE" ANSI_RESET : "");
+        } else {
+            ui_panel_print(&PANEL_TELEMETRY, 1, 3, "SM     -- MHz%s%s",
+                ANSI_BRIGHT_BLACK, ANSI_RESET);
+        }
     } else {
         ui_panel_print(&PANEL_TELEMETRY, 1, 1, "GPU %s --%%%s  VRAM --/--G", 
+            ANSI_BRIGHT_BLACK, ANSI_RESET);
+        ui_panel_print(&PANEL_TELEMETRY, 1, 3, "SM     -- MHz%s%s",
             ANSI_BRIGHT_BLACK, ANSI_RESET);
         ui_panel_print(&PANEL_TELEMETRY, 1, 2, "Temp %s --°C%s  Pwr  --W",
             ANSI_BRIGHT_BLACK, ANSI_RESET);
@@ -239,7 +258,8 @@ void view_boot_draw(void) {
 }
 
 void view_boot_input(ui_key_t key) {
-    switch (key) {
+    /* (int): las vistas aceptan teclas ASCII ademas de las del enum */
+    switch ((int)key) {
         case KEY_ENTER:
             /* Boot complete - let main loop handle transition */
             /* hexos_run will push VIEW_MAIN */
@@ -459,7 +479,8 @@ void view_main_draw(void) {
 }
 
 void view_main_input(ui_key_t key) {
-    switch (key) {
+    /* (int): las vistas aceptan teclas ASCII ademas de las del enum */
+    switch ((int)key) {
         case 'h':
         case 'H':
         case KEY_F1:
@@ -637,7 +658,8 @@ void view_identity_draw(void) {
 }
 
 void view_identity_input(ui_key_t key) {
-    switch (key) {
+    /* (int): las vistas aceptan teclas ASCII ademas de las del enum */
+    switch ((int)key) {
         case KEY_ESC:
             ui_view_pop();
             break;
@@ -788,7 +810,8 @@ void view_memory_draw(void) {
 }
 
 void view_memory_input(ui_key_t key) {
-    switch (key) {
+    /* (int): las vistas aceptan teclas ASCII ademas de las del enum */
+    switch ((int)key) {
         case KEY_ESC:
             ui_view_pop();
             break;
@@ -930,7 +953,8 @@ void view_gpu_draw(void) {
 }
 
 void view_gpu_input(ui_key_t key) {
-    switch (key) {
+    /* (int): las vistas aceptan teclas ASCII ademas de las del enum */
+    switch ((int)key) {
         case KEY_ESC:
             ui_view_pop();
             break;
@@ -1048,7 +1072,8 @@ void view_logs_draw(void) {
 }
 
 void view_logs_input(ui_key_t key) {
-    switch (key) {
+    /* (int): las vistas aceptan teclas ASCII ademas de las del enum */
+    switch ((int)key) {
         case KEY_ESC:
             ui_view_pop();
             break;
@@ -1149,7 +1174,8 @@ void view_advanced_draw(void) {
 }
 
 void view_advanced_input(ui_key_t key) {
-    switch (key) {
+    /* (int): las vistas aceptan teclas ASCII ademas de las del enum */
+    switch ((int)key) {
         case KEY_ESC:
             ui_view_pop();
             s_advanced_authenticated = false;  /* Logout on exit */

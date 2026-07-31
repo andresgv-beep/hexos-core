@@ -31,23 +31,6 @@ static void trim_string(char *str) {
     }
 }
 
-static bool file_contains(const char *filename, const char *needle) {
-    FILE *f = fopen(filename, "r");
-    if (!f) return false;
-    
-    char line[256];
-    bool found = false;
-    
-    while (fgets(line, sizeof(line), f)) {
-        if (strstr(line, needle)) {
-            found = true;
-            break;
-        }
-    }
-    
-    fclose(f);
-    return found;
-}
 
 /* ============================================================================
  * CPU DETECTION

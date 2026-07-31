@@ -3,7 +3,9 @@
  * Telemetry System Implementation
  */
 
-#define _GNU_SOURCE
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE   /* el Makefile ya lo define; guardas para no redefinir */
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -48,6 +50,8 @@ typedef nvmlReturn_t (*nvmlDeviceGetTemperature_t)(nvmlDevice_t device, int sens
 typedef nvmlReturn_t (*nvmlDeviceGetMemoryInfo_t)(nvmlDevice_t device, nvmlMemory_t *memory);
 typedef nvmlReturn_t (*nvmlDeviceGetUtilizationRates_t)(nvmlDevice_t device, nvmlUtilization_t *utilization);
 typedef nvmlReturn_t (*nvmlDeviceGetPowerUsage_t)(nvmlDevice_t device, unsigned int *power);
+typedef nvmlReturn_t (*nvmlDeviceGetClockInfo_t)(nvmlDevice_t device, int type, unsigned int *clock);
+typedef nvmlReturn_t (*nvmlDeviceGetThrottleReasons_t)(nvmlDevice_t device, unsigned long long *reasons);
 
 static nvmlInit_t nvml_init = NULL;
 static nvmlShutdown_t nvml_shutdown = NULL;
@@ -56,6 +60,9 @@ static nvmlDeviceGetTemperature_t nvml_get_temp = NULL;
 static nvmlDeviceGetMemoryInfo_t nvml_get_memory = NULL;
 static nvmlDeviceGetUtilizationRates_t nvml_get_util = NULL;
 static nvmlDeviceGetPowerUsage_t nvml_get_power = NULL;
+static nvmlDeviceGetClockInfo_t nvml_get_clock = NULL;
+static nvmlDeviceGetClockInfo_t nvml_get_clock_max = NULL;
+static nvmlDeviceGetThrottleReasons_t nvml_get_throttle = NULL;
 
 static nvmlDevice_t s_gpu_device = NULL;
 static bool s_nvml_ready = false;
@@ -105,6 +112,13 @@ static bool init_nvml_telemetry(void) {
     nvml_get_memory = (nvmlDeviceGetMemoryInfo_t)dlsym(s_nvml_handle, "nvmlDeviceGetMemoryInfo");
     nvml_get_util = (nvmlDeviceGetUtilizationRates_t)dlsym(s_nvml_handle, "nvmlDeviceGetUtilizationRates");
     nvml_get_power = (nvmlDeviceGetPowerUsage_t)dlsym(s_nvml_handle, "nvmlDeviceGetPowerUsage");
+    nvml_get_clock = (nvmlDeviceGetClockInfo_t)dlsym(s_nvml_handle, "nvmlDeviceGetClockInfo");
+    nvml_get_clock_max = (nvmlDeviceGetClockInfo_t)dlsym(s_nvml_handle, "nvmlDeviceGetMaxClockInfo");
+    /* El nombre cambio en NVML 12; probar el nuevo y caer al antiguo. */
+    nvml_get_throttle = (nvmlDeviceGetThrottleReasons_t)dlsym(s_nvml_handle, "nvmlDeviceGetCurrentClocksEventReasons");
+    if (!nvml_get_throttle) {
+        nvml_get_throttle = (nvmlDeviceGetThrottleReasons_t)dlsym(s_nvml_handle, "nvmlDeviceGetCurrentClocksThrottleReasons");
+    }
     
     if (!nvml_init || !nvml_get_handle) {
         dlclose(s_nvml_handle);
@@ -142,6 +156,8 @@ static void collect_gpu_metrics(telemetry_snapshot_t *snap) {
     snap->gpu_util_pct = 0;
     snap->vram_used_mb = 0;
     snap->thermal_throttle = false;
+    snap->gpu_clock_mhz = 0;
+    snap->gpu_clock_max_mhz = 0;
     
     if (!s_nvml_ready) return;
     
@@ -151,11 +167,6 @@ static void collect_gpu_metrics(telemetry_snapshot_t *snap) {
         if (nvml_get_temp(s_gpu_device, NVML_TEMPERATURE_GPU, &temp) == NVML_SUCCESS) {
             snap->gpu_temp_c = temp;
             snap->gpu_healthy = true;
-            
-            /* Thermal throttle warning at 83°C */
-            if (temp >= 83) {
-                snap->thermal_throttle = true;
-            }
         }
     }
     
@@ -182,6 +193,43 @@ static void collect_gpu_metrics(telemetry_snapshot_t *snap) {
         unsigned int power = 0;
         if (nvml_get_power(s_gpu_device, &power) == NVML_SUCCESS) {
             snap->gpu_power_w = power / 1000;  /* mW to W */
+        }
+    }
+
+    /* Relojes SM (NVML_CLOCK_SM = 1, NVML_CLOCK_ID_MAX apunta al boost).
+     *
+     * El throttle se MIDE, no se supone: antes se marcaba por temperatura
+     * >= 83C, pero un portatil puede recortar por limite de potencia estando
+     * frio, y puede pasar de 83C sosteniendo el boost. Lo unico que importa
+     * para interpretar un tok/s es el reloj real frente al maximo. */
+    if (nvml_get_clock) {
+        unsigned int cur = 0, max = 0;
+        if (nvml_get_clock(s_gpu_device, 1, &cur) == NVML_SUCCESS) {
+            snap->gpu_clock_mhz = (uint16_t)cur;
+        }
+        if (nvml_get_clock_max && nvml_get_clock_max(s_gpu_device, 1, &max) == NVML_SUCCESS) {
+            snap->gpu_clock_max_mhz = (uint16_t)max;
+        }
+    }
+
+    /* El throttle lo dice el driver, no lo deducimos nosotros.
+     *
+     * Dos intentos anteriores fallaron: por temperatura (>=83C) daba falsos
+     * negativos, porque un portatil recorta por potencia estando frio; y por
+     * porcentaje del reloj maximo daba falsos POSITIVOS, porque el maximo que
+     * reporta NVML (3090 MHz aqui) es el bin teorico, no un reloj que la
+     * tarjeta sostenga jamas. Bajo carga normal se corre a ~2450 y cualquier
+     * umbral contra 3090 grita siempre.
+     *
+     * Bits que importan: recorte por potencia (0x4, 0x80), por hardware (0x8)
+     * y termico (0x20, 0x40). Se excluye GpuIdle (0x1), que es bajar de reloj
+     * a proposito por no tener trabajo. */
+    if (nvml_get_throttle) {
+        unsigned long long reasons = 0;
+        if (nvml_get_throttle(s_gpu_device, &reasons) == NVML_SUCCESS) {
+            const unsigned long long RECORTE = 0x4ULL | 0x8ULL | 0x20ULL
+                                             | 0x40ULL | 0x80ULL;
+            snap->thermal_throttle = (reasons & RECORTE) != 0;
         }
     }
 }

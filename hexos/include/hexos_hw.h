@@ -54,6 +54,9 @@ void hexos_hw_seal_contract(hardware_contract_t *hw);
 /* Update dynamic GPU state (call periodically) */
 hexos_result_t hexos_hw_update_gpu_state(dynamic_state_t *state, uint8_t gpu_count);
 
+/* Cierra NVML y descarga libnvidia-ml. Llamar al apagar. */
+void hexos_hw_gpu_shutdown(void);
+
 /* Update dynamic RAM state */
 hexos_result_t hexos_hw_update_ram_state(dynamic_state_t *state);
 

@@ -81,6 +81,10 @@ typedef nvmlReturn_t (*nvmlDeviceGetCudaComputeCapability_t)(nvmlDevice_t device
 typedef nvmlReturn_t (*nvmlDeviceGetNumGpuCores_t)(nvmlDevice_t device, unsigned int *numCores);
 typedef nvmlReturn_t (*nvmlDeviceGetTemperature_t)(nvmlDevice_t device, nvmlTemperatureSensors_t sensorType, unsigned int *temp);
 typedef nvmlReturn_t (*nvmlDeviceGetPowerUsage_t)(nvmlDevice_t device, unsigned int *power);
+/* Relojes: detectar estrangulamiento termico. Sin esto, medir rendimiento
+ * es adivinar — entre GPU fria y estrangulada hay un 35% de diferencia. */
+typedef nvmlReturn_t (*nvmlDeviceGetClockInfo_t)(nvmlDevice_t device, int type, unsigned int *clock);
+typedef nvmlReturn_t (*nvmlDeviceGetMaxClockInfo_t)(nvmlDevice_t device, int type, unsigned int *clock);
 typedef nvmlReturn_t (*nvmlDeviceGetEnforcedPowerLimit_t)(nvmlDevice_t device, unsigned int *limit);
 typedef nvmlReturn_t (*nvmlDeviceGetUtilizationRates_t)(nvmlDevice_t device, nvmlUtilization_t *utilization);
 typedef nvmlReturn_t (*nvmlDeviceGetPciInfo_t)(nvmlDevice_t device, void *pci);
@@ -97,6 +101,8 @@ static nvmlDeviceGetMemoryInfo_t            nvmlDeviceGetMemoryInfo = NULL;
 static nvmlDeviceGetCudaComputeCapability_t nvmlDeviceGetCudaComputeCapability = NULL;
 static nvmlDeviceGetNumGpuCores_t           nvmlDeviceGetNumGpuCores = NULL;
 static nvmlDeviceGetTemperature_t           nvmlDeviceGetTemperature = NULL;
+static nvmlDeviceGetClockInfo_t             nvmlDeviceGetClockInfo = NULL;
+static nvmlDeviceGetMaxClockInfo_t          nvmlDeviceGetMaxClockInfo = NULL;
 static nvmlDeviceGetPowerUsage_t            nvmlDeviceGetPowerUsage = NULL;
 static nvmlDeviceGetEnforcedPowerLimit_t    nvmlDeviceGetEnforcedPowerLimit = NULL;
 static nvmlDeviceGetUtilizationRates_t      nvmlDeviceGetUtilizationRates = NULL;
@@ -135,6 +141,8 @@ static bool load_nvml(void) {
     LOAD_FUNC(nvmlDeviceGetCudaComputeCapability);
     LOAD_FUNC(nvmlDeviceGetNumGpuCores);
     LOAD_FUNC(nvmlDeviceGetTemperature);
+    LOAD_FUNC(nvmlDeviceGetClockInfo);
+    LOAD_FUNC(nvmlDeviceGetMaxClockInfo);
     LOAD_FUNC(nvmlDeviceGetPowerUsage);
     LOAD_FUNC(nvmlDeviceGetEnforcedPowerLimit);
     LOAD_FUNC(nvmlDeviceGetUtilizationRates);
@@ -153,7 +161,9 @@ static bool load_nvml(void) {
     return true;
 }
 
-static void unload_nvml(void) {
+/* Cierra NVML y suelta la libreria. Existia desde el principio pero no la
+ * llamaba nadie: HEXOS hacia dlopen de libnvidia-ml y salia sin cerrarla. */
+void hexos_hw_gpu_shutdown(void) {
     if (s_nvml_handle) {
         if (nvmlShutdown) nvmlShutdown();
         dlclose(s_nvml_handle);
@@ -215,6 +225,7 @@ uint16_t hexos_hw_estimate_tensor_cores(uint8_t compute_major, uint16_t sm_count
 #define HEXOS_SIMULATE_GPU 0  /* Set to 1 for development without GPU */
 #endif
 
+#if HEXOS_SIMULATE_GPU
 static void simulate_gpu(gpu_info_t *gpu, int index) {
     memset(gpu, 0, sizeof(gpu_info_t));
     
@@ -247,6 +258,7 @@ static void simulate_gpu(gpu_info_t *gpu, int index) {
     gpu->is_primary = (index == 0);
     gpu->is_healthy = true;
 }
+#endif /* HEXOS_SIMULATE_GPU */
 
 /* ============================================================================
  * GPU DETECTION
@@ -284,7 +296,7 @@ hexos_result_t hexos_hw_detect_gpus(gpu_info_t *gpus, uint8_t *count) {
     ret = nvmlDeviceGetCount(&device_count);
     if (ret != NVML_SUCCESS || device_count == 0) {
         LOG_ERROR("HW", "No NVIDIA GPUs found");
-        nvmlShutdown();
+        hexos_hw_gpu_shutdown();
         return HEXOS_ERROR_NO_GPU;
     }
     
@@ -347,7 +359,7 @@ hexos_result_t hexos_hw_detect_gpus(gpu_info_t *gpus, uint8_t *count) {
         }
         
         /* Driver version */
-        strncpy(gpu->driver_version, driver_version, HEXOS_MAX_STRING - 1);
+        HEXOS_STRCPY(gpu->driver_version, driver_version);
         
         /* Memory */
         if (nvmlDeviceGetMemoryInfo) {
@@ -485,6 +497,22 @@ hexos_result_t hexos_hw_update_gpu_state(dynamic_state_t *state, uint8_t gpu_cou
             }
         }
         
+        /* Relojes (NVML_CLOCK_SM = 1). El maximo se lee cada vez porque es
+         * barato y evita cachear un valor erroneo si NVML tarda en responder
+         * durante el arranque. */
+        if (nvmlDeviceGetClockInfo) {
+            unsigned int clk = 0;
+            if (nvmlDeviceGetClockInfo(device, 1, &clk) == NVML_SUCCESS) {
+                state->gpu_clock_mhz[i] = (uint16_t)clk;
+            }
+        }
+        if (nvmlDeviceGetMaxClockInfo) {
+            unsigned int clk = 0;
+            if (nvmlDeviceGetMaxClockInfo(device, 1, &clk) == NVML_SUCCESS) {
+                state->gpu_clock_max_mhz[i] = (uint16_t)clk;
+            }
+        }
+
         /* Power */
         if (nvmlDeviceGetPowerUsage) {
             unsigned int power = 0;

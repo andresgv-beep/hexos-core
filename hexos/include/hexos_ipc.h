@@ -149,6 +149,20 @@ typedef struct {
     bool is_owner;                /* Did we create the SHM? */
     
     /* Thread safety */
+    /* OJO: este mutex es LOCAL al proceso — vive en el contexto de cada uno,
+     * no en el segmento compartido, y se inicializa sin PTHREAD_PROCESS_SHARED.
+     * NO sincroniza a HEXOS con Hector; solo protege el acceso concurrente
+     * desde los hilos de un mismo proceso.
+     *
+     * Hoy es correcto por otra razon: cada campo del blackboard tiene UN SOLO
+     * escritor (Hector escribe cognitive.* y su bit en modules_connected con
+     * __atomic_or_fetch; HEXOS escribe todo lo demas). Mientras se respete esa
+     * regla no hace falta cerrojo entre procesos.
+     *
+     * Si algun dia dos procesos escriben el mismo campo, hace falta un mutex
+     * PTHREAD_PROCESS_SHARED + ROBUST DENTRO de hexos_shared_state_t. Eso
+     * cambia el layout del shm, que Hector-engine espeja en src/hexos_bridge.cpp
+     * — es un cambio coordinado entre los dos repos, no unilateral. */
     pthread_mutex_t lock;
     
 } hexos_ipc_ctx_t;

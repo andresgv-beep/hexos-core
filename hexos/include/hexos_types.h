@@ -11,6 +11,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <time.h>
+#include <string.h>
 
 /* ============================================================================
  * VERSION
@@ -275,6 +276,10 @@ typedef struct {
     uint8_t gpu_temp_c[HEXOS_MAX_GPUS];
     uint16_t gpu_power_w[HEXOS_MAX_GPUS];
     uint8_t gpu_util_pct[HEXOS_MAX_GPUS];
+    /* Relojes SM: sin esto, comparar tok/s entre dos momentos es adivinar.
+     * Un portatil estrangulado corre a ~1400 MHz frente a 2452 de boost. */
+    uint16_t gpu_clock_mhz[HEXOS_MAX_GPUS];
+    uint16_t gpu_clock_max_mhz[HEXOS_MAX_GPUS];
     
     /* RAM */
     uint32_t ram_used_mb;
@@ -400,5 +405,25 @@ typedef enum {
     HEXOS_ERROR_IO,
     HEXOS_NOGO
 } hexos_result_t;
+
+/* ============================================================================
+ * UTILIDADES
+ * ============================================================================ */
+
+/* Copia acotada que SIEMPRE cierra la cadena.
+ *
+ * strncpy(dst, src, sizeof(dst)-1) no termina en nulo cuando la fuente llena
+ * el buffer: deja una cadena abierta que el siguiente printf lee de mas.
+ * Solo funcionaba aqui por accidente, porque los structs se inicializan a
+ * cero. Usar esto en su lugar. */
+static inline void hexos_strcpy(char *dst, const char *src, size_t dst_size) {
+    if (!dst || dst_size == 0) return;
+    if (!src) { dst[0] = '\0'; return; }
+    size_t n = strnlen(src, dst_size - 1);
+    memcpy(dst, src, n);
+    dst[n] = '\0';
+}
+
+#define HEXOS_STRCPY(dst, src) hexos_strcpy((dst), (src), sizeof(dst))
 
 #endif /* HEXOS_TYPES_H */

@@ -21,73 +21,54 @@
  * HELPERS
  * ============================================================================ */
 
-/* Get storage type from device */
+/* Tipo de almacenamiento del dispositivo que REALMENTE contiene la ruta.
+ *
+ * La version anterior recorria /sys/block entero y se quedaba con el ultimo
+ * disco leido, y despues una "heuristica" lo forzaba a NVMe si existia
+ * cualquier /dev/nvme0. En una maquina con NVMe + HDD reportaba NVMe para
+ * rutas que estaban en el HDD. Ahora se resuelve el disco concreto por su
+ * major:minor, que es lo que el major() de antes insinuaba y nunca se uso. */
 static storage_type_t detect_storage_type(const char *path) {
     struct stat st;
     if (stat(path, &st) != 0) {
         return STORAGE_TYPE_UNKNOWN;
     }
-    
-    /* Get the device major/minor */
-    dev_t dev = st.st_dev;
-    unsigned int major_num = major(dev);
-    
-    /* Try to find the block device */
-    char sys_path[256];
-    DIR *dir = opendir("/sys/block");
-    if (!dir) {
+
+    /* /sys/dev/block/MAJ:MIN apunta al dispositivo exacto. Para una particion
+     * es el hijo; el disco padre es quien tiene queue/rotational. */
+    char link[64];
+    snprintf(link, sizeof(link), "/sys/dev/block/%u:%u",
+             major(st.st_dev), minor(st.st_dev));
+
+    char dev_path[HEXOS_MAX_PATH];
+    if (realpath(link, dev_path) == NULL) {
         return STORAGE_TYPE_UNKNOWN;
     }
-    
-    storage_type_t type = STORAGE_TYPE_UNKNOWN;
-    struct dirent *entry;
-    
-    while ((entry = readdir(dir)) != NULL) {
-        if (entry->d_name[0] == '.') continue;
-        
-        /* Check if this is an NVMe device */
-        if (strncmp(entry->d_name, "nvme", 4) == 0) {
-            /* Check device numbers match (simplified) */
-            snprintf(sys_path, sizeof(sys_path), "/sys/block/%s/device", entry->d_name);
-            if (access(sys_path, F_OK) == 0) {
-                type = STORAGE_TYPE_NVME;
-                break;
-            }
-        }
-        
-        /* Check rotational flag for HDD vs SSD */
-        snprintf(sys_path, sizeof(sys_path), "/sys/block/%s/queue/rotational", entry->d_name);
-        FILE *f = fopen(sys_path, "r");
+
+    /* Subir hasta el nodo que tenga queue/ (como mucho un nivel en la
+     * practica, pero el bucle evita suponerlo). */
+    char probe[HEXOS_MAX_PATH + 32];
+    for (int up = 0; up < 3; up++) {
+        snprintf(probe, sizeof(probe), "%s/queue/rotational", dev_path);
+        FILE *f = fopen(probe, "r");
         if (f) {
             int rotational = 1;
-            if (fscanf(f, "%d", &rotational) == 1) {
-                if (rotational == 0) {
-                    type = STORAGE_TYPE_SSD;
-                } else {
-                    type = STORAGE_TYPE_HDD;
-                }
-            }
+            int got = (fscanf(f, "%d", &rotational) == 1);
             fclose(f);
+            if (!got) break;
+
+            /* El nombre del disco distingue NVMe de SATA: nvme0n1 vs sda. */
+            const char *name = strrchr(dev_path, '/');
+            name = name ? name + 1 : dev_path;
+            if (strncmp(name, "nvme", 4) == 0) return STORAGE_TYPE_NVME;
+            return rotational ? STORAGE_TYPE_HDD : STORAGE_TYPE_SSD;
         }
+        char *slash = strrchr(dev_path, '/');
+        if (!slash || slash == dev_path) break;
+        *slash = '\0';
     }
-    
-    closedir(dir);
-    
-    /* More specific NVMe check */
-    if (type == STORAGE_TYPE_UNKNOWN || type == STORAGE_TYPE_SSD) {
-        /* Check if any nvme device exists */
-        if (access("/dev/nvme0", F_OK) == 0 || access("/dev/nvme0n1", F_OK) == 0) {
-            /* Rough heuristic: if nvme exists and we're on fast storage, assume nvme */
-            struct statvfs vfs;
-            if (statvfs(path, &vfs) == 0) {
-                /* NVMe typically has very large block sizes or we can't really tell */
-                /* Default to NVMe if /dev/nvme exists */
-                type = STORAGE_TYPE_NVME;
-            }
-        }
-    }
-    
-    return type;
+
+    return STORAGE_TYPE_UNKNOWN;
 }
 
 /* Estimate storage speed based on type */
@@ -117,9 +98,9 @@ hexos_result_t hexos_hw_detect_storage(storage_info_t *storage, const char *work
     /* Get real path */
     char real_path[HEXOS_MAX_PATH];
     if (realpath(work_path, real_path) == NULL) {
-        strncpy(real_path, work_path, HEXOS_MAX_PATH - 1);
+        HEXOS_STRCPY(real_path, work_path);
     }
-    strncpy(storage->work_path, real_path, HEXOS_MAX_PATH - 1);
+    HEXOS_STRCPY(storage->work_path, real_path);
     
     /* Get free space */
     struct statvfs vfs;
@@ -136,7 +117,7 @@ hexos_result_t hexos_hw_detect_storage(storage_info_t *storage, const char *work
     storage->work_speed_mbs = estimate_speed(storage->work_type);
     
     /* Model path defaults to work path */
-    strncpy(storage->model_path, storage->work_path, HEXOS_MAX_PATH - 1);
+    HEXOS_STRCPY(storage->model_path, storage->work_path);
     storage->model_free_mb = storage->work_free_mb;
     
     const char *type_str;

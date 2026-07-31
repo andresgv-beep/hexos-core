@@ -534,7 +534,7 @@ hexos_result_t hexos_init(const char *work_path, const char *model_path) {
     
     /* Store GPU name for display */
     if (s_ctx.hw_contract.gpu_count > 0) {
-        strncpy(boot->gpu_name, s_ctx.hw_contract.gpus[0].name, sizeof(boot->gpu_name) - 1);
+        HEXOS_STRCPY(boot->gpu_name, s_ctx.hw_contract.gpus[0].name);
     }
     boot_ui_update();
     
@@ -774,6 +774,9 @@ void hexos_cleanup(void) {
     
     /* Shutdown IPC */
     hexos_ipc_shutdown(&s_ipc_ctx);
+
+    /* NVML: se cargaba con dlopen al arrancar y no se cerraba nunca. */
+    hexos_hw_gpu_shutdown();
 }
 
 /* ============================================================================

@@ -5,7 +5,9 @@
  * Uses POSIX shared memory (/dev/shm) for zero-copy state sharing
  */
 
-#define _GNU_SOURCE
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE   /* el Makefile ya lo define; guardas para no redefinir */
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
