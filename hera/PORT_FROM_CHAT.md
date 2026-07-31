@@ -50,9 +50,21 @@ Ficheros de datos actuales (`~/.helios/`, o `$HELIOS_HOME`):
    luego lo recitaba— habría sido **imposible por construcción**.
 3. **§7.3 cuota diaria** de propuestas esenciales (1-3): no implementada.
 4. **§2 Nivel 2** (working memory en RAM): hoy es el KV cache + la
-   transcripción de sesión; no hay gestión explícita.
+   transcripción de sesión; no hay gestión explícita. La compactación conserva
+   solo 300 caracteres de cada mensaje reciente, por lo que un bloque de código
+   o documento deja de estar disponible para preguntas posteriores. Los
+   artefactos activos necesitan identidad, presupuesto y retención propios.
 5. **HNF-EXT**: la memoria esencial vive en `facts.md`, no dentro del
    archivo del modelo. `hnf_ext/` ya está blindado y esperando.
+6. **Reparación de hechos**: `append_candidate()` acumula propuestas, pero no
+   existe la transición candidato → confirmado → hecho anterior sustituido.
+   Una confirmación explícita del usuario debe resolver contradicciones de
+   forma auditable; el modelo no puede afirmar que actualizó su memoria cuando
+   solo escribió en `candidates.md`.
+7. **Estado conversacional del CK**: el `bool trivial` no representa intención,
+   continuidad, confianza, registro social y estado de memoria. El diseño y las
+   pruebas de aceptación están en `docs/CK_V4_NORTE.md`; HERA debe consumir el
+   estado de memoria y continuidad sin inventar un sistema de emociones.
 
 ## Cuándo portar
 

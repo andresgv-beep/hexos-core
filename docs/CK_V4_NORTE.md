@@ -72,6 +72,60 @@ no muere.
    CK — 0 tokens para lo trivial, 2000 para donde los logits dudan. Un 4B/E2B
    con thinking rinde como 3-4× su tamaño (no subestimar al Gemma E2B).
 
+## Deuda nacida del uso real: estado conversacional multidimensional
+
+El `bool trivial` del proto-CK ya se ha quedado pequeño. No basta convertir la
+conversación en una escala única de frío/caliente, think/no-think o temperatura
+alta/baja. El estado debe tener **varios ejes independientes y observables**:
+
+- **intención**: social, pregunta factual, código, continuación, corrección o
+  confirmación;
+- **carga cognitiva**: inmediata, normal o profunda;
+- **registro social**: neutral, cercano, humorístico o delicado, inferido del
+  tono que trae el usuario y sin fingir emociones internas;
+- **confianza**: alta, duda medible o contradicción activa;
+- **estado de memoria**: ninguno, candidato, esperando confirmación,
+  confirmado o sustituido;
+- **continuidad**: depende del turno anterior, de un documento o de un bloque
+  de código que sigue activo;
+- **forma de respuesta**: breve, técnica, pedagógica o creativa.
+
+No resucitar el `mood f32` de los contratos v3: cada eje debe tener una señal
+real y una consecuencia concreta. La política resultante decide temperatura,
+top-k/top-p, presupuesto visible, thinking, consulta/escritura de memoria y qué
+información debe sobrevivir a la compactación.
+
+### Fallos observados que fijan la especificación
+
+1. Tras pegar 192 líneas de HQS, la respuesta corta `velocidad` fue marcada
+   como trivial por longitud, elevó la temperatura a 0,90 y perdió el carácter
+   de continuación técnica. Debe heredar intención y artefacto del turno
+   anterior.
+2. Al compactar cerca de 4096 tokens, el intercambio reciente conservó solo
+   300 caracteres del mensaje grande. El modelo dejó de tener el código y
+   respondió de forma genérica. Los documentos y bloques de código necesitan
+   identidad propia y conservación explícita, no un `substr` ciego.
+3. Ante datos falsos sobre Andrés, Gemma 4 pasó de defender el recuerdo a
+   reconocer la contradicción, pedir confirmación y extraer el dato correcto.
+   Sin embargo, el runtime solo escribió candidatos y el modelo afirmó haber
+   actualizado su base de datos. Confirmar debe promover el hecho nuevo y
+   marcar el anterior como sustituido; nunca acumular verdades incompatibles.
+
+### Pruebas de aceptación para cuando se implemente
+
+- `velocidad`, después de hablar de HQS, produce `continuación técnica + breve`,
+  no `trivial`;
+- una pregunta sobre código pegado sigue siendo contestable después de
+  compactar;
+- una corrección confirmada sustituye el hecho falso y sobrevive al siguiente
+  proceso;
+- antes de la promoción, Helios dice que ha tomado nota como propuesta, no que
+  ya modificó su memoria;
+- un saludo aislado continúa siendo social, breve y barato.
+
+Esta política se descubre primero en `helios_chat` mediante uso diario. Cuando
+se estabilice, pertenece al CK/HERA real, no al motor Héctor.
+
 ## Lo genuinamente único de HELIOS (el 20% que nadie tiene)
 
 - Memoria + identidad DENTRO del archivo del modelo (HNF-EXT). Copias el
