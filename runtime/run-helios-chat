@@ -1,0 +1,28 @@
+#!/bin/sh
+
+set -eu
+
+if [ "$#" -eq 0 ]; then
+    echo "Uso: $0 /ruta/al/modelo.hnf [temperatura]" >&2
+    echo "Opcional: HELIOS_CHAT_BIN=/ruta/a/helios_chat" >&2
+    exit 2
+fi
+
+runtime_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+hexos_dir=$(dirname -- "$runtime_dir")
+default_chat_bin="$hexos_dir/../Hector-engine/build/helios_chat"
+chat_bin=${HELIOS_CHAT_BIN:-$default_chat_bin}
+
+if [ ! -x "$chat_bin" ]; then
+    echo "ERROR: no se encontró un helios_chat ejecutable en: $chat_bin" >&2
+    echo "Compila Hector-engine o define HELIOS_CHAT_BIN=/ruta/a/helios_chat" >&2
+    exit 127
+fi
+
+# El usuario puede fijar HELIOS_EMBED_MMAP=0 para comparar o diagnosticar.
+# Si no lo especifica, HEXOS usa el modo verificado que mapea los embeddings
+# desde el HNF y evita mantener su copia completa en RAM.
+: "${HELIOS_EMBED_MMAP:=1}"
+export HELIOS_EMBED_MMAP
+
+exec "$chat_bin" "$@"

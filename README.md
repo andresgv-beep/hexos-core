@@ -73,11 +73,43 @@ La carpeta `runtime/` contiene los datos persistentes:
 ```
 runtime/
 ├── helios.conf      # Configuración
+├── run-helios-chat  # Lanzador de Héctor con los defaults de HEXOS
 ├── memory/          # Archivos de memoria episódica (por día)
 ├── hnf/             # Bloques HNF-EXT (identidad)
 ├── lora/            # LoRA adapters entrenados
 └── logs/            # Logs del sistema
 ```
+
+### Ejecutar Héctor desde HEXOS
+
+Con `Hector-engine` compilado como repositorio hermano de `hexos-core`, el
+chat puede arrancarse con:
+
+```bash
+make chat MODEL=/ruta/al/modelo.hnf
+```
+
+El lanzador activa `HELIOS_EMBED_MMAP=1` por defecto. De esta forma, Héctor
+mapea desde el HNF los embeddings que se mantienen fuera de VRAM y no conserva
+otra copia completa en RAM. El motor conserva su fallback para GPUs que no
+soporten acceso pageable.
+
+La ruta del binario y la temperatura son configurables:
+
+```bash
+HELIOS_CHAT_BIN=/ruta/a/helios_chat \
+  make chat MODEL=/ruta/al/modelo.hnf TEMP=0.7
+```
+
+Para una comparación o un diagnóstico puntual se puede desactivar sin tocar
+archivos:
+
+```bash
+HELIOS_EMBED_MMAP=0 make chat MODEL=/ruta/al/modelo.hnf
+```
+
+Si se ejecuta `helios_chat` directamente, fuera de este lanzador, hay que
+exportar `HELIOS_EMBED_MMAP=1` manualmente.
 
 **Menú Advanced Memory** (comando `advanced` en HEXOS):
 - Requiere autenticación (default: helios / helios123)

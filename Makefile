@@ -33,7 +33,10 @@
 #
 # ============================================================================
 
-.PHONY: all clean hexos memory_core hnf_ext hera test info
+.PHONY: all clean hexos memory_core hnf_ext hera test info chat
+
+MODEL ?=
+TEMP ?= 0.7
 
 # Build all modules
 all: hexos memory_core hnf_ext hera cognitive_stub
@@ -76,6 +79,15 @@ test: all
 	@echo "Running HNF-EXT test..."
 	@cd hnf_ext && ./bin/hnf_ext_test
 
+# Start Hector through the HEXOS runtime defaults. This does not build Hector;
+# HELIOS_CHAT_BIN can point to a binary outside the default sibling repository.
+chat:
+	@if [ -z "$(MODEL)" ]; then \
+		echo "Uso: make chat MODEL=/ruta/al/modelo.hnf [TEMP=0.7]" >&2; \
+		exit 2; \
+	fi
+	@./runtime/run-helios-chat "$(MODEL)" "$(TEMP)"
+
 # Clean all
 clean:
 	@$(MAKE) -C hexos clean 2>/dev/null || true
@@ -105,4 +117,5 @@ info:
 	@echo "  make hexos    - Build only HEXOS"
 	@echo "  make memory_core - Build only Memory Core"
 	@echo "  make hnf_ext  - Build only HNF-EXT"
+	@echo "  make chat MODEL=/ruta/modelo.hnf - Start Hector with HEXOS defaults"
 	@echo ""
