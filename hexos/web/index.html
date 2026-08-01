@@ -99,6 +99,17 @@
   }
   @keyframes blink { 50% { opacity: 0; } }
 
+  .mudo {
+    color: var(--dim); font-style: italic; font-size: 14px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .mudo button {
+    font-style: normal; border: 1px solid var(--border); background: var(--raised);
+    color: var(--text); border-radius: 6px; padding: 3px 10px; font-size: 12px;
+    cursor: pointer; font-family: inherit;
+  }
+  .mudo button:hover { border-color: var(--accent); }
+
   .stats {
     font-size: 11px; color: var(--dim); font-family: ui-monospace, Menlo, monospace;
     display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px;
@@ -187,6 +198,7 @@ let carry    = 0;      // fracción de carácter arrastrada entre frames
 let thinking = false;
 let rawTail  = '';     // resto sin clasificar del flujo crudo
 let stats    = null;   // telemetría del turno, si ya empezó a llegar
+let lastUserMessage = null;   // para reintentar si el turno sale mudo
 
 const THINK_OPEN = '(pensando';
 // helios_chat cierra cada turno con su línea de telemetría. En el terminal
@@ -282,13 +294,6 @@ function ingest(raw) {
   rawTail += raw;
 
   for (;;) {
-    const s = rawTail.match(STATS_RE);
-    if (s && !thinking) {
-      emit(rawTail.slice(0, s.index));
-      stats = rawTail.slice(s.index);
-      rawTail = '';
-      return;
-    }
     if (thinking) {
       const close = rawTail.indexOf(')');
       if (close < 0) { rawTail = ''; return; }   // puntitos: se tiran
@@ -297,14 +302,28 @@ function ingest(raw) {
       showThinking(false);
       continue;
     }
+
+    // Manda el marcador que aparezca antes. Si se mirase la telemetría
+    // primero, un turno que llegara entero en un solo trozo metería
+    // "(pensando)" dentro del texto.
     const open = rawTail.indexOf(THINK_OPEN);
-    if (open >= 0) {
+    const s    = rawTail.match(STATS_RE);
+    const sIdx = s ? s.index : -1;
+
+    if (open >= 0 && (sIdx < 0 || open < sIdx)) {
       emit(rawTail.slice(0, open));
       rawTail = rawTail.slice(open + THINK_OPEN.length);
       thinking = true;
       showThinking(true);
       continue;
     }
+    if (sIdx >= 0) {
+      emit(rawTail.slice(0, sIdx));
+      stats = rawTail.slice(sIdx);
+      rawTail = '';
+      return;
+    }
+
     // Sin marcador: emite todo menos una cola por si está a medias.
     const hold = THINK_OPEN.length - 1;
     if (rawTail.length > hold) {
@@ -368,7 +387,28 @@ function caret() {
 
 function finish() {
   const el = current.bodyEl;
-  el.innerHTML = markdown(current.text.trim());
+  // La rienda del motor inyecta el cierre de pensamiento en el KV cuando se
+  // agota el techo; a veces el modelo lo reemite luego como texto normal y
+  // acaba en la respuesta. Es ruido de control, no algo que Héctor diga.
+  const text = current.text.trim().replace(/^<\/think>\s*/, '');
+
+  if (text) {
+    el.innerHTML = markdown(text);
+  } else {
+    // Turno mudo: la rienda cortó el pensamiento y el modelo cerró sin decir
+    // nada. Una burbuja en blanco parece un fallo de la web, así que se dice
+    // lo que pasó y se ofrece repetir.
+    el.className = 'body mudo';
+    el.textContent = 'Se quedó callado: le cortaron el pensamiento antes de empezar a responder.';
+    if (lastUserMessage) {
+      const again = document.createElement('button');
+      again.textContent = 'Reintentar';
+      const msg = lastUserMessage;
+      again.addEventListener('click', () => { again.disabled = true; send(msg); });
+      el.appendChild(again);
+    }
+  }
+
   if (stats) renderStats(el.parentElement, stats);
   current = null;
   stats = null;
@@ -426,6 +466,11 @@ function connect() {
   es.addEventListener('end', () => {
     setState('idle');
     if (rawTail) { emit(rawTail); rawTail = ''; }
+    // Un turno puede acabar sin haber emitido ni un espacio; aun así hay que
+    // decirle al usuario qué pasó en vez de dejarlo sin respuesta.
+    if (!current && stats !== null) {
+      current = { bodyEl: addMessage('helios', ''), text: '' };
+    }
     if (current) current.done = true; else showThinking(false);
   });
   es.addEventListener('ready', () => setState('idle'));
@@ -439,6 +484,7 @@ function connect() {
 
 async function send(text) {
   if (!text.trim() || state !== 'idle') return;
+  lastUserMessage = text;
   addMessage('user', text);
   input.value = '';
   input.style.height = 'auto';
