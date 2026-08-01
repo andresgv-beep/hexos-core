@@ -68,7 +68,12 @@ static void usage(const char *prog)
         "  --temp <t>        temperatura (por defecto 0.7)\n"
         "  --port <n>        puerto (por defecto %d)\n"
         "  --bind <ip>       interfaz (por defecto %s, toda la LAN)\n"
-        "  --root <dir>      raíz de ficheros web (por defecto %s)\n",
+        "  --root <dir>      raíz de ficheros web (por defecto %s)\n"
+        "  --no-distill      no consolidar la memoria episódica al salir\n"
+        "\n"
+        "Usa --no-distill mientras desarrollas. Cada cierre destila la sesión\n"
+        "al diario de Héctor, así que veinte reinicios de prueba dejan veinte\n"
+        "recuerdos basura — y el modelo los lee al arrancar y los imita.\n",
         prog, DEFAULT_ENGINE, DEFAULT_PORT, DEFAULT_BIND, DEFAULT_ROOT);
 }
 
@@ -80,10 +85,12 @@ int main(int argc, char **argv)
     const char *bind_addr = DEFAULT_BIND;
     const char *root   = DEFAULT_ROOT;
     int port = DEFAULT_PORT;
+    bool no_distill = false;
 
     for (int i = 1; i < argc; i++) {
         const char *next = (i + 1 < argc) ? argv[i + 1] : NULL;
-        if (!strcmp(argv[i], "--model")  && next) { model = next; i++; }
+        if (!strcmp(argv[i], "--no-distill")) { no_distill = true; }
+        else if (!strcmp(argv[i], "--model")  && next) { model = next; i++; }
         else if (!strcmp(argv[i], "--engine") && next) { engine = next; i++; }
         else if (!strcmp(argv[i], "--temp")   && next) { temp = next; i++; }
         else if (!strcmp(argv[i], "--bind")   && next) { bind_addr = next; i++; }
@@ -99,6 +106,17 @@ int main(int argc, char **argv)
     /* El puerto primero: si está ocupado, se sabe al instante y no se han
      * cargado gigabytes de modelo para nada. */
     if (!serve_bind(bind_addr, port)) return 1;
+
+    /* El hijo hereda el entorno: así el motor sabe que esta sesión no debe
+     * consolidarse. Sin esto, cada reinicio de desarrollo escribe una entrada
+     * en ~/.helios/episodic.md, y una transcripción cruda o un bucle guardado
+     * ahí no es un dato: es un ejemplo que el modelo imita en la sesión
+     * siguiente. */
+    if (no_distill) {
+        setenv("HELIOS_NO_DISTILL", "1", 1);
+        fprintf(stderr, "[serve] memoria episódica congelada "
+                        "(esta sesión no se consolidará)\n");
+    }
 
     engine_set_callbacks(on_chunk, on_event, NULL);
     if (!engine_start(engine, model, temp)) {

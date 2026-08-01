@@ -38,6 +38,24 @@
     font-size: 12px; color: var(--dim);
     border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px;
   }
+  /* Medidor de contexto: el 4B se degrada bastante antes de llenarlo — se
+     pone en ámbar a mitad para avisar antes de que empiece a desvariar. */
+  .ctx {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; color: var(--dim); font-family: ui-monospace, monospace;
+  }
+  .ctx .bar {
+    width: 72px; height: 5px; border-radius: 3px; background: var(--border);
+    overflow: hidden;
+  }
+  .ctx .fill {
+    height: 100%; width: 0; background: var(--ok);
+    transition: width .4s ease, background .4s ease;
+  }
+  .ctx.warn .fill { background: var(--warn); }
+  .ctx.hot  .fill { background: var(--bad); }
+  .ctx.warn, .ctx.hot { color: var(--text); }
+  @media (max-width: 560px) { .ctx .bar { width: 44px; } }
   .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); }
   .dot.idle { background: var(--ok); }
   .dot.thinking, .dot.speaking { background: var(--accent); animation: pulse 1.2s infinite; }
@@ -131,7 +149,11 @@
 
 <header>
   <div class="brand">HÉ<span>CTOR</span></div>
-  <div class="pill"><span class="dot booting" id="dot"></span><span id="stateName">conectando</span></div>
+  <div class="ctx" id="ctx" style="margin-left:auto" title="Uso del contexto. El 4B empieza a desvariar bastante antes de llenarlo.">
+    <span class="bar"><span class="fill" id="ctxFill"></span></span>
+    <span id="ctxText">—</span>
+  </div>
+  <div class="pill" style="margin-left:12px"><span class="dot booting" id="dot"></span><span id="stateName">conectando</span></div>
 </header>
 
 <main id="main"><div class="wrap" id="log"></div></main>
@@ -213,6 +235,25 @@ function scroll() {
   // releer, no se le arrastra.
   const near = main.scrollHeight - main.scrollTop - main.clientHeight < 120;
   if (near) main.scrollTop = main.scrollHeight;
+}
+
+/* El REPL informa del contexto en cada turno ("ctx 1922/4096"). Con Qwen3-4B
+ * la calidad se cae mucho antes de llenarlo: pasada la mitad empieza a mezclar
+ * idiomas y a repetirse, y como el error entra en el propio contexto, se
+ * realimenta. Mejor avisar antes que explicarlo después. */
+function updateContext(statsLine) {
+  const m = statsLine.match(/ctx\s+(\d+)\s*\/\s*(\d+)/);
+  if (!m) return;
+  const used = +m[1], total = +m[2];
+  const pct = Math.min(100, Math.round(used * 100 / total));
+  const box = document.getElementById('ctx');
+  document.getElementById('ctxFill').style.width = pct + '%';
+  document.getElementById('ctxText').textContent = pct + '%';
+  box.className = 'ctx' + (pct >= 70 ? ' hot' : pct >= 45 ? ' warn' : '');
+  box.title = used + ' de ' + total + ' posiciones. ' +
+    (pct >= 70 ? 'Zona mala: Héctor va a empezar a repetirse y a mezclar idiomas.'
+     : pct >= 45 ? 'Ojo: a partir de aquí la calidad cae.'
+     : 'Contexto holgado.');
 }
 
 let thinkEl = null;
@@ -338,6 +379,7 @@ function finish() {
 function renderStats(container, line) {
   const inner = line.replace(/^\s*\[/, '').replace(/\]\s*$/, '').trim();
   if (!inner) return;
+  updateContext(inner);
   const box = document.createElement('div');
   box.className = 'stats';
   for (const part of inner.split('·')) {
