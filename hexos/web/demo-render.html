@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Héctor — token crudo vs render suavizado</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --dim: #8b949e;
+    --accent: #58a6ff;
+    --warn: #f0883e;
+    --ok: #3fb950;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    background: var(--bg); color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  h1 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+  .sub { color: var(--dim); font-size: 13px; margin-bottom: 20px; }
+  .controls {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 16px; margin-bottom: 20px;
+  }
+  .controls label { font-size: 13px; color: var(--dim); }
+  input[type=range] { width: 180px; accent-color: var(--accent); }
+  #tps { font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 600; }
+  button {
+    background: var(--accent); color: #0d1117; border: 0;
+    border-radius: 6px; padding: 7px 16px; font-size: 13px;
+    font-weight: 600; cursor: pointer;
+  }
+  button:hover { filter: brightness(1.1); }
+  .panes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 800px) { .panes { grid-template-columns: 1fr; } }
+  .pane {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; overflow: hidden;
+  }
+  .head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; border-bottom: 1px solid var(--border);
+    font-size: 12px; font-weight: 600;
+  }
+  .head .tag { color: var(--dim); font-weight: 400; }
+  .pulse {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--border); transition: background 40ms;
+  }
+  .pulse.on { background: var(--warn); }
+  .pulse.smooth.on { background: var(--ok); }
+  .out {
+    padding: 16px; min-height: 260px;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 14px; line-height: 1.75; white-space: pre-wrap;
+  }
+  .caret {
+    display: inline-block; width: 8px; height: 1.05em;
+    background: var(--text); vertical-align: text-bottom;
+    animation: blink 1.1s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  .note {
+    margin-top: 18px; color: var(--dim); font-size: 13px;
+    line-height: 1.6; max-width: 74ch;
+  }
+  code { color: var(--accent); font-family: ui-monospace, monospace; }
+</style>
+</head>
+<body>
+
+<h1>Héctor a 15 tok/s: el problema no es la velocidad</h1>
+<div class="sub">El mismo flujo de tokens, exactamente al mismo ritmo, dibujado de dos maneras.</div>
+
+<div class="controls">
+  <label>Velocidad</label>
+  <input type="range" id="slider" min="8" max="45" value="15">
+  <span id="tps">15 tok/s</span>
+  <button id="run">Reiniciar</button>
+</div>
+
+<div class="panes">
+  <div class="pane">
+    <div class="head">
+      <span>Terminal <span class="tag">— token entero de golpe</span></span>
+      <span class="pulse" id="pulseA"></span>
+    </div>
+    <div class="out" id="outA"></div>
+  </div>
+  <div class="pane">
+    <div class="head">
+      <span>Suavizado <span class="tag">— carácter a carácter, 60 fps</span></span>
+      <span class="pulse smooth" id="pulseB"></span>
+    </div>
+    <div class="out" id="outB"></div>
+  </div>
+</div>
+
+<div class="note">
+  Los dos paneles reciben <strong>los mismos tokens en los mismos milisegundos</strong>. El izquierdo los
+  pinta según llegan: trozos irregulares de 1 a 8 caracteres cada ~66 ms. El derecho los mete en una cola
+  y un bucle de <code>requestAnimationFrame</code> la vacía a ritmo proporcional a lo pendiente, así que
+  nunca se seca ni se adelanta. A 15 tok/s y ~4 caracteres por token salen ~60 caracteres por segundo:
+  justo un carácter por frame.
+</div>
+
+<script>
+const TEXT = "Los embeddings mmapeados solo paginan las filas que de verdad se consultan, así que la memoria residente baja de 1.132 a 378 MB sin tocar un solo bit de la salida. El coste es un fallo de página la primera vez que aparece un token nuevo: unas decenas de microsegundos frente a los 9,6 milisegundos que cuesta el paso completo. Se amortiza solo.";
+
+// Trocea el texto en algo parecido a tokens BPE: piezas irregulares de 1 a 8
+// caracteres, cortando también dentro de palabras largas.
+function tokenize(text) {
+  const out = [];
+  const words = text.match(/\s*\S+/g) || [];
+  for (const w of words) {
+    if (w.length <= 6) { out.push(w); continue; }
+    let i = 0;
+    while (i < w.length) {
+      const n = 2 + Math.floor(Math.random() * 5);
+      out.push(w.slice(i, i + n));
+      i += n;
+    }
+  }
+  return out;
+}
+
+const outA = document.getElementById('outA');
+const outB = document.getElementById('outB');
+const pulseA = document.getElementById('pulseA');
+const pulseB = document.getElementById('pulseB');
+const slider = document.getElementById('slider');
+const tpsLabel = document.getElementById('tps');
+
+let timer = null, raf = null;
+
+function render(el, text) {
+  el.textContent = text;
+  const caret = document.createElement('span');
+  caret.className = 'caret';
+  el.appendChild(caret);
+}
+
+function start() {
+  clearInterval(timer);
+  cancelAnimationFrame(raf);
+
+  const tps = Number(slider.value);
+  const tokens = tokenize(TEXT);
+  let idx = 0;
+
+  let shownA = '';        // panel izquierdo: se pinta lo que llega
+  let queue = '';         // panel derecho: cola pendiente de dibujar
+  let shownB = '';
+  let carry = 0;          // fracción de carácter arrastrada entre frames
+
+  render(outA, '');
+  render(outB, '');
+
+  timer = setInterval(() => {
+    if (idx >= tokens.length) { clearInterval(timer); return; }
+    const t = tokens[idx++];
+    shownA += t;
+    queue += t;
+    render(outA, shownA);
+    pulseA.classList.add('on');
+    setTimeout(() => pulseA.classList.remove('on'), 60);
+  }, 1000 / tps);
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(now - last, 100);
+    last = now;
+    if (queue.length) {
+      // Ritmo proporcional a lo pendiente: vacía la cola en ~130 ms, así que
+      // acelera cuando se acumula y frena cuando queda poco. Nunca da tirones.
+      const perMs = Math.max(queue.length / 130, 0.004);
+      const want = perMs * dt + carry;
+      const n = Math.floor(want);
+      carry = want - n;
+      if (n > 0) {
+        shownB += queue.slice(0, n);
+        queue = queue.slice(n);
+        render(outB, shownB);
+        pulseB.classList.add('on');
+        setTimeout(() => pulseB.classList.remove('on'), 40);
+      }
+    }
+    raf = requestAnimationFrame(frame);
+  }
+  raf = requestAnimationFrame(frame);
+}
+
+slider.addEventListener('input', () => {
+  tpsLabel.textContent = slider.value + ' tok/s';
+  start();
+});
+document.getElementById('run').addEventListener('click', start);
+start();
+</script>
+
+</body>
+</html>

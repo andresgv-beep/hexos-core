@@ -46,7 +46,7 @@ TARGET = $(BINDIR)/hexos
 # Rules
 # ============================================================================
 
-.PHONY: all clean run modules
+.PHONY: all clean run modules serve
 
 all: modules $(TARGET)
 
@@ -109,6 +109,27 @@ info:
 # ============================================================================
 # Tools
 # ============================================================================
+
+# ============================================================================
+# Serve — puente HTTP/SSE para la UI web
+#
+# Binario aparte: no depende de los módulos cognitivos ni de NVML, solo de
+# pthreads. Conduce helios_chat por tubería, así que no necesita ni un cambio
+# en Hector-engine.
+# ============================================================================
+
+SERVE_SRC = $(SRCDIR)/serve/engine.c $(SRCDIR)/serve/http.c \
+            $(SRCDIR)/serve/serve_main.c
+SERVE_TARGET = $(BINDIR)/hexos_serve
+
+serve: $(SERVE_TARGET)
+
+$(SERVE_TARGET): $(SERVE_SRC) $(INCDIR)/hexos_serve.h
+	@mkdir -p $(BINDIR)
+	$(CC) $(CFLAGS) -I$(INCDIR) $(SERVE_SRC) -o $@ -lpthread
+	@echo ""
+	@echo "Build complete: $@"
+	@echo "Arranca con: ./$(SERVE_TARGET) --model /ruta/modelo.hnf"
 
 tools: $(BINDIR)/hexos_ipc_test
 
