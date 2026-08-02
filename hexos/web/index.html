@@ -110,6 +110,27 @@
   }
   .mudo button:hover { border-color: var(--accent); }
 
+  /* Adjunto pendiente: el contrato visual v1 solo admite uno, y se consume
+     con el siguiente mensaje. Se enseña para que nadie envíe texto sin
+     acordarse de que lleva una foto colgada. */
+  .pend {
+    display: none; align-items: center; gap: 10px;
+    width: 100%; max-width: 780px; margin: 0 auto 10px;
+    background: var(--raised); border: 1px solid var(--border);
+    border-radius: 10px; padding: 8px 10px; font-size: 12px; color: var(--dim);
+  }
+  .pend.on { display: flex; }
+  .pend img { height: 40px; width: 40px; object-fit: cover; border-radius: 6px; }
+  .pend .x {
+    margin-left: auto; border: 0; background: none; color: var(--dim);
+    cursor: pointer; font-size: 16px; padding: 0 6px;
+  }
+  .pend .x:hover { color: var(--bad); }
+  .msg .shot {
+    max-width: 320px; max-height: 320px; border-radius: 8px;
+    border: 1px solid var(--border); display: block; margin-bottom: 8px;
+  }
+
   .stats {
     font-size: 11px; color: var(--dim); font-family: ui-monospace, Menlo, monospace;
     display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px;
@@ -170,6 +191,11 @@
 <main id="main"><div class="wrap" id="log"></div></main>
 
 <footer>
+  <div class="pend" id="pend">
+    <img id="pendImg" alt="">
+    <span id="pendText"></span>
+    <button class="x" id="pendX" title="Quitar">✕</button>
+  </div>
   <div class="composer">
     <button class="btn" id="attach" title="Adjuntar un archivo de texto">📎</button>
     <textarea id="input" rows="1" placeholder="Escribe a Héctor…"></textarea>
@@ -190,6 +216,17 @@ const attachBtn = document.getElementById('attach');
 const fileInput = document.getElementById('file');
 const dot       = document.getElementById('dot');
 const stateName = document.getElementById('stateName');
+const pend      = document.getElementById('pend');
+const pendImg   = document.getElementById('pendImg');
+const pendText  = document.getElementById('pendText');
+const pendX     = document.getElementById('pendX');
+
+const TIPOS_TEXTO = '.txt,.md,.c,.h,.cpp,.py,.js,.ts,.rs,.json,.log,.csv,.html,.css,.sh,.toml,.yaml,.yml';
+const TIPOS_IMAGEN = 'image/*';
+// El motor redimensiona a su propio contrato; aquí solo se evita mandar una
+// foto de 40 MP en crudo por la red. 1280 va muy por encima de lo que el
+// encoder necesita (2520 parches de 16 px ~ 800x800).
+const LADO_MAX = 1280;
 
 let state    = 'booting';
 let current  = null;   // {bodyEl, text} del mensaje que se está recibiendo
@@ -199,6 +236,8 @@ let thinking = false;
 let rawTail  = '';     // resto sin clasificar del flujo crudo
 let stats    = null;   // telemetría del turno, si ya empezó a llegar
 let lastUserMessage = null;   // para reintentar si el turno sale mudo
+let visionReady = false;      // lo dice /api/status, no el nombre del modelo
+let pendiente = null;         // {thumb, w, h, nombre} ya aceptado por el motor
 
 const THINK_OPEN = '(pensando';
 // helios_chat cierra cada turno con su línea de telemetría. En el terminal
@@ -226,7 +265,7 @@ function setState(s) {
 /* ---------------------------------------------------------------------
  * Mensajes
  * ------------------------------------------------------------------- */
-function addMessage(who, text) {
+function addMessage(who, text, thumb) {
   const el = document.createElement('div');
   el.className = 'msg ' + who;
   const label = document.createElement('div');
@@ -234,7 +273,14 @@ function addMessage(who, text) {
   label.textContent = who === 'user' ? 'TÚ' : 'HÉCTOR';
   const body = document.createElement('div');
   body.className = 'body';
-  body.textContent = text || '';
+  if (thumb) {
+    const img = document.createElement('img');
+    img.className = 'shot';
+    img.src = thumb;
+    img.alt = 'imagen adjunta';
+    body.appendChild(img);
+  }
+  body.appendChild(document.createTextNode(text || ''));
   el.appendChild(label);
   el.appendChild(body);
   log.appendChild(el);
@@ -450,6 +496,83 @@ function markdown(src) {
 }
 
 /* ---------------------------------------------------------------------
+ * Capacidades
+ *
+ * La UI no sabe qué es Gemma 4 ni mira el nombre del modelo: pregunta a
+ * /api/status si hay un adaptador de visión listo y se configura con eso.
+ * Con un modelo de solo texto, el clip sigue aceptando ficheros y ya está.
+ * ------------------------------------------------------------------- */
+async function cargarCapacidades() {
+  try {
+    const r = await fetch('/api/status');
+    const d = await r.json();
+    const v = d.model && d.model.modalities && d.model.modalities.vision;
+    visionReady = !!(v && v.status === 'runtime_ready');
+  } catch (_) {
+    visionReady = false;
+  }
+  fileInput.accept = visionReady ? TIPOS_IMAGEN + ',' + TIPOS_TEXTO : TIPOS_TEXTO;
+  attachBtn.title = visionReady ? 'Adjuntar una imagen o un archivo de texto'
+                                : 'Adjuntar un archivo de texto';
+}
+
+/* ---------------------------------------------------------------------
+ * Imágenes
+ *
+ * El motor no decodifica PNG ni JPEG a propósito: recibe RGB8 y punto. El
+ * navegador ya sabe decodificar cualquier formato, así que el trabajo se
+ * hace aquí y Héctor no arrastra una librería de imágenes.
+ * ------------------------------------------------------------------- */
+async function subirImagen(file) {
+  const bmp = await createImageBitmap(file);
+  const k = Math.min(1, LADO_MAX / Math.max(bmp.width, bmp.height));
+  const w = Math.max(1, Math.round(bmp.width * k));
+  const h = Math.max(1, Math.round(bmp.height * k));
+
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  const cx = cv.getContext('2d');
+  cx.drawImage(bmp, 0, 0, w, h);
+
+  // Miniatura aparte para no meter la imagen entera en el DOM.
+  const tc = document.createElement('canvas');
+  const tk = Math.min(1, 320 / Math.max(bmp.width, bmp.height));
+  tc.width = Math.max(1, Math.round(bmp.width * tk));
+  tc.height = Math.max(1, Math.round(bmp.height * tk));
+  tc.getContext('2d').drawImage(bmp, 0, 0, tc.width, tc.height);
+  bmp.close();
+
+  const rgba = cx.getImageData(0, 0, w, h).data;
+  const rgb = new Uint8Array(w * h * 3);
+  for (let i = 0, j = 0; i < rgba.length; i += 4, j += 3) {
+    rgb[j] = rgba[i]; rgb[j + 1] = rgba[i + 1]; rgb[j + 2] = rgba[i + 2];
+  }
+
+  const r = await fetch('/api/attachment/rgb8', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/octet-stream',
+      'X-Image-Width': String(w),
+      'X-Image-Height': String(h),
+      'X-Image-Stride': String(w * 3)
+    },
+    body: rgb
+  });
+  if (!r.ok) throw new Error('el motor rechazó la imagen (HTTP ' + r.status + ')');
+
+  return { thumb: tc.toDataURL('image/jpeg', 0.75), w, h, nombre: file.name };
+}
+
+function mostrarPendiente(p) {
+  pendiente = p;
+  if (!p) { pend.classList.remove('on'); return; }
+  pendImg.src = p.thumb;
+  pendText.textContent = p.nombre + ' · ' + p.w + '×' + p.h +
+                         ' · se envía con tu próximo mensaje';
+  pend.classList.add('on');
+}
+
+/* ---------------------------------------------------------------------
  * Transporte
  * ------------------------------------------------------------------- */
 function connect() {
@@ -483,9 +606,16 @@ function connect() {
 }
 
 async function send(text) {
+  // Con una imagen colgada, enviar sin escribir nada es la pregunta obvia;
+  // se escribe en la burbuja para que quede claro qué se preguntó.
+  if (!text.trim() && pendiente) text = '¿Qué ves en esta imagen?';
   if (!text.trim() || state !== 'idle') return;
+
+  const thumb = pendiente ? pendiente.thumb : null;
+  mostrarPendiente(null);   // el motor la consume con este mensaje
+
   lastUserMessage = text;
-  addMessage('user', text);
+  addMessage('user', text, thumb);
   input.value = '';
   input.style.height = 'auto';
   setState('thinking');
@@ -520,14 +650,41 @@ input.addEventListener('keydown', e => {
 sendBtn.addEventListener('click', () => send(input.value));
 attachBtn.addEventListener('click', () => fileInput.click());
 
-fileInput.addEventListener('change', async () => {
-  const f = fileInput.files[0];
-  if (!f) return;
-  const text = await f.text();
-  send('Archivo: ' + f.name + '\n\n' + text);
-  fileInput.value = '';
+pendX.addEventListener('click', () => {
+  // El contrato v1 no tiene forma de cancelar un adjunto ya aceptado: se
+  // quita de la vista, pero el motor lo consumirá igual con el próximo
+  // mensaje. Mejor decirlo que fingir que se ha borrado.
+  mostrarPendiente(null);
+  addMessage('helios', '(la imagen sigue en cola dentro del motor y se ' +
+                       'gastará con tu próximo mensaje)');
 });
 
+fileInput.addEventListener('change', async () => {
+  const f = fileInput.files[0];
+  fileInput.value = '';
+  if (!f) return;
+
+  if (f.type.startsWith('image/')) {
+    if (!visionReady) {
+      addMessage('helios', '(este modelo no tiene visión: /api/status no ' +
+                           'declara un adaptador listo)');
+      return;
+    }
+    attachBtn.disabled = true;
+    try {
+      mostrarPendiente(await subirImagen(f));
+    } catch (e) {
+      addMessage('helios', '(no pude adjuntar la imagen: ' + e.message + ')');
+    } finally {
+      attachBtn.disabled = false;
+    }
+    return;
+  }
+
+  send('Archivo: ' + f.name + '\n\n' + await f.text());
+});
+
+cargarCapacidades();
 connect();
 requestAnimationFrame(frame);
 </script>
