@@ -215,10 +215,25 @@ def git_head(repo):
         return None
 
 
+def env_efectivo(extra_env):
+    """TODAS las HELIOS_* que verá el motor, no solo las de --env.
+
+    El proceso hijo hereda el entorno del shell: si alguien corre la batería
+    con HELIOS_CTX=8192 exportado, el informe decía `env: {}` y la base
+    quedaba irreproducible sin que nadie lo notara. Se registra lo que de
+    verdad va a estar puesto.
+    """
+    efectivo = {k: v for k, v in os.environ.items() if k.startswith("HELIOS_")}
+    efectivo.update(extra_env)
+    return efectivo
+
+
 def procedencia(model, engine, extra_env, con_sha):
     """Sin esto el informe no es reproducible: 'qwen3_8b.hnf' no identifica nada
     dentro de tres semanas."""
     eng_dir = os.path.dirname(os.path.dirname(os.path.abspath(engine)))
+    heredadas = sorted(k for k in os.environ if k.startswith("HELIOS_")
+                       and k not in extra_env)
     return {
         "modelo_ruta": os.path.abspath(model),
         "modelo_bytes": os.path.getsize(model),
@@ -229,7 +244,9 @@ def procedencia(model, engine, extra_env, con_sha):
         "hector_commit": git_head(eng_dir),
         "hexos_commit": git_head(os.path.dirname(
             os.path.dirname(os.path.abspath(__file__)))),
-        "env": extra_env,
+        "env": env_efectivo(extra_env),
+        "env_explicito": extra_env,
+        "env_heredado": heredadas,
         "bateria_casos": len(BATERIA),
     }
 
@@ -324,6 +341,10 @@ def correr_caso(caso, model, engine, extra_env, tiene_vision):
             salida = re.sub(r"\x1b\[[0-9;]*m", "",
                             proc.stdout.decode("utf-8", "replace"))
             despues = leer_memoria(home)
+            # Un motor que muere a mitad puede dejar turnos capturados y
+            # parecer una captura sana. El código de salida es la única señal
+            # fiable de que la sesión terminó como debía.
+            err_cola = proc.stderr.decode("utf-8", "replace").strip()[-300:]
 
             bloques = re.findall(r"helios> (.*?)\n(\[\d+ tok[^\]]*\])", salida, re.S)
             turnos = []
@@ -343,6 +364,8 @@ def correr_caso(caso, model, engine, extra_env, tiene_vision):
                 "adjunto": sesion.get("adjunto"),
                 "turnos_esperados": len(sesion["turnos"]),
                 "turnos_capturados": len(turnos),
+                "returncode": proc.returncode,
+                "stderr_cola": err_cola if proc.returncode != 0 else "",
                 "memoria_delta": delta_memoria(antes, despues),
                 "avisos": re.findall(
                     r"\((?:texto truncado|reorganizando|turno grande|imagen "
@@ -350,13 +373,22 @@ def correr_caso(caso, model, engine, extra_env, tiene_vision):
             })
 
         esperados = sum(len(s["turnos"]) for s in caso["sesiones"])
+        malas = [s for s in sesiones if s["returncode"] != 0]
+        if malas:
+            estado = "FALLO_MOTOR"
+        elif len(todos) != esperados:
+            estado = "INCOMPLETO"
+        else:
+            estado = "OK"
         return {
             "nombre": caso["nombre"],
             "invariante": caso["invariante"],
-            "estado": "OK" if len(todos) == esperados else "INCOMPLETO",
+            "estado": estado,
             "turnos_esperados": esperados,
             "turnos_capturados": len(todos),
-            "memoria_final": leer_memoria(home) if caso.get("revisa_memoria") else None,
+            # Siempre, no solo en los casos marcados: una sustitución del
+            # mismo tamaño no aparece en el delta y sí en el estado final.
+            "memoria_final": leer_memoria(home),
             "sesiones": sesiones,
             "turnos": todos,
         }
@@ -372,6 +404,7 @@ def resumen(informe):
         "casos": len(informe["casos"]),
         "saltados": sum(1 for c in informe["casos"] if c.get("estado") == "SALTADO"),
         "incompletos": sum(1 for c in informe["casos"] if c.get("estado") == "INCOMPLETO"),
+        "fallos_motor": sum(1 for c in informe["casos"] if c.get("estado") == "FALLO_MOTOR"),
         "turnos": len(t),
         "mudos": sum(1 for x in t if x["mudo"]),
         "ofertas_servicio": sum(x["oferta_servicio"] for x in t),
@@ -433,6 +466,21 @@ def diff(a_path, b_path):
         if da != db:
             print(f"[MEMORIA] {nombre}: cambió lo que se escribió en memoria")
             fallos += 1
+        # El delta no ve una sustitución del mismo tamaño (mismo número de
+        # bytes, otro contenido): hay que comparar también el estado final.
+        # Solo si ambos informes lo traen, para no romper bases anteriores.
+        fa, fb = ca[nombre].get("memoria_final"), cb[nombre].get("memoria_final")
+        if fa is not None and fb is not None and fa != fb and da == db:
+            for fich in sorted(set(fa) | set(fb)):
+                if fa.get(fich) != fb.get(fich):
+                    print(f"[MEMORIA] {nombre}: estado final distinto en {fich}")
+            fallos += 1
+        # `None` = informe anterior al registro de returncode; no es un cambio.
+        rca = [s.get("returncode") for s in ca[nombre].get("sesiones", [])]
+        rcb = [s.get("returncode") for s in cb[nombre].get("sesiones", [])]
+        if None not in rca and None not in rcb and rca != rcb:
+            print(f"[MOTOR] {nombre}: códigos de salida {rca} → {rcb}")
+            fallos += 1
 
     print()
     print("resumen A:", json.dumps(a.get("resumen", {}), ensure_ascii=False))
@@ -481,7 +529,11 @@ def main():
         print(f"[{i}/{len(casos)}] {caso['nombre']}…", flush=True)
         r = correr_caso(caso, args.model, args.engine, extra_env, tiene_vision)
         informe["casos"].append(r)
-        if r.get("estado") not in ("OK", "SALTADO"):
+        if r.get("estado") == "FALLO_MOTOR":
+            malas = [s for s in r["sesiones"] if s["returncode"] != 0]
+            print(f'    FALLO DEL MOTOR: returncode '
+                  f'{[s["returncode"] for s in malas]} — {malas[0]["stderr_cola"][-160:]}')
+        elif r.get("estado") not in ("OK", "SALTADO"):
             print(f'    AVISO: {r["turnos_capturados"]}/{r["turnos_esperados"]} turnos')
 
     informe["resumen"] = resumen(informe)

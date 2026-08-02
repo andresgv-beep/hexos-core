@@ -398,15 +398,23 @@ que la evacuación debe conservar.
 
 ```
 hector@1bca9b5 · qwen3_8b.hnf sha256 164dca9366fc… · HELIOS_EMBED_MMAP=1
-13 casos · 1 saltado (visión) · 27 turnos
+13 casos · 1 saltado (visión) · 27 turnos · 0 fallos de motor
 mudos 0 · fugas de contrato 0 · CJK 0 · repeticiones 0
-ofertas de servicio 1 · pensamientos cortados 6 · presupuestos agotados 1
-respuestas idénticas 1 · tokens medios 214,3
+ofertas de servicio 2 · pensamientos cortados 6 · presupuestos agotados 1
+respuestas idénticas 1 · tokens medios 219,7
 ```
 
+Las cifras de defectos oscilan entre capturas del mismo binario (1-2 ofertas
+de servicio, 6 pensamientos cortados): son **rangos**, no constantes. Una
+comparación posterior debe mirar el orden de magnitud, no la igualdad exacta.
+
 El informe guarda ruta, tamaño y SHA256 del HNF, SHA256 y mtime del binario,
-commit de ambos repos y el entorno completo: dentro de tres semanas se puede
-reconstruir la base sin ambigüedad.
+commit de ambos repos y **todas** las variables `HELIOS_*` que verá el motor,
+separando las pasadas por `--env` de las heredadas del shell: el proceso hijo
+hereda el entorno, así que registrar solo las explícitas dejaba la base
+irreproducible sin que nadie lo notara. También el `returncode` de cada
+sesión: un motor que muere a mitad puede dejar turnos capturados y parecer una
+captura sana.
 
 Caso de visión verificado aparte sobre `gemma4-e2b-it-multimodal.hnf`:
 `continuar_artefacto` correcto, "Veo un círculo rojo sólido" y, al turno
@@ -421,10 +429,18 @@ siguiente sin imagen, "Era rojo" — la referencia al artefacto sobrevive.
    `candidates.md: - Se llama Andrés y es fontanero.` **El hecho falso
    sobrevive y nada queda marcado como sustituido.** Sin el registro de
    memoria este caso habría figurado como pasado.
-2. **Los candidatos se escriben con demasiada alegría** — perfil vacío
-   preguntando "¿qué sabes de mí?" generó 238 bytes de candidatos inventados
-   ("no le gusta ser preguntado sobre su nombre"). Un candidato nunca debe
-   nacer de una inferencia sobre la intención.
+2. **Los candidatos se INVENTAN identidades.** El caso de perfil vacío
+   preguntando "¿qué sabes de mí?" escribió en `candidates.md`:
+   `- Se llama Ana y vive en Bilbao.` **Nada de eso existe en ninguna parte:
+   ni en el perfil, ni en el prompt, ni en la conversación.** El extractor
+   fabricó una identidad completa y la guardó. La invariante "cero fuga"
+   técnicamente pasa —no viene de otro perfil— pero el resultado es peor: no
+   hay filtración, hay invención. En una segunda captura del mismo caso los
+   candidatos inventados fueron otros ("no le gusta ser preguntado sobre su
+   nombre"), así que no es un accidente puntual sino el comportamiento normal
+   del extractor cuando no hay evidencia. **Un candidato no puede nacer de un
+   turno sin evidencia**, y esta es la segunda justificación estructural de
+   E3 junto al fontanero.
 3. **Reinicio parcial** — el perro sobrevive al reinicio, pero "¿en qué
    estaba trabajando?" responde que no tiene datos: los hechos persisten y
    las tareas abiertas no. Es el checkpoint mínimo de HERA que pide E4.

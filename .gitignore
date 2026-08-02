@@ -17,3 +17,7 @@ runtime/logs/
 # Profiling
 *.nsys-rep
 *.sqlite
+
+# Python
+__pycache__/
+*.pyc
