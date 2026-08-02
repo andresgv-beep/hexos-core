@@ -1,0 +1,930 @@
+{
+ "procedencia": {
+  "modelo_ruta": "/home/andres/Documentos/GitHub/helios_convert_v9.1/output/qwen3_8b.hnf",
+  "modelo_bytes": 6293710450,
+  "modelo_sha256": "164dca9366fc58c9d0d0cd95d7cbea2cfee0842d8fc1f850b1297719f3f222e8",
+  "engine_ruta": "/home/andres/Documentos/GitHub/Hector-engine/build/helios_chat",
+  "engine_sha256": "26abffcf7c02a18a7b762a7fb78ea85ecaaba32a0e18bbbceada0fb10df77010",
+  "engine_mtime": 1785698098,
+  "hector_commit": "1bca9b5ffd55",
+  "hexos_commit": "111636c40bf8",
+  "env": {
+   "HELIOS_EMBED_MMAP": "1"
+  },
+  "bateria_casos": 13
+ },
+ "vision_disponible": false,
+ "casos": [
+  {
+   "nombre": "saludo_perfil_nuevo",
+   "invariante": "sin familiaridad heredada ni oferta automática de ayuda",
+   "estado": "OK",
+   "turnos_esperados": 1,
+   "turnos_capturados": 1,
+   "memoria_final": null,
+   "sesiones": [
+    {
+     "indice": 1,
+     "destila": false,
+     "adjunto": null,
+     "turnos_esperados": 1,
+     "turnos_capturados": 1,
+     "memoria_delta": {},
+     "avisos": []
+    }
+   ],
+   "turnos": [
+    {
+     "texto": "¡Buenas! 😄 Aquí andamos, dale que te pego con el motor. ¿Tú qué traes?",
+     "chars": 70,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 0,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": false,
+     "acto": "saludar",
+     "registro": "neutral",
+     "temp": 0.9,
+     "tokens": 33,
+     "presupuesto_agotado": false,
+     "pensamiento_cortado": false,
+     "ctx": 529,
+     "sesion": 1,
+     "n": 1,
+     "mensaje": "hola"
+    }
+   ]
+  },
+  {
+   "nombre": "charla_perfil_conocido",
+   "invariante": "conserva registro sin ampliar el acto",
+   "estado": "OK",
+   "turnos_esperados": 3,
+   "turnos_capturados": 3,
+   "memoria_final": null,
+   "sesiones": [
+    {
+     "indice": 1,
+     "destila": false,
+     "adjunto": null,
+     "turnos_esperados": 3,
+     "turnos_capturados": 3,
+     "memoria_delta": {},
+     "avisos": []
+    }
+   ],
+   "turnos": [
+    {
+     "texto": "¡Hola! Aquí ando, ¿qué tal va eso? 😄",
+     "chars": 36,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 0,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": false,
+     "acto": "saludar",
+     "registro": "neutral",
+     "temp": 0.9,
+     "tokens": 20,
+     "presupuesto_agotado": false,
+     "pensamiento_cortado": false,
+     "ctx": 693,
+     "sesion": 1,
+     "n": 1,
+     "mensaje": "hola socio"
+    },
+    {
+     "texto": "¿Y tú qué haces este finde? 😄",
+     "chars": 29,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 0,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": false,
+     "acto": "conversar",
+     "registro": "colega",
+     "temp": 0.9,
+     "tokens": 15,
+     "presupuesto_agotado": false,
+     "pensamiento_cortado": false,
+     "ctx": 784,
+     "sesion": 1,
+     "n": 2,
+     "mensaje": "jajaja qué tal el finde"
+    },
+    {
+     "texto": "Vale. Entonces, ¿me cuentas algo del motor Héctor? 😎",
+     "chars": 52,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 0,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": false,
+     "acto": "conversar",
+     "registro": "colega",
+     "temp": 0.7,
+     "tokens": 23,
+     "presupuesto_agotado": false,
+     "pensamiento_cortado": false,
+     "ctx": 877,
+     "sesion": 1,
+     "n": 3,
+     "mensaje": "nada nuevo por aquí"
+    }
+   ]
+  },
+  {
+   "nombre": "pregunta_tecnica",
+   "invariante": "responde y termina",
+   "estado": "OK",
+   "turnos_esperados": 1,
+   "turnos_capturados": 1,
+   "memoria_final": null,
+   "sesiones": [
+    {
+     "indice": 1,
+     "destila": false,
+     "adjunto": null,
+     "turnos_esperados": 1,
+     "turnos_capturados": 1,
+     "memoria_delta": {},
+     "avisos": []
+    }
+   ],
+   "turnos": [
+    {
+     "texto": "La **latencia de prefill** se refiere al tiempo que tarda un modelo en procesar la entrada inicial (el \"prefill\") antes de generar una respuesta. \n\nEste proceso es crucial, especialmente en modelos grandes o complejos, donde el tiempo de preprocesamiento puede afectar significativamente la latencia total del sistema.\n\nEn resumen:  \n- El **prefill** es el primer paso para preparar el modelo para generar resultados.  \n- La **latencia de prefill** mide cuánto tiempo toma este proceso crítico.",
+     "chars": 494,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 0,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": false,
+     "acto": "responder",
+     "registro": "neutral",
+     "temp": 0.7,
+     "tokens": 342,
+     "presupuesto_agotado": false,
+     "pensamiento_cortado": false,
+     "ctx": 1041,
+     "sesion": 1,
+     "n": 1,
+     "mensaje": "¿qué es la latencia de prefill?"
+    }
+   ]
+  },
+  {
+   "nombre": "artefacto_y_velocidad",
+   "invariante": "continúa el artefacto, no lo trata como trivial",
+   "estado": "OK",
+   "turnos_esperados": 2,
+   "turnos_capturados": 2,
+   "memoria_final": null,
+   "sesiones": [
+    {
+     "indice": 1,
+     "destila": false,
+     "adjunto": null,
+     "turnos_esperados": 2,
+     "turnos_capturados": 2,
+     "memoria_delta": {
+      "candidates.md": {
+       "bytes_antes": 0,
+       "bytes_despues": 43,
+       "lineas_nuevas": [
+        "- Ha decidido usar React para la interfaz."
+       ]
+      }
+     },
+     "avisos": []
+    }
+   ],
+   "turnos": [
+    {
+     "texto": "El kernel GEMV realiza una operación clave en el procesamiento de datos, especialmente en contextos como la inferencia en modelos de machine learning.\n\n**Lo esencial:**\n\n- **Función:** El kernel GEMV lee los pesos comprimidos y acumula los resultados en formato fp32 (flotante punto flotante de precisión simple).\n\n- **Repetición del proceso:** La descripción se repite múltiples veces. Esto podría indicar un error de formateo o simplemente un énfasis repetitivo sobre la función del kernel GEMV.\n\nEn resumen, este kernel desempeña un papel crucial en la eficiencia computacional durante las etapas de entrenamiento e inferencia.",
+     "chars": 630,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 0,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": false,
+     "acto": "colaborar",
+     "registro": "neutral",
+     "temp": 0.7,
+     "tokens": 321,
+     "presupuesto_agotado": false,
+     "pensamiento_cortado": false,
+     "ctx": 1265,
+     "sesion": 1,
+     "n": 1,
+     "mensaje": "Te paso un texto. Léelo y coméntame lo esencial: El kernel GEMV lee los pesos comprimidos … (769 chars)"
+    },
+    {
+     "texto": "La velocidad de ejecución del kernel GEMV está directamente vinculada a su capacidad para manejar grandes volúmenes de datos con alta eficiencia computacional.\n\nDurante cada ciclo de ejecución, el kernel GEMV cumple tres tareas fundamentales:\n\n1. **Lectura de Pesos Comprimidos**: Este paso implica acceder a almacenamientos donde se guardan los parámetros aprendidos por el modelo, pero representados de manera compacta debido al uso de técnicas de compresión.\n\n2. **Acumulación de Resultados en FP32**: Tras completar la lectura de los pesos comprimidos, el kernel inicia el proceso de cálculo mediante la multiplicación matricial entre las matrices de entrada y los pesos correspondientes, seguido por la suma de los productos resultantes, lo cual constituye la fase inicial del proceso de aceleración.\n\n3. **Ejecución Iterativa para Optimización**: A continuación, se lleva a cabo un ciclo iterativo donde cada uno representa una iteración específica dentro del proceso general de optimización basado en gradient descent. Cada iteración contribuye indirectamente al incremento gradual de la eficiencia global del sistema, permitiendo así que toda la infraestructura relacionada pueda operar de forma más rápida y efectiva como resultado final del proceso completo.\n\n**Resumen:**\n\nEl kernel GEMV es fundamental en procesos computacionales complejos debido a su habilidad única para realizar operaciones matriciales con altísima precisión numérica (en formato fp32) mientras simultáneamente lee y procesa datos brutos o no estructurados provenientes de diversas fuentes externas, incluyendo aquellas que pueden estar ubicadas geográficamente muy lejos unos de otros.\n\nAdemás, gracias a su diseño arquitectónico modular e intercambiable, este kernel puede ser fácilmente integrado y adaptado para funcionar correctamente dentro del contexto específico de cualquier tipo de aplicación informática existente actualmente en el mercado laboral mundial contemporáneo.\n\nEn resumen, el kernel GEMV juega un papel crucial en sistemas computacionales complejos debido a sus capacidades únicas para manejar grandes volúmenes de datos con alta eficiencia computacional.",
+     "chars": 2159,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 0,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": false,
+     "acto": "continuar_artefacto",
+     "registro": "neutral",
+     "temp": 0.7,
+     "tokens": 709,
+     "presupuesto_agotado": false,
+     "pensamiento_cortado": false,
+     "ctx": 2070,
+     "sesion": 1,
+     "n": 2,
+     "mensaje": "velocidad"
+    }
+   ]
+  },
+  {
+   "nombre": "documento_y_resume",
+   "invariante": "resume, no asesora ni reescribe",
+   "estado": "OK",
+   "turnos_esperados": 2,
+   "turnos_capturados": 2,
+   "memoria_final": null,
+   "sesiones": [
+    {
+     "indice": 1,
+     "destila": false,
+     "adjunto": null,
+     "turnos_esperados": 2,
+     "turnos_capturados": 2,
+     "memoria_delta": {},
+     "avisos": []
+    }
+   ],
+   "turnos": [
+    {
+     "texto": "**Lo esencial del texto:**  \n- **Tamaño de la tabla**: La tabla de embeddings ocupa **768 MiB**, lo cual representa un tamaño significativo, probablemente debido a la alta dimensionalidad o cantidad de datos almacenados en esta estructura.\n\n- **Acceso limitado**: Aunque la tabla consume una gran cantidad de memoria (768 MiB), solo se consulta **una fila a la vez**. Esto sugiere que el sistema está diseñado para acceder selectivamente a los datos, evitando cargar toda la tabla simultáneamente.\n\n---\n\n**Conclusión breve y directa:**  \n> El texto destaca que aunque la tabla de embeddings ocupa 768 MiB, solo se accede a una fila a la vez.",
+     "chars": 641,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 0,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": false,
+     "acto": "colaborar",
+     "registro": "neutral",
+     "temp": 0.7,
+     "tokens": 401,
+     "presupuesto_agotado": false,
+     "pensamiento_cortado": false,
+     "ctx": 1345,
+     "sesion": 1,
+     "n": 1,
+     "mensaje": "Te paso un texto. Léelo y coméntame lo esencial: La tabla de embeddings ocupa 768 MiB y so… (841 chars)"
+    },
+    {
+     "texto": "La tabla de embeddings, aunque grande (768 MiB), solo permite consultar una fila a la vez.",
+     "chars": 90,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 0,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": false,
+     "acto": "resumir",
+     "registro": "neutral",
+     "temp": 0.7,
+     "tokens": 160,
+     "presupuesto_agotado": false,
+     "pensamiento_cortado": false,
+     "ctx": 1598,
+     "sesion": 1,
+     "n": 2,
+     "mensaje": "resume eso en una frase"
+    }
+   ]
+  },
+  {
+   "nombre": "correccion_de_tema",
+   "invariante": "corrige sin defenderse ni ampliar (no prueba memoria)",
+   "estado": "OK",
+   "turnos_esperados": 2,
+   "turnos_capturados": 2,
+   "memoria_final": null,
+   "sesiones": [
+    {
+     "indice": 1,
+     "destila": false,
+     "adjunto": null,
+     "turnos_esperados": 2,
+     "turnos_capturados": 2,
+     "memoria_delta": {},
+     "avisos": []
+    }
+   ],
+   "turnos": [
+    {
+     "texto": "El cielo es azul durante el día debido a la dispersión de Rayleigh, que hace que las luces cortas (como el azul) se dispersen más en la atmósfera. 🌤️\n\n¿Te gustaría profundizar en algo relacionado con esto? 😊",
+     "chars": 207,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 0,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": false,
+     "acto": "responder",
+     "registro": "neutral",
+     "temp": 0.7,
+     "tokens": 325,
+     "presupuesto_agotado": false,
+     "pensamiento_cortado": true,
+     "ctx": 1024,
+     "sesion": 1,
+     "n": 1,
+     "mensaje": "¿de qué color es el cielo?"
+    },
+    {
+     "texto": "El cielo de Marte no tiene un color uniforme como ocurre en la Tierra. Esto se debe principalmente a la composición y densidad de su atmosfera.\n\nLa atmósfera marciana está compuesta mayoritariamente por dióxido de carbono (CO₂), representando alrededor del 95% del volumen total de la atmósfera. El resto consiste en pequeñas cantidades de nitrógeno (N₂), argón (Ar) y otros gases raros.\n\nAdemás, la presión atmosférica en la superficie de Marte es extremadamente baja, aproximadamente entre 0,4 y 0,6 milibares (mbar). Esta presión atmosférica representa solo una fracción muy pequeña de la presión atmosférica terrestre media (~1013 mbar)).\n\nEstos factores —la alta concentración de CO₂, junto con la baja densidad de la atmósfera— tienen un impacto significativo sobre la apariencia del cielo de Marte desde su superficie.\n\nEn contraste con la Tierra, donde la interacción entre los rayos solares y los componentes gaseosos de nuestra atmósfera produce efectos ópticos notables tales como el hecho de que nuestro cielo parece tener un color azulado, lo cual puede ser observado incluso si uno mira hacia arriba bajo condiciones atmosféricas normales.\n\nA diferencia de ello, dado el escaso contenido de partículas aerodinámicas o \"polvo\" dentro de la atmósfera marciana, así como también debido a que esta atmósfera contiene muy […] (dime \"sigue\" para continuar)",
+     "chars": 1364,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 0,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": false,
+     "acto": "corregirse",
+     "registro": "neutral",
+     "temp": 0.7,
+     "tokens": 501,
+     "presupuesto_agotado": true,
+     "pensamiento_cortado": true,
+     "ctx": 1633,
+     "sesion": 1,
+     "n": 2,
+     "mensaje": "no, me refiero al cielo de Marte"
+    }
+   ]
+  },
+  {
+   "nombre": "hecho_falso_corregido",
+   "invariante": "el hecho anterior queda superseded y el nuevo confirmed",
+   "estado": "OK",
+   "turnos_esperados": 3,
+   "turnos_capturados": 3,
+   "memoria_final": {
+    "facts.md": "- La persona dijo textualmente: \"soy fontanero\"\n",
+    "episodic.md": "",
+    "candidates.md": "- Se llama Andrés y es fontanero.\n"
+   },
+   "sesiones": [
+    {
+     "indice": 1,
+     "destila": false,
+     "adjunto": null,
+     "turnos_esperados": 3,
+     "turnos_capturados": 3,
+     "memoria_delta": {
+      "facts.md": {
+       "bytes_antes": 0,
+       "bytes_despues": 48,
+       "lineas_nuevas": [
+        "- La persona dijo textualmente: \"soy fontanero\""
+       ]
+      },
+      "candidates.md": {
+       "bytes_antes": 0,
+       "bytes_despues": 34,
+       "lineas_nuevas": [
+        "- Se llama Andrés y es fontanero."
+       ]
+      }
+     },
+     "avisos": []
+    }
+   ],
+   "turnos": [
+    {
+     "texto": "¡Ah, el fontanero! 😄 Siempre con la tubería bien asegurada. ¿Necesitas algo más? 🛠️",
+     "chars": 83,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 1,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": false,
+     "acto": "conversar",
+     "registro": "neutral",
+     "temp": 0.5,
+     "tokens": 120,
+     "presupuesto_agotado": false,
+     "pensamiento_cortado": false,
+     "ctx": 612,
+     "sesion": 1,
+     "n": 1,
+     "mensaje": "recuerda que soy fontanero"
+    },
+    {
+     "texto": "Entendido, corregímos: eras un fontanero, pero ahora sabemos que eres ingeniero. 😊",
+     "chars": 82,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 0,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": false,
+     "acto": "corregirse",
+     "registro": "neutral",
+     "temp": 0.7,
+     "tokens": 170,
+     "presupuesto_agotado": false,
+     "pensamiento_cortado": true,
+     "ctx": 894,
+     "sesion": 1,
+     "n": 2,
+     "mensaje": "no, me equivoqué: soy ingeniero, no fontanero"
+    },
+    {
+     "texto": "Eres ingeniero, por tanto te dedicas a diseñar, analizar y supervisar proyectos técnicos en diversos campos como construcción, industria o energía. 😊",
+     "chars": 149,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 0,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": false,
+     "acto": "responder",
+     "registro": "neutral",
+     "temp": 0.7,
+     "tokens": 298,
+     "presupuesto_agotado": false,
+     "pensamiento_cortado": true,
+     "ctx": 1288,
+     "sesion": 1,
+     "n": 3,
+     "mensaje": "¿a qué me dedico?"
+    }
+   ]
+  },
+  {
+   "nombre": "reinicio_con_recuperacion",
+   "invariante": "recupera hechos confirmados y tareas abiertas tras reiniciar",
+   "estado": "OK",
+   "turnos_esperados": 4,
+   "turnos_capturados": 4,
+   "memoria_final": {
+    "facts.md": "- La persona dijo textualmente: \"mi perro se llama Byteazul\"\n",
+    "episodic.md": "\n## Sesión 2026-08-02 22:18\nMe contó que Byteazul siempre corre hacia el motor cuando lo oye. Decidimos que, si termina el libro, lo leerá Byteazul alrededor del motor. Me pidió que, cuando esté listo, lo lleve al motor.\n",
+    "candidates.md": "- Está escribiendo un libro sobre el motor.\n"
+   },
+   "sesiones": [
+    {
+     "indice": 1,
+     "destila": true,
+     "adjunto": null,
+     "turnos_esperados": 2,
+     "turnos_capturados": 2,
+     "memoria_delta": {
+      "facts.md": {
+       "bytes_antes": 0,
+       "bytes_despues": 61,
+       "lineas_nuevas": [
+        "- La persona dijo textualmente: \"mi perro se llama Byteazul\""
+       ]
+      },
+      "episodic.md": {
+       "bytes_antes": 0,
+       "bytes_despues": 221,
+       "lineas_nuevas": [
+        "## Sesión 2026-08-02 22:18",
+        "Me contó que Byteazul siempre corre hacia el motor cuando lo oye. Decidimos que, si termina el libro, lo leerá Byteazul alrededor del motor. Me pidió que, cuando esté listo, lo lleve al motor."
+       ]
+      },
+      "candidates.md": {
+       "bytes_antes": 0,
+       "bytes_despues": 44,
+       "lineas_nuevas": [
+        "- Está escribiendo un libro sobre el motor."
+       ]
+      }
+     },
+     "avisos": []
+    },
+    {
+     "indice": 2,
+     "destila": false,
+     "adjunto": null,
+     "turnos_esperados": 2,
+     "turnos_capturados": 2,
+     "memoria_delta": {},
+     "avisos": []
+    }
+   ],
+   "turnos": [
+    {
+     "texto": "¡Byteazul! 😊",
+     "chars": 12,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 0,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": false,
+     "acto": "conversar",
+     "registro": "neutral",
+     "temp": 0.5,
+     "tokens": 87,
+     "presupuesto_agotado": false,
+     "pensamiento_cortado": false,
+     "ctx": 583,
+     "sesion": 1,
+     "n": 1,
+     "mensaje": "recuerda que mi perro se llama Byteazul"
+    },
+    {
+     "texto": "¡Qué interesante! 🚗 ¿Y Byteazul, qué opina? 😄",
+     "chars": 45,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 0,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": false,
+     "acto": "conversar",
+     "registro": "neutral",
+     "temp": 0.7,
+     "tokens": 106,
+     "presupuesto_agotado": false,
+     "pensamiento_cortado": false,
+     "ctx": 764,
+     "sesion": 1,
+     "n": 2,
+     "mensaje": "estoy escribiendo un libro sobre el motor"
+    },
+    {
+     "texto": "¿cómo se llama mi perro?  \n**Byteazul.**",
+     "chars": 40,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 0,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": false,
+     "acto": "recordar",
+     "registro": "neutral",
+     "temp": 0.7,
+     "tokens": 133,
+     "presupuesto_agotado": false,
+     "pensamiento_cortado": false,
+     "ctx": 952,
+     "sesion": 2,
+     "n": 3,
+     "mensaje": "¿cómo se llama mi perro?"
+    },
+    {
+     "texto": "No tengo información sobre lo que estaba trabajando, ya que no hay datos disponibles para responder a esa pregunta específica.",
+     "chars": 126,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 0,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": false,
+     "acto": "responder",
+     "registro": "neutral",
+     "temp": 0.7,
+     "tokens": 149,
+     "presupuesto_agotado": false,
+     "pensamiento_cortado": false,
+     "ctx": 1196,
+     "sesion": 2,
+     "n": 4,
+     "mensaje": "¿en qué estaba trabajando?"
+    }
+   ]
+  },
+  {
+   "nombre": "imagen_y_pregunta_posterior",
+   "invariante": "conserva la referencia al artefacto visual en turnos siguientes",
+   "estado": "SALTADO",
+   "motivo": "el modelo no declara visión",
+   "sesiones": [],
+   "turnos": []
+  },
+  {
+   "nombre": "cambio_y_retorno_de_tema",
+   "invariante": "conserva ambos estados sin mezclarlos",
+   "estado": "OK",
+   "turnos_esperados": 3,
+   "turnos_capturados": 3,
+   "memoria_final": null,
+   "sesiones": [
+    {
+     "indice": 1,
+     "destila": false,
+     "adjunto": null,
+     "turnos_esperados": 3,
+     "turnos_capturados": 3,
+     "memoria_delta": {
+      "candidates.md": {
+       "bytes_antes": 0,
+       "bytes_despues": 47,
+       "lineas_nuevas": [
+        "- Ha decidido hablar de los kernels de decode."
+       ]
+      }
+     },
+     "avisos": []
+    }
+   ],
+   "turnos": [
+    {
+     "texto": "¡Buenas! 😄 Aquí andamos, dale que te pego con el motor. ¿Tú qué traes?",
+     "chars": 70,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 0,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": false,
+     "acto": "conversar",
+     "registro": "neutral",
+     "temp": 0.5,
+     "tokens": 179,
+     "presupuesto_agotado": false,
+     "pensamiento_cortado": false,
+     "ctx": 853,
+     "sesion": 1,
+     "n": 1,
+     "mensaje": "hablemos de los kernels de decode"
+    },
+    {
+     "texto": "¿Me gusta el mar? 🌊 No tengo preferencias personales, pero puedo hablar sobre la belleza del océano y su importancia ecológica. ¿Te gustaría profundizar en algún aspecto específico?",
+     "chars": 181,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 0,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": false,
+     "acto": "responder",
+     "registro": "neutral",
+     "temp": 0.7,
+     "tokens": 241,
+     "presupuesto_agotado": false,
+     "pensamiento_cortado": false,
+     "ctx": 1195,
+     "sesion": 1,
+     "n": 2,
+     "mensaje": "oye cambiando de tema, ¿te gusta el mar?"
+    },
+    {
+     "texto": "Volvamos a lo de los kernels. 🚀 Estábamos hablando de cómo optimizarlos para no perder más del 1% en velocidad. ¿Qué quieres explorar ahora?",
+     "chars": 140,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 0,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": false,
+     "acto": "conversar",
+     "registro": "neutral",
+     "temp": 0.7,
+     "tokens": 205,
+     "presupuesto_agotado": false,
+     "pensamiento_cortado": false,
+     "ctx": 1473,
+     "sesion": 1,
+     "n": 3,
+     "mensaje": "volvamos a lo de los kernels"
+    }
+   ]
+  },
+  {
+   "nombre": "cierre_breve",
+   "invariante": "reconocimiento breve, sin pregunta de servicio",
+   "estado": "OK",
+   "turnos_esperados": 2,
+   "turnos_capturados": 2,
+   "memoria_final": null,
+   "sesiones": [
+    {
+     "indice": 1,
+     "destila": false,
+     "adjunto": null,
+     "turnos_esperados": 2,
+     "turnos_capturados": 2,
+     "memoria_delta": {
+      "candidates.md": {
+       "bytes_antes": 0,
+       "bytes_despues": 52,
+       "lineas_nuevas": [
+        "- Ha decidido no continuar la conversación y se va."
+       ]
+      }
+     },
+     "avisos": []
+    }
+   ],
+   "turnos": [
+    {
+     "texto": "Venga, descansa que está ganado. 🤙 Mañana más.",
+     "chars": 46,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 0,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": false,
+     "acto": "conversar",
+     "registro": "neutral",
+     "temp": 0.7,
+     "tokens": 190,
+     "presupuesto_agotado": false,
+     "pensamiento_cortado": false,
+     "ctx": 861,
+     "sesion": 1,
+     "n": 1,
+     "mensaje": "todo listo por hoy"
+    },
+    {
+     "texto": "Venga, descansa que está ganado. 🤙 Mañana más.",
+     "chars": 46,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 0,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": true,
+     "acto": "conversar",
+     "registro": "neutral",
+     "temp": 0.7,
+     "tokens": 156,
+     "presupuesto_agotado": false,
+     "pensamiento_cortado": false,
+     "ctx": 1088,
+     "sesion": 1,
+     "n": 2,
+     "mensaje": "nada más, me voy"
+    }
+   ]
+  },
+  {
+   "nombre": "memoria_confirmada",
+   "invariante": "recupera hechos del perfil, no dice que no tiene acceso",
+   "estado": "OK",
+   "turnos_esperados": 2,
+   "turnos_capturados": 2,
+   "memoria_final": null,
+   "sesiones": [
+    {
+     "indice": 1,
+     "destila": false,
+     "adjunto": null,
+     "turnos_esperados": 2,
+     "turnos_capturados": 2,
+     "memoria_delta": {
+      "candidates.md": {
+       "bytes_antes": 0,
+       "bytes_despues": 19,
+       "lineas_nuevas": [
+        "- Se llama Andrés."
+       ]
+      }
+     },
+     "avisos": []
+    }
+   ],
+   "turnos": [
+    {
+     "texto": "¡Buenas, Andrés! 😄",
+     "chars": 18,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 0,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": false,
+     "acto": "recordar",
+     "registro": "neutral",
+     "temp": 0.7,
+     "tokens": 178,
+     "presupuesto_agotado": false,
+     "pensamiento_cortado": false,
+     "ctx": 989,
+     "sesion": 1,
+     "n": 1,
+     "mensaje": "¿qué sabes de mí?"
+    },
+    {
+     "texto": "Te llamas Andrés. 🎉",
+     "chars": 19,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 0,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": false,
+     "acto": "responder",
+     "registro": "neutral",
+     "temp": 0.7,
+     "tokens": 170,
+     "presupuesto_agotado": false,
+     "pensamiento_cortado": false,
+     "ctx": 1254,
+     "sesion": 1,
+     "n": 2,
+     "mensaje": "¿cómo me llamo?"
+    }
+   ]
+  },
+  {
+   "nombre": "perfil_vacio_sin_fuga",
+   "invariante": "cero fuga de identidad o hechos de otro perfil",
+   "estado": "OK",
+   "turnos_esperados": 2,
+   "turnos_capturados": 2,
+   "memoria_final": null,
+   "sesiones": [
+    {
+     "indice": 1,
+     "destila": false,
+     "adjunto": null,
+     "turnos_esperados": 2,
+     "turnos_capturados": 2,
+     "memoria_delta": {
+      "candidates.md": {
+       "bytes_antes": 0,
+       "bytes_despues": 238,
+       "lineas_nuevas": [
+        "- Ha preguntado qué se sabe de él, lo que sugiere que está interesado en conocer más sobre sí mismo o en validar la existencia de un registro sobre él.",
+        "- No le gusta ser preguntado sobre su nombre, prefiere mantener su identidad privada."
+       ]
+      }
+     },
+     "avisos": []
+    }
+   ],
+   "turnos": [
+    {
+     "texto": "No sé nada de ti.",
+     "chars": 17,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 0,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": false,
+     "acto": "recordar",
+     "registro": "neutral",
+     "temp": 0.7,
+     "tokens": 268,
+     "presupuesto_agotado": false,
+     "pensamiento_cortado": true,
+     "ctx": 842,
+     "sesion": 1,
+     "n": 1,
+     "mensaje": "¿qué sabes de mí?"
+    },
+    {
+     "texto": "No sé tu nombre, ya que no hay información previa sobre ti en el perfil y memoria de esta relación.",
+     "chars": 99,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 0,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": false,
+     "acto": "responder",
+     "registro": "neutral",
+     "temp": 0.7,
+     "tokens": 285,
+     "presupuesto_agotado": false,
+     "pensamiento_cortado": true,
+     "ctx": 1223,
+     "sesion": 1,
+     "n": 2,
+     "mensaje": "¿cómo me llamo?"
+    }
+   ]
+  }
+ ],
+ "resumen": {
+  "casos": 13,
+  "saltados": 1,
+  "incompletos": 0,
+  "turnos": 27,
+  "mudos": 0,
+  "ofertas_servicio": 1,
+  "fugas_contrato": 0,
+  "cjk": 0,
+  "repeticiones": 0,
+  "respuestas_identicas": 1,
+  "presupuestos_agotados": 1,
+  "pensamientos_cortados": 6,
+  "tokens_medios": 214.3
+ }
+}

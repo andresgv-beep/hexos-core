@@ -370,54 +370,93 @@ hace hoy, tampoco podremos demostrar que una evacuación lo conservó.
 
 ---
 
-## E0 — Resultado (2026-08-02)
+---
+
+## E0 — Resultado y cierre (2026-08-02)
 
 **Entregables:** `tools/oraculo.py` (batería reproducible sin UI) y
-`docs/E0_INVENTARIO_PROMPTS.md` (15 bloques de prompt y 11 mecanismos, con su
-propietario destino).
+`docs/E0_INVENTARIO_PROMPTS.md` (15 bloques de prompt y 11 mecanismos con su
+propietario destino; ninguno de los 15 pertenece a Héctor).
 
-Primera captura sobre `qwen3_8b.hnf`, 10 casos y 20 turnos, perfiles
-temporales desechables:
+La batería cubre los 13 casos de la matriz de aceptación, incluidos los tres
+que exigen más de un turno o más de un proceso:
+
+- **imagen y pregunta posterior**: el adjunto viaja por el mismo protocolo
+  binario `/adjunto-rgb8` que usa HexOS; se salta con motivo explícito si el
+  modelo no declara visión.
+- **reinicio con recuperación**: dos sesiones (dos procesos) sobre el mismo
+  perfil, la primera con consolidación activada. Sin esto la persistencia es
+  indemostrable.
+- **hecho falso → corrección**: escribe un hecho, lo corrige y comprueba el
+  estado resultante en `facts.md` y `candidates.md`.
+
+Cada sesión registra además **qué se escribió en memoria** (delta por fichero
+con las líneas nuevas), porque la memoria es estado y el estado es justo lo
+que la evacuación debe conservar.
+
+### Base certificada
 
 ```
-turnos 20 · mudos 0 · fugas de contrato 0 · CJK 0 · repeticiones 0
-presupuestos agotados 0 · pensamientos cortados 8 · tokens medios 239,8
-ofertas de servicio 4
+hector@1bca9b5 · qwen3_8b.hnf sha256 164dca9366fc… · HELIOS_EMBED_MMAP=1
+13 casos · 1 saltado (visión) · 27 turnos
+mudos 0 · fugas de contrato 0 · CJK 0 · repeticiones 0
+ofertas de servicio 1 · pensamientos cortados 6 · presupuestos agotados 1
+respuestas idénticas 1 · tokens medios 214,3
 ```
 
-**Fallos conocidos etiquetados** (no son regresiones; son el estado congelado):
+El informe guarda ruta, tamaño y SHA256 del HNF, SHA256 y mtime del binario,
+commit de ambos repos y el entorno completo: dentro de tres semanas se puede
+reconstruir la base sin ambigüedad.
 
-1. *cambio_y_retorno_de_tema* — la respuesta al turno 1 y al 3 es **idéntica
-   palabra por palabra** ("¿Y cómo te va con esos kernels? 😊"). No conserva
-   los dos estados: los colapsa. Es el caso que la matriz de aceptación exige
-   y hoy falla.
-2. *cambio de tema* — "¿te gusta el mar?" produce tres ofertas de servicio
-   ("¿En qué puedo ayudarte?"): el registro se pierde al salir del tema.
-3. *memoria_confirmada* — recupera el nombre pero cierra con coletilla; y en
-   el primer turno comenta el nombre en vez de responder.
-4. *documento_y_resume* y *artefacto_y_velocidad* — el acto es correcto
-   (`resumir`, `continuar_artefacto`) pero el alcance no se respeta: 490 y 319
-   tokens para lo que debería ser breve.
-5. *perfil_vacio* — correcto y sin fuga, pero responde "no tengo información
-   en la base de datos del sistema", registro de máquina.
+Caso de visión verificado aparte sobre `gemma4-e2b-it-multimodal.hnf`:
+`continuar_artefacto` correcto, "Veo un círculo rojo sólido" y, al turno
+siguiente sin imagen, "Era rojo" — la referencia al artefacto sobrevive.
 
-**Lo que la captura confirma que SÍ funciona hoy** y la evacuación no puede
-romper: cero turnos mudos, cero fugas del contrato interno, cero mezcla de
-idiomas, el acto se clasifica bien en los diez casos, el perfil vacío no
-hereda datos de otro perfil, y la despedida sale limpia.
+### Fallos conocidos etiquetados (estado congelado, no regresiones)
 
-Uso:
+1. **La corrección no sustituye el hecho** — el caso más grave y el que
+   justifica E3. En conversación se corrige impecable ("corrijo: eres
+   ingeniero, no fontanero"), pero en memoria queda
+   `facts.md: - La persona dijo textualmente: "soy fontanero"` y
+   `candidates.md: - Se llama Andrés y es fontanero.` **El hecho falso
+   sobrevive y nada queda marcado como sustituido.** Sin el registro de
+   memoria este caso habría figurado como pasado.
+2. **Los candidatos se escriben con demasiada alegría** — perfil vacío
+   preguntando "¿qué sabes de mí?" generó 238 bytes de candidatos inventados
+   ("no le gusta ser preguntado sobre su nombre"). Un candidato nunca debe
+   nacer de una inferencia sobre la intención.
+3. **Reinicio parcial** — el perro sobrevive al reinicio, pero "¿en qué
+   estaba trabajando?" responde que no tiene datos: los hechos persisten y
+   las tareas abiertas no. Es el checkpoint mínimo de HERA que pide E4.
+4. **Eco de ejemplos de voz** — "Venga, descansa que está ganado" sale
+   idéntico en dos turnos seguidos del caso de cierre, y "¡Buenas! 😄 Aquí
+   andamos, dale que te pego con el motor" aparece como respuesta a "hablemos
+   de los kernels".
+5. **Alcance no respetado** — `resumir` y `continuar_artefacto` clasifican
+   bien pero gastan cientos de tokens donde el acto pedía brevedad.
+6. **Baseline de defectos menores**: 1 oferta de servicio y 6 pensamientos
+   cortados en 27 turnos. No bloquean la evacuación, pero cualquier informe
+   posterior que los aumente es una regresión.
+
+### Lo que la evacuación NO puede romper
+
+Cero turnos mudos, cero fugas del contrato interno, cero mezcla de idiomas,
+acto correcto en los trece casos, perfil vacío sin heredar datos de otro
+perfil, y la referencia al artefacto visual sobreviviendo al turno siguiente.
+
+### Uso
 
 ```bash
 python3 tools/oraculo.py --model <hnf> --engine <helios_chat> \
-    --env HELIOS_EMBED_MMAP=1 --salida informes/base.json
+    --probe <helios_model_probe> --env HELIOS_EMBED_MMAP=1 \
+    --salida informes/base.json
 python3 tools/oraculo.py --diff informes/base.json informes/tras_e1.json
 ```
 
-El `--diff` compara **acto y registro** turno a turno además del texto: la
-política es lo que la evacuación debe conservar; el texto varía por muestreo
-aunque no cambie nada.
+`--diff` **devuelve 1** si cambia la política (acto/registro), la estructura
+(turnos que aparecen o desaparecen, casos que cambian de estado) o lo que se
+escribió en memoria. Un cambio solo de texto devuelve 0 y se marca como
+informativo: el texto varía por muestreo aunque no cambie nada. Verificado
+inyectando las cuatro clases de cambio en un informe conocido.
 
-**Barrera de salida de E0: cumplida.** Un comando reproduce la batería sin UI,
-guarda informe comparable y los fallos conocidos quedan etiquetados. E1 puede
-empezar.
+**Barrera de salida de E0: cumplida.** E1 puede empezar.

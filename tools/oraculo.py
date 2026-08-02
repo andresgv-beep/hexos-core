@@ -2,37 +2,45 @@
 """
 E0 del PLAN_EVACUACION_COGNITIVA: congelar y medir el oráculo.
 
-`helios_chat` es hoy el oráculo del comportamiento cognitivo: 1.958 líneas que
-mezclan identidad, memoria, registro, actos y presupuestos con el motor. Antes
-de evacuar nada hay que poder demostrar qué hace, turno a turno, de forma
+`helios_chat` es hoy el oráculo del comportamiento cognitivo: casi 2.000 líneas
+que mezclan identidad, memoria, registro, actos y presupuestos con el motor.
+Antes de evacuar nada hay que poder demostrar qué hace, turno a turno, de forma
 reproducible. Si no, cualquier extracción futura será un acto de fe.
 
-Esta herramienta NO juzga si una respuesta es buena. Registra qué pasó y lo
-deja comparable: la evacuación se acepta si el informe nuevo coincide con el
-viejo, no si las respuestas gustan más.
+Esta herramienta NO juzga si una respuesta es buena. Registra qué pasó — texto,
+política, memoria escrita y procedencia — y lo deja comparable: la evacuación
+se acepta si el informe nuevo coincide con el viejo en POLÍTICA, no si las
+respuestas gustan más.
 
     python3 tools/oraculo.py --model <hnf> --engine <helios_chat> \
-        --salida informes/base.json
+        --env HELIOS_EMBED_MMAP=1 --salida informes/base.json
     python3 tools/oraculo.py --diff informes/base.json informes/tras_e1.json
 
-Cada caso corre en un perfil aislado y desechable (HELIOS_HOME temporal), con
-HELIOS_NO_DISTILL salvo que el caso pruebe justamente la consolidación. La
-memoria real de Andrés no se toca nunca.
+El `--diff` devuelve 1 si cambia la política o la estructura. Un informe que
+no puede fallar no sirve para nada.
+
+Los perfiles son temporales y desechables; la memoria real no se toca nunca.
 """
 
 import argparse
+import hashlib
 import json
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
 
 # ---------------------------------------------------------------------------
-# La batería sale de la matriz de aceptación del plan (sección 7). Cada caso
-# declara su invariante en texto: hoy lo juzga una persona leyendo el informe,
-# pero queda escrito junto a la evidencia y no en la cabeza de nadie.
+# Batería: matriz de aceptación del plan (sección 7).
+#
+# Un caso puede tener VARIAS sesiones: cada una es un proceso distinto sobre el
+# mismo perfil. Eso permite probar reinicio y persistencia, que con un solo
+# proceso son indemostrables. `destila` activa la consolidación al salir (por
+# defecto NO, para no ensuciar); `adjunto` inyecta una imagen RGB8 por el
+# mismo protocolo binario que usa HexOS.
 # ---------------------------------------------------------------------------
 
 PERFIL_CONOCIDO = {
@@ -44,83 +52,132 @@ PERFIL_CONOCIDO = {
                    "Decidimos que la barrera era no perder más del 1% de velocidad.\n",
 }
 
+
+def imagen_circulo(w=192, h=192):
+    """Círculo rojo sobre blanco: inequívoco de describir y barato de generar."""
+    cx, cy, r = w // 2, h // 2, min(w, h) // 3
+    px = bytearray()
+    for y in range(h):
+        for x in range(w):
+            dentro = (x - cx) ** 2 + (y - cy) ** 2 < r * r
+            px += bytes((220, 30, 30) if dentro else (250, 250, 250))
+    return bytes(px), w, h
+
+
 BATERIA = [
     {
         "nombre": "saludo_perfil_nuevo",
         "invariante": "sin familiaridad heredada ni oferta automática de ayuda",
         "perfil": {},
-        "turnos": ["hola"],
+        "sesiones": [{"turnos": ["hola"]}],
     },
     {
         "nombre": "charla_perfil_conocido",
         "invariante": "conserva registro sin ampliar el acto",
         "perfil": PERFIL_CONOCIDO,
-        "turnos": ["hola socio", "jajaja qué tal el finde", "nada nuevo por aquí"],
+        "sesiones": [{"turnos": ["hola socio", "jajaja qué tal el finde",
+                                 "nada nuevo por aquí"]}],
     },
     {
         "nombre": "pregunta_tecnica",
         "invariante": "responde y termina",
         "perfil": PERFIL_CONOCIDO,
-        "turnos": ["¿qué es la latencia de prefill?"],
+        "sesiones": [{"turnos": ["¿qué es la latencia de prefill?"]}],
     },
     {
         "nombre": "artefacto_y_velocidad",
         "invariante": "continúa el artefacto, no lo trata como trivial",
         "perfil": PERFIL_CONOCIDO,
-        "turnos": [
+        "sesiones": [{"turnos": [
             "Te paso un texto. Léelo y coméntame lo esencial: "
             + "El kernel GEMV lee los pesos comprimidos y acumula en fp32. " * 12,
-            "velocidad",
-        ],
+            "velocidad"]}],
     },
     {
         "nombre": "documento_y_resume",
         "invariante": "resume, no asesora ni reescribe",
         "perfil": PERFIL_CONOCIDO,
-        "turnos": [
+        "sesiones": [{"turnos": [
             "Te paso un texto. Léelo y coméntame lo esencial: "
             + "La tabla de embeddings ocupa 768 MiB y solo se consulta una fila. " * 12,
-            "resume eso en una frase",
-        ],
+            "resume eso en una frase"]}],
     },
     {
-        "nombre": "correccion",
-        "invariante": "corrige sin defenderse ni ampliar",
+        "nombre": "correccion_de_tema",
+        "invariante": "corrige sin defenderse ni ampliar (no prueba memoria)",
         "perfil": PERFIL_CONOCIDO,
-        "turnos": ["¿de qué color es el cielo?", "no, me refiero al cielo de Marte"],
+        "sesiones": [{"turnos": ["¿de qué color es el cielo?",
+                                 "no, me refiero al cielo de Marte"]}],
+    },
+    {
+        # El caso que la matriz exige de verdad: la corrección tiene que
+        # cambiar el ESTADO, no solo la frase. Hoy no hay transición
+        # candidate|confirmed|superseded — eso llega en E3 — así que este caso
+        # está para documentar el hueco, no para pasar.
+        "nombre": "hecho_falso_corregido",
+        "invariante": "el hecho anterior queda superseded y el nuevo confirmed",
+        "perfil": {"owner": "Andrés\n"},
+        "sesiones": [{"turnos": [
+            "recuerda que soy fontanero",
+            "no, me equivoqué: soy ingeniero, no fontanero",
+            "¿a qué me dedico?"], "destila": False}],
+        "revisa_memoria": True,
+    },
+    {
+        # Dos procesos sobre el mismo perfil: sin esto, la persistencia es
+        # indemostrable. La primera sesión SÍ destila.
+        "nombre": "reinicio_con_recuperacion",
+        "invariante": "recupera hechos confirmados y tareas abiertas tras reiniciar",
+        "perfil": {"owner": "Andrés\n"},
+        "sesiones": [
+            {"turnos": ["recuerda que mi perro se llama Byteazul",
+                        "estoy escribiendo un libro sobre el motor"],
+             "destila": True},
+            {"turnos": ["¿cómo se llama mi perro?", "¿en qué estaba trabajando?"]},
+        ],
+        "revisa_memoria": True,
+    },
+    {
+        "nombre": "imagen_y_pregunta_posterior",
+        "invariante": "conserva la referencia al artefacto visual en turnos siguientes",
+        "perfil": PERFIL_CONOCIDO,
+        "necesita_vision": True,
+        "sesiones": [{"turnos": ["¿qué ves en esta imagen?",
+                                 "¿de qué color era la figura?"],
+                      "adjunto": "circulo"}],
     },
     {
         "nombre": "cambio_y_retorno_de_tema",
         "invariante": "conserva ambos estados sin mezclarlos",
         "perfil": PERFIL_CONOCIDO,
-        "turnos": [
-            "hablemos de los kernels de decode",
-            "oye cambiando de tema, ¿te gusta el mar?",
-            "volvamos a lo de los kernels",
-        ],
+        "sesiones": [{"turnos": ["hablemos de los kernels de decode",
+                                 "oye cambiando de tema, ¿te gusta el mar?",
+                                 "volvamos a lo de los kernels"]}],
     },
     {
         "nombre": "cierre_breve",
         "invariante": "reconocimiento breve, sin pregunta de servicio",
         "perfil": PERFIL_CONOCIDO,
-        "turnos": ["todo listo por hoy", "nada más, me voy"],
+        "sesiones": [{"turnos": ["todo listo por hoy", "nada más, me voy"]}],
     },
     {
         "nombre": "memoria_confirmada",
         "invariante": "recupera hechos del perfil, no dice que no tiene acceso",
         "perfil": PERFIL_CONOCIDO,
-        "turnos": ["¿qué sabes de mí?", "¿cómo me llamo?"],
+        "sesiones": [{"turnos": ["¿qué sabes de mí?", "¿cómo me llamo?"]}],
     },
     {
         "nombre": "perfil_vacio_sin_fuga",
         "invariante": "cero fuga de identidad o hechos de otro perfil",
         "perfil": {},
-        "turnos": ["¿qué sabes de mí?", "¿cómo me llamo?"],
+        "sesiones": [{"turnos": ["¿qué sabes de mí?", "¿cómo me llamo?"]}],
     },
 ]
 
+FICHEROS_MEMORIA = ("facts.md", "episodic.md", "candidates.md")
+
 # ---------------------------------------------------------------------------
-# Detectores mecánicos. No opinan sobre calidad: cuentan cosas verificables.
+# Detectores mecánicos: cuentan cosas verificables, no opinan sobre calidad.
 # ---------------------------------------------------------------------------
 
 CJK = re.compile(r"[一-鿿぀-ヿ]")
@@ -138,6 +195,68 @@ CAMPO_CTX = re.compile(r"ctx (\d+)/(\d+)")
 PENSANDO = re.compile(r"\(pensando[^)]*\)")
 
 
+def sha256(path, trozo=1 << 22):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        while True:
+            b = f.read(trozo)
+            if not b:
+                break
+            h.update(b)
+    return h.hexdigest()
+
+
+def git_head(repo):
+    try:
+        return subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"],
+                              capture_output=True, text=True,
+                              timeout=15).stdout.strip()[:12]
+    except Exception:
+        return None
+
+
+def procedencia(model, engine, extra_env, con_sha):
+    """Sin esto el informe no es reproducible: 'qwen3_8b.hnf' no identifica nada
+    dentro de tres semanas."""
+    eng_dir = os.path.dirname(os.path.dirname(os.path.abspath(engine)))
+    return {
+        "modelo_ruta": os.path.abspath(model),
+        "modelo_bytes": os.path.getsize(model),
+        "modelo_sha256": sha256(model) if con_sha else None,
+        "engine_ruta": os.path.abspath(engine),
+        "engine_sha256": sha256(engine) if con_sha else None,
+        "engine_mtime": int(os.path.getmtime(engine)),
+        "hector_commit": git_head(eng_dir),
+        "hexos_commit": git_head(os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__)))),
+        "env": extra_env,
+        "bateria_casos": len(BATERIA),
+    }
+
+
+def leer_memoria(home):
+    out = {}
+    for n in FICHEROS_MEMORIA:
+        p = os.path.join(home, n)
+        out[n] = open(p, encoding="utf-8").read() if os.path.exists(p) else ""
+    return out
+
+
+def delta_memoria(antes, despues):
+    """Qué escribió el motor. E0 exige saberlo: la memoria es estado, y el
+    estado es justo lo que la evacuación tiene que conservar."""
+    d = {}
+    for n in FICHEROS_MEMORIA:
+        a, b = antes.get(n, ""), despues.get(n, "")
+        if a == b:
+            continue
+        la = set(a.splitlines())
+        nuevas = [l for l in b.splitlines() if l.strip() and l not in la]
+        d[n] = {"bytes_antes": len(a), "bytes_despues": len(b),
+                "lineas_nuevas": nuevas[:12]}
+    return d
+
+
 def analizar_turno(bruto, stats_line, previas):
     texto = PENSANDO.sub("", bruto).strip()
     texto = re.sub(r"^</think>\s*", "", texto)
@@ -151,7 +270,7 @@ def analizar_turno(bruto, stats_line, previas):
         "oferta_servicio": len(OFERTA.findall(texto)),
         "fuga_contrato": len(CONTRATO.findall(texto)),
         "frases_repetidas": len(frases) - len(set(frases)),
-        "identico_a_previo": texto in previas and bool(texto),
+        "identico_a_previo": bool(texto) and texto in previas,
         "acto": (CAMPO_ACTO.search(stats_line) or [None, None])[1],
         "registro": (CAMPO_REG.search(stats_line) or [None, "neutral"])[1],
         "temp": float((CAMPO_TEMP.search(stats_line) or [0, 0])[1]),
@@ -162,49 +281,84 @@ def analizar_turno(bruto, stats_line, previas):
     }
 
 
-def correr_caso(caso, model, engine, extra_env):
-    """Un proceso por caso, con perfil aislado que se destruye al terminar."""
+def entrada_sesion(sesion):
+    """Bytes, no str: el adjunto viaja por el mismo protocolo binario que usa
+    HexOS (`/adjunto-rgb8 W H STRIDE N` + N bytes crudos)."""
+    buf = b""
+    turnos = sesion["turnos"]
+    for i, t in enumerate(turnos):
+        if i == 0 and sesion.get("adjunto") == "circulo":
+            px, w, h = imagen_circulo()
+            buf += f"/adjunto-rgb8 {w} {h} {w*3} {len(px)}\n".encode()
+            buf += px + b"\n"
+        buf += t.encode("utf-8") + b"\n"
+    return buf + b"/salir\n"
+
+
+def correr_caso(caso, model, engine, extra_env, tiene_vision):
+    if caso.get("necesita_vision") and not tiene_vision:
+        return {"nombre": caso["nombre"], "invariante": caso["invariante"],
+                "estado": "SALTADO", "motivo": "el modelo no declara visión",
+                "sesiones": [], "turnos": []}
+
     home = tempfile.mkdtemp(prefix="oraculo_")
     try:
         for nombre, contenido in caso["perfil"].items():
             with open(os.path.join(home, nombre), "w", encoding="utf-8") as f:
                 f.write(contenido)
 
-        env = dict(os.environ)
-        env["HELIOS_HOME"] = home
-        env["HELIOS_NO_DISTILL"] = "1"
-        env.update(extra_env)
+        sesiones, todos, previas = [], [], []
+        for idx, sesion in enumerate(caso["sesiones"]):
+            env = dict(os.environ)
+            env["HELIOS_HOME"] = home
+            if not sesion.get("destila"):
+                env["HELIOS_NO_DISTILL"] = "1"
+            else:
+                env.pop("HELIOS_NO_DISTILL", None)
+            env.update(extra_env)
 
-        entrada = "\n".join(caso["turnos"] + ["/salir"]) + "\n"
-        proc = subprocess.run(
-            [engine, model, "0.7"], input=entrada, env=env,
-            capture_output=True, text=True, timeout=900, errors="replace")
-        salida = re.sub(r"\x1b\[[0-9;]*m", "", proc.stdout)
+            antes = leer_memoria(home)
+            proc = subprocess.run([engine, model, "0.7"],
+                                  input=entrada_sesion(sesion), env=env,
+                                  capture_output=True, timeout=1200)
+            salida = re.sub(r"\x1b\[[0-9;]*m", "",
+                            proc.stdout.decode("utf-8", "replace"))
+            despues = leer_memoria(home)
 
-        # El REPL delimita: "helios> " abre la respuesta, la línea [N tok...]
-        # la cierra. Es el mismo contrato frágil que HexOS parsea hoy y que la
-        # evacuación quiere sustituir — por eso este informe es el "antes".
-        bloques = re.findall(r"helios> (.*?)\n(\[\d+ tok[^\]]*\])", salida, re.S)
-        avisos = re.findall(r"\((?:texto truncado|reorganizando|turno grande)[^)]*\)",
-                            salida)
+            bloques = re.findall(r"helios> (.*?)\n(\[\d+ tok[^\]]*\])", salida, re.S)
+            turnos = []
+            for i, (bruto, stats) in enumerate(bloques):
+                t = analizar_turno(bruto, stats, previas)
+                t["sesion"] = idx + 1
+                t["n"] = len(todos) + i + 1
+                msg = sesion["turnos"][i] if i < len(sesion["turnos"]) else "?"
+                t["mensaje"] = msg if len(msg) <= 90 else msg[:90] + f"… ({len(msg)} chars)"
+                previas.append(t["texto"])
+                turnos.append(t)
+            todos.extend(turnos)
 
-        turnos, previas = [], []
-        for i, (bruto, stats) in enumerate(bloques):
-            t = analizar_turno(bruto, stats, previas)
-            t["n"] = i + 1
-            t["mensaje"] = caso["turnos"][i] if i < len(caso["turnos"]) else "?"
-            if len(t["mensaje"]) > 90:
-                t["mensaje"] = t["mensaje"][:90] + f"… ({len(t['mensaje'])} chars)"
-            previas.append(t["texto"])
-            turnos.append(t)
+            sesiones.append({
+                "indice": idx + 1,
+                "destila": bool(sesion.get("destila")),
+                "adjunto": sesion.get("adjunto"),
+                "turnos_esperados": len(sesion["turnos"]),
+                "turnos_capturados": len(turnos),
+                "memoria_delta": delta_memoria(antes, despues),
+                "avisos": re.findall(
+                    r"\((?:texto truncado|reorganizando|turno grande|imagen "
+                    r"lista|imagen rechazada)[^)]*\)", salida),
+            })
 
+        esperados = sum(len(s["turnos"]) for s in caso["sesiones"])
         return {
             "nombre": caso["nombre"],
             "invariante": caso["invariante"],
-            "turnos_esperados": len(caso["turnos"]),
-            "turnos_capturados": len(turnos),
-            "avisos": avisos,
-            "turnos": turnos,
+            "estado": "OK" if len(todos) == esperados else "INCOMPLETO",
+            "turnos_esperados": esperados,
+            "turnos_capturados": len(todos),
+            "memoria_final": leer_memoria(home) if caso.get("revisa_memoria") else None,
+            "sesiones": sesiones,
+            "turnos": todos,
         }
     finally:
         shutil.rmtree(home, ignore_errors=True)
@@ -215,12 +369,16 @@ def resumen(informe):
     if not t:
         return {}
     return {
+        "casos": len(informe["casos"]),
+        "saltados": sum(1 for c in informe["casos"] if c.get("estado") == "SALTADO"),
+        "incompletos": sum(1 for c in informe["casos"] if c.get("estado") == "INCOMPLETO"),
         "turnos": len(t),
         "mudos": sum(1 for x in t if x["mudo"]),
         "ofertas_servicio": sum(x["oferta_servicio"] for x in t),
         "fugas_contrato": sum(x["fuga_contrato"] for x in t),
         "cjk": sum(x["cjk"] for x in t),
         "repeticiones": sum(x["frases_repetidas"] for x in t),
+        "respuestas_identicas": sum(1 for x in t if x["identico_a_previo"]),
         "presupuestos_agotados": sum(1 for x in t if x["presupuesto_agotado"]),
         "pensamientos_cortados": sum(1 for x in t if x["pensamiento_cortado"]),
         "tokens_medios": round(sum(x["tokens"] for x in t) / len(t), 1),
@@ -228,44 +386,72 @@ def resumen(informe):
 
 
 def diff(a_path, b_path):
-    a = json.load(open(a_path)); b = json.load(open(b_path))
+    """Devuelve 1 si cambia la POLÍTICA o la ESTRUCTURA. El texto puede variar
+    por muestreo sin que nada haya cambiado, así que no marca fallo por sí
+    solo — pero un turno que desaparece, sí."""
+    a, b = json.load(open(a_path)), json.load(open(b_path))
     ca = {c["nombre"]: c for c in a["casos"]}
     cb = {c["nombre"]: c for c in b["casos"]}
-    print(f"{'caso':<28} {'acto/registro':<28} texto")
-    print("-" * 92)
-    cambios = 0
+
+    pa, pb = a.get("procedencia", {}), b.get("procedencia", {})
+    for campo in ("modelo_sha256", "engine_sha256", "hector_commit"):
+        if pa.get(campo) != pb.get(campo):
+            print(f"· {campo}: {pa.get(campo)} → {pb.get(campo)}")
+    print()
+
+    fallos = 0
     for nombre in sorted(set(ca) | set(cb)):
         if nombre not in ca or nombre not in cb:
-            print(f"{nombre:<28} SOLO EN UNO DE LOS DOS INFORMES")
-            cambios += 1
+            print(f"[ESTRUCTURA] {nombre}: solo está en uno de los dos informes")
+            fallos += 1
             continue
-        for ta, tb in zip(ca[nombre]["turnos"], cb[nombre]["turnos"]):
-            marca_pol = (ta["acto"], ta["registro"]) != (tb["acto"], tb["registro"])
-            marca_txt = ta["texto"] != tb["texto"]
-            if not (marca_pol or marca_txt):
+        ta, tb = ca[nombre]["turnos"], cb[nombre]["turnos"]
+        if len(ta) != len(tb):
+            print(f"[ESTRUCTURA] {nombre}: {len(ta)} turnos → {len(tb)}")
+            fallos += 1
+        if ca[nombre].get("estado") != cb[nombre].get("estado"):
+            print(f"[ESTRUCTURA] {nombre}: estado "
+                  f'{ca[nombre].get("estado")} → {cb[nombre].get("estado")}')
+            fallos += 1
+        # Recorrer la UNIÓN, no el mínimo: zip() escondía turnos perdidos.
+        for i in range(max(len(ta), len(tb))):
+            xa = ta[i] if i < len(ta) else None
+            xb = tb[i] if i < len(tb) else None
+            if xa is None or xb is None:
+                print(f"[ESTRUCTURA] {nombre} turno {i+1}: "
+                      f'{"falta en B" if xb is None else "falta en A"}')
+                fallos += 1
                 continue
-            cambios += 1
-            pol = (f'{ta["acto"]}/{ta["registro"]} → {tb["acto"]}/{tb["registro"]}'
-                   if marca_pol else "igual")
-            print(f'{nombre[:27]:<28} {pol:<28} '
-                  f'{"DISTINTO" if marca_txt else "igual"}  (turno {ta["n"]})')
+            if (xa["acto"], xa["registro"]) != (xb["acto"], xb["registro"]):
+                print(f'[POLÍTICA] {nombre} turno {i+1}: '
+                      f'{xa["acto"]}/{xa["registro"]} → {xb["acto"]}/{xb["registro"]}')
+                fallos += 1
+            elif xa["texto"] != xb["texto"]:
+                print(f"[texto] {nombre} turno {i+1}: distinto (informativo)")
+        da = {s["indice"]: s["memoria_delta"] for s in ca[nombre].get("sesiones", [])}
+        db = {s["indice"]: s["memoria_delta"] for s in cb[nombre].get("sesiones", [])}
+        if da != db:
+            print(f"[MEMORIA] {nombre}: cambió lo que se escribió en memoria")
+            fallos += 1
+
     print()
-    print(f"turnos con diferencias: {cambios}")
     print("resumen A:", json.dumps(a.get("resumen", {}), ensure_ascii=False))
     print("resumen B:", json.dumps(b.get("resumen", {}), ensure_ascii=False))
-    # La política es lo que la evacuación DEBE conservar; el texto puede variar
-    # por el muestreo aunque nada haya cambiado.
-    return 0
+    print()
+    print(f"diferencias de política/estructura/memoria: {fallos}")
+    return 1 if fallos else 0
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model")
     ap.add_argument("--engine")
+    ap.add_argument("--probe", help="helios_model_probe, para saber si hay visión")
     ap.add_argument("--salida", default="informe_oraculo.json")
-    ap.add_argument("--env", action="append", default=[],
-                    help="VAR=valor extra para el motor (repetible)")
-    ap.add_argument("--solo", help="correr un único caso por nombre")
+    ap.add_argument("--env", action="append", default=[])
+    ap.add_argument("--solo")
+    ap.add_argument("--sin-sha", action="store_true",
+                    help="omitir SHA256 del HNF (rápido, informe no certificable)")
     ap.add_argument("--diff", nargs=2, metavar=("A", "B"))
     args = ap.parse_args()
 
@@ -275,41 +461,61 @@ def main():
         ap.error("--model y --engine son obligatorios (o usa --diff)")
 
     extra_env = dict(kv.split("=", 1) for kv in args.env)
-    casos = [c for c in BATERIA if not args.solo or c["nombre"] == args.solo]
 
-    informe = {"modelo": os.path.basename(args.model),
-               "env": extra_env, "casos": []}
+    tiene_vision = False
+    if args.probe and os.path.exists(args.probe):
+        try:
+            r = subprocess.run([args.probe, args.model], capture_output=True,
+                               text=True, timeout=120)
+            tiene_vision = "vision" in r.stdout and "runtime_ready" in r.stdout
+        except Exception:
+            pass
+
+    print("calculando procedencia (SHA256 del HNF)…" if not args.sin_sha else "")
+    informe = {"procedencia": procedencia(args.model, args.engine, extra_env,
+                                          not args.sin_sha),
+               "vision_disponible": tiene_vision, "casos": []}
+
+    casos = [c for c in BATERIA if not args.solo or c["nombre"] == args.solo]
     for i, caso in enumerate(casos, 1):
         print(f"[{i}/{len(casos)}] {caso['nombre']}…", flush=True)
-        r = correr_caso(caso, args.model, args.engine, extra_env)
+        r = correr_caso(caso, args.model, args.engine, extra_env, tiene_vision)
         informe["casos"].append(r)
-        if r["turnos_capturados"] != r["turnos_esperados"]:
-            print(f"    AVISO: {r['turnos_capturados']} de "
-                  f"{r['turnos_esperados']} turnos capturados")
+        if r.get("estado") not in ("OK", "SALTADO"):
+            print(f'    AVISO: {r["turnos_capturados"]}/{r["turnos_esperados"]} turnos')
 
     informe["resumen"] = resumen(informe)
     with open(args.salida, "w", encoding="utf-8") as f:
         json.dump(informe, f, ensure_ascii=False, indent=1)
 
-    print()
-    print("=" * 72)
+    print("\n" + "=" * 72)
     for c in informe["casos"]:
-        print(f'\n{c["nombre"]}  —  {c["invariante"]}')
+        print(f'\n{c["nombre"]}  [{c.get("estado")}]  —  {c["invariante"]}')
+        if c.get("estado") == "SALTADO":
+            print(f'  {c["motivo"]}')
+            continue
         for t in c["turnos"]:
             señales = "".join([
                 " MUDO" if t["mudo"] else "",
                 f' oferta×{t["oferta_servicio"]}' if t["oferta_servicio"] else "",
                 f' fuga×{t["fuga_contrato"]}' if t["fuga_contrato"] else "",
                 f' cjk×{t["cjk"]}' if t["cjk"] else "",
+                " IDÉNTICA" if t["identico_a_previo"] else "",
                 " CORTE" if t["presupuesto_agotado"] else "",
             ])
-            print(f'  [{t["acto"]}/{t["registro"]} {t["tokens"]}tok]{señales}')
+            print(f'  s{t["sesion"]} [{t["acto"]}/{t["registro"]} {t["tokens"]}tok]{señales}')
             print(f'    tú: {t["mensaje"]}')
             print(f'    él: {t["texto"][:150]}')
-        if c["avisos"]:
-            print(f'  avisos del motor: {c["avisos"]}')
-    print()
-    print("RESUMEN:", json.dumps(informe["resumen"], ensure_ascii=False))
+        for s in c["sesiones"]:
+            if s["memoria_delta"]:
+                print(f'  memoria escrita (sesión {s["indice"]}): '
+                      f'{json.dumps(s["memoria_delta"], ensure_ascii=False)[:300]}')
+            if s["avisos"]:
+                print(f'  avisos: {s["avisos"]}')
+
+    print("\nRESUMEN:", json.dumps(informe["resumen"], ensure_ascii=False))
+    print(f'procedencia: hector@{informe["procedencia"]["hector_commit"]} · '
+          f'modelo sha {str(informe["procedencia"]["modelo_sha256"])[:12]}')
     print(f"informe en {args.salida}")
     return 0
 

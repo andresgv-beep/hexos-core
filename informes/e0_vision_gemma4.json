@@ -1,0 +1,98 @@
+{
+ "procedencia": {
+  "modelo_ruta": "/home/andres/Documentos/GitHub/helios_convert_v9.1/output/gemma4-e2b-it-multimodal.hnf",
+  "modelo_bytes": 4588102267,
+  "modelo_sha256": null,
+  "engine_ruta": "/home/andres/Documentos/GitHub/Hector-engine/build/helios_chat",
+  "engine_sha256": null,
+  "engine_mtime": 1785698098,
+  "hector_commit": "1bca9b5ffd55",
+  "hexos_commit": "111636c40bf8",
+  "env": {
+   "HELIOS_EMBED_MMAP": "1",
+   "HELIOS_VISION_MMAP": "1"
+  },
+  "bateria_casos": 13
+ },
+ "vision_disponible": true,
+ "casos": [
+  {
+   "nombre": "imagen_y_pregunta_posterior",
+   "invariante": "conserva la referencia al artefacto visual en turnos siguientes",
+   "estado": "OK",
+   "turnos_esperados": 2,
+   "turnos_capturados": 2,
+   "memoria_final": null,
+   "sesiones": [
+    {
+     "indice": 1,
+     "destila": false,
+     "adjunto": "circulo",
+     "turnos_esperados": 2,
+     "turnos_capturados": 2,
+     "memoria_delta": {},
+     "avisos": [
+      "(imagen lista: 192x192)"
+     ]
+    }
+   ],
+   "turnos": [
+    {
+     "texto": "¡Buenas! 😄 Veo un círculo rojo sólido. Nada más, ¿qué te trae esa imagen?",
+     "chars": 73,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 0,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": false,
+     "acto": "continuar_artefacto",
+     "registro": "neutral",
+     "temp": 0.7,
+     "tokens": 21,
+     "presupuesto_agotado": false,
+     "pensamiento_cortado": false,
+     "ctx": 923,
+     "sesion": 1,
+     "n": 1,
+     "mensaje": "¿qué ves en esta imagen?"
+    },
+    {
+     "texto": "Era rojo.",
+     "chars": 9,
+     "mudo": false,
+     "cjk": 0,
+     "oferta_servicio": 0,
+     "fuga_contrato": 0,
+     "frases_repetidas": 0,
+     "identico_a_previo": false,
+     "acto": "responder",
+     "registro": "neutral",
+     "temp": 0.7,
+     "tokens": 3,
+     "presupuesto_agotado": false,
+     "pensamiento_cortado": false,
+     "ctx": 1042,
+     "sesion": 1,
+     "n": 2,
+     "mensaje": "¿de qué color era la figura?"
+    }
+   ]
+  }
+ ],
+ "resumen": {
+  "casos": 1,
+  "saltados": 0,
+  "incompletos": 0,
+  "turnos": 2,
+  "mudos": 0,
+  "ofertas_servicio": 0,
+  "fugas_contrato": 0,
+  "cjk": 0,
+  "repeticiones": 0,
+  "respuestas_identicas": 0,
+  "presupuestos_agotados": 0,
+  "pensamientos_cortados": 0,
+  "tokens_medios": 12.0
+ }
+}
