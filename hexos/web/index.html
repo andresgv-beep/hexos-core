@@ -156,10 +156,12 @@
 
   /* Avisos del motor: ni respuesta ni telemetría. Ámbar, porque casi siempre
      significan "Héctor no vio todo lo que le mandaste". */
+  /* En línea y ajustadas al texto: varios avisos seguidos van uno al lado
+     del otro y saltan de línea solos, en vez de tres barras de lado a lado. */
   .aviso {
-    align-self: center; font-size: 12px; color: var(--warn);
+    display: inline-block; font-size: 12px; color: var(--warn);
     border: 1px solid var(--warn); border-radius: 999px;
-    padding: 4px 14px; opacity: .85;
+    padding: 3px 13px; opacity: .85; margin: 0 6px 6px 0;
   }
 
   .stats {
