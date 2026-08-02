@@ -111,6 +111,53 @@ información debe sobrevivir a la compactación.
    actualizado su base de datos. Confirmar debe promover el hecho nuevo y
    marcar el anterior como sustituido; nunca acumular verdades incompatibles.
 
+4. **El registro social no se puede mover.** Andrés intenta pasar de técnico a
+   colega y Héctor sigue seco. No es que no quiera: las tres funciones que
+   deciden el turno (`is_trivial_message`, `temperature_for`,
+   `response_budget`) reciben **solo el mensaje**, sin ningún estado entre
+   turnos. Para Héctor cada mensaje es el turno 1, así que el eje de registro
+   social no es que esté mal inferido — es que estructuralmente no existe.
+   Corolario: el saludo de apertura sale como servicio ("¿en qué puedo
+   ayudarte?") aunque haya memoria de ayer cargada. Un colega abre con
+   historia compartida; la memoria está entrando como fichas de datos, no
+   como continuidad.
+
+5. **La calidez está en el modelo y el prefijo la borra.** Gemma 4 E2B en
+   crudo (app del móvil, sin system prompt) es cálido, expresivo y usa
+   emojis. Pero lo hace **en su registro de asistente efusivo**: listas
+   numeradas con titulares en negrita, "¡Tú eliges el tema!". El prompt de
+   `helios_chat` dice "sin listas ni titulares" precisamente para matar eso,
+   y funcionó — pero en un 4B **la forma y el tono son el mismo registro
+   entrenado**, así que se llevó la calidez por delante. Ni quitar la
+   restricción (vuelve el bot con viñetas) ni añadir adjetivos ("sé cercano"
+   ya está puesto y no hace nada) sirven: cálido + breve + sin listas es una
+   combinación que el modelo no tiene entrenada y hay que **demostrarla con
+   ejemplos en el prefijo**, no describirla.
+
+6. **La temperatura la decide el documento pegado.** `temperature_for()`
+   escanea el mensaje entero, y tras `/pegar` el mensaje incluye el documento.
+   Un spec de 4.000 caracteres casi siempre contiene "error", "dato",
+   "comando" o "exacto", así que **cualquier documento baja el turno a 0,35**
+   y aplana la voz. Observado con `HQ6_LAB.md`, que dispara la palabra por una
+   columna titulada "Error máximo". La misma sesión demuestra el efecto: los
+   turnos a 0,70 fueron cálidos y con pregunta de vuelta ("Si quieres,
+   pásamelo. Lo reviso."), el de 0,35 salió plano.
+
+7. **Tras compactar, el modelo recita su propio prefijo de memoria.**
+   Observado en vivo: justo después de "turno grande — reorganizando…", una
+   respuesta correcta terminó con "Memoria: Andrés es el creador de Helios…"
+   como texto visible. La memoria se re-prefillea como texto y queda tan
+   pegada a la generación que se convierte en algo que continuar. Es primo del
+   bug de memoria envenenada ya arreglado, pero por otra vía: el contenido es
+   bueno, el problema es la frontera.
+
+8. **Lo pegado se trunca en silencio.** El límite es `max_seq_len × 2`
+   caracteres (8.192 con ventana 4096). Un spec de 16.460 entró por la mitad y
+   Héctor respondió como si lo hubiera leído entero. El motor sí avisa, pero
+   el aviso viaja antes del marcador de respuesta. Mitigado en la UI de HEXOS
+   (los avisos ahora se rescatan y se muestran), pero el límite sigue ahí y
+   sube automáticamente si sube la ventana.
+
 ### Pruebas de aceptación para cuando se implemente
 
 - `velocidad`, después de hablar de HQS, produce `continuación técnica + breve`,
@@ -121,7 +168,19 @@ información debe sobrevivir a la compactación.
   proceso;
 - antes de la promoción, Helios dice que ha tomado nota como propuesta, no que
   ya modificó su memoria;
-- un saludo aislado continúa siendo social, breve y barato.
+- un saludo aislado continúa siendo social, breve y barato;
+- tras veinte turnos técnicos, una broma mueve el registro a cercano y el
+  siguiente turno técnico lo devuelve — con histéresis, para que una broma
+  suelta en mitad de un debug no descarrile la sesión;
+- el registro se puede forzar a mano (`/colega`, `/trabajo`): si el usuario
+  dice "relájate", eso **es** la especificación, no una pista a inferir;
+- el registro activo es visible en la interfaz, como el reloj de la GPU: si se
+  equivoca, que se pueda corregir en vez de parecer tonto;
+- pegar un documento no cambia el registro ni la temperatura por sí solo;
+- ningún prefijo de sistema o de memoria aparece jamás en la respuesta
+  visible;
+- en registro cercano caben un emoji suelto y una frase con guasa, y sigue sin
+  haber listas numeradas ni titulares.
 
 Esta política se descubre primero en `helios_chat` mediante uso diario. Cuando
 se estabilice, pertenece al CK/HERA real, no al motor Héctor.
