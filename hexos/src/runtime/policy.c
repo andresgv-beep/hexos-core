@@ -13,6 +13,7 @@
 /* Valores estables de CUdevice_attribute en la API pública del driver. */
 #define HEXOS_CU_DEVICE_ATTRIBUTE_PAGEABLE_MEMORY_ACCESS    88
 #define HEXOS_CU_DEVICE_ATTRIBUTE_CONCURRENT_MANAGED_ACCESS 89
+#define HEXOS_CU_DEVICE_ATTRIBUTE_ASYNC_ENGINE_COUNT         40
 #define HEXOS_CUDA_SUCCESS 0
 
 typedef int hexos_cu_result_t;
@@ -78,17 +79,22 @@ bool hexos_runtime_probe_cuda(hexos_cuda_runtime_caps_t *caps)
 
     int pageable = 0;
     int concurrent = 0;
+    int async_engines = 0;
     if (cu_device_get_attribute(
             &pageable, HEXOS_CU_DEVICE_ATTRIBUTE_PAGEABLE_MEMORY_ACCESS,
             device) != HEXOS_CUDA_SUCCESS ||
         cu_device_get_attribute(
             &concurrent, HEXOS_CU_DEVICE_ATTRIBUTE_CONCURRENT_MANAGED_ACCESS,
+            device) != HEXOS_CUDA_SUCCESS ||
+        cu_device_get_attribute(
+            &async_engines, HEXOS_CU_DEVICE_ATTRIBUTE_ASYNC_ENGINE_COUNT,
             device) != HEXOS_CUDA_SUCCESS) {
         goto done;
     }
 
     caps->pageable_memory_access = pageable != 0;
     caps->concurrent_managed_access = concurrent != 0;
+    caps->async_engine_count = async_engines;
     ok = true;
 
 done:
@@ -182,6 +188,44 @@ bool hexos_runtime_apply_engine_env(
     } else {
         snprintf(local.reason, sizeof(local.reason), "%s por override",
                  hexos_runtime_vision_policy_name(local.vision_policy));
+    }
+
+    const char* double_value = getenv("HELIOS_MMAP_DOUBLE_BUFFER");
+    const bool double_automatic = !double_value || !*double_value ||
+                                  !strcasecmp(double_value, "auto");
+    if (double_automatic && !automatic) {
+        hexos_runtime_probe_cuda(&local.cuda);
+    }
+    bool double_forced = false;
+    if (!double_automatic && !parse_switch(double_value, &double_forced)) {
+        snprintf(local.double_buffer_reason,
+                 sizeof(local.double_buffer_reason),
+                 "HELIOS_MMAP_DOUBLE_BUFFER='%s' no es 0, 1 ni auto",
+                 double_value);
+        if (report) *report = local;
+        return false;
+    }
+    local.mmap_double_buffer = double_automatic
+        ? persistent_process && local.cuda.driver_available &&
+          local.cuda.pageable_memory_access &&
+          local.cuda.concurrent_managed_access &&
+          local.cuda.async_engine_count > 0
+        : double_forced;
+    if (setenv("HELIOS_MMAP_DOUBLE_BUFFER",
+               local.mmap_double_buffer ? "1" : "0", 1) != 0) {
+        return false;
+    }
+    if (double_automatic) {
+        snprintf(local.double_buffer_reason,
+                 sizeof(local.double_buffer_reason),
+                 "auto-%s; motores asíncronos=%d",
+                 local.mmap_double_buffer ? "on" : "off",
+                 local.cuda.async_engine_count);
+    } else {
+        snprintf(local.double_buffer_reason,
+                 sizeof(local.double_buffer_reason),
+                 "forzado-%s por override",
+                 local.mmap_double_buffer ? "on" : "off");
     }
 
     if (report) *report = local;

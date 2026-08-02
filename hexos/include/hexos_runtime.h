@@ -17,6 +17,7 @@ typedef struct {
     int device_index;
     bool pageable_memory_access;
     bool concurrent_managed_access;
+    int async_engine_count;
 } hexos_cuda_runtime_caps_t;
 
 typedef enum {
@@ -33,7 +34,9 @@ typedef struct {
     hexos_vision_mmap_policy_t vision_policy;
     bool embed_mmap;
     bool vision_mmap;
+    bool mmap_double_buffer;
     char reason[192];
+    char double_buffer_reason[192];
 } hexos_runtime_report_t;
 
 /* Consulta el dispositivo CUDA visible número cero. No crea contexto. */
@@ -51,6 +54,7 @@ hexos_vision_mmap_policy_t hexos_runtime_decide_vision_mmap(
  *
  * - HELIOS_EMBED_MMAP: 1 si el usuario no lo ha definido.
  * - HELIOS_VISION_MMAP: auto según capacidades en procesos persistentes.
+ * - HELIOS_MMAP_DOUBLE_BUFFER: auto si existe copia CUDA asíncrona.
  *
  * Los valores explícitos 0/1 nunca se pisan. Devuelve false únicamente ante
  * un override inválido o si setenv falla.

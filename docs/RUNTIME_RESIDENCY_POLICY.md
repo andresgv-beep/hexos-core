@@ -22,6 +22,9 @@ con `dlopen`. No enlaza CUDA, no necesita el Toolkit y no crea un contexto.
   usuario se conserva.
 - `HELIOS_VISION_MMAP` acepta `auto`, `0` o `1`. Si no existe equivale a
   `auto`.
+- `HELIOS_MMAP_DOUBLE_BUFFER` usa la misma semántica y es genérica para
+  cualquier bloque file-backed. En `auto` exige proceso persistente, acceso
+  pageable/managed concurrente y al menos un motor de copia asíncrono.
 - En `auto`, un proceso persistente compatible recibe `1`; cualquier otro
   caso recibe `0`.
 - Un `0` o `1` explícito siempre manda. El `1` forzado no evita la validación
@@ -46,10 +49,11 @@ La decisión puede inspeccionarse sin cargar un modelo:
 ```bash
 make -C hexos runtime-probe
 hexos/bin/hexos_runtime_probe vision-mmap persistent
+hexos/bin/hexos_runtime_probe mmap-double-buffer persistent
 ```
 
-En la RTX 5070 Laptop usada para certificar Gemma 4 V7, la salida esperada es
-`auto-on`, con `pageable=1` y `concurrent=1`.
+En la RTX 5070 Laptop usada para certificar Gemma 4 V8, ambas salidas son
+`auto-on`, con `pageable=1`, `concurrent=1` y dos motores asíncronos.
 
 ## Separación de responsabilidades
 
@@ -58,6 +62,7 @@ binario que se ejecuta. Preparar el modelo, elegir el runner multimodal y
 aceptar imágenes desde la UI son pasos de producto posteriores. Definir la
 variable para un motor de solo texto es inocuo.
 
-Tampoco activa doble buffering. La V7 de Héctor mantiene una ventana CUDA de
-32 MiB y copia una fase cada vez; solapar copia y cómputo solo se adoptará si
-un perfil por fase demuestra una mejora suficiente.
+El doble buffer pertenece al pipeline genérico de Héctor, no a Gemma 4. Cada
+arquitectura declara fases y el runtime común administra las dos ventanas,
+eventos y stream de copia. En Gemma 4 reduce la torre caliente de 97,74 a
+73,25 ms con 20 MiB adicionales.

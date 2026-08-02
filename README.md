@@ -98,7 +98,9 @@ HEXOS resuelve además `HELIOS_VISION_MMAP=auto` para procesos persistentes.
 Consulta al driver CUDA los atributos de acceso pageable y managed concurrente;
 solo activa el staging visual desde HNF/RAM cuando ambos están disponibles.
 Esto mantiene texto y KV en VRAM y usa únicamente una ventana visual temporal
-de 32 MiB. La política completa está en
+de 32 MiB. Cuando la GPU dispone de copia asíncrona, también activa el doble
+buffer genérico mediante `HELIOS_MMAP_DOUBLE_BUFFER=1`; otros runners podrán
+consumirlo sin duplicar infraestructura. La política completa está en
 [`docs/RUNTIME_RESIDENCY_POLICY.md`](docs/RUNTIME_RESIDENCY_POLICY.md).
 
 La ruta del binario y la temperatura son configurables:
@@ -121,6 +123,7 @@ certificación:
 ```bash
 HELIOS_VISION_MMAP=0 make chat MODEL=/ruta/al/modelo.hnf
 HELIOS_VISION_MMAP=1 make chat MODEL=/ruta/al/modelo.hnf
+HELIOS_MMAP_DOUBLE_BUFFER=0 make chat MODEL=/ruta/al/modelo.hnf
 ```
 
 Si se ejecuta `helios_chat` directamente, fuera de este lanzador, hay que

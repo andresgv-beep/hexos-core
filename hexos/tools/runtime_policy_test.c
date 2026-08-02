@@ -14,6 +14,7 @@ static hexos_cuda_runtime_caps_t supported_caps(void)
     caps.device_index = 0;
     caps.pageable_memory_access = true;
     caps.concurrent_managed_access = true;
+    caps.async_engine_count = 2;
     return caps;
 }
 
@@ -41,12 +42,19 @@ int main(void)
     /* Los overrides explícitos se aplican sin consultar la GPU. */
     setenv("HELIOS_EMBED_MMAP", "0", 1);
     setenv("HELIOS_VISION_MMAP", "1", 1);
+    setenv("HELIOS_MMAP_DOUBLE_BUFFER", "0", 1);
     hexos_runtime_report_t report;
     assert(hexos_runtime_apply_engine_env(true, &report));
     assert(!report.embed_mmap);
     assert(report.vision_mmap);
+    assert(!report.mmap_double_buffer);
     assert(!strcmp(getenv("HELIOS_EMBED_MMAP"), "0"));
     assert(!strcmp(getenv("HELIOS_VISION_MMAP"), "1"));
+    assert(!strcmp(getenv("HELIOS_MMAP_DOUBLE_BUFFER"), "0"));
+
+    setenv("HELIOS_MMAP_DOUBLE_BUFFER", "valor-invalido", 1);
+    assert(!hexos_runtime_apply_engine_env(true, &report));
+    assert(strstr(report.double_buffer_reason, "no es 0, 1 ni auto"));
 
     puts("runtime_policy_test: OK");
     return 0;

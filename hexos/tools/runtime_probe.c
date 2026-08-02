@@ -5,12 +5,16 @@
 
 static void usage(const char *prog)
 {
-    fprintf(stderr, "uso: %s vision-mmap [persistent|oneshot]\n", prog);
+    fprintf(stderr,
+            "uso: %s <vision-mmap|mmap-double-buffer> "
+            "[persistent|oneshot]\n", prog);
 }
 
 int main(int argc, char **argv)
 {
-    if (argc < 2 || argc > 3 || strcmp(argv[1], "vision-mmap")) {
+    if (argc < 2 || argc > 3 ||
+        (strcmp(argv[1], "vision-mmap") &&
+         strcmp(argv[1], "mmap-double-buffer"))) {
         usage(argv[0]);
         return 2;
     }
@@ -31,7 +35,13 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    fprintf(stderr, "[hexos] visión mmap: %s\n", report.reason);
-    puts(report.vision_mmap ? "1" : "0");
+    if (!strcmp(argv[1], "vision-mmap")) {
+        fprintf(stderr, "[hexos] visión mmap: %s\n", report.reason);
+        puts(report.vision_mmap ? "1" : "0");
+    } else {
+        fprintf(stderr, "[hexos] doble buffer mmap: %s\n",
+                report.double_buffer_reason);
+        puts(report.mmap_double_buffer ? "1" : "0");
+    }
     return 0;
 }

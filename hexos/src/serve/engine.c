@@ -247,6 +247,8 @@ bool engine_start(const char *binary, const char *model, const char *temp)
             _exit(126);
         }
         fprintf(stderr, "[serve] visión mmap: %s\n", runtime_report.reason);
+        fprintf(stderr, "[serve] doble buffer mmap: %s\n",
+                runtime_report.double_buffer_reason);
 
         /* Hijo: stdin y stdout a las tuberías; stderr se queda en la
          * consola de HEXOS para que la carga del modelo sea visible. */
