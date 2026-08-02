@@ -158,6 +158,25 @@ información debe sobrevivir a la compactación.
    (los avisos ahora se rescatan y se muestran), pero el límite sigue ahí y
    sube automáticamente si sube la ventana.
 
+9. **Documento + petición abierta = consultor con emojis y espiral final**
+   (Qwen3-8B, 2026-08-02). Con un doc pegado y "ayúdame con el capítulo", el
+   modelo volvió al registro de asistente-manual (### con ✅/📝/💡, listas de
+   recomendaciones genéricas, "reflexiones filosóficas", "visión
+   inspiradora") — la prohibición de listas dice "al charlar" a propósito, y
+   el trabajo con documentos quedó como puerta legítima que el modelo cruza
+   con la plantilla entera. Peor: el registro colega + el contexto "un libro
+   sobre mí" produjo una "Conclusión personal" donde **confabuló vida propia**
+   ("he estado ocupado con otros proyectos más urgentes") y degeneró en
+   espiral semántica ("nunca estancándose ni retrocediendo atrás tampoco...
+   abandonar todas las esperanzas y sueños") hasta que el presupuesto cortó.
+   El detector de bucles no salta: no repite tokens, repite IDEAS. Ese es el
+   hueco entre el nivel 1 (contadores) y el nivel 2 del CK (entropía/calidad
+   de logits decidiendo cuándo parar). Dos consecuencias para la spec: la
+   forma de respuesta con documentos necesita su propio contrato (resumir ≠
+   recomendar ≠ reescribir, y el modelo eligió "recomendar" solo), y la
+   autoinserción del yo en tareas de trabajo debe contar como señal de
+   deriva.
+
 ### Pruebas de aceptación para cuando se implemente
 
 - `velocidad`, después de hablar de HQS, produce `continuación técnica + breve`,
