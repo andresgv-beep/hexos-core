@@ -185,6 +185,18 @@ información debe sobrevivir a la compactación.
 Esta política se descubre primero en `helios_chat` mediante uso diario. Cuando
 se estabilice, pertenece al CK/HERA real, no al motor Héctor.
 
+**Primer tramo implementado (Hector-engine `f4f9bae`, 2026-08-02):** registro
+social pegajoso con histéresis de dos señales y forzado manual
+(`/colega`,`/trabajo`,`/normal`, visible en la telemetría), suelos de
+temperatura por registro (0,45/0,50/0,60 en vez del 0,35 plano), el tono lo
+decide el arranque del mensaje y no el documento pegado, continuidad de
+artefacto durante 3 turnos (resuelve el fallo 1), voz demostrada con dos
+ejemplos en el prefijo en vez de descrita con adjetivos (resuelve el 5), y
+techo de pensamiento trivial 20→48 (reduce los turnos mudos del fallo de la
+rienda). Pendientes de este documento: los demás ejes (empezar por su fallo
+observado), el rescate real del turno mudo y la frontera del prefijo tras
+compactar (fallo 7).
+
 ## Lo genuinamente único de HELIOS (el 20% que nadie tiene)
 
 - Memoria + identidad DENTRO del archivo del modelo (HNF-EXT). Copias el
