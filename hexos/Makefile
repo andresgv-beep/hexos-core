@@ -46,7 +46,7 @@ TARGET = $(BINDIR)/hexos
 # Rules
 # ============================================================================
 
-.PHONY: all clean run modules serve
+.PHONY: all clean run modules serve runtime-probe runtime-policy-test tools
 
 all: modules $(TARGET)
 
@@ -118,20 +118,38 @@ info:
 # en Hector-engine.
 # ============================================================================
 
+RUNTIME_SRC = $(SRCDIR)/runtime/policy.c
 SERVE_SRC = $(SRCDIR)/serve/engine.c $(SRCDIR)/serve/http.c \
-            $(SRCDIR)/serve/serve_main.c
+            $(SRCDIR)/serve/serve_main.c $(RUNTIME_SRC)
 SERVE_TARGET = $(BINDIR)/hexos_serve
 
 serve: $(SERVE_TARGET)
 
 $(SERVE_TARGET): $(SERVE_SRC) $(INCDIR)/hexos_serve.h
 	@mkdir -p $(BINDIR)
-	$(CC) $(CFLAGS) -I$(INCDIR) $(SERVE_SRC) -o $@ -lpthread
+	$(CC) $(CFLAGS) -I$(INCDIR) $(SERVE_SRC) -o $@ -lpthread -ldl
 	@echo ""
 	@echo "Build complete: $@"
 	@echo "Arranca con: ./$(SERVE_TARGET) --model /ruta/modelo.hnf"
 
 tools: $(BINDIR)/hexos_ipc_test
+
+runtime-probe: $(BINDIR)/hexos_runtime_probe
+
+$(BINDIR)/hexos_runtime_probe: tools/runtime_probe.c $(RUNTIME_SRC) \
+                               $(INCDIR)/hexos_runtime.h
+	@mkdir -p $(BINDIR)
+	$(CC) $(CFLAGS) -I$(INCDIR) tools/runtime_probe.c $(RUNTIME_SRC) \
+		-o $@ -ldl
+
+runtime-policy-test: $(BINDIR)/runtime_policy_test
+	./$(BINDIR)/runtime_policy_test
+
+$(BINDIR)/runtime_policy_test: tools/runtime_policy_test.c $(RUNTIME_SRC) \
+                               $(INCDIR)/hexos_runtime.h
+	@mkdir -p $(BINDIR)
+	$(CC) $(CFLAGS) -I$(INCDIR) tools/runtime_policy_test.c $(RUNTIME_SRC) \
+		-o $@ -ldl
 
 $(BINDIR)/hexos_ipc_test: tools/hexos_ipc_test.c $(SRCDIR)/ipc/ipc.c $(SRCDIR)/core/log.c
 	@mkdir -p $(BINDIR)

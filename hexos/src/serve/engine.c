@@ -17,6 +17,7 @@
 #define _GNU_SOURCE
 #endif
 #include "hexos_serve.h"
+#include "hexos_runtime.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -239,6 +240,14 @@ bool engine_start(const char *binary, const char *model, const char *temp)
     }
 
     if (pid == 0) {
+        hexos_runtime_report_t runtime_report;
+        if (!hexos_runtime_apply_engine_env(true, &runtime_report)) {
+            fprintf(stderr, "[serve] política runtime inválida: %s\n",
+                    runtime_report.reason);
+            _exit(126);
+        }
+        fprintf(stderr, "[serve] visión mmap: %s\n", runtime_report.reason);
+
         /* Hijo: stdin y stdout a las tuberías; stderr se queda en la
          * consola de HEXOS para que la carga del modelo sea visible. */
         dup2(to_engine[0], STDIN_FILENO);

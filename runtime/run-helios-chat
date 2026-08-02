@@ -25,4 +25,17 @@ fi
 : "${HELIOS_EMBED_MMAP:=1}"
 export HELIOS_EMBED_MMAP
 
+# La visión tiene requisitos más estrictos que los embeddings. HEXOS consulta
+# al driver los dos atributos que exige Héctor y resuelve auto a 0/1 antes de
+# lanzar el proceso. Un override explícito del usuario sigue mandando.
+runtime_probe="$hexos_dir/hexos/bin/hexos_runtime_probe"
+if [ -x "$runtime_probe" ]; then
+    HELIOS_VISION_MMAP=$($runtime_probe vision-mmap persistent)
+elif [ -z "${HELIOS_VISION_MMAP+x}" ] || [ "$HELIOS_VISION_MMAP" = "auto" ]; then
+    echo "[hexos] aviso: falta hexos_runtime_probe; visión mmap desactivada" >&2
+    echo "[hexos] ejecuta: make -C hexos runtime-probe" >&2
+    HELIOS_VISION_MMAP=0
+fi
+export HELIOS_VISION_MMAP
+
 exec "$chat_bin" "$@"

@@ -94,6 +94,13 @@ mapea desde el HNF los embeddings que se mantienen fuera de VRAM y no conserva
 otra copia completa en RAM. El motor conserva su fallback para GPUs que no
 soporten acceso pageable.
 
+HEXOS resuelve además `HELIOS_VISION_MMAP=auto` para procesos persistentes.
+Consulta al driver CUDA los atributos de acceso pageable y managed concurrente;
+solo activa el staging visual desde HNF/RAM cuando ambos están disponibles.
+Esto mantiene texto y KV en VRAM y usa únicamente una ventana visual temporal
+de 32 MiB. La política completa está en
+[`docs/RUNTIME_RESIDENCY_POLICY.md`](docs/RUNTIME_RESIDENCY_POLICY.md).
+
 La ruta del binario y la temperatura son configurables:
 
 ```bash
@@ -106,6 +113,14 @@ archivos:
 
 ```bash
 HELIOS_EMBED_MMAP=0 make chat MODEL=/ruta/al/modelo.hnf
+```
+
+La residencia visual también admite overrides para comparación o
+certificación:
+
+```bash
+HELIOS_VISION_MMAP=0 make chat MODEL=/ruta/al/modelo.hnf
+HELIOS_VISION_MMAP=1 make chat MODEL=/ruta/al/modelo.hnf
 ```
 
 Si se ejecuta `helios_chat` directamente, fuera de este lanzador, hay que
