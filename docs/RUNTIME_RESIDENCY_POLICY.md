@@ -55,12 +55,30 @@ hexos/bin/hexos_runtime_probe mmap-double-buffer persistent
 En la RTX 5070 Laptop usada para certificar Gemma 4 V8, ambas salidas son
 `auto-on`, con `pageable=1`, `concurrent=1` y dos motores asíncronos.
 
-## Separación de responsabilidades
+## Capacidades del modelo y separación de responsabilidades
 
-La política no detecta todavía modalidades dentro del HNF ni cambia el
-binario que se ejecuta. Preparar el modelo, elegir el runner multimodal y
-aceptar imágenes desde la UI son pasos de producto posteriores. Definir la
-variable para un motor de solo texto es inocuo.
+HexOS ya puede consultar modalidades y adaptadores mediante
+`helios_model_probe`, la frontera metadata-only de Héctor. No duplica el
+parser HNF, no enlaza C++/CUDA y no decide por el nombre del fichero:
+
+```bash
+make -C hexos model-info
+hexos/bin/hexos_model_info modelo.hnf /ruta/a/helios_model_probe
+```
+
+`hexos_serve` ejecuta la misma sonda antes de cargar pesos. `--probe` fija su
+ruta, `HELIOS_MODEL_PROBE` hace lo mismo por entorno y `--no-probe` conserva
+el arranque de compatibilidad. Si la sonda no está instalada, avisa y continúa
+en texto para no romper despliegues existentes.
+
+El resultado se publica en `GET /api/status`: arquitectura textual,
+modalidades presentes, estado del adaptador e identificador estable. Así la UI
+podrá mostrar adjuntos únicamente cuando el runtime los soporte sin conocer
+Gemma, SigLIP o cualquier arquitectura futura.
+
+Esta fase todavía no cambia el binario ejecutado ni acepta imágenes. Elegir el
+runner genérico y definir el transporte de adjuntos son pasos separados; la
+política de residencia ya puede aplicarse sin riesgo a un motor de solo texto.
 
 El doble buffer pertenece al pipeline genérico de Héctor, no a Gemma 4. Cada
 arquitectura declara fases y el runtime común administra las dos ventanas,

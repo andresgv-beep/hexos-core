@@ -26,6 +26,7 @@
 #define DEFAULT_BIND "0.0.0.0"
 #define DEFAULT_ROOT "hexos/web"
 #define DEFAULT_ENGINE "helios_chat"
+#define DEFAULT_MODEL_PROBE "helios_model_probe"
 
 static void on_chunk(const char *text, size_t len, void *user)
 {
@@ -65,6 +66,8 @@ static void usage(const char *prog)
         "\n"
         "  --model <ruta>    HNF a cargar (obligatorio)\n"
         "  --engine <ruta>   binario de helios_chat (por defecto: %s del PATH)\n"
+        "  --probe <ruta>    sonda HNF de Héctor (por defecto: %s del PATH)\n"
+        "  --no-probe        compatibilidad: no inspeccionar capacidades HNF\n"
         "  --temp <t>        temperatura (por defecto 0.7)\n"
         "  --port <n>        puerto (por defecto %d)\n"
         "  --bind <ip>       interfaz (por defecto %s, toda la LAN)\n"
@@ -74,24 +77,30 @@ static void usage(const char *prog)
         "Usa --no-distill mientras desarrollas. Cada cierre destila la sesión\n"
         "al diario de Héctor, así que veinte reinicios de prueba dejan veinte\n"
         "recuerdos basura — y el modelo los lee al arrancar y los imita.\n",
-        prog, DEFAULT_ENGINE, DEFAULT_PORT, DEFAULT_BIND, DEFAULT_ROOT);
+        prog, DEFAULT_ENGINE, DEFAULT_MODEL_PROBE,
+        DEFAULT_PORT, DEFAULT_BIND, DEFAULT_ROOT);
 }
 
 int main(int argc, char **argv)
 {
     const char *model  = NULL;
     const char *engine = DEFAULT_ENGINE;
+    const char *probe = getenv("HELIOS_MODEL_PROBE");
+    if (!probe || !*probe) probe = DEFAULT_MODEL_PROBE;
     const char *temp   = "0.7";
     const char *bind_addr = DEFAULT_BIND;
     const char *root   = DEFAULT_ROOT;
     int port = DEFAULT_PORT;
     bool no_distill = false;
+    bool no_probe = false;
 
     for (int i = 1; i < argc; i++) {
         const char *next = (i + 1 < argc) ? argv[i + 1] : NULL;
         if (!strcmp(argv[i], "--no-distill")) { no_distill = true; }
+        else if (!strcmp(argv[i], "--no-probe")) { no_probe = true; }
         else if (!strcmp(argv[i], "--model")  && next) { model = next; i++; }
         else if (!strcmp(argv[i], "--engine") && next) { engine = next; i++; }
+        else if (!strcmp(argv[i], "--probe")  && next) { probe = next; i++; }
         else if (!strcmp(argv[i], "--temp")   && next) { temp = next; i++; }
         else if (!strcmp(argv[i], "--bind")   && next) { bind_addr = next; i++; }
         else if (!strcmp(argv[i], "--root")   && next) { root = next; i++; }
@@ -102,6 +111,30 @@ int main(int argc, char **argv)
 
     signal(SIGINT,  on_signal);
     signal(SIGTERM, on_signal);
+
+    if (!no_probe) {
+        hexos_model_report_t report;
+        if (hexos_model_probe(probe, model, &report)) {
+            serve_set_model_report(&report);
+            fprintf(stderr, "[serve] HNF: text=%s multimodal=%s\n",
+                    report.text_architecture,
+                    report.multimodal ? "sí" : "no");
+            for (int i = 0; i < HEXOS_MODEL_MODALITY_COUNT; i++) {
+                const hexos_modality_capability_t *cap = &report.modalities[i];
+                if (!cap->declared && !cap->present) continue;
+                fprintf(stderr, "[serve]   %s: %s",
+                        hexos_model_modality_name((hexos_model_modality_t)i),
+                        hexos_adapter_status_name(cap->status));
+                if (cap->adapter[0]) fprintf(stderr, " (%s)", cap->adapter);
+                fputc('\n', stderr);
+            }
+        } else {
+            fprintf(stderr, "[serve] aviso: no pude inspeccionar el HNF: %s\n",
+                    report.error);
+            fprintf(stderr, "[serve] continúo en compatibilidad de texto; "
+                            "usa --probe para fijar la sonda\n");
+        }
+    }
 
     /* El puerto primero: si está ocupado, se sabe al instante y no se han
      * cargado gigabytes de modelo para nada. */

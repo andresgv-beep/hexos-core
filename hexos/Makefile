@@ -46,7 +46,7 @@ TARGET = $(BINDIR)/hexos
 # Rules
 # ============================================================================
 
-.PHONY: all clean run modules serve runtime-probe runtime-policy-test tools
+.PHONY: all clean run modules serve runtime-probe runtime-policy-test model-info model-probe-test tools
 
 all: modules $(TARGET)
 
@@ -119,13 +119,14 @@ info:
 # ============================================================================
 
 RUNTIME_SRC = $(SRCDIR)/runtime/policy.c
+MODEL_PROBE_SRC = $(SRCDIR)/model/probe.c
 SERVE_SRC = $(SRCDIR)/serve/engine.c $(SRCDIR)/serve/http.c \
-            $(SRCDIR)/serve/serve_main.c $(RUNTIME_SRC)
+            $(SRCDIR)/serve/serve_main.c $(RUNTIME_SRC) $(MODEL_PROBE_SRC)
 SERVE_TARGET = $(BINDIR)/hexos_serve
 
 serve: $(SERVE_TARGET)
 
-$(SERVE_TARGET): $(SERVE_SRC) $(INCDIR)/hexos_serve.h
+$(SERVE_TARGET): $(SERVE_SRC) $(INCDIR)/hexos_serve.h $(INCDIR)/hexos_model.h
 	@mkdir -p $(BINDIR)
 	$(CC) $(CFLAGS) -I$(INCDIR) $(SERVE_SRC) -o $@ -lpthread -ldl
 	@echo ""
@@ -133,6 +134,21 @@ $(SERVE_TARGET): $(SERVE_SRC) $(INCDIR)/hexos_serve.h
 	@echo "Arranca con: ./$(SERVE_TARGET) --model /ruta/modelo.hnf"
 
 tools: $(BINDIR)/hexos_ipc_test
+
+model-info: $(BINDIR)/hexos_model_info
+
+$(BINDIR)/hexos_model_info: tools/model_info.c $(MODEL_PROBE_SRC) \
+                            $(INCDIR)/hexos_model.h
+	@mkdir -p $(BINDIR)
+	$(CC) $(CFLAGS) -I$(INCDIR) tools/model_info.c $(MODEL_PROBE_SRC) -o $@
+
+model-probe-test: $(BINDIR)/model_probe_test
+	./$(BINDIR)/model_probe_test
+
+$(BINDIR)/model_probe_test: tools/model_probe_test.c $(MODEL_PROBE_SRC) \
+                            $(INCDIR)/hexos_model.h
+	@mkdir -p $(BINDIR)
+	$(CC) $(CFLAGS) -I$(INCDIR) tools/model_probe_test.c $(MODEL_PROBE_SRC) -o $@
 
 runtime-probe: $(BINDIR)/hexos_runtime_probe
 

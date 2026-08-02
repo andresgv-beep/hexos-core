@@ -14,6 +14,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#include "hexos_model.h"
+
 /* ============================================================================
  * MOTOR (engine.c)
  * ============================================================================ */
@@ -55,6 +57,9 @@ void engine_stop(void);
 /* Reserva el puerto. Se llama ANTES de arrancar el motor: si está ocupado,
  * el fallo es inmediato en vez de después de cargar gigabytes de modelo. */
 bool serve_bind(const char *bind_addr, int port);
+
+/* Published by /api/status. Must be called before serve_run(). */
+void serve_set_model_report(const hexos_model_report_t *report);
 
 /* Bucle de accept sobre el socket ya reservado. Bloquea hasta serve_stop(). */
 bool serve_run(const char *web_root);

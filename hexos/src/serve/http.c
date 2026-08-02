@@ -39,6 +39,8 @@
 static int             g_listen_fd = -1;
 static volatile int    g_running;
 static const char     *g_web_root;
+static hexos_model_report_t g_model_report;
+static bool            g_has_model_report;
 
 static int             g_sse[MAX_SSE_CLIENTS];
 static pthread_mutex_t g_sse_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -184,10 +186,40 @@ static void serve_static(int fd, const char *path)
 
 static void serve_status(int fd)
 {
-    char json[256];
-    int n = snprintf(json, sizeof(json), "{\"state\":\"%s\"}",
-                     engine_state_name(engine_state()));
-    respond(fd, "200 OK", "application/json; charset=utf-8", json, (size_t)n);
+    char json[4096];
+    size_t used = (size_t)snprintf(json, sizeof(json),
+                                  "{\"state\":\"%s\"",
+                                  engine_state_name(engine_state()));
+    if (g_has_model_report && used < sizeof(json)) {
+        used += (size_t)snprintf(
+            json + used, sizeof(json) - used,
+            ",\"model\":{\"schema_version\":%u,"
+            "\"text_architecture\":\"%s\",\"multimodal\":%s,"
+            "\"modalities\":{",
+            g_model_report.schema_version,
+            g_model_report.text_architecture,
+            g_model_report.multimodal ? "true" : "false");
+        for (int i = 0; i < HEXOS_MODEL_MODALITY_COUNT && used < sizeof(json); i++) {
+            const hexos_modality_capability_t *cap =
+                &g_model_report.modalities[i];
+            used += (size_t)snprintf(
+                json + used, sizeof(json) - used,
+                "%s\"%s\":{\"present\":%s,\"status\":\"%s\","
+                "\"architecture\":\"%s\",\"adapter\":\"%s\"}",
+                i ? "," : "",
+                hexos_model_modality_name((hexos_model_modality_t)i),
+                cap->present ? "true" : "false",
+                hexos_adapter_status_name(cap->status),
+                cap->architecture, cap->adapter);
+        }
+        if (used < sizeof(json)) {
+            used += (size_t)snprintf(json + used, sizeof(json) - used, "}}");
+        }
+    }
+    if (used < sizeof(json)) json[used++] = '}';
+    else used = sizeof(json) - 1;
+    json[used] = '\0';
+    respond(fd, "200 OK", "application/json; charset=utf-8", json, used);
 }
 
 static void serve_sse(int fd)
@@ -327,6 +359,17 @@ bool serve_bind(const char *bind_addr, int port)
         return false;
     }
     return true;
+}
+
+void serve_set_model_report(const hexos_model_report_t *report)
+{
+    if (!report || !report->valid) {
+        memset(&g_model_report, 0, sizeof(g_model_report));
+        g_has_model_report = false;
+        return;
+    }
+    g_model_report = *report;
+    g_has_model_report = true;
 }
 
 bool serve_run(const char *web_root)
