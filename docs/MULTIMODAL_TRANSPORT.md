@@ -58,6 +58,8 @@ cada byte, el estado `staging`, el evento de confirmación y el turno posterior.
 También se verificó manualmente el endpoint HTTP completo con ese motor.
 
 La certificación real de Héctor usa el HNF combinado Gemma 4: imagen, respuesta
-visual y seguimiento textual en el mismo KV. La prueba HTTP real se repetirá
-cuando la GPU esté libre; durante este corte un juego ocupaba 7005 MiB y el
-modelo no podía cargarse, por lo que no se mató ningún proceso ajeno.
+visual y seguimiento textual en el mismo KV. El recorrido completo
+UI→HTTP→HexOS→frame RGB8→adaptador de Héctor se verificó después con el HNF
+canónico `../helios_convert_v9.1/output/gemma4-e2b-it-multimodal.hnf`; la UI se
+configura desde `/api/status` y oculta el adjunto cuando visión no está
+`runtime_ready`.

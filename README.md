@@ -89,6 +89,12 @@ chat puede arrancarse con:
 make chat MODEL=/ruta/al/modelo.hnf
 ```
 
+El artefacto Gemma 4 multimodal canónico del workspace actual está en:
+
+```bash
+make chat MODEL=../helios_convert_v9.1/output/gemma4-e2b-it-multimodal.hnf
+```
+
 El lanzador activa `HELIOS_EMBED_MMAP=1` por defecto. De esta forma, Héctor
 mapea desde el HNF los embeddings que se mantienen fuera de VRAM y no conserva
 otra copia completa en RAM. El motor conserva su fallback para GPUs que no
