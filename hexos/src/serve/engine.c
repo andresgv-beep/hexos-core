@@ -45,6 +45,7 @@ static pthread_mutex_t  g_write_lock = PTHREAD_MUTEX_INITIALIZER;
 static engine_state_t   g_state  = ENGINE_BOOTING;
 static engine_chunk_cb  g_on_chunk;
 static engine_event_cb  g_on_event;
+static engine_notice_cb g_on_notice;
 static void            *g_user;
 static volatile int     g_reader_alive;
 
@@ -96,6 +97,11 @@ static bool transition_from_idle(engine_state_t next, const char *event)
     return true;
 }
 
+void engine_set_notice_cb(engine_notice_cb on_notice)
+{
+    g_on_notice = on_notice;
+}
+
 void engine_set_callbacks(engine_chunk_cb on_chunk, engine_event_cb on_event,
                           void *user)
 {
@@ -141,6 +147,46 @@ static size_t strip_ansi(const char *in, size_t len, char *out)
  * partido entre dos lecturas; sin eso, un "tú>" a caballo entre dos read()
  * dejaría el turno abierto para siempre.
  * ------------------------------------------------------------------------ */
+/* Avisos que merece la pena enseñar. El REPL imprime muchos paréntesis y la
+ * mayoría son ruido de trámite ("pega el texto…"); estos son los que cambian
+ * lo que el usuario debe creerse de la respuesta. */
+static bool aviso_relevante(const char *s, size_t n)
+{
+    static const char *claves[] = {
+        "truncad", "recortad", "reorganiz", "caracteres recibidos",
+        "no cabía", "no cabia", "memoria", "contexto"
+    };
+    for (size_t i = 0; i < sizeof(claves) / sizeof(*claves); i++) {
+        size_t k = strlen(claves[i]);
+        if (n >= k && memmem(s, n, claves[i], k)) return true;
+    }
+    return false;
+}
+
+/* Extrae los "(...)" del tramo que se iba a descartar. */
+static void rescatar_avisos(const char *buf, size_t len)
+{
+    if (!g_on_notice) return;
+    for (size_t i = 0; i < len; i++) {
+        if (buf[i] != '(') continue;
+        const char *fin = memchr(buf + i, ')', len - i);
+        if (!fin) return;                 /* sin cerrar: llegará en la próxima */
+        size_t n = (size_t)(fin - (buf + i)) + 1;
+        if (n > 3 && n < 240 && aviso_relevante(buf + i, n)) {
+            /* El rescate corre en dos sitios (con marcador y sin él); un
+             * aviso a caballo entre lecturas podría verse dos veces. */
+            static char ultimo[240];
+            static size_t ultimo_n;
+            if (n != ultimo_n || memcmp(ultimo, buf + i, n) != 0) {
+                memcpy(ultimo, buf + i, n);
+                ultimo_n = n;
+                g_on_notice(buf + i, n, g_user);
+            }
+        }
+        i += n - 1;
+    }
+}
+
 static void consume_pending(void)
 {
     for (;;) {
@@ -179,20 +225,40 @@ static void consume_pending(void)
             return;
         }
 
-        /* BOOTING / IDLE / THINKING: buscamos el marcador que toca y
-         * tiramos el ruido de en medio (banners, avisos de memoria...). */
+        /* BOOTING / IDLE / THINKING: buscamos el marcador que toca. Lo que
+         * hay en medio es casi todo ruido (banners, ecos del REPL), pero no
+         * todo: ahí van también los avisos entre paréntesis del motor, y
+         * alguno importa mucho. Se rescatan antes de tirar el resto. */
         const char *marker = (st == ENGINE_THINKING) ? PROMPT_ASSIST
                                                      : PROMPT_USER;
         char *hit = memmem(g_pending, g_pending_len, marker, strlen(marker));
         if (!hit) {
+            /* Todavía no hay marcador, pero aquí dentro pueden venir avisos:
+             * hay que rescatarlos ANTES de tirar el buffer. Se conserva desde
+             * el último "(" sin cerrar, porque un aviso partido entre dos
+             * lecturas se perdería si solo guardáramos la cola del marcador. */
             if (g_pending_len > MAX_MARKER) {
-                memmove(g_pending, g_pending + g_pending_len - MAX_MARKER,
-                        MAX_MARKER);
-                g_pending_len = MAX_MARKER;
+                rescatar_avisos(g_pending, g_pending_len);
+                size_t guardar = MAX_MARKER;
+                for (size_t i = g_pending_len; i-- > 0; ) {
+                    if (g_pending[i] == ')') break;      /* cerrado: nada abierto */
+                    if (g_pending[i] == '(') {
+                        size_t cola = g_pending_len - i;
+                        if (cola < 256 && cola > guardar) guardar = cola;
+                        break;
+                    }
+                }
+                if (guardar < g_pending_len) {
+                    memmove(g_pending, g_pending + g_pending_len - guardar,
+                            guardar);
+                    g_pending_len = guardar;
+                }
             }
             return;
         }
-        size_t skip = (size_t)(hit - g_pending) + strlen(marker);
+        size_t descartado = (size_t)(hit - g_pending);
+        rescatar_avisos(g_pending, descartado);
+        size_t skip = descartado + strlen(marker);
         memmove(g_pending, g_pending + skip, g_pending_len - skip);
         g_pending_len -= skip;
 

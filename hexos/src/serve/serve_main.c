@@ -38,6 +38,19 @@ static void on_chunk(const char *text, size_t len, void *user)
     serve_broadcast("token", json);
 }
 
+/* Avisos del motor: van por su propio evento para que la UI los distinga de
+ * lo que Héctor dice. Que un documento se haya truncado no es parte de la
+ * respuesta, pero cambia cuánto vale la respuesta. */
+static void on_notice(const char *text, size_t len, void *user)
+{
+    (void)user;
+    char esc[1024];
+    char json[1200];
+    json_escape(text, len, esc, sizeof(esc));
+    snprintf(json, sizeof(json), "{\"t\":\"%s\"}", esc);
+    serve_broadcast("notice", json);
+}
+
 static void on_event(const char *event, void *user)
 {
     (void)user;
@@ -151,6 +164,7 @@ int main(int argc, char **argv)
                         "(esta sesión no se consolidará)\n");
     }
 
+    engine_set_notice_cb(on_notice);
     engine_set_callbacks(on_chunk, on_event, NULL);
     if (!engine_start(engine, model, temp)) {
         fprintf(stderr, "[serve] no pude arrancar el motor\n");

@@ -37,6 +37,13 @@ typedef void (*engine_chunk_cb)(const char *text, size_t len, void *user);
 /* Cambio de estado: "ready", "start", "end", "dead". */
 typedef void (*engine_event_cb)(const char *event, void *user);
 
+/* Aviso del motor entre paréntesis, de los que imprime antes de responder:
+ * texto truncado, mensaje recortado, reorganización de memoria... No son
+ * parte de la respuesta, pero sí cosas que el usuario necesita saber — si
+ * se tiran con el resto del ruido, uno pega un documento de 16 KB, el motor
+ * se queda con la mitad y nadie se entera. */
+typedef void (*engine_notice_cb)(const char *text, size_t len, void *user);
+
 /* Lanza helios_chat con tuberías. `temp` puede ser NULL (usa 0.7). */
 bool engine_start(const char *binary, const char *model, const char *temp);
 
@@ -64,6 +71,7 @@ bool engine_command(const char *cmd);
 
 engine_state_t engine_state(void);
 const char *engine_state_name(engine_state_t st);
+void engine_set_notice_cb(engine_notice_cb on_notice);
 void engine_set_callbacks(engine_chunk_cb on_chunk, engine_event_cb on_event,
                           void *user);
 void engine_stop(void);

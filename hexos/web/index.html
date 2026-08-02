@@ -142,6 +142,25 @@
     max-width: 320px; max-height: 320px; border-radius: 11px;
     display: block; margin-bottom: 8px;
   }
+  /* Un documento pegado no debe convertirse en un muro de scroll: se pliega
+     y se abre a petición. */
+  /* display:block es imprescindible: sobre un span en línea, max-height no
+     hace absolutamente nada. */
+  .plegado { display: block; max-height: 5.4em; overflow: hidden; }
+  .verMas {
+    display: block; margin-top: 8px; background: none; border: 0;
+    color: var(--dim); font-size: 12px; cursor: pointer; padding: 0;
+    font-family: inherit; text-decoration: underline;
+  }
+  .verMas:hover { color: var(--text); }
+
+  /* Avisos del motor: ni respuesta ni telemetría. Ámbar, porque casi siempre
+     significan "Héctor no vio todo lo que le mandaste". */
+  .aviso {
+    align-self: center; font-size: 12px; color: var(--warn);
+    border: 1px solid var(--warn); border-radius: 999px;
+    padding: 4px 14px; opacity: .85;
+  }
 
   .stats {
     font-size: 11px; color: var(--dim); font-family: ui-monospace, Menlo, monospace;
@@ -296,7 +315,27 @@ function addMessage(who, text, thumb) {
     img.alt = 'imagen adjunta';
     body.appendChild(img);
   }
-  body.appendChild(document.createTextNode(text || ''));
+  const cuerpo = document.createElement('span');
+  cuerpo.textContent = text || '';
+  body.appendChild(cuerpo);
+
+  // Pegar un documento largo llenaba el chat de scroll. Se pliega mostrando
+  // de qué es y cuánto ocupa, que es lo que uno quiere ver de un vistazo.
+  if (who === 'user' && (text || '').length > 600) {
+    cuerpo.classList.add('plegado');
+    const b = document.createElement('button');
+    b.className = 'verMas';
+    const cab = (text.match(/^Archivo:\s*(.+)$/m) || [])[1];
+    const etiqueta = (cab ? cab + ' · ' : '') +
+                     text.length.toLocaleString('es') + ' caracteres';
+    b.textContent = 'Mostrar todo — ' + etiqueta;
+    b.addEventListener('click', () => {
+      const abierto = cuerpo.classList.toggle('plegado');
+      b.textContent = (abierto ? 'Mostrar todo — ' : 'Plegar — ') + etiqueta;
+      scroll();
+    });
+    body.appendChild(b);
+  }
   el.appendChild(label);
   el.appendChild(body);
   log.appendChild(el);
@@ -328,6 +367,20 @@ function updateContext(statsLine) {
     (pct >= 70 ? 'Zona mala: Héctor va a empezar a repetirse y a mezclar idiomas.'
      : pct >= 45 ? 'Ojo: a partir de aquí la calidad cae.'
      : 'Contexto holgado.');
+}
+
+/* El motor avisa entre paréntesis cuando trunca un documento, recorta un
+ * mensaje o reorganiza la memoria. Antes se tiraban con el resto del ruido
+ * del REPL, así que uno pegaba 16 KB, Héctor veía la mitad y respondía tan
+ * tranquilo. Ahora se ven. */
+function mostrarAviso(texto) {
+  const t = (texto || '').trim().replace(/^\(|\)$/g, '').trim();
+  if (!t) return;
+  const el = document.createElement('div');
+  el.className = 'aviso';
+  el.textContent = t;
+  log.appendChild(el);
+  scroll();
 }
 
 let thinkEl = null;
@@ -611,6 +664,9 @@ function connect() {
       current = { bodyEl: addMessage('helios', ''), text: '' };
     }
     if (current) current.done = true; else showThinking(false);
+  });
+  es.addEventListener('notice', e => {
+    try { mostrarAviso(JSON.parse(e.data).t); } catch (_) {}
   });
   es.addEventListener('ready', () => setState('idle'));
   es.addEventListener('dead',  () => setState('dead'));
