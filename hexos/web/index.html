@@ -5,21 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>HÉCTOR</title>
 <style>
-  /* Pizarra: gris de esquisto en vez del azul-negro de antes, y el texto en
-     blanco tiza (ligeramente cálido) para que no deslumbre en una sala a
-     oscuras. Los acentos son tiza de colores, no neón. */
+  /* Pizarra de grafito: grises neutros, sin tinte azul ni verde. El realce
+     no es un color sino claridad — el botón de enviar y el cursor van en
+     blanco tiza. Los únicos colores que quedan son semánticos (estado del
+     motor y medidor de contexto), y apagados para no gritar. */
   :root {
-    --bg: #1b2126;
-    --panel: #232b31;
-    --raised: #2c353c;
-    --border: #3a454e;
-    --text: #e7ece9;
-    --dim: #93a2ab;
-    --accent: #7fbcd8;
-    --burbuja: #2f4450;
-    --ok: #7fc49a;
-    --warn: #e5b170;
-    --bad: #e08a80;
+    --bg: #131516;
+    --panel: #1b1e1f;
+    --raised: #262a2b;
+    --border: #343839;
+    --text: #e9eaea;
+    --dim: #929798;
+    --accent: #dfe2e2;   /* tiza: el realce es claridad, no color */
+    --burbuja: #2b2f30;
+    --ok: #7fb894;
+    --warn: #d9a86c;
+    --bad: #d4867e;
     --r: 16px;      /* radio general: todo redondeado por igual */
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -90,13 +91,13 @@
   }
   .msg.helios .body { padding-right: 8px; }
   .body pre {
-    background: #151b20; border: 1px solid var(--border); border-radius: 12px;
+    background: #1a1c1d; border: 1px solid var(--border); border-radius: 12px;
     padding: 12px 14px; overflow-x: auto; margin: 10px 0;
     font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px;
     line-height: 1.55; white-space: pre;
   }
   .body code {
-    background: #151b20; border: 1px solid var(--border); border-radius: 6px;
+    background: #1a1c1d; border: 1px solid var(--border); border-radius: 6px;
     padding: 1px 5px; font-family: ui-monospace, Menlo, Consolas, monospace;
     font-size: 13px;
   }
@@ -186,7 +187,7 @@
   /* El clip, redondo del todo: es un icono, no una etiqueta. */
   #attach { width: 46px; padding: 0; font-size: 17px; }
   .btn:hover:not(:disabled) { border-color: var(--accent); }
-  .btn.send { background: var(--accent); color: #16202a; font-weight: 600; border-color: var(--accent); }
+  .btn.send { background: var(--accent); color: #1b1e1f; font-weight: 600; border-color: var(--accent); }
   .btn:disabled { opacity: .4; cursor: not-allowed; }
   .hint { color: var(--dim); font-size: 11px; text-align: center; margin-top: 8px; }
   #file { display: none; }
