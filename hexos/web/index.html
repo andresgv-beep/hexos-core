@@ -5,18 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>HÉCTOR</title>
 <style>
+  /* Pizarra: gris de esquisto en vez del azul-negro de antes, y el texto en
+     blanco tiza (ligeramente cálido) para que no deslumbre en una sala a
+     oscuras. Los acentos son tiza de colores, no neón. */
   :root {
-    --bg: #0d1117;
-    --panel: #161b22;
-    --raised: #1c2333;
-    --border: #30363d;
-    --text: #e6edf3;
-    --dim: #8b949e;
-    --accent: #58a6ff;
-    --user: #234;
-    --ok: #3fb950;
-    --warn: #f0883e;
-    --bad: #f85149;
+    --bg: #1b2126;
+    --panel: #232b31;
+    --raised: #2c353c;
+    --border: #3a454e;
+    --text: #e7ece9;
+    --dim: #93a2ab;
+    --accent: #7fbcd8;
+    --burbuja: #2f4450;
+    --ok: #7fc49a;
+    --warn: #e5b170;
+    --bad: #e08a80;
+    --r: 16px;      /* radio general: todo redondeado por igual */
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { height: 100%; }
@@ -69,24 +73,30 @@
   }
   .wrap { width: 100%; max-width: 780px; margin: 0 auto; }
 
+  /* Tú a la derecha en burbuja, Héctor a la izquierda sin ella: el texto
+     largo se lee mejor suelto que metido en una caja, y así de un vistazo
+     se distingue quién habla sin leer la etiqueta. */
   .msg { display: flex; flex-direction: column; gap: 6px; }
+  .msg.user { align-items: flex-end; }
   .who { font-size: 11px; color: var(--dim); letter-spacing: .5px; }
   .body {
     font-size: 15px; line-height: 1.7; white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
   .msg.user .body {
-    background: var(--raised); border: 1px solid var(--border);
-    border-radius: 10px; padding: 10px 14px; white-space: pre-wrap;
+    background: var(--burbuja);
+    border-radius: var(--r) var(--r) 5px var(--r);
+    padding: 11px 15px; max-width: 78%; white-space: pre-wrap;
   }
+  .msg.helios .body { padding-right: 8px; }
   .body pre {
-    background: #0b0f16; border: 1px solid var(--border); border-radius: 8px;
+    background: #151b20; border: 1px solid var(--border); border-radius: 12px;
     padding: 12px 14px; overflow-x: auto; margin: 10px 0;
     font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px;
     line-height: 1.55; white-space: pre;
   }
   .body code {
-    background: #0b0f16; border: 1px solid var(--border); border-radius: 4px;
+    background: #151b20; border: 1px solid var(--border); border-radius: 6px;
     padding: 1px 5px; font-family: ui-monospace, Menlo, Consolas, monospace;
     font-size: 13px;
   }
@@ -105,7 +115,7 @@
   }
   .mudo button {
     font-style: normal; border: 1px solid var(--border); background: var(--raised);
-    color: var(--text); border-radius: 6px; padding: 3px 10px; font-size: 12px;
+    color: var(--text); border-radius: 999px; padding: 4px 12px; font-size: 12px;
     cursor: pointer; font-family: inherit;
   }
   .mudo button:hover { border-color: var(--accent); }
@@ -117,18 +127,19 @@
     display: none; align-items: center; gap: 10px;
     width: 100%; max-width: 780px; margin: 0 auto 10px;
     background: var(--raised); border: 1px solid var(--border);
-    border-radius: 10px; padding: 8px 10px; font-size: 12px; color: var(--dim);
+    border-radius: 999px; padding: 7px 8px 7px 7px;
+    font-size: 12px; color: var(--dim);
   }
   .pend.on { display: flex; }
-  .pend img { height: 40px; width: 40px; object-fit: cover; border-radius: 6px; }
+  .pend img { height: 34px; width: 34px; object-fit: cover; border-radius: 50%; }
   .pend .x {
     margin-left: auto; border: 0; background: none; color: var(--dim);
-    cursor: pointer; font-size: 16px; padding: 0 6px;
+    cursor: pointer; font-size: 16px; padding: 0 10px 0 6px;
   }
   .pend .x:hover { color: var(--bad); }
   .msg .shot {
-    max-width: 320px; max-height: 320px; border-radius: 8px;
-    border: 1px solid var(--border); display: block; margin-bottom: 8px;
+    max-width: 320px; max-height: 320px; border-radius: 11px;
+    display: block; margin-bottom: 8px;
   }
 
   .stats {
@@ -160,18 +171,22 @@
   }
   textarea {
     flex: 1; resize: none; background: var(--bg); color: var(--text);
-    border: 1px solid var(--border); border-radius: 10px;
-    padding: 11px 14px; font-size: 15px; font-family: inherit;
-    line-height: 1.5; max-height: 180px; min-height: 44px;
+    border: 1px solid var(--border); border-radius: 22px;
+    padding: 11px 18px; font-size: 15px; font-family: inherit;
+    line-height: 1.5; max-height: 180px; min-height: 46px;
+    transition: border-color .15s ease;
   }
   textarea:focus { outline: none; border-color: var(--accent); }
   .btn {
     border: 1px solid var(--border); background: var(--raised); color: var(--text);
-    border-radius: 10px; height: 44px; padding: 0 14px; cursor: pointer;
+    border-radius: 999px; height: 46px; padding: 0 20px; cursor: pointer;
     font-size: 14px; font-family: inherit; flex-shrink: 0;
+    transition: border-color .15s ease, filter .15s ease;
   }
+  /* El clip, redondo del todo: es un icono, no una etiqueta. */
+  #attach { width: 46px; padding: 0; font-size: 17px; }
   .btn:hover:not(:disabled) { border-color: var(--accent); }
-  .btn.send { background: var(--accent); color: #0d1117; font-weight: 600; border-color: var(--accent); }
+  .btn.send { background: var(--accent); color: #16202a; font-weight: 600; border-color: var(--accent); }
   .btn:disabled { opacity: .4; cursor: not-allowed; }
   .hint { color: var(--dim); font-size: 11px; text-align: center; margin-top: 8px; }
   #file { display: none; }
