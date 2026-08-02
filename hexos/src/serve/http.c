@@ -11,6 +11,7 @@
  *   GET  /api/events       -> SSE: token, start, end, ready, dead
  *   GET  /api/status       -> JSON con el estado del motor
  *   POST /api/chat         -> cuerpo en texto plano = mensaje del usuario
+ *   POST /api/attachment/rgb8 -> RGB8 crudo + cabeceras de geometría
  *   POST /api/command      -> cuerpo en texto plano = comando del REPL
  */
 
@@ -35,6 +36,7 @@
 
 #define MAX_SSE_CLIENTS 16
 #define REQ_CAP         (64 * 1024)
+#define ATTACHMENT_CAP  ((size_t)300 * 1024 * 1024)
 
 static int             g_listen_fd = -1;
 static volatile int    g_running;
@@ -252,6 +254,37 @@ static void serve_sse(int fd)
     sse_remove(fd);
 }
 
+static bool parse_u64_header(const char *headers, size_t header_len,
+                             const char *name, uint64_t *value)
+{
+    const size_t name_len = strlen(name);
+    const char *p = headers;
+    const char *end = headers + header_len;
+    while (p < end) {
+        const char *line_end = memchr(p, '\n', (size_t)(end - p));
+        if (!line_end) line_end = end;
+        if ((size_t)(line_end - p) > name_len &&
+            !strncasecmp(p, name, name_len)) {
+            const char *number = p + name_len;
+            while (number < line_end && (*number == ' ' || *number == '\t')) number++;
+            char buffer[32];
+            size_t count = (size_t)(line_end - number);
+            if (count && number[count - 1] == '\r') count--;
+            if (!count || count >= sizeof(buffer)) return false;
+            memcpy(buffer, number, count);
+            buffer[count] = '\0';
+            char *tail = NULL;
+            errno = 0;
+            unsigned long long parsed = strtoull(buffer, &tail, 10);
+            if (errno || !tail || *tail) return false;
+            *value = (uint64_t)parsed;
+            return true;
+        }
+        p = line_end < end ? line_end + 1 : end;
+    }
+    return false;
+}
+
 /* ------------------------------------------------------------------------
  * Bucle de conexión
  * ------------------------------------------------------------------------ */
@@ -279,23 +312,54 @@ static void *conn_thread(void *arg)
         return NULL;
     }
 
-    char *body = strstr(req, "\r\n\r\n");
-    size_t body_len = 0;
-    if (body) {
-        body += 4;
-        body_len = len - (size_t)(body - req);
-        /* Si el cuerpo venía partido, se completa con Content-Length. */
-        const char *cl = strcasestr(req, "content-length:");
-        if (cl) {
-            size_t want = (size_t)atol(cl + 15);
-            while (body_len < want && len < sizeof(req) - 1) {
-                ssize_t n = recv(fd, req + len, sizeof(req) - 1 - len, 0);
-                if (n <= 0) break;
-                len += (size_t)n;
-                body_len += (size_t)n;
-            }
-            req[len] = '\0';
-            if (body_len > want) body_len = want;
+    char *body_start = strstr(req, "\r\n\r\n");
+    if (!body_start) {
+        respond(fd, "400 Bad Request", "application/json",
+                "{\"ok\":false}", 12);
+        close(fd);
+        return NULL;
+    }
+    size_t header_len = body_start
+        ? (size_t)(body_start + 4 - req) : len;
+    size_t body_in_req = body_start ? len - header_len : 0;
+    const bool attachment_route =
+        !strcmp(method, "POST") && !strcmp(path, "/api/attachment/rgb8");
+    uint64_t content_length = 0;
+    const bool has_content_length = parse_u64_header(
+        req, header_len, "content-length:", &content_length);
+    const size_t body_cap = attachment_route ? ATTACHMENT_CAP : REQ_CAP;
+    const bool needs_body_length = !strcmp(method, "POST");
+    if ((needs_body_length && !has_content_length) ||
+        content_length > body_cap ||
+        content_length > SIZE_MAX - 1) {
+        respond(fd, "413 Payload Too Large", "application/json",
+                "{\"ok\":false}", 12);
+        close(fd);
+        return NULL;
+    }
+
+    size_t body_len = (size_t)content_length;
+    unsigned char *body = NULL;
+    if (body_len) {
+        body = malloc(body_len + 1);
+        if (!body) {
+            respond(fd, "503 Service Unavailable", "application/json",
+                    "{\"ok\":false}", 12);
+            close(fd);
+            return NULL;
+        }
+        size_t copied = body_in_req < body_len ? body_in_req : body_len;
+        if (copied) memcpy(body, req + header_len, copied);
+        while (copied < body_len) {
+            ssize_t n = recv(fd, body + copied, body_len - copied, 0);
+            if (n < 0 && errno == EINTR) continue;
+            if (n <= 0) break;
+            copied += (size_t)n;
+        }
+        if (copied != body_len) {
+            free(body);
+            close(fd);
+            return NULL;
         }
         body[body_len] = '\0';
     }
@@ -305,12 +369,36 @@ static void *conn_thread(void *arg)
     } else if (!strcmp(method, "GET") && !strcmp(path, "/api/status")) {
         serve_status(fd);
     } else if (!strcmp(method, "POST") && !strcmp(path, "/api/chat")) {
-        bool ok = body && body_len && engine_send(body);
+        bool ok = body && body_len && !memchr(body, '\0', body_len) &&
+                  engine_send((const char *)body);
         respond(fd, ok ? "202 Accepted" : "409 Conflict",
                 "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}",
                 ok ? 11 : 12);
     } else if (!strcmp(method, "POST") && !strcmp(path, "/api/command")) {
-        bool ok = body && body_len && engine_command(body);
+        bool ok = body && body_len && !memchr(body, '\0', body_len) &&
+                  engine_command((const char *)body);
+        respond(fd, ok ? "202 Accepted" : "409 Conflict",
+                "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}",
+                ok ? 11 : 12);
+    } else if (attachment_route) {
+        uint64_t width = 0, height = 0, stride = 0;
+        bool geometry =
+            parse_u64_header(req, header_len, "x-image-width:", &width) &&
+            parse_u64_header(req, header_len, "x-image-height:", &height) &&
+            parse_u64_header(req, header_len, "x-image-stride:", &stride) &&
+            width <= UINT32_MAX && height <= UINT32_MAX && stride <= SIZE_MAX;
+        engine_attachment_t attachment = {
+            .kind = ENGINE_ATTACHMENT_RGB8,
+            .data = body,
+            .byte_size = body_len,
+            .width = (uint32_t)width,
+            .height = (uint32_t)height,
+            .row_stride_bytes = (size_t)stride,
+        };
+        const bool model_accepts_vision = !g_has_model_report ||
+            g_model_report.modalities[HEXOS_MODALITY_VISION].status ==
+                HEXOS_ADAPTER_RUNTIME_READY;
+        bool ok = geometry && model_accepts_vision && engine_attach(&attachment);
         respond(fd, ok ? "202 Accepted" : "409 Conflict",
                 "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}",
                 ok ? 11 : 12);
@@ -320,6 +408,7 @@ static void *conn_thread(void *arg)
         respond(fd, "405 Method Not Allowed", "text/plain", "", 0);
     }
 
+    free(body);
     close(fd);
     return NULL;
 }

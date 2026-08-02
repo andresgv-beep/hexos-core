@@ -46,7 +46,7 @@ TARGET = $(BINDIR)/hexos
 # Rules
 # ============================================================================
 
-.PHONY: all clean run modules serve runtime-probe runtime-policy-test model-info model-probe-test tools
+.PHONY: all clean run modules serve runtime-probe runtime-policy-test model-info model-probe-test attachment-bridge-test tools
 
 all: modules $(TARGET)
 
@@ -149,6 +149,21 @@ $(BINDIR)/model_probe_test: tools/model_probe_test.c $(MODEL_PROBE_SRC) \
                             $(INCDIR)/hexos_model.h
 	@mkdir -p $(BINDIR)
 	$(CC) $(CFLAGS) -I$(INCDIR) tools/model_probe_test.c $(MODEL_PROBE_SRC) -o $@
+
+attachment-bridge-test: $(BINDIR)/attachment_bridge_test \
+                        $(BINDIR)/fake_attachment_engine
+	./$(BINDIR)/attachment_bridge_test ./$(BINDIR)/fake_attachment_engine
+
+$(BINDIR)/fake_attachment_engine: tools/fake_attachment_engine.c
+	@mkdir -p $(BINDIR)
+	$(CC) $(CFLAGS) $< -o $@
+
+$(BINDIR)/attachment_bridge_test: tools/attachment_bridge_test.c \
+                                  $(SRCDIR)/serve/engine.c $(RUNTIME_SRC) \
+                                  $(INCDIR)/hexos_serve.h
+	@mkdir -p $(BINDIR)
+	$(CC) $(CFLAGS) -I$(INCDIR) tools/attachment_bridge_test.c \
+		$(SRCDIR)/serve/engine.c $(RUNTIME_SRC) -o $@ -lpthread -ldl
 
 runtime-probe: $(BINDIR)/hexos_runtime_probe
 

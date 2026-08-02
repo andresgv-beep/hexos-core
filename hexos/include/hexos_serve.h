@@ -13,6 +13,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #include "hexos_model.h"
 
@@ -24,6 +25,7 @@
 typedef enum {
     ENGINE_BOOTING = 0,   /* cargando modelo, aún sin prompt */
     ENGINE_IDLE,          /* listo, esperando mensaje */
+    ENGINE_STAGING,       /* transfiriendo un adjunto para el próximo turno */
     ENGINE_THINKING,      /* mensaje enviado, respuesta sin empezar */
     ENGINE_SPEAKING,      /* emitiendo texto de la respuesta */
     ENGINE_DEAD           /* el proceso murió */
@@ -40,6 +42,22 @@ bool engine_start(const char *binary, const char *model, const char *temp);
 
 /* Envía un mensaje del usuario. Falla si el motor no está en IDLE. */
 bool engine_send(const char *text);
+
+typedef enum {
+    ENGINE_ATTACHMENT_RGB8 = 0,
+} engine_attachment_kind_t;
+
+typedef struct {
+    engine_attachment_kind_t kind;
+    const void *data;
+    size_t byte_size;
+    uint32_t width;
+    uint32_t height;
+    size_t row_stride_bytes;
+} engine_attachment_t;
+
+/* Deja un adjunto pendiente para el siguiente engine_send(). */
+bool engine_attach(const engine_attachment_t *attachment);
 
 /* Envía un comando del REPL tal cual (/fast, /memoria, /salir...). */
 bool engine_command(const char *cmd);

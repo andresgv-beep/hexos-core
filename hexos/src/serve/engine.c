@@ -41,6 +41,7 @@ static int              g_in_fd  = -1;   /* escribimos al stdin del motor */
 static int              g_out_fd = -1;   /* leemos su stdout */
 static pthread_t        g_reader;
 static pthread_mutex_t  g_lock   = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t  g_write_lock = PTHREAD_MUTEX_INITIALIZER;
 static engine_state_t   g_state  = ENGINE_BOOTING;
 static engine_chunk_cb  g_on_chunk;
 static engine_event_cb  g_on_event;
@@ -58,6 +59,7 @@ const char *engine_state_name(engine_state_t st)
     switch (st) {
         case ENGINE_BOOTING:  return "booting";
         case ENGINE_IDLE:     return "idle";
+        case ENGINE_STAGING:  return "staging";
         case ENGINE_THINKING: return "thinking";
         case ENGINE_SPEAKING: return "speaking";
         case ENGINE_DEAD:     return "dead";
@@ -79,6 +81,19 @@ static void set_state(engine_state_t st, const char *event)
     g_state = st;
     pthread_mutex_unlock(&g_lock);
     if (event && g_on_event) g_on_event(event, g_user);
+}
+
+static bool transition_from_idle(engine_state_t next, const char *event)
+{
+    pthread_mutex_lock(&g_lock);
+    if (g_state != ENGINE_IDLE) {
+        pthread_mutex_unlock(&g_lock);
+        return false;
+    }
+    g_state = next;
+    pthread_mutex_unlock(&g_lock);
+    if (event && g_on_event) g_on_event(event, g_user);
+    return true;
 }
 
 void engine_set_callbacks(engine_chunk_cb on_chunk, engine_event_cb on_event,
@@ -185,7 +200,9 @@ static void consume_pending(void)
             set_state(ENGINE_SPEAKING, "start");
         } else {
             /* Primer "tú>": el modelo terminó de cargar. */
-            set_state(ENGINE_IDLE, st == ENGINE_BOOTING ? "ready" : NULL);
+            set_state(ENGINE_IDLE,
+                      st == ENGINE_BOOTING ? "ready" :
+                      st == ENGINE_STAGING ? "attachment" : NULL);
         }
     }
 }
@@ -282,6 +299,7 @@ bool engine_start(const char *binary, const char *model, const char *temp)
 static bool write_line(const char *text)
 {
     if (g_in_fd < 0) return false;
+    pthread_mutex_lock(&g_write_lock);
     size_t len = strlen(text);
     struct iovec parts[2] = {
         { (void *)text, len },
@@ -294,18 +312,65 @@ static bool write_line(const char *text)
             ssize_t w = write(g_in_fd, p, left);
             if (w <= 0) {
                 if (errno == EINTR) continue;
+                pthread_mutex_unlock(&g_write_lock);
                 return false;
             }
             p += w; left -= (size_t)w;
         }
     }
+    pthread_mutex_unlock(&g_write_lock);
     return true;
+}
+
+static bool write_bytes_locked(const void *data, size_t len)
+{
+    const unsigned char *p = data;
+    while (len) {
+        ssize_t written = write(g_in_fd, p, len);
+        if (written < 0 && errno == EINTR) continue;
+        if (written <= 0) return false;
+        p += written;
+        len -= (size_t)written;
+    }
+    return true;
+}
+
+bool engine_attach(const engine_attachment_t *attachment)
+{
+    if (!attachment || !attachment->data || attachment->byte_size == 0 ||
+        attachment->kind != ENGINE_ATTACHMENT_RGB8 ||
+        attachment->width == 0 || attachment->height == 0) return false;
+#if SIZE_MAX == UINT32_MAX
+    if (attachment->width > SIZE_MAX / 3) return false;
+#endif
+    const size_t packed = (size_t)attachment->width * 3;
+    const size_t stride = attachment->row_stride_bytes
+        ? attachment->row_stride_bytes : packed;
+    if (stride < packed || attachment->height > SIZE_MAX / stride ||
+        attachment->byte_size != stride * attachment->height ||
+        attachment->byte_size > (size_t)300 * 1024 * 1024) return false;
+
+    if (g_in_fd < 0 ||
+        !transition_from_idle(ENGINE_STAGING, "staging")) return false;
+
+    char header[160];
+    int header_len = snprintf(
+        header, sizeof(header), "/adjunto-rgb8 %u %u %zu %zu\n",
+        attachment->width, attachment->height, stride,
+        attachment->byte_size);
+    bool ok = header_len > 0 && (size_t)header_len < sizeof(header);
+    pthread_mutex_lock(&g_write_lock);
+    if (ok) ok = write_bytes_locked(header, (size_t)header_len);
+    if (ok) ok = write_bytes_locked(attachment->data, attachment->byte_size);
+    if (ok) ok = write_bytes_locked("\n", 1);
+    pthread_mutex_unlock(&g_write_lock);
+    if (!ok) set_state(ENGINE_IDLE, NULL);
+    return ok;
 }
 
 bool engine_send(const char *text)
 {
-    if (engine_state() != ENGINE_IDLE) return false;
-    set_state(ENGINE_THINKING, "thinking");
+    if (!transition_from_idle(ENGINE_THINKING, "thinking")) return false;
 
     /* El REPL lee por líneas: un mensaje con saltos se convertiría en varios
      * turnos. Para eso existe /pegar, que acumula hasta /fin y lo trata como

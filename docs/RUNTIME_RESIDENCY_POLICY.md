@@ -76,9 +76,12 @@ modalidades presentes, estado del adaptador e identificador estable. Así la UI
 podrá mostrar adjuntos únicamente cuando el runtime los soporte sin conocer
 Gemma, SigLIP o cualquier arquitectura futura.
 
-Esta fase todavía no cambia el binario ejecutado ni acepta imágenes. Elegir el
-runner genérico y definir el transporte de adjuntos son pasos separados; la
-política de residencia ya puede aplicarse sin riesgo a un motor de solo texto.
+No se cambia el binario ejecutado: `helios_chat` carga el adaptador declarado
+por el HNF y HexOS ya acepta imágenes RGB8 para el siguiente turno. El
+transporte se documenta en
+`MULTIMODAL_TRANSPORT.md`; la UI todavía debe conectar su selector de ficheros
+con ese endpoint. La política de residencia sigue siendo inocua para un motor
+de solo texto.
 
 El doble buffer pertenece al pipeline genérico de Héctor, no a Gemma 4. Cada
 arquitectura declara fases y el runtime común administra las dos ventanas,
