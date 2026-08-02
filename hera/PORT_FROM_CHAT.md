@@ -34,6 +34,8 @@ Funciones en `helios_chat.cpp` → responsabilidad del contrato HERA:
 | `consolidate()` | §5.1 triggers + §5.2 proceso | Triggers vivos: cierre de sesión y presión de contexto |
 | `reflect_and_capture()` | §3.2 Evaluación de relevancia | **Viola §12: corre dentro del turno** |
 | `prefill_prefix()` | §4 Identidad persistente | Identidad + memoria como prefijo permanente en KV |
+| `ck_policy::classify_turn()` | CK v5 `TurnFrame` | Primer contrato ejecutable; aún en Héctor para iterar |
+| `ck_policy::frame_user_message()` | CK v5 `ResponseContract` | Debe consumirlo HERA cuando la política se estabilice |
 
 Ficheros de datos actuales (`~/.helios/`, o `$HELIOS_HOME`):
 `facts.md` (nivel 1 provisional), `episodic.md` (nivel 3),

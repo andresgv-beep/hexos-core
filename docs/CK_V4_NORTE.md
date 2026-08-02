@@ -1,5 +1,9 @@
 # CK v4 — EL NORTE (escrito el 2026-07-29, la noche que Héctor arrancó)
 
+> **Documento histórico/de laboratorio.** El contrato normativo, genérico y
+> multiusuario nacido de estos fallos vive en
+> [`CK_V5_CONTRATO.md`](CK_V5_CONTRATO.md). Este fichero conserva el porqué.
+
 ## ✅ ESTADO REAL (actualizado 2026-07-31)
 
 **El proto-CK ya no es papel: es `helios_chat` (repo Hector-engine).**
