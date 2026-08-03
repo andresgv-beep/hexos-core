@@ -1,0 +1,176 @@
+{"direction": "event", "payload": {"type": "ready", "protocol": 2, "model": {"architecture": "qwen2", "max_seq_len": 4096, "multimodal": false, "vision_adapter": null}}}
+{"direction": "request", "payload": {"type": "turn", "request_id": "r1", "messages": [{"role": "user", "content": "Mi perro se llama Byteazul. Responde solo: vale"}], "generation": {"max_visible_tokens": 30, "max_thinking_tokens": 60}}}
+{"direction": "event", "payload": {"type": "prefill", "request_id": "r1", "tokens": 22, "ms": 173.952145}}
+{"direction": "event", "payload": {"type": "thinking", "request_id": "r1", "tokens": 16}}
+{"direction": "event", "payload": {"type": "thinking", "request_id": "r1", "tokens": 32}}
+{"direction": "event", "payload": {"type": "thinking", "request_id": "r1", "tokens": 48}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": "\n\n"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": "vale"}}
+{"direction": "event", "payload": {"type": "completed", "request_id": "r1", "visible_text": "\n\nvale", "finish_reason": "eos", "usage": {"prefill_tokens": 22, "generated_tokens": 62, "thinking_tokens": 60}, "timings": {"prefill_ms": 173.952145, "decode_ms": 1174.831403, "tokens_per_second": 52.77353}, "model_state": {"cache_position_before": 0, "cache_position": 86, "max_seq_len": 4096}}}
+{"direction": "request", "payload": {"type": "turn", "request_id": "r2", "messages": [{"role": "user", "content": "¿Cómo se llama mi perro?"}], "generation": {"max_visible_tokens": 40, "max_thinking_tokens": 60}}}
+{"direction": "event", "payload": {"type": "prefill", "request_id": "r2", "tokens": 16, "ms": 139.211976}}
+{"direction": "event", "payload": {"type": "thinking", "request_id": "r2", "tokens": 16}}
+{"direction": "event", "payload": {"type": "thinking", "request_id": "r2", "tokens": 32}}
+{"direction": "event", "payload": {"type": "thinking", "request_id": "r2", "tokens": 48}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r2", "text": "\n\n"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r2", "text": "Byte"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r2", "text": "az"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r2", "text": "ul"}}
+{"direction": "event", "payload": {"type": "completed", "request_id": "r2", "visible_text": "\n\nByteazul", "finish_reason": "eos", "usage": {"prefill_tokens": 16, "generated_tokens": 64, "thinking_tokens": 60}, "timings": {"prefill_ms": 139.211976, "decode_ms": 1197.982791, "tokens_per_second": 53.423138}, "model_state": {"cache_position_before": 86, "cache_position": 168, "max_seq_len": 4096}}}
+{"direction": "request", "payload": {"type": "turn", "request_id": "r3", "messages": [{"role": "user", "content": "Repite tal cual: if (x) { return {\"ok\": true}; }"}], "generation": {"max_visible_tokens": 60, "max_thinking_tokens": 40}}}
+{"direction": "event", "payload": {"type": "prefill", "request_id": "r3", "tokens": 25, "ms": 143.647145}}
+{"direction": "event", "payload": {"type": "thinking", "request_id": "r3", "tokens": 16}}
+{"direction": "event", "payload": {"type": "thinking", "request_id": "r3", "tokens": 32}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r3", "text": "\n\n"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r3", "text": "if"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r3", "text": " ("}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r3", "text": "x"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r3", "text": ")"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r3", "text": " {"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r3", "text": " return"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r3", "text": " {\""}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r3", "text": "ok"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r3", "text": "\":"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r3", "text": " true"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r3", "text": "};"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r3", "text": " }"}}
+{"direction": "event", "payload": {"type": "completed", "request_id": "r3", "visible_text": "\n\nif (x) { return {\"ok\": true}; }", "finish_reason": "eos", "usage": {"prefill_tokens": 25, "generated_tokens": 53, "thinking_tokens": 40}, "timings": {"prefill_ms": 143.647145, "decode_ms": 997.330828, "tokens_per_second": 53.141845}, "model_state": {"cache_position_before": 168, "cache_position": 248, "max_seq_len": 4096}}}
+{"direction": "request", "payload": {"type": "turn", "request_id": "r4", "messages": [{"role": "user", "content": "Escribe un ensayo largo sobre la historia de la computación"}], "generation": {"max_visible_tokens": 900, "max_thinking_tokens": 200}}}
+{"direction": "event", "payload": {"type": "prefill", "request_id": "r4", "tokens": 21, "ms": 150.463659}}
+{"direction": "event", "payload": {"type": "thinking", "request_id": "r4", "tokens": 16}}
+{"direction": "event", "payload": {"type": "thinking", "request_id": "r4", "tokens": 32}}
+{"direction": "event", "payload": {"type": "thinking", "request_id": "r4", "tokens": 48}}
+{"direction": "event", "payload": {"type": "thinking", "request_id": "r4", "tokens": 64}}
+{"direction": "event", "payload": {"type": "thinking", "request_id": "r4", "tokens": 80}}
+{"direction": "event", "payload": {"type": "thinking", "request_id": "r4", "tokens": 96}}
+{"direction": "event", "payload": {"type": "thinking", "request_id": "r4", "tokens": 112}}
+{"direction": "event", "payload": {"type": "thinking", "request_id": "r4", "tokens": 128}}
+{"direction": "event", "payload": {"type": "thinking", "request_id": "r4", "tokens": 144}}
+{"direction": "event", "payload": {"type": "thinking", "request_id": "r4", "tokens": 160}}
+{"direction": "event", "payload": {"type": "thinking", "request_id": "r4", "tokens": 176}}
+{"direction": "event", "payload": {"type": "thinking", "request_id": "r4", "tokens": 192}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "\n\n"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "La"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " historia"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " de"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " la"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " comput"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "ación"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " es"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " un"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " testimon"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "io"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " del"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " av"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "ance"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " humano"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " en"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " el"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " ámbito"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " tecn"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "ológico"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "."}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " Desde"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " las"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " primer"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "as"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " herramient"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "as"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " mec"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "án"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "icas"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " hasta"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " los"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " super"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "orden"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "adores"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " modern"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "os"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": ","}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " cada"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " et"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "apa"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " representa"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " una"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " rev"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "olución"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " en"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " cómo"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " proces"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "amos"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " y"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " utiliz"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "amos"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " la"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " información"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": ".\n\n"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "**"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "Or"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "í"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "genes"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": ":"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " De"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " las"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " Má"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "qu"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "inas"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " M"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "ec"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "án"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "icas"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " a"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " los"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " Primer"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "os"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " Comput"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "adores"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "**\n\n"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "Los"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " or"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "í"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "genes"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " de"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " la"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " comput"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "ación"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " pueden"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " r"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "ast"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "re"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "arse"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " hasta"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " las"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " civil"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "iz"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "aciones"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " ant"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "igu"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "as"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "."}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " La"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " ab"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "ac"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "ada"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": ","}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " por"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " ejemplo"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": ","}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " era"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " una"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " herramient"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": "a"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " fundamental"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r4", "text": " para"}}
+{"direction": "request", "payload": {"type": "cancel", "request_id": "c1", "target": "r4"}}
+{"direction": "event", "payload": {"type": "result", "request_id": "c1", "ok": true, "model_state": {"cache_position_before": 248, "cache_position": 583, "max_seq_len": 4096}}}
+{"direction": "event", "payload": {"type": "completed", "request_id": "r4", "visible_text": "\n\nLa historia de la computación es un testimonio del avance humano en el ámbito tecnológico. Desde las primeras herramientas mecánicas hasta los superordenadores modernos, cada etapa representa una revolución en cómo procesamos y utilizamos la información.\n\n**Orígenes: De las Máquinas Mecánicas a los Primeros Computadores**\n\nLos orígenes de la computación pueden rastrearse hasta las civilizaciones antiguas. La abacada, por ejemplo, era una herramienta fundamental para", "finish_reason": "cancelled", "usage": {"prefill_tokens": 21, "generated_tokens": 312, "thinking_tokens": 200}, "timings": {"prefill_ms": 150.463659, "decode_ms": 5887.79558, "tokens_per_second": 52.99097}, "model_state": {"cache_position_before": 248, "cache_position": 583, "max_seq_len": 4096}}}
+{"direction": "request", "payload": {"type": "turn", "request_id": "r5", "messages": [{"role": "user", "content": "Sigues ahí? responde solo: sí"}], "generation": {"max_visible_tokens": 20, "max_thinking_tokens": 40}}}
+{"direction": "event", "payload": {"type": "prefill", "request_id": "r5", "tokens": 18, "ms": 160.09529}}
+{"direction": "event", "payload": {"type": "thinking", "request_id": "r5", "tokens": 16}}
+{"direction": "event", "payload": {"type": "thinking", "request_id": "r5", "tokens": 32}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r5", "text": "\n\n"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r5", "text": "s"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r5", "text": "í"}}
+{"direction": "event", "payload": {"type": "completed", "request_id": "r5", "visible_text": "\n\nsí", "finish_reason": "eos", "usage": {"prefill_tokens": 18, "generated_tokens": 43, "thinking_tokens": 40}, "timings": {"prefill_ms": 160.09529, "decode_ms": 841.385789, "tokens_per_second": 51.106164}, "model_state": {"cache_position_before": 583, "cache_position": 646, "max_seq_len": 4096}}}
+{"direction": "request", "payload": {"type": "shutdown", "request_id": "q1"}}
+{"direction": "event", "payload": {"type": "result", "request_id": "q1", "ok": true, "model_state": {"cache_position_before": 646, "cache_position": 646, "max_seq_len": 4096}}}
