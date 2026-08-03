@@ -33,6 +33,11 @@ cambiarlo durante el traslado**.
 
 ## 1. Reglas de emergencia
 
+**Alcance del producto durante esta evacuación:** una instalación local y un
+propietario. Varias sesiones significan chats o agentes aislados del mismo
+propietario, no multiusuario. Cuentas, autenticación y permisos entre personas
+quedan fuera de alcance hasta que exista un requisito explícito y medido.
+
 Desde que empiece la evacuación:
 
 1. No se añade lógica cognitiva nueva a `Hector-engine`.
@@ -55,14 +60,14 @@ Desde que empiece la evacuación:
 | CK | `TurnFrame`, `ResponseContract`, alcance, parada y `MemoryDelta` propuesto | persistencia o verdad autoritativa |
 | HERA | identidad, perfil, relación, continuidad, autoridad de hechos, correcciones, promoción y consolidación | kernels, VRAM o formato de conversación del modelo |
 | Memory Core | almacenar, indexar, consultar, versionar y mover recuerdos | importancia, confirmación o personalidad |
-| HexOS | procesos, perfiles activos, recursos, transporte, API y telemetría | contenido de la identidad o reglas cognitivas |
+| HexOS | procesos, perfil local, sesiones, recursos, transporte, API y telemetría | contenido de la identidad o reglas cognitivas |
 | UI | entrada, adjuntos, visualización y controles explícitos | inferir memoria o modificar estado ocultamente |
 
 ### Flujo de un turno
 
 ```text
 UI
-  -> HexOS selecciona profile_id y sesión
+  -> HexOS resuelve el perfil local y activa la sesión elegida
   -> HERA entrega estado autoritativo y recuerdos relevantes
   -> CK produce TurnFrame + ResponseContract
   -> adaptador convierte estado y contrato en mensajes tipados

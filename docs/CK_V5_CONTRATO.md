@@ -1,4 +1,4 @@
-# CK v5 — contrato ejecutable y multiusuario
+# CK v5 — contrato ejecutable local
 
 **Estado:** primera rebanada implementada en `Hector-engine/src/ck_policy.*`.
 Este documento es normativo. `CK_V4_NORTE.md` conserva el diario de fallos,
@@ -16,7 +16,18 @@ un asistente con frases más simpáticas. CK decide, para cada turno:
 5. cuándo la respuesta ya está terminada.
 
 La identidad de Helios es estable. Lo que cambia y aprende es la relación con
-cada persona.
+su propietario local.
+
+**Alcance actual:** una instalación local y un propietario. Puede haber varios
+chats, sesiones o agentes del mismo propietario, pero solo un chat visible está
+activo a la vez. Multiusuario, cuentas, autenticación y permisos entre personas
+quedan fuera de alcance; no son un requisito implícito de `profile_id`.
+
+Abrir o interactuar con otro chat pausa el actual y activa el seleccionado. Una
+sesión pausada conserva KV, sampler, posición y transcripción, pero no ejecuta
+GPU. Si se cierra y libera su KV, la transcripción queda disponible para una
+reconstrucción posterior. Los agentes de fondo son sesiones del mismo
+propietario y ceden la ejecución ante cualquier chat visible.
 
 ## 2. Invariantes
 
@@ -52,7 +63,7 @@ cada persona.
 No contiene nombre del propietario, profesión, proyectos ni ejemplos de habla
 de una persona concreta.
 
-### `UserProfile` — uno por persona
+### `UserProfile` — del propietario local
 
 ```text
 profile_id
@@ -68,7 +79,7 @@ active_projects[]
 `status` de un hecho: `candidate | confirmed | superseded`. Nunca se conservan
 dos hechos incompatibles como si ambos fueran vigentes.
 
-### `Relationship` — uno por persona
+### `Relationship` — con el propietario local
 
 ```text
 familiarity: new | known | close
@@ -175,11 +186,50 @@ La respuesta debe describir lo que realmente ocurrió. Si solo existe un
 candidato, Helios puede decir “lo dejo como propuesta”, pero nunca “he
 actualizado mi base de datos”.
 
-## 6. Perfil público y aislamiento
+### Tiempo del recuerdo — requisito pendiente
 
-Durante la transición, `$HELIOS_HOME` continúa seleccionando un perfil. El
-fichero `profile_name` sustituye semánticamente a `owner`; `owner` se acepta
-solo como compatibilidad legacy.
+El tiempo forma parte de la procedencia, no es prosa que el modelo pueda
+inventar. Cada interacción canónica conserva internamente su instante exacto,
+con zona horaria, y todo recuerdo derivado referencia la evidencia fechada de
+la que nació. No toda interacción se convierte en memoria.
+
+Se distinguen al menos estos tiempos, porque responden preguntas diferentes:
+
+```text
+occurred_at       cuándo se dijo u ocurrió
+created_at        cuándo HERA creó el candidato
+confirmed_at      cuándo fue confirmado
+superseded_at     cuándo dejó de estar vigente
+last_recalled_at  cuándo se recuperó por última vez
+```
+
+Recordar algo no modifica `occurred_at`. Una corrección tampoco borra la
+cronología anterior: la sustituye como autoridad vigente y conserva cuándo fue
+válida cada versión.
+
+La propiedad se divide así:
+
+- **HERA** guarda el instante exacto, filtra por intervalos y devuelve la
+  procedencia temporal estructurada.
+- **CK** decide la precisión humana adecuada: «esta mañana», «ayer», «la semana
+  pasada», «el mes pasado» o una fecha concreta cuando sea relevante.
+- **El modelo** redacta, pero no calcula ni adivina cuándo ocurrió el recuerdo.
+
+La recuperación temporal combina tema o significado, intervalo, sesión y
+estado del recuerdo. Esto debe permitir consultas como «¿qué decidimos ayer
+sobre visión?» o «¿qué creíamos antes de refutar lo del PLE?» sin convertir la
+fecha en una fuente de autoridad ni mostrar la hora salvo que aporte algo.
+
+Este apartado documenta una capacidad futura. No autoriza cambios en el
+trabajador, la cola durable ni el formato del almacén durante E4.
+
+## 6. Perfil local y aislamiento
+
+Durante la transición, `$HELIOS_HOME` continúa seleccionando el perfil local.
+El fichero `profile_name` sustituye semánticamente a `owner`; `owner` se acepta
+solo como compatibilidad legacy. `profile_id` es una clave interna de
+persistencia y pruebas, no una cuenta ni una identidad que el cliente pueda
+elegir para acceder a datos ajenos.
 
 El modelo/HNF distribuible contiene `IdentityCore`, no el perfil de Andrés. Los
 datos personales viven en un directorio o bloque asociado al `profile_id`. Una
@@ -207,17 +257,20 @@ Un filtro de coletillas sirve como telemetría, no como arquitectura. Regenerar
 hasta que desaparezca “si necesitas algo” no arregla el objetivo oculto de
 seguir prestando servicio.
 
-## 8. Evaluación multiusuario
+## 8. Evaluación con perfiles sintéticos
 
-La batería mínima utiliza perfiles sintéticos aislados:
+La batería mínima utiliza perfiles sintéticos aislados como fixtures:
 
 1. persona nueva sin memoria;
 2. perfil técnico, directo y coloquial;
 3. perfil principiante que prefiere explicación pedagógica;
 4. perfil distante que rechaza emojis y charla innecesaria.
 
-Se ejecutan las mismas tareas en todos. Debe conservarse el acto y la verdad;
-solo cambia el trato y la profundidad justificada por el perfil.
+No representan usuarios simultáneos ni una función de cuentas. Sirven para
+demostrar que CK es genérico, que no contiene ejemplos o datos de Andrés y que
+una instalación limpia funciona sin historia previa. Se ejecutan las mismas
+tareas por separado. Debe conservarse el acto y la verdad; solo cambia el trato
+y la profundidad justificada por la fixture.
 
 Fallos duros:
 

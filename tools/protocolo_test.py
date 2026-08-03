@@ -54,14 +54,26 @@ ESQUEMA_EVENTOS = {
     # tiene que ser coherente con el streaming.
     "error":             ({"request_id", "code", "message", "model_state"},
                           {"visible_text", "usage", "timings"}),
+    # Sesiones. Héctor ofrece sesiones GENÉRICAS sobre unos mismos pesos: no
+    # sabe que unas son chats. `session_paused` dice qué sesión dejó de generar
+    # y por qué — hoy solo por conmutación, y el motivo va declarado para que
+    # mañana no se cuele otro sin que nadie lo apruebe.
+    "session_opened":    ({"session"}, set()),
+    "session_closed":    ({"session"}, set()),
+    "session_paused":    ({"session", "reason"}, set()),
 }
+PAUSE_REASONS = {"switch"}
 ESQUEMA_PETICIONES = {
+    # `session` es OPCIONAL: sin él va a la sesión por defecto, así que el
+    # protocolo anterior sigue valiendo palabra por palabra.
     "turn":       ({"request_id", "messages"},
-                   {"attachment_ids", "generation"}),
+                   {"attachment_ids", "generation", "session"}),
+    "session_open":  ({"request_id", "session"}, set()),
+    "session_close": ({"request_id", "session"}, set()),
     "attachment": ({"request_id", "kind", "width", "height", "stride", "bytes"},
                    set()),
     "cancel":     ({"request_id", "target"}, set()),
-    "reset":      ({"request_id"}, set()),
+    "reset":      ({"request_id"}, {"session"}),
     "status":     ({"request_id"}, set()),
     "shutdown":   ({"request_id"}, set()),
 }
@@ -173,6 +185,9 @@ def validar(traza):
             continue
 
         # ---------------- eventos ----------------
+        if tipo == "session_paused" and d.get("reason") not in PAUSE_REASONS:
+            fallos.append(f"inv8: [{i}] motivo de pausa no declarado: "
+                          f"{d.get('reason')!r}")
         if tipo not in ESQUEMA_EVENTOS:
             fallos.append(f"inv8: [{i}] tipo de evento desconocido: {tipo!r}")
             continue
@@ -189,6 +204,15 @@ def validar(traza):
             ready_vistos += 1
             if i != 0:
                 fallos.append(f"inv1: 'ready' no es el primer evento (línea {i})")
+            continue
+
+        # Eventos de CICLO DE VIDA de una sesión: no responden a una petición
+        # concreta y por eso no llevan `request_id`, igual que `ready`. Su
+        # esquema ya se validó arriba, así que aquí solo hay que no confundir
+        # "no tiene id" con "tiene un id inventado".
+        if tipo in ("session_opened", "session_closed", "session_paused"):
+            if "request_id" in p:
+                fallos.append(f"inv7: [{i}] {tipo} no debe traer request_id")
             continue
 
         rid = p.get("request_id")
