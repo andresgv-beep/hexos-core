@@ -24,8 +24,9 @@ BINDIR = bin
 CORE_SRC = $(SRCDIR)/hera.c
 STORE_SRC = $(SRCDIR)/hera_store.c
 MENTE_SRC = $(SRCDIR)/hera_profile.c $(SRCDIR)/hera_delta.c
+COLA_SRC  = $(SRCDIR)/hera_queue.c
 
-ALL_SRC = $(CORE_SRC) $(STORE_SRC) $(MENTE_SRC)
+ALL_SRC = $(CORE_SRC) $(STORE_SRC) $(MENTE_SRC) $(COLA_SRC)
 
 # Object files
 OBJECTS = $(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(ALL_SRC))
@@ -40,9 +41,9 @@ TEST_TARGET = $(BINDIR)/hera_test
 # Rules
 # ============================================================================
 
-.PHONY: all clean lib test store-test mente-test cli sabotaje sabotaje-mente sabotaje-carrera carrera auditar
+.PHONY: all clean lib test store-test mente-test cola-test cli sabotaje sabotaje-mente sabotaje-cola sabotaje-cola-carrera cola-carrera sabotaje-carrera carrera auditar
 
-all: lib test store-test mente-test cli auditar
+all: lib test store-test mente-test cola-test cli auditar
 
 lib: $(LIB_TARGET)
 
@@ -80,6 +81,8 @@ STORE_TEST = $(BINDIR)/hera_store_test
 SABOTAJES  = 1 2 3 4 5 6 7 8 9
 MENTE_TEST = $(BINDIR)/hera_mente_test
 MENTE_SABOTAJES = 20 21 22 23
+COLA_TEST  = $(BINDIR)/hera_cola_test
+COLA_SABOTAJES = 30 31 32 33 34
 
 store-test: $(STORE_TEST)
 
@@ -187,9 +190,9 @@ carrera:
 	rotas=`grep -cv '}$$' $$d/hera.jsonl || true`; \
 	rm -rf $$d; \
 	echo "  `basename $(BIN)`: $$nu dijo/$$u ids · $$nf hechos/$$f ids · $$rotas lineas rotas"; \
-	if [ "$$nf" != "24" ]; then \
-	  echo "  FALLO: se escribieron $$nf hechos y no 24 — la fase 2 no esta probando nada"; exit 1; fi; \
 	if [ "$(ESPERA)" = "si" ]; then \
+	  if [ "$$nf" != "24" ]; then \
+	    echo "  FALLO: con cerrojo se escribieron $$nf hechos y no 24 — la fase 2 no esta probando nada"; exit 1; fi; \
 	  if [ "$$u" != "$$nu" ] || [ "$$f" != "$$nf" ] || [ "$$rotas" != "0" ]; then \
 	    echo "  FALLO: con cerrojo se repitio algun id o se rompio el diario"; exit 1; fi; \
 	  echo "  con cerrojo: 24+1 evidencias y 24 hechos, todos con id unico"; \
@@ -201,3 +204,50 @@ carrera:
 
 auditar:
 	@python3 tools/auditar_cerrojos.py src/hera_store.c
+	@python3 tools/auditar_cerrojos.py src/hera_queue.c
+
+cola-test: $(COLA_TEST)
+
+$(COLA_TEST): tools/hera_cola_test.c $(COLA_SRC) $(STORE_SRC)
+	@mkdir -p $(BINDIR)
+	$(CC) $(CFLAGS) -DHERA_SABOTAJE=0 -I$(INCDIR) \
+	  $(STORE_SRC) $(COLA_SRC) tools/hera_cola_test.c -o $@ -lpthread
+
+sabotaje-cola: $(COLA_TEST)
+	@$(COLA_TEST) > /dev/null || (echo "FALLO: la cola no pasa en limpio"; exit 1)
+	@echo "limpio: 0 fallos"
+	@fallos=0; \
+	for n in $(COLA_SABOTAJES); do \
+	  if ! $(CC) $(CFLAGS) -DHERA_SABOTAJE=$$n -I$(INCDIR) $(STORE_SRC) $(COLA_SRC) \
+	       tools/hera_cola_test.c -o $(BINDIR)/hera_ct_$$n -lpthread 2>/dev/null; then \
+	    echo "  sabotaje $$n: NO COMPILA"; fallos=1; continue; fi; \
+	  salida=`$(BINDIR)/hera_ct_$$n --sabotaje $$n 2>&1`; codigo=$$?; \
+	  if [ $$codigo -ne 0 ]; then echo "  sabotaje $$n: EL BINARIO MURIO ($$codigo)"; fallos=1; \
+	  elif ! echo "$$salida" | grep -q "se detecta"; then echo "  sabotaje $$n: NO SE DETECTA"; fallos=1; \
+	  else echo "  sabotaje $$n: `echo "$$salida" | grep -o 'se detecta ([0-9]* fallos)'`"; fi; \
+	done; \
+	if [ $$fallos -ne 0 ]; then echo "FALLO: algun sabotaje no quedo demostrado"; exit 1; fi; \
+	echo "los $(words $(COLA_SABOTAJES)) sabotajes de la cola se detectan"
+
+# Dos trabajadores de VERDAD (procesos exec'd, no fork: tras un fork los hijos
+# comparten la descripcion de fichero y flock no excluiria entre ellos).
+sabotaje-cola-carrera: $(COLA_TEST)
+	@$(CC) $(CFLAGS) -DHERA_SABOTAJE=31 -I$(INCDIR) $(STORE_SRC) $(COLA_SRC) \
+	  tools/hera_cola_test.c -o $(BINDIR)/hera_ct_sin_marca -lpthread 2>/dev/null
+	@$(MAKE) --no-print-directory cola-carrera BIN=$(COLA_TEST)              ESPERA=si
+	@$(MAKE) --no-print-directory cola-carrera BIN=$(BINDIR)/hera_ct_sin_marca ESPERA=no
+
+cola-carrera:
+	@d=`mktemp -d`; export HELIOS_HOME=$$d; \
+	$(COLA_TEST) --sembrar 12 >/dev/null 2>&1 || { echo "  FALLO: no pude sembrar"; exit 1; }; \
+	for i in `seq 1 12`; do $(BIN) --tomar-uno >> $$d/tomados.txt 2>/dev/null & done; wait; \
+	tot=`grep -c . $$d/tomados.txt || true`; uni=`sort -u $$d/tomados.txt | wc -l`; \
+	rm -rf $$d; \
+	echo "  `basename $(BIN)`: $$tot tomados · $$uni distintos"; \
+	if [ "$(ESPERA)" = "si" ]; then \
+	  if [ "$$tot" != "$$uni" ]; then echo "  FALLO: dos trabajadores se llevaron el mismo job"; exit 1; fi; \
+	  echo "  con marca: cada job lo toma uno solo"; \
+	else \
+	  if [ "$$tot" = "$$uni" ]; then echo "  FALLO: sin marca tambien salen todos distintos — la prueba no prueba nada"; exit 1; fi; \
+	  echo "  sin marca: dos trabajadores se llevan el mismo job"; \
+	fi

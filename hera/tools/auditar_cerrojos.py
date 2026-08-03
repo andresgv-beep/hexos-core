@@ -26,6 +26,10 @@ EXENTAS = {
     "hera_store_ruta": "devuelve la ruta, fijada en abrir() y ya inmutable",
     "hera_store_cerrar": "suelta el descriptor del cerrojo; tomarlo aquí sería "
                          "cerrar la puerta con la llave dentro",
+    "hera_job_estado_nombre": "función pura sobre un enum, no toca estado",
+    "hera_cola_ruta": "devuelve la ruta, fijada en abrir() y ya inmutable",
+    "hera_cola_cerrar": "suelta el descriptor del cerrojo, igual que su gemela "
+                        "del almacén",
 }
 
 
