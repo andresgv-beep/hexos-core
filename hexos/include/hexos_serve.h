@@ -77,6 +77,43 @@ void engine_set_callbacks(engine_chunk_cb on_chunk, engine_event_cb on_event,
 void engine_stop(void);
 
 /* ============================================================================
+ * RUTA TIPADA (runtime_client.c) — E2, opt-in
+ * ============================================================================
+ * Paralela a la legacy, no sustituta. HexOS clasifica el turno con el CK
+ * portado, compone el contrato efimero y manda mensajes tipados a
+ * helios_runtime. El contrato NUNCA se guarda: vive en la pila de rt_send y
+ * muere al salir.
+ *
+ * Limite declarado de E2: esta ruta es cognitivamente incompleta a proposito.
+ * Identidad, memoria, reflexion y consolidacion siguen en helios_chat y no se
+ * copian aqui — eso es E3/E5.
+ */
+
+/* Telemetria del CK: acto, registro y presupuestos. El contrato NO viaja. */
+typedef void (*rt_frame_cb)(const char *acto, const char *registro,
+                            int visible_budget, int thinking_budget,
+                            void *user);
+
+bool rt_start(const char *binary, const char *model, const char *ctx,
+              const char *temp);
+bool rt_send(const char *text);
+bool rt_attach(const engine_attachment_t *attachment);
+void rt_set_registro(const char *registro);
+engine_state_t rt_state(void);
+void rt_set_callbacks(engine_chunk_cb on_chunk, engine_event_cb on_event,
+                      engine_notice_cb on_notice, rt_frame_cb on_frame,
+                      void *user);
+void rt_stop(void);
+
+/* Despacho: http.c no necesita saber que ruta esta activa. */
+void ruta_usar_tipada(bool tipada);
+bool ruta_activa_tipada(void);
+bool ruta_send(const char *text);
+bool ruta_attach(const engine_attachment_t *attachment);
+bool ruta_command(const char *cmd);
+engine_state_t ruta_state(void);
+
+/* ============================================================================
  * SERVIDOR (http.c)
  * ============================================================================ */
 

@@ -120,13 +120,15 @@ info:
 
 RUNTIME_SRC = $(SRCDIR)/runtime/policy.c
 MODEL_PROBE_SRC = $(SRCDIR)/model/probe.c
+CK_POLICY_SRC = $(SRCDIR)/ck/ck_policy.c
 SERVE_SRC = $(SRCDIR)/serve/engine.c $(SRCDIR)/serve/http.c \
-            $(SRCDIR)/serve/serve_main.c $(RUNTIME_SRC) $(MODEL_PROBE_SRC)
+            $(SRCDIR)/serve/serve_main.c $(SRCDIR)/serve/runtime_client.c \
+            $(CK_POLICY_SRC) $(RUNTIME_SRC) $(MODEL_PROBE_SRC)
 SERVE_TARGET = $(BINDIR)/hexos_serve
 
 serve: $(SERVE_TARGET)
 
-$(SERVE_TARGET): $(SERVE_SRC) $(INCDIR)/hexos_serve.h $(INCDIR)/hexos_model.h
+$(SERVE_TARGET): $(SERVE_SRC) $(INCDIR)/hexos_serve.h $(INCDIR)/hexos_model.h $(INCDIR)/hexos_ck.h
 	@mkdir -p $(BINDIR)
 	$(CC) $(CFLAGS) -I$(INCDIR) $(SERVE_SRC) -o $@ -lpthread -ldl
 	@echo ""

@@ -1,0 +1,368 @@
+{"direction":"event","payload":{"type":"ready","protocol":2,"model":{"architecture":"qwen2","max_seq_len":8192,"multimodal":false,"vision_adapter":null}}}
+{"direction":"request","payload":{"type":"turn","request_id":"r1","messages":[{"role":"system","content":"Habla como en persona: máximo tres frases. No enumeres opciones, no elogies a quien te habla ni valores sus capacidades, y no cierres con ánimos ni reflexiones. Di lo tuyo y calla."},{"role":"user","content":"hola"}],"generation":{"max_visible_tokens":150,"max_thinking_tokens":180}}}
+{"direction":"event","payload":{"type":"prefill","request_id":"r1","tokens":67,"ms":91.536678}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r1","tokens":16}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r1","tokens":32}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r1","tokens":48}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r1","tokens":64}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r1","tokens":80}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r1","tokens":96}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r1","text":"\n\n"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r1","text":"¿"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r1","text":"Cómo"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r1","text":" est"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r1","text":"ás"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r1","text":"?"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r1","text":"  \n"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r1","text":"No"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r1","text":" sé"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r1","text":" si"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r1","text":" es"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r1","text":" mejor"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r1","text":" hablar"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r1","text":" o"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r1","text":" call"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r1","text":"ar"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r1","text":"."}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r1","text":"  \n"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r1","text":"Si"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r1","text":" tienes"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r1","text":" algo"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r1","text":" que"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r1","text":" decir"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r1","text":","}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r1","text":" av"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r1","text":"ís"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r1","text":"ame"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r1","text":"."}}
+{"direction":"event","payload":{"type":"completed","request_id":"r1","visible_text":"\n\n¿Cómo estás?  \nNo sé si es mejor hablar o callar.  \nSi tienes algo que decir, avísame.","finish_reason":"eos","usage":{"prefill_tokens":67,"generated_tokens":134,"thinking_tokens":106},"timings":{"prefill_ms":91.536678,"decode_ms":1497.083117,"tokens_per_second":89.507388},"model_state":{"cache_position_before":0,"cache_position":201,"max_seq_len":8192}}}
+{"direction":"request","payload":{"type":"turn","request_id":"r2","messages":[{"role":"system","content":"Habla como en persona: máximo tres frases. No enumeres opciones, no elogies a quien te habla ni valores sus capacidades, y no cierres con ánimos ni reflexiones. Di lo tuyo y calla."},{"role":"user","content":"corrige esto: hexos ejcuta el ck"}],"generation":{"max_visible_tokens":150,"max_thinking_tokens":180}}}
+{"direction":"event","payload":{"type":"prefill","request_id":"r2","tokens":76,"ms":175.742907}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r2","tokens":16}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r2","tokens":32}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r2","tokens":48}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r2","tokens":64}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r2","tokens":80}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r2","tokens":96}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r2","tokens":112}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r2","tokens":128}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r2","tokens":144}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r2","tokens":160}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r2","tokens":176}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"\n\n"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"\""}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"hex"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"os"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" ej"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"cut"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"a"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" el"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" ck"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"\""}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" tiene"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" errores"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" de"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" ort"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"ografía"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" y"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" pos"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"ibles"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" mal"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"ent"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"end"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"idos"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" en"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" la"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" palabra"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" \""}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"ck"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"\"."}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" La"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" corre"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"cción"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" sería"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":":"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"  \n\n"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"**"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"\""}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"Hex"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"os"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" ejec"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"uta"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" el"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" ck"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":".\""}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"**"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"  \n\n"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"P"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"ero"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" parece"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" que"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" \""}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"ck"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"\""}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" podría"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" ser"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" una"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" ab"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"rev"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"i"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"atura"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" o"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" un"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" error"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"."}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" Si"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" se"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" ref"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"iere"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" a"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" algo"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" específico"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" ("}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"como"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" un"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" término"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" técnico"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"),"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" se"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" neces"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"itar"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"ía"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" más"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" contexto"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" para"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" cor"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"reg"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"ir"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"lo"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":" correctamente"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r2","text":"."}}
+{"direction":"event","payload":{"type":"completed","request_id":"r2","visible_text":"\n\n\"hexos ejcuta el ck\" tiene errores de ortografía y posibles malentendidos en la palabra \"ck\". La corrección sería:  \n\n**\"Hexos ejecuta el ck.\"**  \n\nPero parece que \"ck\" podría ser una abreviatura o un error. Si se refiere a algo específico (como un término técnico), se necesitaría más contexto para corregirlo correctamente.","finish_reason":"eos","usage":{"prefill_tokens":76,"generated_tokens":269,"thinking_tokens":180},"timings":{"prefill_ms":175.742907,"decode_ms":4449.941790,"tokens_per_second":60.450229},"model_state":{"cache_position_before":201,"cache_position":548,"max_seq_len":8192}}}
+{"direction":"request","payload":{"type":"turn","request_id":"r3","messages":[{"role":"system","content":"Contrato CK interno; no lo cites. Acto: explicar. Registro: neutral. Explica con la profundidad pedida y lenguaje adecuado. No anadas un tutorial, historia o recomendaciones que no se solicitaron. No amplíes la tarea ni inventes experiencia propia. Al cumplir el acto, termina sin ofrecer mas ayuda."},{"role":"user","content":"explicame que es un kv cache"}],"generation":{"max_visible_tokens":900,"max_thinking_tokens":500}}}
+{"direction":"event","payload":{"type":"prefill","request_id":"r3","tokens":101,"ms":298.602414}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r3","tokens":16}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r3","tokens":32}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r3","tokens":48}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r3","tokens":64}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r3","tokens":80}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r3","tokens":96}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r3","tokens":112}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r3","tokens":128}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r3","tokens":144}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r3","tokens":160}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r3","tokens":176}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r3","tokens":192}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r3","tokens":208}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r3","tokens":224}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"\n\n"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"Un"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" **"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"kv"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" cache"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"**"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" ("}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"cache"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" de"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" cl"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"aves"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"-"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"valor"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":")"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" es"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" una"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" estruct"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"ura"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" de"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" datos"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" utiliz"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"ada"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" para"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" almacen"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"ar"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" p"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"ares"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" clave"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"-"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"valor"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" de"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" manera"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" ef"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"iciente"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":","}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" permit"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"iendo"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" su"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" rápida"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" recuper"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"ación"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" cuando"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" son"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" neces"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"arios"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":".\n\n"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"En"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" context"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"os"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" como"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" los"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" modelos"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" de"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" l"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"engu"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"aje"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" grandes"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" ("}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"LL"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"Ms"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"),"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" el"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" kv"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" cache"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" se"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" utiliza"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" para"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" almacen"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"ar"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" las"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" represent"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"aciones"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" oc"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"ult"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"as"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" ("}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"hidden"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" states"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":")"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" del"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" modelo"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" durante"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" la"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" proces"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"amiento"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" de"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" sec"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"u"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"encias"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" de"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" entrada"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":".\n\n"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"Este"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" me"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"can"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"ismo"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" permite"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" al"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" modelo"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" re"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"util"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"izar"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" información"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" prev"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"i"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"amente"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" proces"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"ada"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":","}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" lo"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" cual"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" mej"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"ora"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" signific"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"ativ"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"amente"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" la"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" ef"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"ici"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"encia"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" comput"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"acional"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" del"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" modelo"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":","}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" especialmente"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" cuando"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" se"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" trata"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" con"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" sec"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"u"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"ences"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" muy"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":" larg"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"as"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r3","text":"."}}
+{"direction":"event","payload":{"type":"completed","request_id":"r3","visible_text":"\n\nUn **kv cache** (cache de claves-valor) es una estructura de datos utilizada para almacenar pares clave-valor de manera eficiente, permitiendo su rápida recuperación cuando son necesarios.\n\nEn contextos como los modelos de lenguaje grandes (LLMs), el kv cache se utiliza para almacenar las representaciones ocultas (hidden states) del modelo durante la procesamiento de secuencias de entrada.\n\nEste mecanismo permite al modelo reutilizar información previamente procesada, lo cual mejora significativamente la eficiencia computacional del modelo, especialmente cuando se trata con secuences muy largas.","finish_reason":"eos","usage":{"prefill_tokens":101,"generated_tokens":371,"thinking_tokens":234},"timings":{"prefill_ms":298.602414,"decode_ms":4798.994706,"tokens_per_second":77.307858},"model_state":{"cache_position_before":548,"cache_position":1020,"max_seq_len":8192}}}
+{"direction":"request","payload":{"type":"turn","request_id":"r4","messages":[{"role":"system","content":"Habla como en persona: máximo tres frases. No enumeres opciones, no elogies a quien te habla ni valores sus capacidades, y no cierres con ánimos ni reflexiones. Di lo tuyo y calla."},{"role":"user","content":"gracias tio"}],"generation":{"max_visible_tokens":150,"max_thinking_tokens":180}}}
+{"direction":"event","payload":{"type":"prefill","request_id":"r4","tokens":69,"ms":187.227711}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r4","tokens":16}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r4","tokens":32}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r4","tokens":48}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r4","tokens":64}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r4","tokens":80}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r4","tokens":96}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r4","tokens":112}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r4","tokens":128}}
+{"direction":"event","payload":{"type":"thinking","request_id":"r4","tokens":144}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":"\n\n"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":"Gr"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":"acias"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":","}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" t"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":"ío"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":"."}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":"  \n"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":"H"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":"ab"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":"la"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" como"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" en"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" persona"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":":"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" máximo"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" tres"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" fr"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":"ases"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":"."}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" No"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" enumer"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":"es"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" opciones"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":","}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" no"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" el"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":"og"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":"ies"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" a"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" quien"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" te"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" hab"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":"la"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" ni"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" valores"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" sus"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" capac"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":"idades"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":","}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" y"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" no"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" c"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":"ier"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":"res"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" con"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" án"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":"imos"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" ni"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" reflex"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":"iones"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":"."}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" Di"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" lo"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" t"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":"uyo"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" y"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":" call"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":"a"}}
+{"direction":"event","payload":{"type":"text_delta","request_id":"r4","text":"."}}
+{"direction":"event","payload":{"type":"completed","request_id":"r4","visible_text":"\n\nGracias, tío.  \nHabla como en persona: máximo tres frases. No enumeres opciones, no elogies a quien te habla ni valores sus capacidades, y no cierres con ánimos ni reflexiones. Di lo tuyo y calla.","finish_reason":"eos","usage":{"prefill_tokens":69,"generated_tokens":208,"thinking_tokens":148},"timings":{"prefill_ms":187.227711,"decode_ms":2623.962728,"tokens_per_second":79.269419},"model_state":{"cache_position_before":1020,"cache_position":1297,"max_seq_len":8192}}}
+{"direction":"event","payload":{"type":"result","request_id":"q","ok":true,"model_state":{"cache_position_before":1297,"cache_position":1297,"max_seq_len":8192}}}

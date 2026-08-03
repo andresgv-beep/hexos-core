@@ -191,7 +191,7 @@ static void serve_status(int fd)
     char json[4096];
     size_t used = (size_t)snprintf(json, sizeof(json),
                                   "{\"state\":\"%s\"",
-                                  engine_state_name(engine_state()));
+                                  engine_state_name(ruta_state()));
     if (g_has_model_report && used < sizeof(json)) {
         used += (size_t)snprintf(
             json + used, sizeof(json) - used,
@@ -239,7 +239,7 @@ static void serve_sse(int fd)
     char hello[192];
     int n = snprintf(hello, sizeof(hello),
                      "event: state\ndata: {\"state\":\"%s\"}\n\n",
-                     engine_state_name(engine_state()));
+                     engine_state_name(ruta_state()));
     write_all(fd, hello, (size_t)n);
 
     sse_add(fd);
@@ -370,13 +370,13 @@ static void *conn_thread(void *arg)
         serve_status(fd);
     } else if (!strcmp(method, "POST") && !strcmp(path, "/api/chat")) {
         bool ok = body && body_len && !memchr(body, '\0', body_len) &&
-                  engine_send((const char *)body);
+                  ruta_send((const char *)body);
         respond(fd, ok ? "202 Accepted" : "409 Conflict",
                 "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}",
                 ok ? 11 : 12);
     } else if (!strcmp(method, "POST") && !strcmp(path, "/api/command")) {
         bool ok = body && body_len && !memchr(body, '\0', body_len) &&
-                  engine_command((const char *)body);
+                  ruta_command((const char *)body);
         respond(fd, ok ? "202 Accepted" : "409 Conflict",
                 "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}",
                 ok ? 11 : 12);
@@ -398,7 +398,7 @@ static void *conn_thread(void *arg)
         const bool model_accepts_vision = !g_has_model_report ||
             g_model_report.modalities[HEXOS_MODALITY_VISION].status ==
                 HEXOS_ADAPTER_RUNTIME_READY;
-        bool ok = geometry && model_accepts_vision && engine_attach(&attachment);
+        bool ok = geometry && model_accepts_vision && ruta_attach(&attachment);
         respond(fd, ok ? "202 Accepted" : "409 Conflict",
                 "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}",
                 ok ? 11 : 12);

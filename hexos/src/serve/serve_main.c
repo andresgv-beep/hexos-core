@@ -51,16 +51,31 @@ static void on_notice(const char *text, size_t len, void *user)
     serve_broadcast("notice", json);
 }
 
+/* Telemetría del CK: acto, registro y presupuestos. El contrato NO viaja —
+ * es efímero y no debe aparecer en la traza que ve el usuario. */
+static void on_frame(const char *acto, const char *registro,
+                     int visible_budget, int thinking_budget, void *user)
+{
+    (void)user;
+    char json[256];
+    snprintf(json, sizeof(json),
+             "{\"acto\":\"%s\",\"registro\":\"%s\","
+             "\"visible_budget\":%d,\"thinking_budget\":%d}",
+             acto, registro, visible_budget, thinking_budget);
+    serve_broadcast("ck_frame", json);
+}
+
 static void on_event(const char *event, void *user)
 {
     (void)user;
     char json[128];
     snprintf(json, sizeof(json), "{\"state\":\"%s\"}",
-             engine_state_name(engine_state()));
+             engine_state_name(ruta_state()));
     serve_broadcast(event, json);
 
-    if (!strcmp(event, "ready")) {
-        /* El navegador suaviza; el motor va suelto. */
+    if (!strcmp(event, "ready") && !ruta_activa_tipada()) {
+        /* El navegador suaviza; el motor va suelto. La ruta tipada no tiene
+         * governor de ritmo que desactivar: nunca lo tuvo. */
         engine_command("/fast");
         fprintf(stderr, "[serve] motor listo (ritmo pleno, la UI suaviza)\n");
     }
@@ -86,6 +101,10 @@ static void usage(const char *prog)
         "  --bind <ip>       interfaz (por defecto %s, toda la LAN)\n"
         "  --root <dir>      raíz de ficheros web (por defecto %s)\n"
         "  --no-distill      no consolidar la memoria episódica al salir\n"
+        "  --runtime <ruta>  RUTA TIPADA (E2, opt-in): HexOS clasifica el turno\n"
+        "                    con su propio CK y habla con helios_runtime por\n"
+        "                    eventos tipados. Sin este flag manda la legacy,\n"
+        "                    que sigue siendo la predeterminada y el oráculo.\n"
         "\n"
         "Usa --no-distill mientras desarrollas. Cada cierre destila la sesión\n"
         "al diario de Héctor, así que veinte reinicios de prueba dejan veinte\n"
@@ -105,11 +124,13 @@ int main(int argc, char **argv)
     const char *root   = DEFAULT_ROOT;
     int port = DEFAULT_PORT;
     bool no_distill = false;
+    const char *runtime_bin = NULL;
     bool no_probe = false;
 
     for (int i = 1; i < argc; i++) {
         const char *next = (i + 1 < argc) ? argv[i + 1] : NULL;
         if (!strcmp(argv[i], "--no-distill")) { no_distill = true; }
+        else if (!strcmp(argv[i], "--runtime") && next) { runtime_bin = next; i++; }
         else if (!strcmp(argv[i], "--no-probe")) { no_probe = true; }
         else if (!strcmp(argv[i], "--model")  && next) { model = next; i++; }
         else if (!strcmp(argv[i], "--engine") && next) { engine = next; i++; }
@@ -164,11 +185,24 @@ int main(int argc, char **argv)
                         "(esta sesión no se consolidará)\n");
     }
 
-    engine_set_notice_cb(on_notice);
-    engine_set_callbacks(on_chunk, on_event, NULL);
-    if (!engine_start(engine, model, temp)) {
-        fprintf(stderr, "[serve] no pude arrancar el motor\n");
-        return 1;
+    if (runtime_bin) {
+        // Ruta tipada: el CK vive aquí y Héctor solo genera.
+        ruta_usar_tipada(true);
+        rt_set_callbacks(on_chunk, on_event, on_notice, on_frame, NULL);
+        if (!rt_start(runtime_bin, model, getenv("HELIOS_CTX"), temp)) {
+            fprintf(stderr, "[serve] no pude arrancar helios_runtime\n");
+            return 1;
+        }
+        fprintf(stderr, "[serve] RUTA TIPADA (E2, opt-in): CK en HexOS.\n"
+                        "[serve] Sin identidad ni memoria todavía — eso es "
+                        "E3/E5. La legacy sigue siendo el oráculo.\n");
+    } else {
+        engine_set_notice_cb(on_notice);
+        engine_set_callbacks(on_chunk, on_event, NULL);
+        if (!engine_start(engine, model, temp)) {
+            fprintf(stderr, "[serve] no pude arrancar el motor\n");
+            return 1;
+        }
     }
     fprintf(stderr, "[serve] cargando %s...\n", model);
     fprintf(stderr, "[serve] http://localhost:%d  (y en la LAN por %s)\n",
@@ -177,6 +211,6 @@ int main(int argc, char **argv)
     serve_run(root);
 
     fprintf(stderr, "\n[serve] cerrando: dejo que Héctor destile la memoria\n");
-    engine_stop();
+    if (ruta_activa_tipada()) rt_stop(); else engine_stop();
     return 0;
 }

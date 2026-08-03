@@ -2,8 +2,8 @@
  "representa": "Hector-engine/src/ck_policy.{hpp,cpp}",
  "commit": "3b0abaf1b17f",
  "ck_policy_cpp_sha256": "95cd924a82d2a67a",
- "ck_policy_hpp_sha256": "1757cad33b7bce9b",
+ "ck_policy_hpp_sha256": "05bf6a4fb1f2c623",
  "corpus": "informes/e2_corpus.jsonl",
  "casos": 71,
- "nota": "Si cualquiera de estos sha cambia, la referencia caduca y hay que regenerarla."
+ "nota": "Si cualquiera de estos sha cambia, la referencia caduca y hay que regenerarla. El sha del .hpp se re-armó al añadirle el banner CONGELADO: se recompiló ck_dump desde ese header y produjo esta misma referencia byte a byte, y el port en C siguió dando 71/71. El cambio era de comentarios, pero eso se demuestra, no se supone."
 }
