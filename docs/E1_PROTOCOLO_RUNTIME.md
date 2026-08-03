@@ -52,6 +52,11 @@ y un adjunto que comparte id con su turno vuelve ambiguo qué terminó.
 {"type":"attachment","request_id":"a1","kind":"rgb8",
  "width":192,"height":192,"stride":576,"bytes":110592}
 // … seguido de 110592 bytes crudos y un \n
+//
+// Para kind rgb8 la geometría es OBLIGATORIA y coherente:
+//   width > 0, height > 0, stride >= width*3, bytes == stride*height
+//   y bytes <= 300 MiB. Una cabecera no puede pedir que se reserve una
+//   cantidad arbitraria ni describir una imagen imposible.
 
 {"type":"cancel","request_id":"c1","target":"r1"}
 {"type":"reset","request_id":"x1"}
@@ -104,7 +109,11 @@ decide **E2**, no este documento.
 {"type":"result","request_id":"x1","ok":true,
  "model_state":{"cache_position_before":231,"cache_position":0,"max_seq_len":4096}}
 
-{"type":"error","request_id":"r1","code":"context_full","message":"…"}
+{"type":"error","request_id":"r1","code":"context_full","message":"…",
+ "model_state":{"cache_position_before":222,"cache_position":222,
+                "max_seq_len":4096},
+ "visible_text":"lo que llegó a decir",   // obligatorio si hubo text_delta
+ "usage":{…},"timings":{…}}
 ```
 
 Se llama **`text_delta`** y no `token` a propósito: una cadena JSON debe ser
@@ -129,9 +138,13 @@ Sin esto escrito, dos implementaciones razonables divergen:
 - **Cancelación:** se conserva **exactamente el texto ya emitido**. El turno
   termina con `completed` y `finish_reason: cancelled`, no con `error`: hubo
   respuesta parcial y el cliente ya la pintó.
-- `completed`, `error` y `result` llevan siempre `cache_position_before` y
+- `completed`, `error` y `result` llevan **siempre** `cache_position_before` y
   `cache_position`, para que el cliente pueda auditar el efecto de cada
-  petición sin inferirlo.
+  petición sin inferirlo. El esquema lo exige en los tres.
+- Un `error` de turno que llega **después** de haber emitido texto debe traer
+  `visible_text`, `usage` y `timings`, y su `visible_text` debe coincidir con
+  los `text_delta` ya emitidos: el cliente ya pintó ese texto y el resultado
+  final no puede contradecirlo.
 
 ## 5. Invariantes
 
@@ -155,16 +168,24 @@ bajada del KV ocurrió *después* de su `reset` y no antes.
    **todo turno que emite texto emite antes su `prefill`**.
 5. Concatenar los `text_delta.text` da exactamente `completed.visible_text`.
 6. `cache_position` no decrece salvo inmediatamente después de un `reset`
-   confirmado o de un `context_compacted` del mismo `request_id`.
+   **confirmado con `result{ok:true}`** —recibir la petición no basta, y un
+   `reset` que termina en `error` no autoriza nada— o de un
+   `context_compacted` del mismo `request_id`, que además debe reducir de
+   verdad (`after < before`).
 7. Todo evento con `request_id` corresponde a una petición **ya recibida** en
    la traza; los `request_id` no se repiten.
-8. Solo se emiten tipos de evento conocidos, con sus campos obligatorios.
+8. Solo se emiten tipos conocidos, con sus campos obligatorios y **sin campos
+   superiores que nadie haya declarado**: la validación es por lista blanca,
+   tanto en eventos como en peticiones. Los adjuntos `rgb8` cumplen además su
+   geometría.
 9. `completed` trae `finish_reason`, `usage`, `timings` y `model_state` con
    ambas posiciones.
-10. **El protocolo no define campos ni tipos de evento de dominio cognitivo.**
-    Se verifica sobre las **claves** del esquema, nunca sobre el texto que
-    genera el modelo: una respuesta legítima puede hablar de memoria o de
-    perfiles y eso no es una fuga.
+10. **El protocolo no define campos ni tipos de dominio cognitivo**, ni en
+    eventos **ni en peticiones**: un `turn` con un campo `memory` es una fuga
+    igual que un evento con `acto`, y por ahí es por donde la mente volvería a
+    entrar. Se verifica sobre las **claves** del esquema, nunca sobre el texto
+    que genera el modelo ni sobre `messages[].content`: una respuesta legítima
+    puede hablar de memoria o de perfiles y eso no es una fuga.
 
 ## 6. Pruebas antes de implementar
 

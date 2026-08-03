@@ -34,30 +34,41 @@ TERMINAL_DE = {
 }
 TERMINALES = {"completed", "error", "result"}
 
-# Esquema mínimo: tipo -> campos obligatorios. Un tipo desconocido es un fallo,
-# no algo que ignorar en silencio.
+# Esquema: tipo -> (campos obligatorios, campos opcionales). Se valida por
+# LISTA BLANCA: un campo superior desconocido es un fallo, no algo que ignorar.
+# Así la frontera cognitiva no depende de acertar la lista de palabras
+# prohibidas — cualquier campo que nadie declaró queda fuera.
 ESQUEMA_EVENTOS = {
-    "ready":             {"protocol", "model"},
-    "prefill":           {"request_id", "tokens", "ms"},
-    "thinking":          {"request_id", "tokens"},
-    "text_delta":        {"request_id", "text"},
-    "notice":            {"request_id", "text"},
-    "context_compacted": {"request_id", "cache_position_before",
-                          "cache_position_after"},
-    "completed":         {"request_id", "visible_text", "finish_reason",
-                          "usage", "timings", "model_state"},
-    "result":            {"request_id", "ok"},
-    "error":             {"request_id", "code", "message"},
+    "ready":             ({"protocol", "model"}, set()),
+    "prefill":           ({"request_id", "tokens", "ms"}, set()),
+    "thinking":          ({"request_id", "tokens"}, set()),
+    "text_delta":        ({"request_id", "text"}, set()),
+    "notice":            ({"request_id", "text"}, set()),
+    "context_compacted": ({"request_id", "cache_position_before",
+                           "cache_position_after"}, set()),
+    "completed":         ({"request_id", "visible_text", "finish_reason",
+                           "usage", "timings", "model_state"}, set()),
+    "result":            ({"request_id", "ok", "model_state"}, {"detail"}),
+    # `error` de un turno debe traer además el texto parcial y sus contadores:
+    # si el modelo llegó a emitir, el cliente ya lo pintó y el resultado final
+    # tiene que ser coherente con el streaming.
+    "error":             ({"request_id", "code", "message", "model_state"},
+                          {"visible_text", "usage", "timings"}),
 }
 ESQUEMA_PETICIONES = {
-    "turn":       {"request_id", "messages"},
-    "attachment": {"request_id", "kind", "bytes"},
-    "cancel":     {"request_id", "target"},
-    "reset":      {"request_id"},
-    "status":     {"request_id"},
-    "shutdown":   {"request_id"},
+    "turn":       ({"request_id", "messages"},
+                   {"attachment_ids", "generation"}),
+    "attachment": ({"request_id", "kind", "width", "height", "stride", "bytes"},
+                   set()),
+    "cancel":     ({"request_id", "target"}, set()),
+    "reset":      ({"request_id"}, set()),
+    "status":     ({"request_id"}, set()),
+    "shutdown":   ({"request_id"}, set()),
 }
 FINISH_REASONS = {"eos", "max_tokens", "stop", "cancelled"}
+# Mismo tope que el /adjunto-rgb8 de helios_chat: la cabecera no puede pedir
+# que se reserve una cantidad arbitraria de memoria.
+MAX_ADJUNTO = 300 * 1024 * 1024
 
 # Vocabulario cognitivo prohibido EN LAS CLAVES del esquema (invariante 10).
 # Nunca en los valores: el modelo puede hablar de memoria o perfiles y eso es
@@ -68,6 +79,54 @@ CLAVES_PROHIBIDAS = {"acto", "act", "registro", "register", "contrato",
                      "presupuesto"}
 # `text` y `visible_text` llevan salida opaca del modelo: no se inspeccionan.
 CLAVES_OPACAS = {"text", "visible_text", "message", "content"}
+
+
+def validar_adjunto(i, p):
+    """`kind: rgb8` obliga a una geometría coherente: sin esto la cabecera
+    puede pedir que se reserve cualquier cosa o describir una imagen
+    imposible."""
+    if p.get("kind") != "rgb8":
+        return [f"inv8: [{i}] adjunto de tipo desconocido: {p.get('kind')!r}"]
+    fallos, g = [], {}
+    for campo in ("width", "height", "stride", "bytes"):
+        v = p.get(campo)
+        if not isinstance(v, int) or isinstance(v, bool) or v <= 0:
+            fallos.append(f"inv8: [{i}] adjunto con {campo} inválido: {v!r}")
+        else:
+            g[campo] = v
+    if len(g) == 4:
+        if g["stride"] < g["width"] * 3:
+            fallos.append(f"inv8: [{i}] stride {g['stride']} < width*3 "
+                          f"({g['width'] * 3})")
+        if g["bytes"] != g["stride"] * g["height"]:
+            fallos.append(f"inv8: [{i}] bytes {g['bytes']} != stride*height "
+                          f"({g['stride'] * g['height']})")
+        if g["bytes"] > MAX_ADJUNTO:
+            fallos.append(f"inv8: [{i}] adjunto de {g['bytes']} bytes supera "
+                          f"el tope de {MAX_ADJUNTO}")
+    return fallos
+
+
+def escanear_cognitivo(payload, tipo, fallos):
+    """Invariante 10, sobre CLAVES del esquema en peticiones y eventos.
+
+    Antes solo miraba eventos, así que un `turn` con `"memory": {...}` pasaba
+    limpio: la mente podía entrar por la puerta del cliente. El texto opaco
+    (contenido de mensajes y salida del modelo) queda excluido: que Héctor
+    hable de memoria o de perfiles es contenido legítimo, no una fuga.
+    """
+    def rec(obj, ruta=""):
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                if k.lower() in CLAVES_PROHIBIDAS:
+                    fallos.append(f"inv10: clave cognitiva '{k}' en "
+                                  f"{ruta or tipo}")
+                if k not in CLAVES_OPACAS:
+                    rec(v, f"{ruta}.{k}" if ruta else k)
+        elif isinstance(obj, list):
+            for x in obj:
+                rec(x, ruta)
+    rec(payload)
 
 
 def validar(traza):
@@ -93,24 +152,38 @@ def validar(traza):
             if tipo not in ESQUEMA_PETICIONES:
                 fallos.append(f"inv8: [{i}] tipo de petición desconocido: {tipo!r}")
                 continue
-            faltan = ESQUEMA_PETICIONES[tipo] - set(p)
+            obligatorios, opcionales = ESQUEMA_PETICIONES[tipo]
+            faltan = obligatorios - set(p)
             if faltan:
                 fallos.append(f"inv8: [{i}] petición {tipo} sin {sorted(faltan)}")
+            sobran = set(p) - obligatorios - opcionales - {"type"}
+            if sobran:
+                fallos.append(f"inv10: [{i}] petición {tipo} con campos no "
+                              f"declarados: {sorted(sobran)}")
+            if tipo == "attachment":
+                fallos += validar_adjunto(i, p)
             rid = p.get("request_id")
             if rid in peticiones:
                 fallos.append(f"inv7: [{i}] request_id duplicado: {rid!r}")
             peticiones[rid] = tipo
-            if tipo == "reset":
-                autoriza_bajada = rid
+            # OJO: el permiso para que baje el KV NO se concede aquí. Un reset
+            # que termina en error autorizaría retrocesos para siempre. Se
+            # concede al procesar su terminal exitoso.
+            escanear_cognitivo(p, tipo, fallos)
             continue
 
         # ---------------- eventos ----------------
         if tipo not in ESQUEMA_EVENTOS:
             fallos.append(f"inv8: [{i}] tipo de evento desconocido: {tipo!r}")
             continue
-        faltan = ESQUEMA_EVENTOS[tipo] - set(p)
+        obligatorios, opcionales = ESQUEMA_EVENTOS[tipo]
+        faltan = obligatorios - set(p)
         if faltan:
             fallos.append(f"inv8: [{i}] evento {tipo} sin {sorted(faltan)}")
+        sobran = set(p) - obligatorios - opcionales - {"type"}
+        if sobran:
+            fallos.append(f"inv10: [{i}] evento {tipo} con campos no "
+                          f"declarados: {sorted(sobran)}")
 
         if tipo == "ready":
             ready_vistos += 1
@@ -134,30 +207,64 @@ def validar(traza):
                               f"'{peticiones.get(rid)}' y su terminal fue "
                               f"'{tipo}' (esperado {sorted(esperados)})")
             terminado[rid] = tipo
+            # El permiso para bajar el KV nace AQUÍ y solo si el reset salió
+            # bien; un error lo revoca en vez de dejarlo colgando.
+            if peticiones.get(rid) == "reset":
+                autoriza_bajada = rid if (tipo == "result" and
+                                          p.get("ok") is True) else None
+            elif tipo == "error":
+                autoriza_bajada = None
 
         if tipo == "text_delta" and "prefill" not in eventos_por_id.get(rid, []):
             fallos.append(f"inv4: [{i}] {rid} emite text_delta sin 'prefill' previo")
 
-        if tipo == "completed":
+        # Coherencia streaming/resultado: vale para `completed` y también para
+        # un `error` de turno que ya había emitido texto.
+        es_error_de_turno = (tipo == "error" and peticiones.get(rid) == "turn")
+        if tipo == "completed" or es_error_de_turno:
             unido = "".join(
                 l["payload"]["text"] for l in traza[:i]
                 if l.get("direction") == "event"
                 and l["payload"].get("type") == "text_delta"
                 and l["payload"].get("request_id") == rid)
-            if unido != p.get("visible_text", ""):
+            if es_error_de_turno and unido and "visible_text" not in p:
+                fallos.append(f"inv5: {rid} el error llega tras emitir "
+                              f"{len(unido)} chars y no trae visible_text")
+            elif "visible_text" in p and unido != p.get("visible_text", ""):
                 fallos.append(f"inv5: {rid} los text_delta concatenados no dan "
                               f"visible_text ({len(unido)} vs "
                               f"{len(p.get('visible_text',''))} chars)")
+            if es_error_de_turno and unido:
+                for campo in ("usage", "timings"):
+                    if campo not in p:
+                        fallos.append(f"inv9: {rid} error con texto parcial "
+                                      f"sin '{campo}'")
+        if tipo == "completed":
             if p.get("finish_reason") not in FINISH_REASONS:
                 fallos.append(f"inv9: {rid} finish_reason inválido: "
                               f"{p.get('finish_reason')!r}")
+
+        # `model_state` con AMBAS posiciones en los tres terminales: es lo que
+        # permite auditar el efecto de cada petición sin inferirlo.
+        if tipo in TERMINALES:
             st = p.get("model_state") or {}
             if not {"cache_position_before", "cache_position"} <= set(st):
-                fallos.append(f"inv9: {rid} model_state sin ambas posiciones")
+                fallos.append(f"inv9: {rid} '{tipo}' sin ambas posiciones en "
+                              f"model_state")
 
         # ---- invariante 6: el KV solo baja con permiso ----
         if tipo == "context_compacted":
+            antes_c, despues_c = (p.get("cache_position_before"),
+                                  p.get("cache_position_after"))
+            if not (isinstance(antes_c, int) and isinstance(despues_c, int)
+                    and despues_c < antes_c):
+                fallos.append(f"inv6: {rid} context_compacted no reduce el "
+                              f"contexto ({antes_c} → {despues_c})")
             autoriza_bajada = rid
+            # La posición observada pasa a ser la de después: si no, la bajada
+            # real se detectaría más tarde y fuera de su permiso.
+            if isinstance(despues_c, int):
+                ultima_pos = despues_c
         st = p.get("model_state") or {}
         if "cache_position" in st:
             pos = st["cache_position"]
@@ -172,19 +279,7 @@ def validar(traza):
             ultima_pos = pos
             autoriza_bajada = None
 
-        # ---- invariante 10: claves cognitivas en el esquema ----
-        def escanear(obj, ruta=""):
-            if isinstance(obj, dict):
-                for k, v in obj.items():
-                    if k.lower() in CLAVES_PROHIBIDAS:
-                        fallos.append(f"inv10: clave cognitiva '{k}' en "
-                                      f"{ruta or tipo}")
-                    if k not in CLAVES_OPACAS:
-                        escanear(v, f"{ruta}.{k}" if ruta else k)
-            elif isinstance(obj, list):
-                for x in obj:
-                    escanear(x, ruta)
-        escanear(p)
+        escanear_cognitivo(p, tipo, fallos)
 
     if ready_vistos != 1:
         fallos.append(f"inv1: 'ready' aparece {ready_vistos} veces, debe ser 1")
@@ -241,7 +336,8 @@ F["conforme_reset_baja_kv"] = (
           model_state={"cache_position_before": 7, "cache_position": 0,
                        "max_seq_len": 4096})], True)
 F["conforme_compactacion"] = (
-    [READY] + [req(type="turn", request_id="r1",
+    [READY] + turno("r0", "previo", ("pre", "vio"), antes=0, despues=3900)
+    + [req(type="turn", request_id="r1",
                    messages=[{"role": "user", "content": "x"}]),
                ev(type="prefill", request_id="r1", tokens=5, ms=1.0),
                ev(type="context_compacted", request_id="r1",
@@ -262,7 +358,9 @@ F["conforme_cancelacion"] = (
      ev(type="prefill", request_id="r1", tokens=5, ms=1.0),
      ev(type="text_delta", request_id="r1", text="Empeza"),
      req(type="cancel", request_id="c1", target="r1"),
-     ev(type="result", request_id="c1", ok=True),
+     ev(type="result", request_id="c1", ok=True,
+        model_state={"cache_position_before": 0, "cache_position": 6,
+                     "max_seq_len": 4096}),
      ev(type="completed", request_id="r1", visible_text="Empeza",
         finish_reason="cancelled",
         usage={"prefill_tokens": 5, "generated_tokens": 3, "thinking_tokens": 0},
@@ -271,8 +369,11 @@ F["conforme_cancelacion"] = (
                      "max_seq_len": 4096})], True)
 F["conforme_adjunto_y_turno"] = (
     [READY,
-     req(type="attachment", request_id="a1", kind="rgb8", bytes=110592),
-     ev(type="result", request_id="a1", ok=True)]
+     req(type="attachment", request_id="a1", kind="rgb8",
+         width=192, height=192, stride=576, bytes=110592),
+     ev(type="result", request_id="a1", ok=True,
+        model_state={"cache_position_before": 0, "cache_position": 0,
+                     "max_seq_len": 4096})]
     + [req(type="turn", request_id="r1",
            messages=[{"role": "user", "content": "¿qué ves?"}],
            attachment_ids=["a1"]),
@@ -331,6 +432,59 @@ F["inv10_clave_cognitiva"] = (
      ev(type="completed", request_id="r1", visible_text="", finish_reason="eos",
         acto="saludar", usage={}, timings={},
         model_state={"cache_position_before": 0, "cache_position": 1})], False)
+
+# --- las cuatro trazas que GPT construyo y pasaban como conformes ---
+F["inv6_reset_fallido_autoriza"] = (
+    [READY] + turno("r1", antes=0, despues=7)
+    + [req(type="reset", request_id="x1"),
+       ev(type="error", request_id="x1", code="busy", message="ocupado",
+          model_state={"cache_position_before": 7, "cache_position": 7,
+                       "max_seq_len": 4096})]
+    + turno("r2", "Vale", ("Va", "le"), antes=7, despues=2), False)
+F["inv10_turn_con_campo_memory"] = (
+    [READY,
+     req(type="turn", request_id="r1",
+         messages=[{"role": "user", "content": "x"}],
+         memory={"facts": ["es fontanero"]}),
+     ev(type="prefill", request_id="r1", tokens=1, ms=1.0),
+     ev(type="completed", request_id="r1", visible_text="", finish_reason="eos",
+        usage={}, timings={},
+        model_state={"cache_position_before": 0, "cache_position": 1})], False)
+F["inv8_rgb8_sin_geometria"] = (
+    [READY,
+     req(type="attachment", request_id="a1", kind="rgb8", bytes=110592),
+     ev(type="result", request_id="a1", ok=True,
+        model_state={"cache_position_before": 0, "cache_position": 0})], False)
+F["inv9_error_sin_model_state"] = (
+    [READY,
+     req(type="turn", request_id="r1", messages=[{"role": "user", "content": "x"}]),
+     ev(type="prefill", request_id="r1", tokens=1, ms=1.0),
+     ev(type="error", request_id="r1", code="context_full", message="lleno")],
+    False)
+# Refuerzos propios
+F["inv6_compactacion_no_reduce"] = (
+    [READY,
+     req(type="turn", request_id="r1", messages=[{"role": "user", "content": "x"}]),
+     ev(type="prefill", request_id="r1", tokens=1, ms=1.0),
+     ev(type="context_compacted", request_id="r1",
+        cache_position_before=100, cache_position_after=300),
+     ev(type="completed", request_id="r1", visible_text="", finish_reason="eos",
+        usage={}, timings={},
+        model_state={"cache_position_before": 300, "cache_position": 301})],
+    False)
+F["inv8_rgb8_bytes_no_cuadran"] = (
+    [READY,
+     req(type="attachment", request_id="a1", kind="rgb8",
+         width=192, height=192, stride=576, bytes=99999),
+     ev(type="result", request_id="a1", ok=True,
+        model_state={"cache_position_before": 0, "cache_position": 0})], False)
+F["inv5_error_tras_emitir_sin_texto"] = (
+    [READY,
+     req(type="turn", request_id="r1", messages=[{"role": "user", "content": "x"}]),
+     ev(type="prefill", request_id="r1", tokens=1, ms=1.0),
+     ev(type="text_delta", request_id="r1", text="Empeza"),
+     ev(type="error", request_id="r1", code="context_full", message="lleno",
+        model_state={"cache_position_before": 0, "cache_position": 8})], False)
 # El modelo hablando de memoria NO es una fuga: solo se inspeccionan claves.
 F["conforme_texto_menciona_memoria"] = (
     [READY] + turno(texto="Tu memoria y tu perfil están vacíos",
