@@ -1,16 +1,24 @@
 /*
  * HERA — almacén de memoria (E3)
  *
- * Ver hera_store.h para las tres reglas. Aquí solo el cómo.
+ * Ver hera_store.h para las cuatro reglas. Aquí solo el cómo.
  *
  * El diario es JSONL de solo añadir. Cada línea es un registro:
  *
  *   {"r":"dijo","id":"u1","ts":...,"texto":"mi perro se llama Byteazul"}
  *   {"r":"hecho","id":"f1","ts":...,"clave":"perro/nombre","valor":"Byteazul",
- *    "texto":"Su perro se llama Byteazul","estado":"confirmado",
- *    "evidencia":"u1","origen":"persona"}
- *   {"r":"confirma","id":"f1","ts":...}
- *   {"r":"sustituye","viejo":"f1","nuevo":"f2","ts":...}
+ *    "texto":"Su perro se llama Byteazul","estado":"candidato",
+ *    "evidencia":"u1","confirmacion":"","origen":"modelo"}
+ *   {"r":"confirma","id":"f1","por":"u5","ts":...}
+ *   {"r":"corrige","viejo":"f1","id":"f2",...}     <- UNA línea, no dos
+ *   {"r":"importado","ts":...,"n":3}
+ *
+ * ATOMICIDAD. Una corrección es un solo registro. Al releer se descarta toda
+ * línea que no venga terminada en '\n' y en '}': si el proceso murió a mitad
+ * de escribirla, esa línea está incompleta, se tira entera y el estado sigue
+ * siendo el de antes de intentarlo. Lo que no puede pasar es que sobreviva la
+ * mitad que crea el hecho nuevo sin la mitad que jubila al viejo — que es lo
+ * que dejaría dos confirmados contradiciéndose.
  *
  * El estado vive en RAM y se reconstruye leyendo el fichero entero al abrir.
  * Son decenas o cientos de líneas por perfil: releerlas cuesta menos que
@@ -32,6 +40,7 @@
 
 #define HECHOS_MAX     4096
 #define DICHOS_MAX     4096
+#define LINEA_MAX      (HERA_UTTER_MAX * 2)
 
 typedef struct {
     char id[HERA_ID_MAX];
@@ -49,12 +58,15 @@ static unsigned     g_seq_u, g_seq_f;
 
 const char *hera_veredicto_nombre(hera_veredicto_t v) {
     switch (v) {
-        case HERA_OK:                     return "ok";
-        case HERA_RECHAZO_SIN_EVIDENCIA:  return "sin_evidencia";
-        case HERA_RECHAZO_NO_LITERAL:     return "no_literal";
-        case HERA_RECHAZO_DUPLICADO:      return "duplicado";
-        case HERA_RECHAZO_INVALIDO:       return "invalido";
-        case HERA_RECHAZO_DESCONOCIDO:    return "desconocido";
+        case HERA_OK:                       return "ok";
+        case HERA_RECHAZO_SIN_EVIDENCIA:    return "sin_evidencia";
+        case HERA_RECHAZO_NO_LITERAL:       return "no_literal";
+        case HERA_RECHAZO_SUJETO_AJENO:     return "sujeto_ajeno";
+        case HERA_RECHAZO_POLARIDAD:        return "polaridad";
+        case HERA_RECHAZO_SIN_CONFIRMACION: return "sin_confirmacion";
+        case HERA_RECHAZO_DUPLICADO:        return "duplicado";
+        case HERA_RECHAZO_INVALIDO:         return "invalido";
+        case HERA_RECHAZO_DESCONOCIDO:      return "desconocido";
     }
     return "?";
 }
@@ -72,9 +84,9 @@ const char *hera_estado_nombre(hera_estado_t e) {
  * Normalización. Minúsculas ASCII y todo lo que no sea letra o número pasa a
  * separador. Los bytes >= 128 se dejan intactos: pasarlos por tolower() con
  * locale "C" no hace nada, y tocarlos byte a byte partiría un UTF-8 de dos
- * bytes por la mitad. "Bilbao" y "bilbao" tienen que casar; "Bilbaó" y
- * "Bilbao" no, y eso es correcto — un acento distinto es otra palabra hasta
- * que alguien demuestre lo contrario.
+ * bytes por la mitad. "Bilbao" y "bilbao" casan; "Bilbaó" y "Bilbao" no, y eso
+ * es correcto — un acento distinto es otra palabra hasta que se demuestre lo
+ * contrario.
  * ------------------------------------------------------------------------ */
 static void normalizar(const char *in, char *out, size_t cap) {
     size_t o = 0;
@@ -86,43 +98,145 @@ static void normalizar(const char *in, char *out, size_t cap) {
     out[o] = '\0';
 }
 
-/* ¿Aparecen TODAS las palabras significativas de `valor` dentro de `texto`?
- * Significativa = 3 bytes o más; las de una o dos letras ("de", "la") no
- * aportan y exigirlas rechazaría hechos legítimos. Palabra completa, no
- * subcadena: si no, "Ana" colaría dentro de "manzana". */
-static bool valor_esta_en(const char *valor, const char *texto) {
-#if HERA_SABOTAJE == 1
-    /* Sabotaje: la comprobación de literalidad siempre dice que sí. Sirve
-     * para verificar que la batería detecta un almacén roto. */
-    (void)valor; (void)texto; return true;
-#endif
-    char nv[HERA_VALOR_MAX * 2], nt[HERA_UTTER_MAX * 2];
-    normalizar(valor, nv, sizeof(nv));
-    normalizar(texto, nt, sizeof(nt));
-
-    bool alguna = false;
-    char copia[HERA_VALOR_MAX * 2];
-    snprintf(copia, sizeof(copia), "%s", nv);
-    for (char *tok = strtok(copia, " "); tok; tok = strtok(NULL, " ")) {
-        const size_t l = strlen(tok);
-        if (l < 3) continue;
-        alguna = true;
-        bool visto = false;
-        for (const char *p = strstr(nt, tok); p; p = strstr(p + 1, tok)) {
-            const bool ini = (p == nt) || p[-1] == ' ';
-            const bool fin = (p[l] == '\0') || p[l] == ' ';
-            if (ini && fin) { visto = true; break; }
-        }
-        if (!visto) return false;
+/* Palabra completa dentro de un texto ya normalizado. Sin esto "Ana" colaría
+ * dentro de "manzana". */
+static bool tiene_palabra(const char *texto_norm, const char *palabra) {
+    const size_t l = strlen(palabra);
+    if (!l) return false;
+    for (const char *p = strstr(texto_norm, palabra); p;
+         p = strstr(p + 1, palabra)) {
+        const bool ini = (p == texto_norm) || p[-1] == ' ';
+        const bool fin = (p[l] == '\0') || p[l] == ' ';
+        if (ini && fin) return true;
     }
-    /* Un valor sin ninguna palabra significativa ("no", "42") no se puede
-     * verificar de esta forma: se exige que aparezca entero como subcadena. */
-    if (!alguna) return strstr(nt, nv) != NULL;
-    return true;
+    return false;
 }
 
-/* Duplicado por contención de palabras, el criterio que ya usaba la legacy:
- * pilla copias, trozos y versiones ampliadas del mismo hecho. */
+/* ------------------------------------------------------------------------
+ * POLARIDAD. La comprobación por bolsa de palabras pierde las negaciones
+ * cortas: "no" tiene dos letras y se cae de cualquier filtro por longitud, así
+ * que "me gusta el café" autorizaba "no me gusta el café" — el hecho exacto
+ * del revés. Se compara la PRESENCIA de negación en el valor contra la de la
+ * frase citada, y tienen que coincidir.
+ *
+ * Es una comprobación deliberadamente burda y rechaza de más: en "no tengo
+ * perro pero me gusta el café", el valor "me gusta el café" se rechaza porque
+ * la frase contiene un "no" que era de otra cosa. Se acepta ese coste. Un
+ * rechazo de más significa que el dato no se guarda solo y la persona puede
+ * pedirlo a mano; un rechazo de menos significa guardar lo contrario de lo que
+ * dijo y repetírselo mañana como si lo hubiera dicho ella.
+ * ------------------------------------------------------------------------ */
+static bool hay_negacion(const char *texto_norm) {
+    static const char *marcas[] = {"no", "nunca", "jamas", "jamás", "tampoco",
+                                   "ni", "sin", NULL};
+    for (int i = 0; marcas[i]; i++)
+        if (tiene_palabra(texto_norm, marcas[i])) return true;
+    return false;
+}
+
+/* Sujeto de una clave "sujeto/predicado". */
+static void sujeto_de(const char *clave, char *out, size_t cap) {
+    const char *barra = strchr(clave, '/');
+    const size_t n = barra ? (size_t)(barra - clave) : strlen(clave);
+    const size_t c = (n < cap - 1) ? n : cap - 1;
+    memcpy(out, clave, c);
+    out[c] = '\0';
+}
+
+/* ------------------------------------------------------------------------
+ * La comprobación de fondo: ¿respalda esta frase este hecho?
+ *
+ * Se exige que TODO ocurra en la MISMA frase — sujeto, valor y polaridad. Sin
+ * el troceo por frases, "Ana es mi hermana. Luis vive en Bilbao" respaldaría
+ * `ana/ciudad = Bilbao`: las dos palabras están en el texto, solo que hablando
+ * de personas distintas. Atribuirle a uno lo que se dijo de otro es el mismo
+ * fallo que la regla 1 quería impedir, un nivel más abajo.
+ * ------------------------------------------------------------------------ */
+static hera_veredicto_t frase_respalda(const char *frase_norm,
+                                       const char *sujeto_norm,
+                                       const char *valor_norm,
+                                       bool sujeto_es_yo) {
+#if HERA_SABOTAJE == 1
+    /* Sabotaje: la comprobación de respaldo siempre dice que sí. */
+    (void)frase_norm; (void)sujeto_norm; (void)valor_norm; (void)sujeto_es_yo;
+    return HERA_OK;
+#elif HERA_SABOTAJE == 4
+    /* Sabotaje: se comprueba el dato pero no de quién se dijo — el fallo
+     * "Luis vive en Bilbao autoriza ana/ciudad = Bilbao". */
+    sujeto_es_yo = true;
+#endif
+    /* 1. Sujeto. "yo" no necesita estar escrito: quien dice "vivo en Sevilla"
+     *    no se nombra, pero es el autor del texto y eso lo acredita. */
+    if (!sujeto_es_yo && !tiene_palabra(frase_norm, sujeto_norm))
+        return HERA_RECHAZO_SUJETO_AJENO;
+
+    /* 2. Valor, palabra a palabra. Las de una o dos letras no se exigen: no
+     *    aportan y pedirlas rechazaría hechos legítimos. */
+    bool alguna = false;
+    char copia[HERA_VALOR_MAX * 2];
+    snprintf(copia, sizeof(copia), "%s", valor_norm);
+    for (char *tok = strtok(copia, " "); tok; tok = strtok(NULL, " ")) {
+        if (strlen(tok) < 3) continue;
+        alguna = true;
+        if (!tiene_palabra(frase_norm, tok)) return HERA_RECHAZO_NO_LITERAL;
+    }
+    /* Un valor sin ninguna palabra significativa ("42", "sí") no se puede
+     * verificar así: se exige entero como subcadena. */
+    if (!alguna && !strstr(frase_norm, valor_norm))
+        return HERA_RECHAZO_NO_LITERAL;
+
+    /* 3. Polaridad. */
+#if HERA_SABOTAJE == 5
+    /* Sabotaje: bolsa de palabras pura, la negación corta se pierde. */
+    return HERA_OK;
+#endif
+    if (hay_negacion(valor_norm) != hay_negacion(frase_norm))
+        return HERA_RECHAZO_POLARIDAD;
+
+    return HERA_OK;
+}
+
+/* Recorre las frases del texto citado y devuelve OK si alguna respalda el
+ * hecho. Si ninguna lo hace, devuelve el rechazo MÁS ESPECÍFICO que se haya
+ * visto: saber que el sujeto era otro es más útil que un "no_literal" genérico
+ * cuando estás depurando por qué no se guardó algo. */
+static hera_veredicto_t texto_respalda(const char *texto, const char *clave,
+                                       const char *valor) {
+    char sujeto[HERA_CLAVE_MAX], sujeto_norm[HERA_CLAVE_MAX * 2];
+    sujeto_de(clave, sujeto, sizeof(sujeto));
+    normalizar(sujeto, sujeto_norm, sizeof(sujeto_norm));
+    const bool es_yo = (strcmp(sujeto, HERA_SUJETO_YO) == 0);
+
+    char valor_norm[HERA_VALOR_MAX * 2];
+    normalizar(valor, valor_norm, sizeof(valor_norm));
+
+    hera_veredicto_t peor = HERA_RECHAZO_NO_LITERAL;
+    const char *ini = texto;
+    while (*ini) {
+        size_t n = strcspn(ini, ".;!?\n");
+        if (n > 0) {
+            char frase[HERA_UTTER_MAX];
+            const size_t c = (n < sizeof(frase) - 1) ? n : sizeof(frase) - 1;
+            memcpy(frase, ini, c);
+            frase[c] = '\0';
+
+            char frase_norm[HERA_UTTER_MAX * 2];
+            normalizar(frase, frase_norm, sizeof(frase_norm));
+            const hera_veredicto_t v =
+                frase_respalda(frase_norm, sujeto_norm, valor_norm, es_yo);
+            if (v == HERA_OK) return HERA_OK;
+            /* Sujeto correcto pero polaridad o dato mal: más informativo. */
+            if (v == HERA_RECHAZO_POLARIDAD) peor = v;
+            else if (v == HERA_RECHAZO_SUJETO_AJENO &&
+                     peor == HERA_RECHAZO_NO_LITERAL) peor = v;
+        }
+        ini += n;
+        while (*ini && strchr(".;!?\n", *ini)) ini++;
+    }
+    return peor;
+}
+
+/* Duplicado: mismo valor normalizado bajo la misma clave, entre lo vigente. */
 static bool es_duplicado(const char *clave, const char *valor) {
     for (size_t i = 0; i < g_hechos_n; i++) {
         if (g_hechos[i].estado == HERA_SUSTITUIDO) continue;
@@ -136,7 +250,7 @@ static bool es_duplicado(const char *clave, const char *valor) {
 }
 
 /* ------------------------------------------------------------------------
- * JSON mínimo: escribir y leer los pocos campos del diario.
+ * JSON mínimo
  * ------------------------------------------------------------------------ */
 
 static void esc(const char *s, char *out, size_t cap) {
@@ -199,21 +313,22 @@ static void directorio(char *out, size_t cap) {
     mkdir(out, 0755);
 }
 
-/* Reloj fijable para que las pruebas puedan comparar diarios byte a byte.
- * Sin la variable, la hora de verdad. */
+/* Reloj fijable para que las pruebas puedan comparar diarios byte a byte. */
 static long long ahora(void) {
     const char *fijo = getenv("HERA_TS_FIJO");
     if (fijo && *fijo) return atoll(fijo);
     return (long long)time(NULL);
 }
 
+/* Una escritura, un registro. El fichero se abre en modo añadir y se cierra
+ * en cada llamada: si el proceso cae, cae entre registros, no dentro de uno
+ * a medio vaciar del buffer. */
 static bool anexar(const char *linea) {
     FILE *f = fopen(g_ruta, "a");
     if (!f) return false;
-    fputs(linea, f);
-    fputc('\n', f);
-    fclose(f);
-    return true;
+    const size_t l = strlen(linea);
+    const bool ok = fwrite(linea, 1, l, f) == l && fputc('\n', f) != EOF;
+    return (fclose(f) == 0) && ok;
 }
 
 static hera_hecho_t *buscar_hecho(const char *id) {
@@ -222,7 +337,6 @@ static hera_hecho_t *buscar_hecho(const char *id) {
     return NULL;
 }
 
-/* Hecho vigente de una clave: confirmado y sin sustituir. */
 static hera_hecho_t *vigente(const char *clave) {
     for (size_t i = g_hechos_n; i > 0; i--) {
         hera_hecho_t *h = &g_hechos[i - 1];
@@ -242,8 +356,32 @@ const char *hera_store_evidencia(const char *id) {
 const char *hera_store_ruta(void) { return g_ruta; }
 
 /* ------------------------------------------------------------------------
- * Apertura: reconstruir el estado leyendo el diario entero.
+ * Relectura
  * ------------------------------------------------------------------------ */
+
+/* Alta en RAM de un hecho leído o recién escrito. */
+static hera_hecho_t *poner_en_ram(const char *id, const char *clave,
+                                  const char *valor, const char *texto,
+                                  hera_estado_t estado, const char *evidencia,
+                                  const char *confirmacion, const char *origen,
+                                  long long ts) {
+    if (g_hechos_n >= HECHOS_MAX) return NULL;
+    hera_hecho_t *h = &g_hechos[g_hechos_n++];
+    memset(h, 0, sizeof(*h));
+    snprintf(h->id, sizeof(h->id), "%s", id);
+    snprintf(h->clave, sizeof(h->clave), "%s", clave);
+    snprintf(h->valor, sizeof(h->valor), "%s", valor);
+    snprintf(h->texto, sizeof(h->texto), "%s", texto);
+    snprintf(h->evidencia, sizeof(h->evidencia), "%s", evidencia ? evidencia : "");
+    snprintf(h->confirmacion, sizeof(h->confirmacion), "%s",
+             confirmacion ? confirmacion : "");
+    snprintf(h->origen, sizeof(h->origen), "%s", origen);
+    h->estado = estado;
+    h->ts = ts;
+    unsigned n = 0;
+    if (sscanf(id, "f%u", &n) == 1 && n > g_seq_f) g_seq_f = n;
+    return h;
+}
 
 static void aplicar(const char *linea) {
     char r[32];
@@ -253,40 +391,67 @@ static void aplicar(const char *linea) {
         if (g_dichos_n >= DICHOS_MAX) return;
         dicho_t *d = &g_dichos[g_dichos_n];
         if (!leer_campo(linea, "id", d->id, sizeof(d->id))) return;
+        d->texto[0] = '\0';
         leer_campo(linea, "texto", d->texto, sizeof(d->texto));
         unsigned n = 0;
         if (sscanf(d->id, "u%u", &n) == 1 && n > g_seq_u) g_seq_u = n;
         g_dichos_n++;
         return;
     }
-    if (strcmp(r, "hecho") == 0) {
-        if (g_hechos_n >= HECHOS_MAX) return;
-        hera_hecho_t *h = &g_hechos[g_hechos_n];
-        memset(h, 0, sizeof(*h));
-        if (!leer_campo(linea, "id", h->id, sizeof(h->id))) return;
-        leer_campo(linea, "clave", h->clave, sizeof(h->clave));
-        leer_campo(linea, "valor", h->valor, sizeof(h->valor));
-        leer_campo(linea, "texto", h->texto, sizeof(h->texto));
-        leer_campo(linea, "evidencia", h->evidencia, sizeof(h->evidencia));
-        leer_campo(linea, "origen", h->origen, sizeof(h->origen));
-        char est[24] = "candidato";
-        leer_campo(linea, "estado", est, sizeof(est));
-        h->estado = (strcmp(est, "confirmado") == 0) ? HERA_CONFIRMADO
-                                                     : HERA_CANDIDATO;
-        const char *ts = strstr(linea, "\"ts\":");
-        h->ts = ts ? atoll(ts + 5) : 0;
-        unsigned n = 0;
-        if (sscanf(h->id, "f%u", &n) == 1 && n > g_seq_f) g_seq_f = n;
-        g_hechos_n++;
-        return;
-    }
-    if (strcmp(r, "confirma") == 0) {
-        char id[HERA_ID_MAX];
+
+    if (strcmp(r, "hecho") == 0 || strcmp(r, "corrige") == 0) {
+        char id[HERA_ID_MAX], clave[HERA_CLAVE_MAX], valor[HERA_VALOR_MAX];
+        char texto[HERA_TEXTO_MAX], ev[HERA_ID_MAX] = "", cf[HERA_ID_MAX] = "";
+        char origen[16] = "modelo", est[24] = "candidato";
         if (!leer_campo(linea, "id", id, sizeof(id))) return;
-        hera_hecho_t *h = buscar_hecho(id);
-        if (h && h->estado == HERA_CANDIDATO) h->estado = HERA_CONFIRMADO;
+        if (!leer_campo(linea, "clave", clave, sizeof(clave))) return;
+        if (!leer_campo(linea, "valor", valor, sizeof(valor))) return;
+        if (!leer_campo(linea, "texto", texto, sizeof(texto)))
+            snprintf(texto, sizeof(texto), "%s", valor);
+        leer_campo(linea, "evidencia", ev, sizeof(ev));
+        leer_campo(linea, "confirmacion", cf, sizeof(cf));
+        leer_campo(linea, "origen", origen, sizeof(origen));
+        leer_campo(linea, "estado", est, sizeof(est));
+        const char *ts = strstr(linea, "\"ts\":");
+
+        const hera_estado_t estado =
+            (strcmp(r, "corrige") == 0 || strcmp(est, "confirmado") == 0)
+                ? HERA_CONFIRMADO : HERA_CANDIDATO;
+        poner_en_ram(id, clave, valor, texto, estado, ev, cf, origen,
+                     ts ? atoll(ts + 5) : 0);
+
+        /* La corrección jubila al viejo en el MISMO registro. Si esta línea
+         * hubiera quedado a medias no habríamos llegado hasta aquí: la
+         * relectura la habría descartado entera. */
+        if (strcmp(r, "corrige") == 0) {
+            char viejo[HERA_ID_MAX];
+            if (leer_campo(linea, "viejo", viejo, sizeof(viejo))) {
+                hera_hecho_t *v = buscar_hecho(viejo);
+                if (v) {
+                    v->estado = HERA_SUSTITUIDO;
+                    snprintf(v->sustituido_por, sizeof(v->sustituido_por),
+                             "%s", id);
+                }
+            }
+        }
         return;
     }
+
+    if (strcmp(r, "confirma") == 0) {
+        char id[HERA_ID_MAX], por[HERA_ID_MAX] = "";
+        if (!leer_campo(linea, "id", id, sizeof(id))) return;
+        leer_campo(linea, "por", por, sizeof(por));
+        hera_hecho_t *h = buscar_hecho(id);
+        if (h && h->estado == HERA_CANDIDATO) {
+            h->estado = HERA_CONFIRMADO;
+            snprintf(h->confirmacion, sizeof(h->confirmacion), "%s", por);
+        }
+        return;
+    }
+
+    /* Registro suelto de sustitución: ya no se emite (la corrección es un
+     * único evento), pero el lector lo entiende — es lo que permite que el
+     * sabotaje 2 reviva el bug de las dos escrituras y la batería lo cace. */
     if (strcmp(r, "sustituye") == 0) {
         char viejo[HERA_ID_MAX], nuevo[HERA_ID_MAX];
         if (!leer_campo(linea, "viejo", viejo, sizeof(viejo))) return;
@@ -298,6 +463,7 @@ static void aplicar(const char *linea) {
         }
         return;
     }
+
     if (strcmp(r, "importado") == 0) g_importado = true;
 }
 
@@ -312,9 +478,21 @@ bool hera_store_abrir(void) {
 
     FILE *f = fopen(g_ruta, "r");
     if (f) {
-        char *linea = malloc(HERA_UTTER_MAX * 2);
+        char *linea = malloc(LINEA_MAX);
         if (linea) {
-            while (fgets(linea, (int)(HERA_UTTER_MAX * 2), f)) aplicar(linea);
+            while (fgets(linea, LINEA_MAX, f)) {
+                /* Registro completo = terminado en '\n' y cerrado con '}'.
+                 * Una línea sin salto es la última y quedó a medias porque el
+                 * proceso murió escribiéndola: se descarta ENTERA. Ahí está la
+                 * atomicidad de la corrección. */
+                size_t l = strlen(linea);
+                if (l == 0 || linea[l - 1] != '\n') break;
+                linea[--l] = '\0';
+                while (l && (linea[l - 1] == ' ' || linea[l - 1] == '\r'))
+                    linea[--l] = '\0';
+                if (l == 0 || linea[l - 1] != '}') continue;
+                aplicar(linea);
+            }
             free(linea);
         }
         fclose(f);
@@ -361,48 +539,8 @@ bool hera_store_dijo(const char *texto, char *out_id, size_t cap) {
     return true;
 }
 
-/* Alta de un hecho ya validado. `sin_evidencia` solo lo usa la importación
- * legacy; el camino normal nunca pasa por aquí sin cita. */
-static hera_veredicto_t alta(const char *clave, const char *valor,
-                             const char *texto, const char *evidencia_id,
-                             bool confirmado, const char *origen,
-                             char *out_id, size_t cap) {
-    if (g_hechos_n >= HECHOS_MAX) return HERA_RECHAZO_INVALIDO;
-
-    char id[HERA_ID_MAX];
-    snprintf(id, sizeof(id), "f%u", ++g_seq_f);
-
-    char ec[HERA_CLAVE_MAX * 2], ev[HERA_VALOR_MAX * 2], et[HERA_TEXTO_MAX * 2];
-    esc(clave, ec, sizeof(ec));
-    esc(valor, ev, sizeof(ev));
-    esc(texto && *texto ? texto : valor, et, sizeof(et));
-
-    char linea[HERA_TEXTO_MAX * 4];
-    snprintf(linea, sizeof(linea),
-             "{\"r\":\"hecho\",\"id\":\"%s\",\"ts\":%lld,\"clave\":\"%s\","
-             "\"valor\":\"%s\",\"texto\":\"%s\",\"estado\":\"%s\","
-             "\"evidencia\":\"%s\",\"origen\":\"%s\"}",
-             id, ahora(), ec, ev, et,
-             confirmado ? "confirmado" : "candidato",
-             evidencia_id ? evidencia_id : "", origen);
-    if (!anexar(linea)) return HERA_RECHAZO_INVALIDO;
-
-    hera_hecho_t *h = &g_hechos[g_hechos_n++];
-    memset(h, 0, sizeof(*h));
-    snprintf(h->id, sizeof(h->id), "%s", id);
-    snprintf(h->clave, sizeof(h->clave), "%s", clave);
-    snprintf(h->valor, sizeof(h->valor), "%s", valor);
-    snprintf(h->texto, sizeof(h->texto), "%s", texto && *texto ? texto : valor);
-    snprintf(h->evidencia, sizeof(h->evidencia), "%s",
-             evidencia_id ? evidencia_id : "");
-    snprintf(h->origen, sizeof(h->origen), "%s", origen);
-    h->estado = confirmado ? HERA_CONFIRMADO : HERA_CANDIDATO;
-    h->ts = ahora();
-    if (out_id && cap) snprintf(out_id, cap, "%s", id);
-    return HERA_OK;
-}
-
-/* La puerta única. Todo lo que entre por aquí trae cita comprobada. */
+/* La puerta única de validación. Todo lo que nazca aquí trae cita comprobada
+ * sobre una frase entera: sujeto, dato y polaridad. */
 static hera_veredicto_t validar(const char *clave, const char *valor,
                                 const char *evidencia_id) {
     if (!g_abierto) return HERA_RECHAZO_INVALIDO;
@@ -412,72 +550,150 @@ static hera_veredicto_t validar(const char *clave, const char *valor,
 
     const char *dicho = hera_store_evidencia(evidencia_id);
     if (!dicho) return HERA_RECHAZO_SIN_EVIDENCIA;
-    if (!valor_esta_en(valor, dicho)) return HERA_RECHAZO_NO_LITERAL;
+    return texto_respalda(dicho, clave, valor);
+}
+
+/* Escribe el registro de un hecho nuevo. `viejo_id` != NULL lo convierte en un
+ * registro de CORRECCIÓN: una sola línea que crea y jubila a la vez. */
+static hera_veredicto_t alta(const char *clave, const char *valor,
+                             const char *texto, const char *evidencia_id,
+                             const char *confirmacion_id, bool confirmado,
+                             const char *origen, const char *viejo_id,
+                             char *out_id, size_t cap) {
+    if (g_hechos_n >= HECHOS_MAX) return HERA_RECHAZO_INVALIDO;
+
+    char id[HERA_ID_MAX];
+    snprintf(id, sizeof(id), "f%u", g_seq_f + 1);
+
+    char ec[HERA_CLAVE_MAX * 2], ev[HERA_VALOR_MAX * 2], et[HERA_TEXTO_MAX * 2];
+    esc(clave, ec, sizeof(ec));
+    esc(valor, ev, sizeof(ev));
+    esc(texto && *texto ? texto : valor, et, sizeof(et));
+
+    char viejo_campo[64] = "";
+    if (viejo_id) snprintf(viejo_campo, sizeof(viejo_campo),
+                           "\"viejo\":\"%s\",", viejo_id);
+
+    const long long ts = ahora();
+    char linea[HERA_TEXTO_MAX * 4];
+    snprintf(linea, sizeof(linea),
+             "{\"r\":\"%s\",%s\"id\":\"%s\",\"ts\":%lld,\"clave\":\"%s\","
+             "\"valor\":\"%s\",\"texto\":\"%s\",\"estado\":\"%s\","
+             "\"evidencia\":\"%s\",\"confirmacion\":\"%s\",\"origen\":\"%s\"}",
+             viejo_id ? "corrige" : "hecho", viejo_campo, id, ts, ec, ev, et,
+             confirmado ? "confirmado" : "candidato",
+             evidencia_id ? evidencia_id : "",
+             confirmacion_id ? confirmacion_id : "", origen);
+    if (!anexar(linea)) return HERA_RECHAZO_INVALIDO;
+
+    /* Solo después de que el registro esté en disco se toca el estado en RAM:
+     * si la escritura falla, la memoria no se ha creído nada. */
+    poner_en_ram(id, clave, valor, texto && *texto ? texto : valor,
+                 confirmado ? HERA_CONFIRMADO : HERA_CANDIDATO,
+                 evidencia_id, confirmacion_id, origen, ts);
+
+    if (viejo_id) {
+        hera_hecho_t *v = buscar_hecho(viejo_id);
+        if (v) {
+            v->estado = HERA_SUSTITUIDO;
+            snprintf(v->sustituido_por, sizeof(v->sustituido_por), "%s", id);
+        }
+    }
+    if (out_id && cap) snprintf(out_id, cap, "%s", id);
     return HERA_OK;
 }
 
 hera_veredicto_t hera_store_proponer(const char *clave, const char *valor,
                                      const char *texto,
                                      const char *evidencia_id,
-                                     bool confirmado,
                                      char *out_id, size_t cap) {
     const hera_veredicto_t v = validar(clave, valor, evidencia_id);
     if (v != HERA_OK) return v;
     if (es_duplicado(clave, valor)) return HERA_RECHAZO_DUPLICADO;
-    return alta(clave, valor, texto, evidencia_id, confirmado,
-                confirmado ? "persona" : "modelo", out_id, cap);
+    /* Sin parámetro para nacer confirmado: por aquí no se asciende nada. */
+    return alta(clave, valor, texto, evidencia_id, NULL, false, "modelo",
+                NULL, out_id, cap);
 }
 
-hera_veredicto_t hera_store_confirmar(const char *id) {
+hera_veredicto_t hera_store_registrar(const char *clave, const char *valor,
+                                      const char *texto,
+                                      const char *evidencia_id,
+                                      const char *confirmacion_id,
+                                      char *out_id, size_t cap) {
+    if (!hera_store_evidencia(confirmacion_id))
+        return HERA_RECHAZO_SIN_CONFIRMACION;
+    const hera_veredicto_t v = validar(clave, valor, evidencia_id);
+    if (v != HERA_OK) return v;
+    if (es_duplicado(clave, valor)) return HERA_RECHAZO_DUPLICADO;
+    return alta(clave, valor, texto, evidencia_id, confirmacion_id, true,
+                "persona", NULL, out_id, cap);
+}
+
+hera_veredicto_t hera_store_confirmar(const char *id,
+                                      const char *confirmacion_id) {
     if (!g_abierto || !id || !*id) return HERA_RECHAZO_INVALIDO;
+    /* La confirmación tiene que ser una intervención registrada de la persona.
+     * Sin esto, "confirmado" solo querría decir "alguien llamó a esta función",
+     * y una extracción del modelo podría ascenderse a sí misma. */
+#if HERA_SABOTAJE != 6
+    if (!hera_store_evidencia(confirmacion_id))
+        return HERA_RECHAZO_SIN_CONFIRMACION;
+#endif
+    /* Sabotaje 6: confirmar sin que conste que la persona dijo nada — una
+     * extracción del modelo podría ascenderse a sí misma. */
+
     hera_hecho_t *h = buscar_hecho(id);
-    if (!h) return HERA_RECHAZO_DESCONOCIDO;
-    if (h->estado == HERA_SUSTITUIDO) return HERA_RECHAZO_DESCONOCIDO;
+    if (!h || h->estado == HERA_SUSTITUIDO) return HERA_RECHAZO_DESCONOCIDO;
     if (h->estado == HERA_CONFIRMADO) return HERA_OK;
 
-    char linea[128];
+    char linea[160];
     snprintf(linea, sizeof(linea),
-             "{\"r\":\"confirma\",\"id\":\"%s\",\"ts\":%lld}", id, ahora());
+             "{\"r\":\"confirma\",\"id\":\"%s\",\"por\":\"%s\",\"ts\":%lld}",
+             id, confirmacion_id, ahora());
     if (!anexar(linea)) return HERA_RECHAZO_INVALIDO;
     h->estado = HERA_CONFIRMADO;
+    snprintf(h->confirmacion, sizeof(h->confirmacion), "%s", confirmacion_id);
     return HERA_OK;
 }
 
 hera_veredicto_t hera_store_corregir(const char *clave, const char *valor,
                                      const char *texto,
                                      const char *evidencia_id,
+                                     const char *confirmacion_id,
                                      char *out_id, size_t cap) {
+    if (!hera_store_evidencia(confirmacion_id))
+        return HERA_RECHAZO_SIN_CONFIRMACION;
     const hera_veredicto_t v = validar(clave, valor, evidencia_id);
     if (v != HERA_OK) return v;
 
     hera_hecho_t *viejo = vigente(clave);
     if (!viejo) return HERA_RECHAZO_DESCONOCIDO;
 
-    char id[HERA_ID_MAX];
-    const hera_veredicto_t a = alta(clave, valor, texto, evidencia_id, true,
-                                    "persona", id, sizeof(id));
-    if (a != HERA_OK) return a;
-
 #if HERA_SABOTAJE == 2
-    /* Sabotaje: corregir se limita a añadir, como hacía la legacy. El hecho
-     * viejo sigue vigente y la memoria se contradice en silencio. */
-    if (out_id && cap) snprintf(out_id, cap, "%s", id);
-    return HERA_OK;
-#endif
-    char linea[160];
-    snprintf(linea, sizeof(linea),
-             "{\"r\":\"sustituye\",\"viejo\":\"%s\",\"nuevo\":\"%s\",\"ts\":%lld}",
-             viejo->id, id, ahora());
-    if (!anexar(linea)) return HERA_RECHAZO_INVALIDO;
-
-    /* `viejo` puede haberse invalidado si alta() movió el array; se rebusca. */
-    hera_hecho_t *v2 = buscar_hecho(viejo->id);
-    if (v2) {
-        v2->estado = HERA_SUSTITUIDO;
-        snprintf(v2->sustituido_por, sizeof(v2->sustituido_por), "%s", id);
+    /* Sabotaje: vuelve el bug de las dos escrituras. Si el proceso muere
+     * entre ambas, al releer quedan dos confirmados contradiciéndose. */
+    {
+        char id[HERA_ID_MAX], viejo_id[HERA_ID_MAX];
+        snprintf(viejo_id, sizeof(viejo_id), "%s", viejo->id);
+        const hera_veredicto_t a = alta(clave, valor, texto, evidencia_id,
+                                        confirmacion_id, true, "persona",
+                                        NULL, id, sizeof(id));
+        if (a != HERA_OK) return a;
+        char l2[160];
+        snprintf(l2, sizeof(l2),
+                 "{\"r\":\"sustituye\",\"viejo\":\"%s\",\"nuevo\":\"%s\","
+                 "\"ts\":%lld}", viejo_id, id, ahora());
+        anexar(l2);
+        hera_hecho_t *v2 = buscar_hecho(viejo_id);
+        if (v2) { v2->estado = HERA_SUSTITUIDO;
+                  snprintf(v2->sustituido_por, sizeof(v2->sustituido_por), "%s", id); }
+        if (out_id && cap) snprintf(out_id, cap, "%s", id);
+        return HERA_OK;
     }
-    if (out_id && cap) snprintf(out_id, cap, "%s", id);
-    return HERA_OK;
+#endif
+    /* UN solo registro: crear y jubilar van juntos o no van. */
+    return alta(clave, valor, texto, evidencia_id, confirmacion_id, true,
+                "persona", viejo->id, out_id, cap);
 }
 
 /* ------------------------------------------------------------------------
@@ -514,10 +730,10 @@ size_t hera_store_historial(const char *clave, hera_hecho_t *out, size_t cap) {
 }
 
 /* ------------------------------------------------------------------------
- * Importación legacy
+ * Importación legacy — TODO EN CUARENTENA
  * ------------------------------------------------------------------------ */
 
-static size_t importar_fichero(const char *nombre, bool confirmado) {
+static size_t importar_fichero(const char *nombre) {
     char dir[1024], ruta[1200];
     directorio(dir, sizeof(dir));
     snprintf(ruta, sizeof(ruta), "%s/%s", dir, nombre);
@@ -536,15 +752,26 @@ static size_t importar_fichero(const char *nombre, bool confirmado) {
             s[--l] = '\0';
         if (!l) continue;
 
-        /* La clave legacy es el propio texto: no había sujeto ni predicado,
-         * así que no se puede inventar uno sin decidir por el pasado. Se
-         * marcan con prefijo para que no colisionen con las claves nuevas. */
+        /* La clave legacy es el propio texto: no había sujeto ni predicado, y
+         * inventarle uno sería decidir por el pasado. Prefijo propio para que
+         * no colisione con las claves nuevas ni pueda ser corregida como si
+         * fuera una: primero hay que confirmarla. */
         char clave[HERA_CLAVE_MAX];
         snprintf(clave, sizeof(clave), "legacy/%.*s",
                  (int)(HERA_CLAVE_MAX - 10), s);
         if (es_duplicado(clave, s)) continue;
-        if (alta(clave, s, s, NULL, confirmado, "legacy", NULL, 0) == HERA_OK)
-            n++;
+
+        /* CANDIDATO, siempre. `facts.md` tiene hechos falsos e identidades
+         * inventadas: importarlo como autoridad mudaría la contaminación vieja
+         * al almacén nuevo y dejaría la regla 1 en un adorno. */
+#if HERA_SABOTAJE == 7
+        /* Sabotaje: la memoria legacy envenenada entra como autoridad. */
+        if (alta(clave, s, s, NULL, NULL, true, "legacy", NULL, NULL, 0)
+                == HERA_OK) n++;
+#else
+        if (alta(clave, s, s, NULL, NULL, false, "legacy", NULL, NULL, 0)
+                == HERA_OK) n++;
+#endif
     }
     fclose(f);
     return n;
@@ -552,8 +779,8 @@ static size_t importar_fichero(const char *nombre, bool confirmado) {
 
 size_t hera_store_importar_legacy(void) {
     if (!g_abierto || g_importado) return 0;
-    const size_t n = importar_fichero("facts.md", true) +
-                     importar_fichero("candidates.md", false);
+    const size_t n = importar_fichero("facts.md") +
+                     importar_fichero("candidates.md");
     char linea[128];
     snprintf(linea, sizeof(linea),
              "{\"r\":\"importado\",\"ts\":%lld,\"n\":%zu}", ahora(), n);
