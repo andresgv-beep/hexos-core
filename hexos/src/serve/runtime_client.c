@@ -24,6 +24,8 @@
 #endif
 #include "hexos_serve.h"
 #include "hexos_ck.h"
+#include "hera_profile.h"
+#include "hera_delta.h"
 
 #include <errno.h>
 #include <pthread.h>
@@ -59,6 +61,72 @@ static unsigned         g_seq;
  * clasificador lo necesita para distinguir continuación de charla. */
 static int  g_artefacto_turnos;
 static char g_registro[32] = "neutral";
+
+/* ------------------------------------------------------------------------
+ * MEMORIA (E3). Dos cosas gobiernan este cableado:
+ *
+ * EFÍMERO. El bloque de perfil se compone en la pila de rt_send y muere ahí.
+ * No entra en la transcripción canónica, ni en el diario, ni en nada que el
+ * usuario vea. Igual que el contrato.
+ *
+ * EL KV NO SE PARCHEA, SE RECONSTRUYE. Inyectar el perfil en cada turno no
+ * solo gasta contexto: no borra nada. Si un hecho se corrige, el viejo sigue
+ * FÍSICAMENTE dentro del KV y el modelo lo sigue atendiendo por mucho que le
+ * mandemos el nuevo detrás. Cuando el bloque de perfil cambia se manda un
+ * `reset` y se rearma el turno con la transcripción canónica más el perfil
+ * vigente. Es más caro y es la única forma de que una corrección sea real.
+ * ------------------------------------------------------------------------ */
+
+#define TRANSCRIPCION_MAX 64
+
+typedef struct { char rol[16]; char *texto; } linea_t;
+static linea_t         g_transcripcion[TRANSCRIPCION_MAX];
+static size_t          g_transcripcion_n;
+static pthread_mutex_t g_tr_lock = PTHREAD_MUTEX_INITIALIZER;
+static char           *g_respuesta;      /* lo que va diciendo este turno */
+static size_t          g_respuesta_len, g_respuesta_cap;
+static unsigned long long g_perfil_hash;  /* del bloque metido en el KV */
+static bool            g_perfil_puesto;
+static bool            g_kv_con_algo;   /* ¿hay ya contexto que tirar? */
+
+static unsigned long long hash64(const char *s) {
+    unsigned long long h = 1469598103934665603ULL;
+    for (const unsigned char *p = (const unsigned char *)s; *p; p++) {
+        h ^= *p; h *= 1099511628211ULL;
+    }
+    return h;
+}
+
+/* La transcripción canónica guarda SOLO lo que se dijo: nunca el perfil ni el
+ * contrato. Son contexto efímero, y meterlos aquí los volvería permanentes
+ * por la puerta de atrás. */
+static void transcribir(const char *rol, const char *texto) {
+    if (!texto || !*texto) return;
+    pthread_mutex_lock(&g_tr_lock);
+    if (g_transcripcion_n == TRANSCRIPCION_MAX) {
+        free(g_transcripcion[0].texto);
+        memmove(&g_transcripcion[0], &g_transcripcion[1],
+                sizeof(linea_t) * (TRANSCRIPCION_MAX - 1));
+        g_transcripcion_n--;
+        if (g_on_notice) {
+            const char *aviso = "(la sesión es larga: al reconstruir el "
+                                "contexto se perderán los turnos más viejos)";
+            g_on_notice(aviso, strlen(aviso), g_user);
+        }
+    }
+    linea_t *l = &g_transcripcion[g_transcripcion_n];
+    snprintf(l->rol, sizeof(l->rol), "%s", rol);
+    l->texto = strdup(texto);
+    if (l->texto) g_transcripcion_n++;
+    pthread_mutex_unlock(&g_tr_lock);
+}
+
+static void transcripcion_liberar(void) {
+    pthread_mutex_lock(&g_tr_lock);
+    for (size_t i = 0; i < g_transcripcion_n; i++) free(g_transcripcion[i].texto);
+    g_transcripcion_n = 0;
+    pthread_mutex_unlock(&g_tr_lock);
+}
 
 /* ------------------------------------------------------------------------
  * Toma de traza (HEXOS_RT_TRACE=<fichero>). Escribe lo que sale y lo que
@@ -177,8 +245,23 @@ static void *reader_thread(void *arg) {
             set_state(ENGINE_SPEAKING, "start");
         } else if (!strcmp(tipo, "text_delta")) {
             char *texto = malloc(RT_LINEA_MAX);
-            if (texto && campo_str(linea, "text", texto, RT_LINEA_MAX) && g_on_chunk) {
-                g_on_chunk(texto, strlen(texto), g_user);
+            if (texto && campo_str(linea, "text", texto, RT_LINEA_MAX)) {
+                if (g_on_chunk) g_on_chunk(texto, strlen(texto), g_user);
+                /* Se guarda para la transcripción canónica: es lo que habrá
+                 * que volver a prefillear si el perfil cambia y hay que
+                 * reconstruir el KV. */
+                const size_t l = strlen(texto);
+                if (g_respuesta_len + l + 1 > g_respuesta_cap) {
+                    size_t nc = (g_respuesta_cap ? g_respuesta_cap : 4096);
+                    while (nc < g_respuesta_len + l + 1) nc *= 2;
+                    char *n = realloc(g_respuesta, nc);
+                    if (n) { g_respuesta = n; g_respuesta_cap = nc; }
+                }
+                if (g_respuesta && g_respuesta_len + l + 1 <= g_respuesta_cap) {
+                    memcpy(g_respuesta + g_respuesta_len, texto, l);
+                    g_respuesta_len += l;
+                    g_respuesta[g_respuesta_len] = '\0';
+                }
             }
             free(texto);
         } else if (!strcmp(tipo, "notice")) {
@@ -190,7 +273,13 @@ static void *reader_thread(void *arg) {
             /* Un `error` de adjunto llega con el motor ya en IDLE. Cerrar el
              * turno ahí emitiría un "end" que la UI cuenta como respuesta
              * terminada — y no había turno. */
-            if (rt_state() != ENGINE_IDLE) set_state(ENGINE_IDLE, "end");
+            if (rt_state() != ENGINE_IDLE) {
+                if (g_respuesta && g_respuesta_len)
+                    transcribir("assistant", g_respuesta);
+                g_respuesta_len = 0;
+                if (g_respuesta) g_respuesta[0] = '\0';
+                set_state(ENGINE_IDLE, "end");
+            }
         }
     }
     free(linea);
@@ -223,6 +312,19 @@ bool rt_start(const char *binary, const char *model, const char *ctx,
     g_pid = pid; g_in = a[1]; g_out = b[0];
     g_out_f = fdopen(g_out, "r");
     if (!g_out_f) return false;
+    /* La memoria se abre con la ruta. Si el perfil no es escribible es mejor
+     * saberlo aquí que a mitad del primer turno. */
+    if (!hera_store_abrir()) {
+        fprintf(stderr, "[serve] no pude abrir la memoria del perfil\n");
+        return false;
+    }
+    const size_t importados = hera_store_importar_legacy();
+    if (importados) {
+        fprintf(stderr, "[serve] %zu recuerdos legacy importados EN CUARENTENA "
+                        "(candidatos: no gobiernan nada hasta que los "
+                        "confirmes)\n", importados);
+    }
+
     const char *traza = getenv("HEXOS_RT_TRACE");
     if (traza && *traza) {
         g_traza = fopen(traza, "w");
@@ -290,7 +392,20 @@ bool rt_attach(const engine_attachment_t *a) {
 bool rt_send(const char *text) {
     if (rt_state() != ENGINE_IDLE) return false;
 
-    /* 1. CK clasifica sobre mensaje + estado de artefacto. */
+    /* 0. Releer el diario. La memoria puede cambiar desde FUERA de la ruta —
+     *    una corrección por CLI hoy, un demonio de consolidación mañana — y
+     *    el estado de HERA vive en RAM por proceso. Una ruta que solo leyera
+     *    el diario al arrancar seguiría sirviendo un hecho que se corrigió
+     *    hace una hora, que es exactamente el fallo que E3 viene a cerrar.
+     *    Son unas decenas de líneas: cuesta menos que equivocarse. */
+    hera_store_abrir();
+
+    /* 1. Lo que dice la persona se registra como EVIDENCIA. Es lo único que
+     *    después podrá respaldar un recuerdo. No crea ningún hecho: sin
+     *    aplicador de MemoryDelta, nadie puede escribir memoria por aquí. */
+    hera_store_dijo(text, NULL, 0);
+
+    /* 2. CK clasifica sobre mensaje + estado de artefacto. */
     const bool trae_artefacto =
         strstr(text, "```") != NULL || strlen(text) > 1500;
     const ck_turn_frame_t frame =
@@ -302,71 +417,169 @@ bool rt_send(const char *text) {
     const int vis = ck_visible_token_budget(&frame);
     const int think = ck_thinking_token_budget(&frame, strlen(text));
 
-    /* 2. Telemetría: acto, registro y presupuestos VISIBLES. El contrato no. */
+    /* 3. Perfil vigente. EFÍMERO: vive en esta pila y muere al salir. */
+    char perfil[8192];
+    const size_t perfil_n = hera_recuperar(perfil, sizeof(perfil), 3000);
+    const unsigned long long h = perfil_n ? hash64(perfil) : 0;
+
+    /* ¿Cambió la memoria confirmada desde lo que hay dentro del KV? Entonces
+     * no basta con mandar el hecho nuevo: el viejo sigue FÍSICAMENTE en el KV
+     * y el modelo lo sigue leyendo. Hay que tirar el KV y rearmarlo desde la
+     * transcripción canónica con el perfil de ahora. */
+    const bool reconstruir = (!g_perfil_puesto || h != g_perfil_hash);
+
+    /* 4. Telemetría: acto, registro y presupuestos VISIBLES. El contrato no. */
     if (g_on_frame) {
         g_on_frame(ck_response_act_name(frame.act), g_registro, vis, think,
                    g_user);
     }
 
-    /* 3. El contrato se renderiza como mensaje efímero. Vive en esta pila y
-     *    muere al salir: no se guarda en ninguna parte. */
+    /* 5. Contrato efímero. */
     ck_str_t contrato;
     ck_str_init(&contrato);
-    const bool con_contrato = ck_contract_needed(&frame);
-    if (con_contrato) {
+    if (ck_contract_needed(&frame)) {
         ck_response_contract(&frame, g_registro, NULL, &contrato);
     } else {
         ck_str_append(&contrato, ck_social_steer(&frame));
     }
 
-    /* 4. Mensajes tipados. El runtime no sabe que esto es un contrato: para
-     *    él es un `system` corriente. */
-    const size_t cap = strlen(text) * 2 + (contrato.len * 2) + 4096;
-    char *esc_txt = malloc(cap), *esc_con = malloc(cap), *linea = malloc(cap * 2);
-    if (!esc_txt || !esc_con || !linea) {
-        free(esc_txt); free(esc_con); free(linea); ck_str_free(&contrato);
+    /* 6. Mensajes tipados. */
+    size_t cap = strlen(text) * 2 + contrato.len * 2 + perfil_n * 2 + 8192;
+    pthread_mutex_lock(&g_tr_lock);
+    for (size_t i = 0; i < g_transcripcion_n; i++)
+        cap += strlen(g_transcripcion[i].texto) * 2 + 64;
+    pthread_mutex_unlock(&g_tr_lock);
+
+    char *esc_txt = malloc(cap), *esc_aux = malloc(cap), *linea = malloc(cap * 2);
+    if (!esc_txt || !esc_aux || !linea) {
+        free(esc_txt); free(esc_aux); free(linea); ck_str_free(&contrato);
         return false;
     }
-    esc_into(text, esc_txt, cap);
-    esc_into(contrato.data ? contrato.data : "", esc_con, cap);
 
     int n = snprintf(linea, cap * 2,
         "{\"type\":\"turn\",\"request_id\":\"r%u\",\"messages\":[", ++g_seq);
-    if (contrato.len > 0) {
+    const char *coma = "";
+
+    if (reconstruir && perfil_n) {
+        esc_into(perfil, esc_aux, cap);
         n += snprintf(linea + n, cap * 2 - n,
-                      "{\"role\":\"system\",\"content\":\"%s\"},", esc_con);
+                      "{\"role\":\"system\",\"content\":\"%s\"}", esc_aux);
+        coma = ",";
     }
+    if (reconstruir) {
+        /* La transcripción canónica: solo lo que se dijo. Ni perfil ni
+         * contrato viejos — esos se recomponen, nunca se replican. */
+        pthread_mutex_lock(&g_tr_lock);
+        for (size_t i = 0; i < g_transcripcion_n; i++) {
+            esc_into(g_transcripcion[i].texto, esc_aux, cap);
+            n += snprintf(linea + n, cap * 2 - n,
+                          "%s{\"role\":\"%s\",\"content\":\"%s\"}",
+                          coma, g_transcripcion[i].rol, esc_aux);
+            coma = ",";
+        }
+        pthread_mutex_unlock(&g_tr_lock);
+    }
+    if (contrato.len > 0) {
+        esc_into(contrato.data ? contrato.data : "", esc_aux, cap);
+        n += snprintf(linea + n, cap * 2 - n,
+                      "%s{\"role\":\"system\",\"content\":\"%s\"}",
+                      coma, esc_aux);
+        coma = ",";
+    }
+    esc_into(text, esc_txt, cap);
     n += snprintf(linea + n, cap * 2 - n,
-        "{\"role\":\"user\",\"content\":\"%s\"}]", esc_txt);
+                  "%s{\"role\":\"user\",\"content\":\"%s\"}]", coma, esc_txt);
+
     if (g_adjuntos_n > 0) {
         n += snprintf(linea + n, cap * 2 - n, ",\"attachment_ids\":[");
-        for (int i = 0; i < g_adjuntos_n; i++) {
+        for (int i = 0; i < g_adjuntos_n; i++)
             n += snprintf(linea + n, cap * 2 - n, "%s\"%s\"",
                           i ? "," : "", g_adjuntos[i]);
-        }
         n += snprintf(linea + n, cap * 2 - n, "]");
     }
     n += snprintf(linea + n, cap * 2 - n,
         ",\"generation\":{\"max_visible_tokens\":%d,"
         "\"max_thinking_tokens\":%d}}\n", vis, think);
 
-    if (n > 0 && linea[n - 1] == '\n') { linea[n - 1] = '\0'; trazar("request", linea); linea[n - 1] = '\n'; }
+    if (n > 0 && linea[n - 1] == '\n') {
+        linea[n - 1] = '\0'; trazar("request", linea); linea[n - 1] = '\n';
+    }
 
     set_state(ENGINE_THINKING, "thinking");
     pthread_mutex_lock(&g_wr);
-    const bool ok = escribir(linea);
+    bool ok = true;
+    /* El reset SOLO si hay algo viejo dentro. En el primer turno el KV está
+     * vacío y resetear no borra nada: sería una ida y vuelta de más y, peor,
+     * dejaría el `reset` sin significado. Que aparezca uno tiene que querer
+     * decir exactamente una cosa: la memoria cambió y había contexto rancio. */
+    if (reconstruir && g_kv_con_algo) {
+        /* Va primero y por el mismo cerrojo: si se colara una escritura entre
+         * el reset y el turno, el KV se rearmaría a medias. */
+        char r[128];
+        snprintf(r, sizeof(r),
+                 "{\"type\":\"reset\",\"request_id\":\"x%u\"}", g_seq);
+        trazar("request", r);
+        ok = escribir(r) && escribir("\n");
+    }
+    ok = ok && escribir(linea);
     pthread_mutex_unlock(&g_wr);
+
     if (ok) {
-        /* El runtime los consume al aceptar el turno; si falla el envío
-         * siguen pendientes y valen para el próximo intento. */
         g_adjuntos_n = 0;
+        g_perfil_hash = h;
+        g_perfil_puesto = true;
+        g_kv_con_algo = true;
+        transcribir("user", text);
     } else {
         set_state(ENGINE_IDLE, NULL);
     }
 
-    free(esc_txt); free(esc_con); free(linea);
+    free(esc_txt); free(esc_aux); free(linea);
     ck_str_free(&contrato);   /* el contrato muere aquí */
     return ok;
+}
+
+/* Estado de la memoria para telemetría y auditoría. El bloque de perfil NO se
+ * expone: es contexto efímero, y publicarlo lo convertiría en un sitio más
+ * donde vive la memoria sin reglas. */
+size_t rt_memoria_json(char *out, size_t cap) {
+    hera_perfil_t p;
+    hera_perfil_derivar(&p);
+    hera_hecho_t hs[64];
+    const size_t t = hera_store_todos(hs, 64);
+    size_t candidatos = 0, sustituidos = 0;
+    for (size_t i = 0; i < t; i++) {
+        if (hs[i].estado == HERA_CANDIDATO)  candidatos++;
+        if (hs[i].estado == HERA_SUSTITUIDO) sustituidos++;
+    }
+    char nombre[HERA_VALOR_MAX * 2];
+    esc_into(p.nombre, nombre, sizeof(nombre));
+    const int n = snprintf(out, cap,
+        "{\"nombre\":\"%s\",\"confirmados\":%zu,\"candidatos\":%zu,"
+        "\"sustituidos\":%zu,\"perfil_en_kv\":%s}",
+        nombre, p.propias_n + p.ajenas_n, candidatos, sustituidos,
+        g_perfil_puesto ? "true" : "false");
+    return (n > 0) ? (size_t)n : 0;
+}
+
+/* Ensayo de un MemoryDelta: devuelve los veredictos SIN aplicar nada. No hay
+ * aplicador en E3 y esto no lo es — es la ventana para ver qué diría el
+ * almacén si algún día se conectara la reflexión. */
+size_t rt_memoria_ensayo(const char *json_delta, char *out, size_t cap) {
+    hera_delta_t d;
+    hera_delta_leer(json_delta, &d);
+    int n = snprintf(out, cap, "{\"bien_formado\":%s,\"aplicado\":false,\"ops\":[",
+                     d.bien_formado ? "true" : "false");
+    for (size_t i = 0; i < d.n && (size_t)n < cap; i++) {
+        char clave[HERA_CLAVE_MAX * 2];
+        esc_into(d.ops[i].clave, clave, sizeof(clave));
+        n += snprintf(out + n, cap - n,
+                      "%s{\"op\":\"%s\",\"clave\":\"%s\",\"veredicto\":\"%s\"}",
+                      i ? "," : "", hera_op_nombre(d.ops[i].op), clave,
+                      hera_veredicto_nombre(d.ops[i].veredicto));
+    }
+    n += snprintf(out + n, cap - n, "],\"aceptables\":%zu}", d.aceptables);
+    return (n > 0) ? (size_t)n : 0;
 }
 
 void rt_set_registro(const char *registro) {
@@ -377,6 +590,9 @@ void rt_set_registro(const char *registro) {
 void rt_stop(void) {
     g_alive = 0;
     if (g_in >= 0) {
+        /* También se traza: sin esto su `result` aparecía en la traza sin
+         * petición que lo justificara, y la conformidad lo cantaba con razón. */
+        trazar("request", "{\"type\":\"shutdown\",\"request_id\":\"q\"}");
         escribir("{\"type\":\"shutdown\",\"request_id\":\"q\"}\n");
         close(g_in);
         g_in = -1;
@@ -390,6 +606,12 @@ void rt_stop(void) {
     }
     if (g_out_f) { fclose(g_out_f); g_out_f = NULL; g_out = -1; }
     if (g_traza) { fclose(g_traza); g_traza = NULL; }
+    transcripcion_liberar();
+    free(g_respuesta); g_respuesta = NULL;
+    g_respuesta_len = g_respuesta_cap = 0;
+    g_perfil_puesto = false;
+    g_kv_con_algo = false;
+    hera_store_cerrar();
 }
 
 /* ------------------------------------------------------------------------

@@ -368,6 +368,27 @@ static void *conn_thread(void *arg)
         serve_sse(fd);
     } else if (!strcmp(method, "GET") && !strcmp(path, "/api/status")) {
         serve_status(fd);
+    } else if (!strcmp(method, "GET") && !strcmp(path, "/api/memoria")) {
+        if (!ruta_activa_tipada()) {
+            respond(fd, "404 Not Found", "text/plain", "solo ruta tipada", 16);
+        } else {
+            char json[2048];
+            const size_t n = rt_memoria_json(json, sizeof(json));
+            respond(fd, "200 OK", "application/json; charset=utf-8", json, n);
+        }
+    } else if (!strcmp(method, "POST") && !strcmp(path, "/api/memoria/ensayo")) {
+        /* Ensayo, nunca aplicación: devuelve qué diría el almacén. */
+        if (!ruta_activa_tipada() || !body || !body_len) {
+            respond(fd, "409 Conflict", "application/json", "{\"ok\":false}", 12);
+        } else {
+            char *json = malloc(64 * 1024);
+            if (json) {
+                const size_t n = rt_memoria_ensayo((const char *)body, json,
+                                                   64 * 1024);
+                respond(fd, "200 OK", "application/json; charset=utf-8", json, n);
+                free(json);
+            }
+        }
     } else if (!strcmp(method, "POST") && !strcmp(path, "/api/chat")) {
         bool ok = body && body_len && !memchr(body, '\0', body_len) &&
                   ruta_send((const char *)body);

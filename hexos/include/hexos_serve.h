@@ -105,6 +105,15 @@ void rt_set_callbacks(engine_chunk_cb on_chunk, engine_event_cb on_event,
                       void *user);
 void rt_stop(void);
 
+/* Estado de la memoria para telemetría y auditoría. NO expone el bloque de
+ * perfil: es contexto efímero y publicarlo sería un sitio más donde vive la
+ * memoria sin reglas. */
+size_t rt_memoria_json(char *out, size_t cap);
+
+/* Ensayo de un MemoryDelta: veredictos SIN aplicar nada. En E3 no hay
+ * aplicador y esto no lo es. */
+size_t rt_memoria_ensayo(const char *json_delta, char *out, size_t cap);
+
 /* Despacho: http.c no necesita saber que ruta esta activa. */
 void ruta_usar_tipada(bool tipada);
 bool ruta_activa_tipada(void);

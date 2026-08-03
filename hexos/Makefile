@@ -121,6 +121,7 @@ info:
 RUNTIME_SRC = $(SRCDIR)/runtime/policy.c
 MODEL_PROBE_SRC = $(SRCDIR)/model/probe.c
 CK_POLICY_SRC = $(SRCDIR)/ck/ck_policy.c
+HERA_SRC = ../hera/src/hera_store.c ../hera/src/hera_profile.c ../hera/src/hera_delta.c
 SERVE_SRC = $(SRCDIR)/serve/engine.c $(SRCDIR)/serve/http.c \
             $(SRCDIR)/serve/serve_main.c $(SRCDIR)/serve/runtime_client.c \
             $(CK_POLICY_SRC) $(RUNTIME_SRC) $(MODEL_PROBE_SRC)
@@ -130,7 +131,7 @@ serve: $(SERVE_TARGET)
 
 $(SERVE_TARGET): $(SERVE_SRC) $(INCDIR)/hexos_serve.h $(INCDIR)/hexos_model.h $(INCDIR)/hexos_ck.h
 	@mkdir -p $(BINDIR)
-	$(CC) $(CFLAGS) -I$(INCDIR) $(SERVE_SRC) -o $@ -lpthread -ldl
+	$(CC) $(CFLAGS) -I$(INCDIR) -I../hera/include $(SERVE_SRC) $(HERA_SRC) -o $@ -lpthread -ldl
 	@echo ""
 	@echo "Build complete: $@"
 	@echo "Arranca con: ./$(SERVE_TARGET) --model /ruta/modelo.hnf"

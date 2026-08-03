@@ -40,9 +40,9 @@ TEST_TARGET = $(BINDIR)/hera_test
 # Rules
 # ============================================================================
 
-.PHONY: all clean lib test store-test mente-test sabotaje sabotaje-mente
+.PHONY: all clean lib test store-test mente-test cli sabotaje sabotaje-mente
 
-all: lib test store-test mente-test
+all: lib test store-test mente-test cli
 
 lib: $(LIB_TARGET)
 
@@ -138,3 +138,10 @@ sabotaje-mente: $(MENTE_TEST)
 	done; \
 	if [ $$fallos -ne 0 ]; then echo "FALLO: algun sabotaje no quedo demostrado"; exit 1; fi; \
 	echo "los $(words $(MENTE_SABOTAJES)) sabotajes de la mente se detectan"
+
+cli: $(BINDIR)/hera
+
+$(BINDIR)/hera: tools/hera_cli.c $(STORE_SRC) $(MENTE_SRC)
+	@mkdir -p $(BINDIR)
+	$(CC) $(CFLAGS) -DHERA_SABOTAJE=0 -I$(INCDIR) \
+	  $(STORE_SRC) $(MENTE_SRC) tools/hera_cli.c -o $@
