@@ -176,6 +176,22 @@ BATERIA = [
 
 FICHEROS_MEMORIA = ("facts.md", "episodic.md", "candidates.md")
 
+# Normalización canónica de la memoria. La destilación lleva marca de tiempo,
+# así que comparar el texto crudo daba regresiones falsas — pero quedarse en
+# "el fichero existe y no está vacío" es peor: sustituir «ingeniero» por
+# «fontanero» pasaría limpio, que es EXACTAMENTE el fallo que E3 debe
+# arreglar. Se normaliza lo irreproducible y se compara el resto.
+TS_SESION = re.compile(r"^##\s*Sesión\s+\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?",
+                       re.M)
+TS_SUELTO = re.compile(r"\b\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2})?)?\b")
+
+
+def canonico(texto):
+    """Quita solo lo que no puede reproducirse: fechas y horas."""
+    t = TS_SESION.sub("## Sesión <TS>", texto)
+    t = TS_SUELTO.sub("<TS>", t)
+    return "\n".join(l.rstrip() for l in t.strip().splitlines())
+
 # ---------------------------------------------------------------------------
 # Detectores mecánicos: cuentan cosas verificables, no opinan sobre calidad.
 # ---------------------------------------------------------------------------
@@ -507,17 +523,24 @@ def diff(a_path, b_path):
         # El delta no ve una sustitución del mismo tamaño (mismo número de
         # bytes, otro contenido): hay que comparar también el estado final.
         # Solo si ambos informes lo traen, para no romper bases anteriores.
-        # El estado final también se compara por forma: qué ficheros acaban
-        # con contenido y cuáles vacíos. Una sustitución que vacíe un fichero
-        # o llene otro sí se ve; una reescritura del mismo hecho con otras
-        # palabras, no — y esa es la diferencia entre medir y adivinar.
+        # El estado final se compara CANÓNICAMENTE: mismo contenido salvo
+        # fechas. Así una sustitución de hecho («ingeniero» → «fontanero»)
+        # salta, que es justo lo que E3 tiene que poder demostrar.
         fa, fb = ca[nombre].get("memoria_final"), cb[nombre].get("memoria_final")
         if fa is not None and fb is not None:
-            va = {k: bool(v.strip()) for k, v in fa.items()}
-            vb = {k: bool(v.strip()) for k, v in fb.items()}
-            if va != vb:
-                print(f"[MEMORIA] {nombre}: cambia qué ficheros quedan con "
-                      f"contenido {va} → {vb}")
+            for fich in sorted(set(fa) | set(fb)):
+                xa, xb = canonico(fa.get(fich, "")), canonico(fb.get(fich, ""))
+                if xa == xb:
+                    continue
+                # La destilación episódica es prosa generada: su contenido
+                # varía legítimamente y solo se compara su presencia.
+                if fich == "episodic.md" and bool(xa) == bool(xb):
+                    print(f"[memoria] {nombre}: {fich} con prosa distinta "
+                          f"(informativo: la destilación se genera)")
+                    continue
+                print(f"[MEMORIA] {nombre}: {fich} cambia de contenido")
+                for linea in sorted(set(xa.splitlines()) ^ set(xb.splitlines()))[:4]:
+                    print(f"           {linea[:90]}")
                 fallos += 1
         # `None` = informe anterior al registro de returncode; no es un cambio.
         rca = [s.get("returncode") for s in ca[nombre].get("sesiones", [])]
