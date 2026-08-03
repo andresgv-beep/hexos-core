@@ -79,7 +79,7 @@ STORE_TEST = $(BINDIR)/hera_store_test
 # puerta. Antes se tragaba un segfault en silencio y seguia diciendo OK.
 SABOTAJES  = 1 2 3 4 5 6 7 8 9
 MENTE_TEST = $(BINDIR)/hera_mente_test
-MENTE_SABOTAJES = 20 21 22
+MENTE_SABOTAJES = 20 21 22 23
 
 store-test: $(STORE_TEST)
 

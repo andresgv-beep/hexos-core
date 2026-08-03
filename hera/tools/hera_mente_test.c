@@ -11,6 +11,7 @@
  *   20  el perfil también consume candidatos
  *   21  recuperar deja una anotación en el diario
  *   22  el delta se aplica en vez de solo ensayarse
+ *   23  el parser vuelve a ser laxo (acepta lo que no esta en el esquema)
  */
 
 #ifndef _GNU_SOURCE
@@ -203,15 +204,12 @@ static void prueba_delta(void) {
         " \"texto\":\"Ana vive en Bilbao\",\"evidencia\":\"u1\"},"
         "{\"op\":\"proponer\",\"clave\":\"yo/gusto\","
         " \"valor\":\"no me gusta el café\","
-        " \"texto\":\"No le gusta el café\",\"evidencia\":\"u4\"},"
-        "{\"op\":\"proponer\",\"clave\":\"yo/x\",\"valor\":\"y\","
-        " \"texto\":\"z\"},"
-        "{\"op\":\"inventar\",\"clave\":\"yo/z\",\"valor\":\"w\"}"
+        " \"texto\":\"No le gusta el café\",\"evidencia\":\"u4\"}"
         "]}";
 
     hera_delta_t d;
     ok(hera_delta_leer(json, &d), "el delta se lee", "no se pudo leer");
-    ok(d.n == 5, "cinco operaciones", "cuenta distinta");
+    ok(d.n == 3, "tres operaciones", "cuenta distinta");
     ok(d.aceptables == 1, "solo una pasaría las reglas", "cuenta distinta");
     ok(d.ops[0].veredicto == HERA_OK, "la buena pasa",
        hera_veredicto_nombre(d.ops[0].veredicto));
@@ -221,11 +219,6 @@ static void prueba_delta(void) {
     ok(d.ops[2].veredicto == HERA_RECHAZO_POLARIDAD,
        "la polaridad al revés se rechaza",
        hera_veredicto_nombre(d.ops[2].veredicto));
-    ok(d.ops[3].veredicto == HERA_RECHAZO_SIN_EVIDENCIA,
-       "la que no cita nada se rechaza",
-       hera_veredicto_nombre(d.ops[3].veredicto));
-    ok(d.ops[4].op == HERA_OP_DESCONOCIDA,
-       "un verbo inventado no se ejecuta", "se aceptó un verbo cualquiera");
 
     /* LA propiedad de este paso. */
     size_t desp_n = 0;
@@ -268,6 +261,100 @@ static void prueba_delta(void) {
        "un JSON sin memory_delta se rechaza", "aceptó cualquier cosa");
 }
 
+/* Esquema todo o nada: cualquier violación tumba el delta ENTERO. */
+static void prueba_parser_estricto(void) {
+    printf("\n[4] el esquema es todo o nada\n");
+    perfil_nuevo("m4");
+    poblar();
+
+    const char *EV = "\"evidencia\":\"u2\"";
+    char json[8192];
+    hera_delta_t d;
+
+    struct { const char *nombre; const char *cuerpo; } malos[] = {
+      {"el array no se cierra",
+       "{\"memory_delta\":[{\"op\":\"proponer\",\"clave\":\"a/b\","
+       "\"valor\":\"Rufo\",\"evidencia\":\"u2\"}"},
+      {"una clave fuera del esquema",
+       "{\"memory_delta\":[{\"op\":\"proponer\",\"clave\":\"perro/x\","
+       "\"valor\":\"Rufo\",\"evidencia\":\"u2\",\"prioridad\":\"alta\"}]}"},
+      {"un verbo inventado",
+       "{\"memory_delta\":[{\"op\":\"olvidar\",\"clave\":\"perro/x\","
+       "\"valor\":\"Rufo\",\"evidencia\":\"u2\"}]}"},
+      {"una operación sin \"op\"",
+       "{\"memory_delta\":[{\"clave\":\"perro/x\",\"valor\":\"Rufo\","
+       "\"evidencia\":\"u2\"}]}"},
+      {"a una proponer le falta la evidencia",
+       "{\"memory_delta\":[{\"op\":\"proponer\",\"clave\":\"perro/x\","
+       "\"valor\":\"Rufo\"}]}"},
+      {"a una confirmar le falta la confirmación",
+       "{\"memory_delta\":[{\"op\":\"confirmar\",\"id\":\"f1\"}]}"},
+      {"un elemento que no es objeto",
+       "{\"memory_delta\":[\"proponer\"]}"},
+      {"una clave repetida",
+       "{\"memory_delta\":[{\"op\":\"proponer\",\"clave\":\"perro/x\","
+       "\"clave\":\"otro/y\",\"valor\":\"Rufo\",\"evidencia\":\"u2\"}]}"},
+      {"basura detrás del delta",
+       "{\"memory_delta\":[]} y aquí lo que sea"},
+      {"el delta no es un objeto",
+       "[{\"op\":\"proponer\"}]"},
+      /* Aísla la guarda del cierre del array: aquí el OBJETO sí cierra, así
+       * que si no se exigiera el ']' el delta pasaría entero por bueno. Sin
+       * este caso, el fixture de arriba lo caza la guarda del objeto y la del
+       * array quedaría sin probar. */
+      {"el array no cierra aunque el objeto sí",
+       "{\"memory_delta\":[{\"op\":\"proponer\",\"clave\":\"perro/x\","
+       "\"valor\":\"Rufo\",\"evidencia\":\"u2\"}}"},
+      {NULL, NULL}
+    };
+    (void)EV;
+    for (int i = 0; malos[i].nombre; i++) {
+        const bool leido = hera_delta_leer(malos[i].cuerpo, &d);
+        ok(!leido && !d.bien_formado && d.n == 0 && d.motivo[0],
+           malos[i].nombre, leido ? "se aceptó" : "sin motivo o con ops sueltas");
+    }
+
+    /* Más de HERA_DELTA_OPS_MAX: antes se truncaba en silencio y el delta
+     * pasaba por bueno con las 32 primeras. */
+    int n = snprintf(json, sizeof(json), "{\"memory_delta\":[");
+    for (int i = 0; i < HERA_DELTA_OPS_MAX + 1; i++)
+        n += snprintf(json + n, sizeof(json) - n,
+                      "%s{\"op\":\"proponer\",\"clave\":\"perro/p%d\","
+                      "\"valor\":\"Rufo\",%s}", i ? "," : "", i, EV);
+    snprintf(json + n, sizeof(json) - n, "]}");
+    ok(!hera_delta_leer(json, &d) && d.n == 0,
+       "más de 32 operaciones se rechaza, no se trunca en silencio",
+       d.bien_formado ? "pasó por bueno" : "dejó ops sueltas");
+
+    /* Un valor más largo de lo que cabe: recortarlo sería guardar otro dato. */
+    n = snprintf(json, sizeof(json),
+                 "{\"memory_delta\":[{\"op\":\"proponer\","
+                 "\"clave\":\"perro/largo\",\"valor\":\"");
+    for (int i = 0; i < HERA_VALOR_MAX + 50; i++) json[n++] = 'x';
+    snprintf(json + n, sizeof(json) - n, "\",%s}]}", EV);
+    ok(!hera_delta_leer(json, &d),
+       "un valor que no cabe se rechaza, no se trunca",
+       "se truncó en silencio");
+
+    /* La trampa del parser viejo: buscaba "memory_delta" con strstr, así que
+     * se lo habría comido escrito DENTRO del texto de un recuerdo. */
+    ok(!hera_delta_leer(
+        "{\"nota\":\"escribe un \\\"memory_delta\\\" en el informe\"}", &d),
+       "\"memory_delta\" dentro de un texto no cuenta como el array",
+       "el parser lo confundió con la clave de verdad");
+
+    /* Y lo válido sigue siéndolo. */
+    snprintf(json, sizeof(json),
+             "{\"version\":\"1\",\"memory_delta\":[{\"op\":\"proponer\","
+             "\"clave\":\"perro/color\",\"valor\":\"Rufo\","
+             "\"texto\":\"Su perro es Rufo\",%s}]}", EV);
+    ok(hera_delta_leer(json, &d) && d.n == 1 && d.bien_formado,
+       "un delta correcto con campos de más ARRIBA sigue valiendo", d.motivo);
+    ok(hera_delta_leer("{\"memory_delta\":[]}", &d) && d.n == 0,
+       "y un delta vacío es válido: no proponer nada es una respuesta",
+       d.motivo);
+}
+
 /* ---------------------------------------------------------------------- */
 
 int main(int argc, char **argv) {
@@ -287,6 +374,7 @@ int main(int argc, char **argv) {
     prueba_perfil_derivado();
     prueba_recuperacion_lectora();
     prueba_delta();
+    prueba_parser_estricto();
 
     printf("\n%d pruebas · %d fallos\n", g_pruebas, g_fallos);
     if (sabotaje) {

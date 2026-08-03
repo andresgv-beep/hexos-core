@@ -60,12 +60,27 @@ typedef struct {
     hera_delta_op_t ops[HERA_DELTA_OPS_MAX];
     size_t          n;
     size_t          aceptables;   /* cuántas pasarían las reglas */
-    bool            bien_formado; /* false si el JSON no se pudo leer */
+    bool            bien_formado; /* false si el delta viola el esquema */
+    char            motivo[160];  /* por qué no lo está, para telemetría */
 } hera_delta_t;
 
 /* Lee el delta y ensaya cada operación contra el almacén abierto. NO ESCRIBE
  * NADA — lo verifica una prueba que compara el diario byte a byte antes y
- * después. Devuelve false si el JSON está roto o no trae `memory_delta`.
+ * después.
+ *
+ * ESQUEMA TODO O NADA, SEMÁNTICA POR OPERACIÓN. Son dos líneas distintas:
+ *
+ *   · Esquema: array sin cerrar, un elemento que no es objeto, una clave que
+ *     no está en el esquema, un verbo inventado, un campo obligatorio que
+ *     falta, un valor más largo de lo que cabe, basura detrás del cierre, más
+ *     de HERA_DELTA_OPS_MAX operaciones. Cualquiera de estas invalida el
+ *     delta ENTERO: devuelve false y `motivo` dice cuál. Si algún día hay
+ *     aplicador, aplicar la mitad buena de un delta corrupto es peor que no
+ *     aplicar nada — no se sabe qué se perdió en la mitad ilegible.
+ *
+ *   · Semántica: sin evidencia, sujeto ajeno, polaridad, duplicado. Esas van
+ *     por operación, en su `veredicto`, y NO invalidan el delta: son la
+ *     respuesta normal del almacén a una propuesta que no se sostiene.
  *
  * Que una operación traiga `veredicto == HERA_OK` significa que pasaría las
  * reglas HOY. No significa que se haya hecho: aplicar no existe todavía. */
