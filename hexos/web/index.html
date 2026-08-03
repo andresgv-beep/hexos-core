@@ -212,9 +212,69 @@
   .btn:disabled { opacity: .4; cursor: not-allowed; }
   .hint { color: var(--dim); font-size: 11px; text-align: center; margin-top: 8px; }
   #file { display: none; }
+  /* --- Barra lateral de chats ------------------------------------------
+     Mínima a propósito: una lista, un botón de crear y un menú por chat.
+     Pulsar un chat NO genera nada ni toca la GPU — solo cambia el activo. */
+  #app { display:flex; height:100vh; overflow:hidden; }
+  #cols { display:flex; flex-direction:column; flex:1; min-width:0; height:100vh; }
+  aside#lado {
+    width:224px; flex:0 0 224px; background:var(--panel);
+    border-right:1px solid var(--border); display:flex; flex-direction:column;
+  }
+  #nuevo {
+    margin:10px; padding:9px 12px; border-radius:9px; cursor:pointer;
+    background:var(--raised); color:var(--text); border:1px solid var(--border);
+    font:inherit; text-align:left;
+  }
+  #nuevo:hover { background:#2f3435; }
+  #lista { overflow-y:auto; flex:1; padding:0 6px 10px; }
+  .fila {
+    display:flex; align-items:center; gap:6px; padding:8px 8px;
+    border-radius:8px; cursor:pointer; color:var(--dim); font-size:13px;
+  }
+  .fila:hover { background:var(--raised); color:var(--text); }
+  .fila.on { background:var(--raised); color:var(--text); }
+  .fila .punto { width:7px; flex:0 0 7px; text-align:center; }
+  .fila.on .punto::before { content:"●"; font-size:9px; }
+  .fila .tit {
+    flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  /* Una sesión con KV cargado gasta VRAM aunque esté pausada. Que se vea. */
+  .fila .kv { font-size:9px; color:var(--dim); opacity:.65; }
+  .fila .mas {
+    opacity:0; padding:0 3px; border:0; background:none; color:inherit;
+    cursor:pointer; font-size:15px; line-height:1;
+  }
+  .fila:hover .mas, .fila.on .mas { opacity:.75; }
+  #menu {
+    position:fixed; z-index:50; background:var(--raised);
+    border:1px solid var(--border); border-radius:9px; padding:5px;
+    display:none; min-width:172px; box-shadow:0 8px 26px #0008;
+  }
+  #menu button {
+    display:block; width:100%; text-align:left; padding:8px 10px; border:0;
+    background:none; color:var(--text); font:inherit; font-size:13px;
+    border-radius:6px; cursor:pointer;
+  }
+  #menu button:hover { background:#343a3b; }
+  /* Eliminar NO puede parecerse a liberar memoria: una suelta VRAM y la otra
+     se lleva la conversación. Se separa y se marca. */
+  #menu .peligro { color:#e08a84; border-top:1px solid var(--border);
+                   margin-top:4px; padding-top:8px; }
+  .detenido {
+    font-size:11px; color:var(--dim); font-style:italic; margin-top:4px;
+  }
+  @media (max-width:720px) { aside#lado { width:168px; flex-basis:168px; } }
 </style>
 </head>
 <body>
+<div id="app">
+<aside id="lado">
+  <button id="nuevo">+ Nuevo chat</button>
+  <div id="lista"></div>
+</aside>
+<div id="cols">
 
 <header>
   <div class="brand">HÉ<span>CTOR</span></div>
@@ -241,6 +301,15 @@
   <div class="hint">Enter envía · Shift+Enter salta de línea</div>
   <input type="file" id="file" accept=".txt,.md,.c,.h,.cpp,.py,.js,.ts,.rs,.json,.log,.csv,.html,.css,.sh,.toml,.yaml,.yml">
 </footer>
+
+</div>
+</div>
+
+<div id="menu">
+  <button data-a="renombrar">Renombrar</button>
+  <button data-a="liberar">Liberar memoria</button>
+  <button class="peligro" data-a="eliminar">Eliminar chat</button>
+</div>
 
 <script>
 'use strict';
@@ -282,6 +351,151 @@ const THINK_OPEN = '(pensando';
 const STATS_RE = /\n\[\d+ tok/;
 
 /* ---------------------------------------------------------------------
+ * Chats
+ * ---------------------------------------------------------------------
+ * Pulsar un chat NO genera nada ni toca la GPU: solo cambia el activo. Si
+ * había algo generándose, el servidor lo detiene y conserva lo emitido.
+ *
+ * Volver a un chat cuya memoria se liberó NO reconstruye nada al pulsarlo:
+ * el contexto se rearma al ENVIAR. Seleccionar tiene que ser gratis, o mirar
+ * la lista costaría GPU.
+ * ------------------------------------------------------------------- */
+const lado   = document.getElementById('lado');
+const lista  = document.getElementById('lista');
+const menu   = document.getElementById('menu');
+let chats    = [];
+let activo   = null;
+
+async function cargarChats() {
+  try {
+    const r = await fetch('/api/chats');
+    if (!r.ok) { lado.style.display = 'none'; return; }   // ruta legacy
+    const d = await r.json();
+    chats = d.chats || [];
+    activo = d.activo || null;
+    pintarLista();
+  } catch (e) { lado.style.display = 'none'; }
+}
+
+function pintarLista() {
+  lista.innerHTML = '';
+  for (const c of chats) {
+    const fila = document.createElement('div');
+    fila.className = 'fila' + (c.id === activo ? ' on' : '');
+    fila.innerHTML = '<span class="punto"></span>';
+
+    const t = document.createElement('span');
+    t.className = 'tit';
+    t.textContent = c.titulo || 'Chat';
+    t.title = c.titulo || '';
+    fila.appendChild(t);
+
+    // Se marca lo que ocupa VRAM ahora mismo: una sesión pausada sigue
+    // gastando su KV, y eso es lo que decide cuántos chats caben.
+    if (c.sesion_viva) {
+      const kv = document.createElement('span');
+      kv.className = 'kv';
+      kv.textContent = 'KV';
+      kv.title = 'Su memoria está cargada en la GPU';
+      fila.appendChild(kv);
+    }
+
+    const mas = document.createElement('button');
+    mas.className = 'mas';
+    mas.textContent = '⋮';
+    mas.title = 'Opciones';
+    mas.addEventListener('click', (ev) => { ev.stopPropagation(); abrirMenu(ev, c); });
+    fila.appendChild(mas);
+
+    fila.addEventListener('click', () => activar(c.id));
+    lista.appendChild(fila);
+  }
+}
+
+async function activar(id) {
+  if (id === activo) return;
+  await fetch('/api/chats/' + id + '/activar', { method: 'POST' });
+  activo = id;
+  await abrirChat(id);
+  await cargarChats();
+}
+
+async function abrirChat(id) {
+  const r = await fetch('/api/chats/' + id);
+  if (!r.ok) return;
+  const d = await r.json();
+  log.innerHTML = '';
+  current = null;
+  for (const t of (d.turnos || [])) {
+    const body = addMessage(t.rol === 'user' ? 'user' : 'bot', t.texto);
+    // Una respuesta cortada al cambiar de chat se enseña MARCADA. Pintarla
+    // como si estuviera entera sería mentir sobre lo que dijo.
+    if (t.detenido) {
+      const n = document.createElement('div');
+      n.className = 'detenido';
+      n.textContent = '— detenida al cambiar de chat';
+      body.appendChild(n);
+    }
+  }
+  scroll();
+}
+
+document.getElementById('nuevo').addEventListener('click', async () => {
+  // Crear y activar. No gasta GPU: no hay sesión hasta que se escriba algo.
+  const r = await fetch('/api/chats', { method: 'POST', body: '' });
+  if (!r.ok) return;
+  const d = await r.json();
+  await fetch('/api/chats/' + d.id + '/activar', { method: 'POST' });
+  activo = d.id;
+  log.innerHTML = '';
+  current = null;
+  await cargarChats();
+  input.focus();
+});
+
+let menuChat = null;
+function abrirMenu(ev, c) {
+  menuChat = c;
+  menu.style.display = 'block';
+  const alto = menu.offsetHeight || 120;
+  menu.style.left = Math.min(ev.clientX, window.innerWidth - 190) + 'px';
+  menu.style.top = Math.min(ev.clientY, window.innerHeight - alto - 8) + 'px';
+}
+function cerrarMenu() { menu.style.display = 'none'; menuChat = null; }
+document.addEventListener('click', (ev) => {
+  if (!menu.contains(ev.target)) cerrarMenu();
+});
+
+menu.addEventListener('click', async (ev) => {
+  const a = ev.target.dataset ? ev.target.dataset.a : null;
+  const c = menuChat;
+  cerrarMenu();
+  if (!a || !c) return;
+
+  if (a === 'renombrar') {
+    const t = prompt('Nombre del chat:', c.titulo || '');
+    if (t && t.trim()) {
+      await fetch('/api/chats/' + c.id + '/renombrar',
+                  { method: 'POST', body: t.trim() });
+    }
+  } else if (a === 'liberar') {
+    // LIBERAR MEMORIA: suelta el KV de la GPU. La conversación se queda.
+    await fetch('/api/chats/' + c.id + '/liberar', { method: 'POST' });
+  } else if (a === 'eliminar') {
+    // ELIMINAR: se lleva la conversación. Por eso pregunta, y por eso el
+    // texto dice exactamente qué desaparece — nadie debe borrar un chat
+    // creyendo que solo liberaba VRAM.
+    const nombre = c.titulo || 'este chat';
+    if (!confirm('¿Eliminar «' + nombre + '»?\n\n' +
+                 'Se borra la conversación entera y no se puede deshacer.\n' +
+                 'Si solo querías soltar la GPU, usa «Liberar memoria».')) return;
+    await fetch('/api/chats/' + c.id, { method: 'DELETE' });
+    if (c.id === activo) { log.innerHTML = ''; activo = null; }
+  }
+  await cargarChats();
+});
+
+/* ---------------------------------------------------------------------
  * Estado
  * ------------------------------------------------------------------- */
 const LABELS = {
@@ -289,7 +503,14 @@ const LABELS = {
   speaking: 'escribiendo', dead: 'motor caído'
 };
 
+let estadoPrevio = null;
 function setState(s) {
+  // Al volver a idle tras hablar, la lista puede haber cambiado: el título
+  // automático sale del primer mensaje y el orden es por más reciente.
+  if (s === 'idle' && (estadoPrevio === 'speaking' || estadoPrevio === 'thinking')) {
+    setTimeout(cargarChats, 60);
+  }
+  estadoPrevio = s;
   state = s;
   dot.className = 'dot ' + s;
   stateName.textContent = LABELS[s] || s;
@@ -759,6 +980,7 @@ fileInput.addEventListener('change', async () => {
 });
 
 cargarCapacidades();
+cargarChats().then(() => { if (activo) abrirChat(activo); });
 connect();
 requestAnimationFrame(frame);
 </script>

@@ -302,8 +302,16 @@ static void *reader_thread(void *arg) {
                 /* Lo dicho va al registro durable, no a una lista en RAM que
                  * muere con el proceso. Se anota tambien lo cancelado a
                  * medias: representarlo honestamente es parte del trato. */
-                if (g_respuesta && g_respuesta_len && g_chat_en_curso[0])
-                    chats_anotar(g_chat_en_curso, "assistant", g_respuesta);
+                char razon_fin[32] = "";
+                campo_str(linea, "finish_reason", razon_fin, sizeof(razon_fin));
+                if (g_respuesta && g_respuesta_len && g_chat_en_curso[0]) {
+                    /* Se guarda lo que alcanzó a decir, MARCADO como detenido
+                     * si se cortó. Enseñarlo como una respuesta entera sería
+                     * mentir sobre lo que dijo. */
+                    chats_anotar_estado(g_chat_en_curso, "assistant",
+                                        g_respuesta,
+                                        !strcmp(razon_fin, "cancelled"));
+                }
 
                 /* REFLEXIÓN: solo tras un `completed` normal. Nada después de
                  * un error ni de una cancelación — reflexionar sobre media
@@ -311,9 +319,7 @@ static void *reader_thread(void *arg) {
                  * DESPUÉS de emitir el texto: encolar no puede retrasar lo que
                  * el usuario está esperando. Encolar no ejecuta nada: no hay
                  * trabajador todavía. */
-                char razon[32] = "";
-                campo_str(linea, "finish_reason", razon, sizeof(razon));
-                if (!strcmp(tipo, "completed") && strcmp(razon, "cancelled") &&
+                if (!strcmp(tipo, "completed") && strcmp(razon_fin, "cancelled") &&
                     g_turno.listo && g_chat_en_curso[0]) {
                     hera_job_t j;
                     memset(&j, 0, sizeof(j));
@@ -663,6 +669,7 @@ static bool rt_send_bloqueado(const char *text) {
         if (kv) kv->perfil_hash = h;
         pthread_mutex_unlock(&g_tr_lock);
         chats_marcar_sesion(chat, true);
+        chats_titular_por_mensaje(chat, text);   /* antes de anotar: mira si es el primero */
         chats_anotar(chat, "user", text);
     } else {
         set_state(ENGINE_IDLE, NULL);

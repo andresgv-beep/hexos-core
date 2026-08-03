@@ -41,12 +41,20 @@ def ok(cond, nombre, detalle=""):
         print(f"  \033[31m✗ {nombre}\033[0m — {detalle}")
 
 
+# Acciones que SIEMPRE son POST. Deducir el método de si hay cuerpo ya me ha
+# mordido tres veces: la petición salía como GET, el servidor no hacía nada, y
+# la prueba fallaba culpando al código. Ahora un GET a una acción revienta en
+# vez de no hacer nada en silencio.
+ACCIONES = ("/activar", "/liberar", "/renombrar", "/borrar", "/cerrar")
+
+
 def pedir(ruta, datos=None, metodo=None):
-    # OJO: `b""` es falsy en Python. Deducir el método de si hay cuerpo mandaba
-    # GET en todas las acciones sin cuerpo y no se activaba ningún chat — la
-    # prueba "fallaba" por su propio cliente, no por el servidor.
     if metodo is None:
         metodo = "POST" if datos is not None else "GET"
+    if metodo == "GET" and ruta.endswith(ACCIONES):
+        raise AssertionError(
+            f"{ruta} es una acción y se estaba pidiendo por GET: "
+            "pásale método o cuerpo")
     req = urllib.request.Request(BASE + ruta, data=datos or b"",
                                  method=metodo)
     try:
@@ -274,6 +282,52 @@ def main():
         # El turno cancelado de [8] NO debe haberse encolado.
         ok(not any(x.split("/")[1] == c for x in ids),
            "un turno cancelado no se encola", str(ids))
+
+        print("\n[10] los nombres de la UI hacen lo que dicen")
+        # Título automático: primera línea del mensaje, sin gastar inferencia.
+        n1 = json.loads(pedir("/api/chats", b""))["id"]
+        pedir(f"/api/chats/{n1}/activar", metodo="POST")
+        s.hablar("Pruebas HQS de cuantización\nsegunda línea que no cuenta")
+        ficha = [x for x in json.loads(pedir("/api/chats"))["chats"]
+                 if x["id"] == n1][0]
+        ok(ficha["titulo"].startswith("Pruebas HQS"),
+           "el título sale de la primera línea del primer mensaje",
+           ficha["titulo"])
+        ok("\n" not in ficha["titulo"] and len(ficha["titulo"]) <= 42,
+           "recortado y de una sola línea", repr(ficha["titulo"]))
+
+        pedir(f"/api/chats/{n1}/renombrar", "Libro".encode("utf-8"))
+        ficha = [x for x in json.loads(pedir("/api/chats"))["chats"]
+                 if x["id"] == n1][0]
+        ok(ficha["titulo"] == "Libro", "renombrar manda sobre el automático",
+           ficha["titulo"])
+
+        s.hablar("Di solo: dos.")
+        ficha = [x for x in json.loads(pedir("/api/chats"))["chats"]
+                 if x["id"] == n1][0]
+        ok(ficha["titulo"] == "Libro",
+           "y el título puesto a mano no lo pisa el automático después",
+           ficha["titulo"])
+
+        # LIBERAR MEMORIA conserva el chat; ELIMINAR se lo lleva. Son cosas
+        # distintas y la prueba lo comprueba por separado.
+        pedir(f"/api/chats/{n1}/liberar", metodo="POST")
+        ficha = [x for x in json.loads(pedir("/api/chats"))["chats"]
+                 if x["id"] == n1][0]
+        ok(ficha["sesion_viva"] is False and ficha["turnos"] > 0,
+           "«Liberar memoria» suelta el KV y conserva la conversación",
+           str(ficha))
+
+        print("\n[11] una respuesta detenida se marca como tal")
+        det = json.loads(pedir(f"/api/chats/{c}"))["turnos"]
+        asis = [t for t in det if t["rol"] == "assistant"]
+        ok(asis and asis[0].get("detenido") is True,
+           "el turno cortado viaja marcado, no como respuesta entera",
+           str([(t["rol"], t.get("detenido")) for t in det]))
+        entero = json.loads(pedir(f"/api/chats/{n1}"))["turnos"]
+        ok(all(t.get("detenido") is False for t in entero),
+           "y los que terminaron bien no se marcan",
+           str([t.get("detenido") for t in entero]))
 
     shutil.rmtree(raiz, ignore_errors=True)
     print(f"\n{pruebas} pruebas · {fallos} fallos")

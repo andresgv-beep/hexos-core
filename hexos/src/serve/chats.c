@@ -36,7 +36,7 @@ static int             g_lock_prof;
 static unsigned        g_seq;
 static pthread_mutex_t g_mtx = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 
-static void recargar(void);
+static void recargar(bool conservar_vivas);
 
 static void bloquear(int op) {
     pthread_mutex_lock(&g_mtx);
@@ -161,6 +161,7 @@ static void aplicar(const char *linea) {
         }
         chat_linea_t *l = &c->lineas[c->lineas_n];
         campo(linea, "rol", l->rol, sizeof(l->rol));
+        l->detenido = strstr(linea, "\"detenido\":true") != NULL;
         char *t = malloc(CHAT_TEXTO_MAX);
         if (!t) return;
         t[0] = '\0';
@@ -187,7 +188,23 @@ static void aplicar(const char *linea) {
     }
 }
 
-static void recargar(void) {
+/* `sesion_viva` es estado VOLÁTIL y el diario no lo conoce, así que releer no
+ * puede inventárselo — pero tampoco puede borrarlo. Se llama a recargar() en
+ * cada mutación (crear un chat, anotar un turno), y si limpiara la marca,
+ * crear un chat apagaría el KV de todos los demás a ojos de HexOS: cada turno
+ * volvería a reconstruir el contexto desde la transcripción, y "cambiar y
+ * volver conserva el KV" dejaría de ser cierto sin que nada fallara a gritos.
+ *
+ * Solo hay un momento en que TODAS son falsas de verdad: al abrir, porque
+ * Héctor acaba de nacer. Eso lo hace chats_abrir(), no esto. */
+static void recargar(bool conservar_vivas) {
+    char vivas[CHATS_MAX][CHAT_ID_MAX];
+    size_t vivas_n = 0;
+    if (conservar_vivas) {
+        for (size_t i = 0; i < g_chats_n && vivas_n < CHATS_MAX; i++)
+            if (g_chats[i].sesion_viva)
+                memcpy(vivas[vivas_n++], g_chats[i].id, CHAT_ID_MAX);
+    }
     for (size_t i = 0; i < g_chats_n; i++) soltar_lineas(&g_chats[i]);
     g_chats_n = 0;
     g_activo[0] = '\0';
@@ -206,10 +223,11 @@ static void recargar(void) {
         free(linea);
     }
     fclose(f);
-    /* Ninguna sesión sobrevive a un arranque del motor: Héctor acaba de nacer.
-     * Decir lo contrario sería prometer un KV que no existe, y el primer turno
-     * lo descubriría contestando sin contexto. */
     for (size_t i = 0; i < g_chats_n; i++) g_chats[i].sesion_viva = false;
+    for (size_t v = 0; v < vivas_n; v++) {
+        chat_t *c = buscar_mut(vivas[v]);
+        if (c) c->sesion_viva = true;
+    }
 }
 
 bool chats_abrir(void) {
@@ -233,7 +251,10 @@ bool chats_abrir(void) {
     FILE *f = fopen(g_ruta, "a");
     if (!f) { desbloquear(); return false; }
     fclose(f);
-    recargar();
+    /* Al ABRIR sí: ninguna sesión sobrevive a un arranque del motor. Decir lo
+     * contrario sería prometer un KV que no existe, y el primer turno lo
+     * descubriría contestando sin contexto. */
+    recargar(false);
     desbloquear();
     g_abierto = true;
     return true;
@@ -252,7 +273,7 @@ void chats_cerrar(void) {
 bool chats_crear(const char *titulo, char *out_id, size_t cap) {
     if (!g_abierto) return false;
     bloquear(LOCK_EX);
-    recargar();
+    recargar(true);
     if (g_chats_n >= CHATS_MAX) { desbloquear(); return false; }
 
     char id[CHAT_ID_MAX];
@@ -318,7 +339,8 @@ bool chats_activar(const char *id) {
 
 const char *chats_activo(void) { return g_activo; }
 
-bool chats_anotar(const char *id, const char *rol, const char *texto) {
+bool chats_anotar_estado(const char *id, const char *rol, const char *texto,
+                         bool detenido) {
     if (!g_abierto || !texto || !*texto) return false;
     if (strlen(texto) >= CHAT_TEXTO_MAX - 1) return false;
     bloquear(LOCK_EX);
@@ -331,10 +353,58 @@ bool chats_anotar(const char *id, const char *rol, const char *texto) {
     esc(texto, e, CHAT_TEXTO_MAX * 2);
     snprintf(linea, LINEA_MAX,
              "{\"r\":\"dicho\",\"chat\":\"%s\",\"ts\":%lld,\"rol\":\"%s\","
-             "\"texto\":\"%s\"}", id, ahora(), rol, e);
+             "\"detenido\":%s,\"texto\":\"%s\"}",
+             id, ahora(), rol, detenido ? "true" : "false", e);
     const bool ok = anexar(linea);
     if (ok) aplicar(linea);
     free(e); free(linea);
+    desbloquear();
+    return ok;
+}
+
+bool chats_anotar(const char *id, const char *rol, const char *texto) {
+    return chats_anotar_estado(id, rol, texto, false);
+}
+
+/* El título sale de la primera línea del primer mensaje, recortada. Sin gastar
+ * inferencia: pedirle un título al modelo cuesta un turno entero y una espera,
+ * y para una etiqueta de barra lateral no compensa. */
+bool chats_titular_por_mensaje(const char *id, const char *mensaje) {
+    if (!g_abierto || !mensaje) return false;
+    bloquear(LOCK_EX);
+    chat_t *c = buscar_mut(id);
+    /* Solo si sigue sin título propio Y es el primer mensaje: renombrar un
+     * chat que la persona ya nombró seria pisarle la decisión. */
+    if (!c || c->borrado || c->lineas_n > 0 ||
+        strcmp(c->titulo, "Chat nuevo") != 0) {
+        desbloquear();
+        return false;
+    }
+    char t[CHAT_TITULO_MAX];
+    size_t n = 0;
+    for (const char *p = mensaje; *p && n + 1 < 42; p++) {
+        if (*p == '\n' || *p == '\r') break;
+        t[n++] = *p;
+    }
+    while (n && t[n - 1] == ' ') n--;
+    t[n] = '\0';
+    desbloquear();
+    return n ? chats_renombrar(id, t) : false;
+}
+
+bool chats_renombrar(const char *id, const char *titulo) {
+    if (!g_abierto || !titulo || !*titulo) return false;
+    bloquear(LOCK_EX);
+    chat_t *c = buscar_mut(id);
+    if (!c || c->borrado) { desbloquear(); return false; }
+    char t[CHAT_TITULO_MAX * 2];
+    esc(titulo, t, sizeof(t));
+    char linea[CHAT_TITULO_MAX * 3];
+    snprintf(linea, sizeof(linea),
+             "{\"r\":\"titulo\",\"chat\":\"%s\",\"ts\":%lld,\"titulo\":\"%s\"}",
+             id, ahora(), t);
+    const bool ok = anexar(linea);
+    if (ok) aplicar(linea);
     desbloquear();
     return ok;
 }
@@ -411,8 +481,10 @@ size_t chats_json(const char *id, char *out, size_t cap) {
     char *e = malloc(CHAT_TEXTO_MAX * 2);
     for (size_t i = 0; e && i < c->lineas_n && (size_t)w + 64 < cap; i++) {
         esc(c->lineas[i].texto ? c->lineas[i].texto : "", e, CHAT_TEXTO_MAX * 2);
-        w += snprintf(out + w, cap - w, "%s{\"rol\":\"%s\",\"texto\":\"%s\"}",
-                      i ? "," : "", c->lineas[i].rol, e);
+        w += snprintf(out + w, cap - w,
+                      "%s{\"rol\":\"%s\",\"detenido\":%s,\"texto\":\"%s\"}",
+                      i ? "," : "", c->lineas[i].rol,
+                      c->lineas[i].detenido ? "true" : "false", e);
     }
     free(e);
     w += snprintf(out + w, cap - w, "]}");

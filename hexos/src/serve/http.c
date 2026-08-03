@@ -329,9 +329,16 @@ static void *conn_thread(void *arg)
     const bool has_content_length = parse_u64_header(
         req, header_len, "content-length:", &content_length);
     const size_t body_cap = attachment_route ? ATTACHMENT_CAP : REQ_CAP;
-    const bool needs_body_length = !strcmp(method, "POST");
-    if ((needs_body_length && !has_content_length) ||
-        content_length > body_cap ||
+    /* Un POST SIN `Content-Length` es un POST sin cuerpo, y eso ahora es
+     * normal: las acciones de un chat (activar, liberar, borrar) no llevan
+     * nada. Antes se respondía 413 a todas ellas — la regla venía de cuando
+     * todo POST traía carga y un tamaño sin declarar era un riesgo de
+     * verdad. Sigue siéndolo: por eso se rechaza un `Content-Length`
+     * excesivo, y por eso nunca se lee más allá de las cabeceras si no viene
+     * declarado. Lo que no puede es rechazar una petición que simplemente no
+     * tiene cuerpo. */
+    (void)has_content_length;
+    if (content_length > body_cap ||
         content_length > SIZE_MAX - 1) {
         respond(fd, "413 Payload Too Large", "application/json",
                 "{\"ok\":false}", 12);
@@ -411,6 +418,16 @@ static void *conn_thread(void *arg)
                         usleep(20000);   /* que la pausa sea real al volver */
                 }
                 ok = chats_activar(id);
+            } else if (!strcmp(method, "POST") && !strcmp(accion, "renombrar")) {
+                char t[CHAT_TITULO_MAX] = "";
+                if (body && body_len && body_len < sizeof(t))
+                    memcpy(t, body, body_len);
+                ok = chats_renombrar(id, t);
+            } else if (!strcmp(method, "POST") && !strcmp(accion, "liberar")) {
+                /* "Liberar memoria", no "cerrar": suelta el KV y NO toca la
+                 * conversación. El nombre importa — nadie debe borrar algo
+                 * creyendo que solo liberaba VRAM. */
+                ok = rt_cerrar_sesion(id);
             } else if (!strcmp(method, "POST") && !strcmp(accion, "cerrar")) {
                 /* Libera el KV; la conversación se queda entera. */
                 ok = rt_cerrar_sesion(id);

@@ -41,6 +41,9 @@
 typedef struct {
     char rol[16];                 /* "user" | "assistant" */
     char *texto;
+    /* La respuesta se cortó al cambiar de chat. Se guarda igual y se marca:
+     * enseñarla como si estuviera entera sería mentir sobre lo que dijo. */
+    bool detenido;
 } chat_linea_t;
 
 typedef struct {
@@ -79,6 +82,17 @@ const char *chats_activo(void);
 
 /* Anota lo dicho. `actualizado` avanza, que es lo que ordena la lista. */
 bool chats_anotar(const char *id, const char *rol, const char *texto);
+bool chats_anotar_estado(const char *id, const char *rol, const char *texto,
+                         bool detenido);
+
+/* Renombrar a mano, desde el menú del chat. */
+bool chats_renombrar(const char *id, const char *titulo);
+
+/* Título automático: primera línea del primer mensaje, recortada. NO gasta
+ * inferencia — pedirle un título al modelo cuesta un turno y una espera, y
+ * para una etiqueta de barra lateral no compensa. No pisa un título puesto
+ * a mano. */
+bool chats_titular_por_mensaje(const char *id, const char *mensaje);
 
 /* Marca si Héctor tiene el KV de este chat cargado ahora mismo. */
 void chats_marcar_sesion(const char *id, bool viva);
