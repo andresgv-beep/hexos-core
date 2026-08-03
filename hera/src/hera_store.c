@@ -37,10 +37,16 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <unistd.h>
 
 #define HECHOS_MAX     4096
 #define DICHOS_MAX     4096
-#define LINEA_MAX      (HERA_UTTER_MAX * 2)
+/* Holgada a proposito: el registro mas largo que se escribe es un "dijo" con
+ * HERA_UTTER_MAX de texto escapado, ~8 KB. El buffer tiene que superarlo con
+ * margen porque una lectura que LLENA el buffer sin ver '\n' es
+ * indistinguible de una cola incompleta, y confundirlas truncaria datos
+ * validos. */
+#define LINEA_MAX      (HERA_UTTER_MAX * 4)
 
 typedef struct {
     char id[HERA_ID_MAX];
@@ -346,6 +352,15 @@ static hera_hecho_t *vigente(const char *clave) {
     return NULL;
 }
 
+/* Posición cronológica de una intervención; -1 si no existe. El diario es de
+ * solo añadir, así que el orden del array ES el orden en que se dijeron. */
+static int indice_dicho(const char *id) {
+    if (!id || !*id) return -1;
+    for (size_t i = 0; i < g_dichos_n; i++)
+        if (strcmp(g_dichos[i].id, id) == 0) return (int)i;
+    return -1;
+}
+
 const char *hera_store_evidencia(const char *id) {
     if (!id || !*id) return NULL;
     for (size_t i = 0; i < g_dichos_n; i++)
@@ -479,23 +494,53 @@ bool hera_store_abrir(void) {
     FILE *f = fopen(g_ruta, "r");
     if (f) {
         char *linea = malloc(LINEA_MAX);
+        /* Byte en el que acaba el último registro COMPLETO. Todo lo que haya
+         * después es una cola que el proceso no llegó a terminar. */
+        long fin_valido = 0;
+        bool cola_incompleta = false;
         if (linea) {
             while (fgets(linea, LINEA_MAX, f)) {
-                /* Registro completo = terminado en '\n' y cerrado con '}'.
-                 * Una línea sin salto es la última y quedó a medias porque el
-                 * proceso murió escribiéndola: se descarta ENTERA. Ahí está la
-                 * atomicidad de la corrección. */
                 size_t l = strlen(linea);
-                if (l == 0 || linea[l - 1] != '\n') break;
+                /* Registro completo = terminado en '\n'. Una línea sin salto
+                 * solo puede ser la última: el proceso murió escribiéndola. */
+                if (l == 0 || linea[l - 1] != '\n') {
+                    /* Salvo que haya llenado el buffer: entonces no es una
+                     * cola, es una línea más larga de lo previsto, y truncar
+                     * ahí se comería registros buenos. Se para sin tocar nada. */
+                    cola_incompleta = (l < LINEA_MAX - 1);
+                    break;
+                }
+                fin_valido += (long)l;
                 linea[--l] = '\0';
                 while (l && (linea[l - 1] == ' ' || linea[l - 1] == '\r'))
                     linea[--l] = '\0';
+                /* Línea entera pero mal formada: no se aplica, pero SÍ cuenta
+                 * como escritura terminada — recortar por delante de ella se
+                 * llevaría por delante todo lo que vino después. */
                 if (l == 0 || linea[l - 1] != '}') continue;
                 aplicar(linea);
             }
             free(linea);
         }
+        const long tam = (fseek(f, 0, SEEK_END) == 0) ? ftell(f) : fin_valido;
         fclose(f);
+
+        /* AQUÍ se cierra la atomicidad de verdad. Ignorar la cola no basta:
+         * la siguiente escritura se pegaría justo detrás, y en el reinicio
+         * siguiente esa mezcla se leería como un registro terminado — la
+         * corrección abortada resucitaría y el recuerdo nuevo se perdería
+         * dentro de ella. La cola se borra del disco. */
+#if HERA_SABOTAJE == 9
+        /* Sabotaje: la cola incompleta se ignora pero no se borra, y la
+         * siguiente escritura se pega detrás. */
+        cola_incompleta = false;
+#endif
+        if (cola_incompleta && tam > fin_valido) {
+            if (truncate(g_ruta, fin_valido) != 0) {
+                g_abierto = false;
+                return false;   /* mejor no abrir que abrir sobre basura */
+            }
+        }
     } else {
         /* Crear el fichero ya, para fallar aquí si el perfil no es escribible
          * y no a mitad del primer turno. */
@@ -632,6 +677,11 @@ hera_veredicto_t hera_store_registrar(const char *clave, const char *valor,
 hera_veredicto_t hera_store_confirmar(const char *id,
                                       const char *confirmacion_id) {
     if (!g_abierto || !id || !*id) return HERA_RECHAZO_INVALIDO;
+    /* Explícito y por delante de todo: sin esto, la seguridad frente a NULL
+     * dependía de que la comprobación de evidencia se hiciera antes, y basta
+     * reordenarlas para convertir un rechazo en un segfault. */
+    if (!confirmacion_id || !*confirmacion_id)
+        return HERA_RECHAZO_SIN_CONFIRMACION;
     /* La confirmación tiene que ser una intervención registrada de la persona.
      * Sin esto, "confirmado" solo querría decir "alguien llamó a esta función",
      * y una extracción del modelo podría ascenderse a sí misma. */
@@ -645,6 +695,19 @@ hera_veredicto_t hera_store_confirmar(const char *id,
     hera_hecho_t *h = buscar_hecho(id);
     if (!h || h->estado == HERA_SUSTITUIDO) return HERA_RECHAZO_DESCONOCIDO;
     if (h->estado == HERA_CONFIRMADO) return HERA_OK;
+
+#if HERA_SABOTAJE != 8 && HERA_SABOTAJE != 6
+    /* La confirmación tiene que ser DISTINTA y POSTERIOR a lo que originó el
+     * candidato. Aceptar la misma frase sería contarse a sí mismo: de "creo
+     * que me mudo a Girona" saldría el candidato Y su confirmación, y una
+     * extracción del modelo se quedaría confirmada sin que nadie asintiera.
+     * Que un "sí, guárdalo" signifique de verdad asentimiento es cosa del CK;
+     * aquí solo se exige que exista un turno posterior al que señalar. */
+    if (strcmp(confirmacion_id, h->evidencia) == 0)
+        return HERA_RECHAZO_SIN_CONFIRMACION;
+    if (indice_dicho(confirmacion_id) <= indice_dicho(h->evidencia))
+        return HERA_RECHAZO_SIN_CONFIRMACION;
+#endif
 
     char linea[160];
     snprintf(linea, sizeof(linea),

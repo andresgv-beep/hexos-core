@@ -13,8 +13,10 @@
  *   3  los candidatos se cuelan entre los confirmados
  *   4  no se comprueba de quién se dijo el dato
  *   5  la polaridad se ignora (bolsa de palabras pura)
- *   6  confirmar no exige intervención registrada de la persona
+ *   6  confirmar no exige autoridad ninguna (ni registrada ni posterior)
  *   7  la memoria legacy envenenada entra como autoridad
+ *   8  confirmar acepta la misma frase que originó el candidato
+ *   9  la cola incompleta se ignora pero no se borra del disco
  */
 
 #ifndef _GNU_SOURCE
@@ -202,9 +204,16 @@ static void prueba_autoridad(void) {
     ok(hera_store_confirmados(hs, 16) == 0,
        "y sigue sin ser un hecho", "ascendió igualmente");
 
+    /* La rendija fina: la misma frase que originó el candidato no puede valer
+     * también de confirmación. Sería contarse a sí mismo. */
+    v = hera_store_confirmar(f, u);
+    ok(v == HERA_RECHAZO_SIN_CONFIRMACION,
+       "la frase que originó el candidato no vale de confirmación",
+       hera_veredicto_nombre(v));
+
     char c[HERA_ID_MAX];
     hera_store_dijo("sí, guárdalo", c, sizeof(c));
-    ok(hera_store_confirmar(f, c) == HERA_OK, "con su \"sí\" registrado, sube",
+    ok(hera_store_confirmar(f, c) == HERA_OK, "con su \"sí\" POSTERIOR, sube",
        "no subió");
 
     const size_t n = hera_store_confirmados(hs, 16);
@@ -304,12 +313,45 @@ static void prueba_corte_a_media_correccion(void) {
     hera_store_abrir();
 
     hera_hecho_t hs[16];
-    const size_t n = hera_store_confirmados(hs, 16);
+    size_t n = hera_store_confirmados(hs, 16);
     ok(n == 1, "tras reiniciar sigue habiendo UN solo hecho vigente",
        "quedaron dos confirmados contradiciéndose");
     ok(n == 1 && strcmp(hs[0].valor, "Byteazul") == 0,
        "y es el de antes: la corrección a medias no ocurrió",
        "sobrevivió media corrección");
+
+    /* Ignorar la cola no basta: hay que borrarla del disco. Si sigue ahí, la
+     * siguiente escritura se pega detrás y en el reinicio siguiente esa mezcla
+     * se lee como un registro terminado — la corrección abortada resucita y el
+     * recuerdo nuevo se pierde dentro de ella. */
+    FILE *g = fopen(ruta, "rb");
+    fseek(g, 0, SEEK_END);
+    const long tras_abrir = ftell(g);
+    fclose(g);
+    ok(tras_abrir < tam, "al abrir, la cola incompleta se borra del diario",
+       "la cola sigue en disco esperando a contaminar la próxima escritura");
+
+    /* Se escribe un recuerdo nuevo encima y se vuelve a reiniciar. */
+    char u3[HERA_ID_MAX];
+    hera_store_dijo("guarda esto: mi gato se llama Nube", u3, sizeof(u3));
+    ok(hera_store_registrar("gato/nombre", "Nube", "Su gato es Nube",
+                            u3, u3, NULL, 0) == HERA_OK,
+       "se escribe un recuerdo nuevo después de la caída", "no entró");
+
+    hera_store_cerrar();
+    hera_store_abrir();
+
+    n = hera_store_confirmados(hs, 16);
+    bool resucito = false, nuevo_vivo = false;
+    for (size_t i = 0; i < n; i++) {
+        if (strcmp(hs[i].valor, "Rufo") == 0) resucito = true;
+        if (strcmp(hs[i].valor, "Nube") == 0) nuevo_vivo = true;
+    }
+    ok(!resucito, "la corrección abortada no reaparece en el segundo reinicio",
+       "resucitó una corrección que nunca llegó a escribirse");
+    ok(nuevo_vivo, "y el recuerdo escrito después sí sobrevive",
+       "el recuerdo nuevo se perdió dentro de la cola");
+    ok(n == 2, "quedan exactamente los dos que tocan", "la cuenta no cuadra");
 }
 
 /* Los candidatos no son hechos. */
@@ -328,7 +370,7 @@ static void prueba_candidatos(void) {
     ok(hera_store_todos(hs, 16) == 1,
        "pero sigue guardado para poder confirmarlo luego", "se perdió");
 
-    hera_store_dijo("sí, es correcto", c, sizeof(c));
+    hera_store_dijo("sí, es correcto", c, sizeof(c));   /* turno posterior */
     ok(hera_store_confirmar(f, c) == HERA_OK, "la persona lo confirma", "falló");
     ok(hera_store_confirmados(hs, 16) == 1, "y entonces sí es un hecho",
        "no ascendió");

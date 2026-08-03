@@ -23,7 +23,9 @@ hecho: después se puede preguntar "¿por qué crees esto?" y contestar con sus
 palabras exactas.
 
 **3 · Corregir sustituye, en un solo evento.** La corrección es UNA línea del
-diario que crea el nuevo y jubila el viejo a la vez.
+diario que crea el nuevo y jubila el viejo a la vez. Si el proceso muere
+escribiéndola, la cola incompleta **se borra del disco al abrir**: ignorarla no
+bastaba.
 
 **4 · Los candidatos no son hechos** — y ahí entra todo lo importado del almacén
 legacy.
@@ -42,13 +44,24 @@ en un adorno: bastaría con haber ensuciado el fichero antes. **Todo entra como
 devuelve jamás hasta que la persona lo confirme una a una — y entonces ya tendrá
 su evidencia. La legacy sigue leyendo sus ficheros exactamente como antes.
 
-### Corrección atómica
+### Corrección atómica, y la cola borrada
 
 Antes eran dos escrituras: crear el nuevo, después jubilar el viejo. Una caída
 entre ambas dejaba dos confirmados contradiciéndose. Ahora es un registro
 `{"r":"corrige","viejo":"f1","id":"f2",...}`, y la relectura **descarta entera**
-toda línea que no venga terminada en `\n` y cerrada con `}`. Si el proceso muere
-escribiéndola, el estado sigue siendo el de antes de intentarlo.
+toda línea que no venga terminada en `\n`.
+
+Descartarla no bastaba. La cola seguía en disco, la siguiente escritura se
+pegaba justo detrás, y en el reinicio siguiente esa mezcla se leía como un
+registro terminado: **la corrección abortada resucitaba y el recuerdo nuevo se
+perdía dentro de ella**. Ahora el diario se trunca físicamente hasta el último
+registro completo.
+
+Con una cautela: si una lectura LLENA el buffer sin ver `\n`, eso es
+indistinguible de una cola incompleta, y truncar ahí se comería datos buenos.
+En ese caso se para sin tocar nada. El buffer es cuatro veces el registro más
+largo que el almacén puede escribir, así que el caso no debería darse — pero
+"no debería" no es razón para arriesgar el diario.
 
 ### Autoridad de confirmación
 
@@ -56,8 +69,14 @@ escribiéndola, el estado sigue siendo el de antes de intentarlo.
 |---|---|
 | `proponer(clave, valor, texto, evidencia)` | siempre CANDIDATO — no hay forma de pedir otra cosa |
 | `registrar(..., evidencia, confirmacion)` | confirmado de una, para "guarda en memoria: …" |
-| `confirmar(id, confirmacion)` | asciende; sin intervención registrada, `sin_confirmacion` |
+| `confirmar(id, confirmacion)` | asciende; exige intervención registrada **distinta y posterior** a la que originó el candidato |
 | `corregir(clave, valor, texto, evidencia, confirmacion)` | un solo evento |
+
+La confirmación tiene que ser **posterior**: aceptar la misma frase sería
+contarse a sí mismo — de "creo que me mudo a Girona" saldrían el candidato y su
+propia confirmación, y una extracción del modelo quedaría confirmada sin que
+nadie asintiera. Que un "sí, guárdalo" signifique de verdad asentimiento es cosa
+del CK; el almacén solo exige que exista un turno posterior al que señalar.
 
 ### Sujeto y polaridad, no solo el valor
 
@@ -85,7 +104,7 @@ dijo y repetírselo mañana como si lo hubiera dicho ella.
 | Los candidatos no entran en el prompt como hechos | ✅ pruebas 8 y 11 |
 | Reiniciar conserva exactamente el estado confirmado | ✅ prueba 9 |
 
-**53 pruebas · 0 fallos.**
+**59 pruebas · 0 fallos.**
 
 ## Las cinco fronteras pedidas
 
@@ -96,10 +115,12 @@ dijo y repetírselo mañana como si lo hubiera dicho ella.
 | Caída entre las dos partes de una corrección | [7] queda 1 confirmado, el de antes |
 | Confirmar sin intervención registrada | [5] `sin_confirmacion` |
 | Legacy contaminado nunca aparece como confirmado | [11] 0 confirmados de 4 importados |
+| La corrección abortada no resucita tras escribir encima | [7] se corta, se reinicia, se escribe, se reinicia |
+| La frase que originó el candidato no vale de confirmación | [5] `sin_confirmacion` |
 
 ## La batería se ha visto fallar
 
-`make sabotaje` compila el almacén roto de siete formas y exige que se detecten.
+`make sabotaje` compila el almacén roto de nueve formas y exige que se detecten.
 Cada una rompe **exactamente** la frontera que le toca:
 
 | Sabotaje | Rompe |
@@ -109,8 +130,16 @@ Cada una rompe **exactamente** la frontera que le toca:
 | 3 · los candidatos se cuelan | 8 pruebas |
 | 4 · no se comprueba el sujeto | las 2 de "Luis vive en Bilbao" |
 | 5 · se ignora la polaridad | las 2 del café y el té |
-| 6 · confirmar no exige intervención | 4 pruebas de autoridad |
+| 6 · confirmar no exige autoridad ninguna | 4 pruebas de autoridad |
 | 7 · el legacy envenenado entra como autoridad | 4 pruebas de cuarentena |
+| 8 · confirmar acepta la frase que originó el candidato | las 2 de la confirmación posterior |
+| 9 · la cola incompleta se ignora pero no se borra | la de la corrección resucitada |
+
+**Y la puerta se endureció**, porque se tragaba fallos: un sabotaje que moría por
+segfault no imprimía nada y `make sabotaje` seguía diciendo OK. Ahora un
+sabotaje que no compila, que muere o que no se detecta hace fallar la puerta con
+código de error. Es el mismo defecto que ya tuvo cuando corría tres de siete: un
+gate que no comprueba lo que dice comprobar es peor que no tenerlo.
 
 ## Lo que falta para cerrar E3
 

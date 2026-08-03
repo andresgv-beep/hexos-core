@@ -74,6 +74,9 @@ clean:
 # nada: hay que verla fallar cuando el código está mal.
 
 STORE_TEST = $(BINDIR)/hera_store_test
+# Un sabotaje que no compila, que muere o que no se detecta hace fallar la
+# puerta. Antes se tragaba un segfault en silencio y seguia diciendo OK.
+SABOTAJES  = 1 2 3 4 5 6 7 8 9
 
 store-test: $(STORE_TEST)
 
@@ -83,10 +86,24 @@ $(STORE_TEST): tools/hera_store_test.c $(STORE_SRC) $(INCDIR)/hera_store.h
 	  $(STORE_SRC) tools/hera_store_test.c -o $@
 
 sabotaje: $(STORE_TEST)
-	@$(STORE_TEST) > /dev/null || (echo "la bateria falla en limpio"; exit 1)
+	@$(STORE_TEST) > /dev/null || (echo "FALLO: la bateria no pasa en limpio"; exit 1)
 	@echo "limpio: 0 fallos"
-	@for n in 1 2 3 4 5 6 7; do \
-	  $(CC) $(CFLAGS) -DHERA_SABOTAJE=$$n -I$(INCDIR) $(STORE_SRC) \
-	    tools/hera_store_test.c -o $(BINDIR)/hera_st_$$n 2>/dev/null; \
-	  $(BINDIR)/hera_st_$$n --sabotaje $$n | tail -1; \
-	done
+	@fallos=0; \
+	for n in $(SABOTAJES); do \
+	  if ! $(CC) $(CFLAGS) -DHERA_SABOTAJE=$$n -I$(INCDIR) $(STORE_SRC) \
+	       tools/hera_store_test.c -o $(BINDIR)/hera_st_$$n 2>/dev/null; then \
+	    echo "  sabotaje $$n: NO COMPILA"; fallos=1; continue; \
+	  fi; \
+	  salida=`$(BINDIR)/hera_st_$$n --sabotaje $$n 2>&1`; codigo=$$?; \
+	  if [ $$codigo -ne 0 ]; then \
+	    echo "  sabotaje $$n: EL BINARIO MURIO (codigo $$codigo)"; fallos=1; \
+	  elif ! echo "$$salida" | grep -q "se detecta"; then \
+	    echo "  sabotaje $$n: NO SE DETECTA"; fallos=1; \
+	  else \
+	    echo "  sabotaje $$n: `echo "$$salida" | grep -o 'se detecta ([0-9]* fallos)'`"; \
+	  fi; \
+	done; \
+	if [ $$fallos -ne 0 ]; then \
+	  echo "FALLO: algun sabotaje no quedo demostrado"; exit 1; \
+	fi; \
+	echo "los $(words $(SABOTAJES)) sabotajes se detectan"

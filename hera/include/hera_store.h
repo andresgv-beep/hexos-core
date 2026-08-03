@@ -139,9 +139,16 @@ hera_veredicto_t hera_store_registrar(const char *clave, const char *valor,
                                       char *out_id, size_t cap);
 
 /* Asciende un candidato. `confirmacion_id` tiene que ser una intervención
- * registrada de la persona; sin ella se rechaza. La cita queda en el hecho:
- * después se puede preguntar "¿por qué crees esto?" y contestar con sus
- * palabras exactas. */
+ * registrada de la persona, DISTINTA y POSTERIOR a la que originó el
+ * candidato; si no, se rechaza. Aceptar la misma frase sería contarse a sí
+ * mismo: de "creo que me mudo a Girona" saldrían el candidato Y su
+ * confirmación, y una extracción del modelo se quedaría confirmada sin que
+ * nadie hubiera asentido. Que un "sí, guárdalo" signifique de verdad
+ * asentimiento es cosa del CK; aquí solo se exige que exista un turno
+ * posterior al que señalar.
+ *
+ * La cita queda en el hecho: después se puede preguntar "¿por qué crees esto?"
+ * y contestar con sus palabras exactas. */
 hera_veredicto_t hera_store_confirmar(const char *id,
                                       const char *confirmacion_id);
 
