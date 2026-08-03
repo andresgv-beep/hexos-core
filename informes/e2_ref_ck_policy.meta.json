@@ -1,0 +1,9 @@
+{
+ "representa": "Hector-engine/src/ck_policy.{hpp,cpp}",
+ "commit": "3b0abaf1b17f",
+ "ck_policy_cpp_sha256": "95cd924a82d2a67a",
+ "ck_policy_hpp_sha256": "1757cad33b7bce9b",
+ "corpus": "informes/e2_corpus.jsonl",
+ "casos": 71,
+ "nota": "Si cualquiera de estos sha cambia, la referencia caduca y hay que regenerarla."
+}

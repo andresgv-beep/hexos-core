@@ -49,3 +49,23 @@
 {"id": "reg_colega_social", "message": "hola", "trivial": true, "artifact_active": false, "has_attachment": false, "registro": "colega", "recall_query": "", "confirmed_facts": ""}
 {"id": "reg_colega_tarea", "message": "resume esto", "trivial": false, "artifact_active": false, "has_attachment": false, "registro": "colega", "recall_query": "", "confirmed_facts": ""}
 {"id": "reg_colega_recall", "message": "qué sabes de mí", "trivial": false, "artifact_active": false, "has_attachment": false, "registro": "colega", "recall_query": "qué sabes de mí", "confirmed_facts": "- Se llama Andrés.\n"}
+{"id": "col_cont_corr", "message": "sigue, no me refiero a eso", "trivial": false, "artifact_active": false, "has_attachment": false, "registro": "neutral", "recall_query": "", "confirmed_facts": ""}
+{"id": "col_corr_recall", "message": "no, me refiero a qué sabes de mí", "trivial": false, "artifact_active": false, "has_attachment": false, "registro": "neutral", "recall_query": "", "confirmed_facts": ""}
+{"id": "col_recall_check", "message": "qué tal estás, y qué sabes de mí", "trivial": false, "artifact_active": false, "has_attachment": false, "registro": "neutral", "recall_query": "", "confirmed_facts": ""}
+{"id": "col_check_rew", "message": "cómo estás, reescribe esto", "trivial": false, "artifact_active": false, "has_attachment": false, "registro": "neutral", "recall_query": "", "confirmed_facts": ""}
+{"id": "col_rew_sum", "message": "reescribe el resumen", "trivial": false, "artifact_active": false, "has_attachment": false, "registro": "neutral", "recall_query": "", "confirmed_facts": ""}
+{"id": "col_sum_ext", "message": "resume y extrae los datos", "trivial": false, "artifact_active": false, "has_attachment": false, "registro": "neutral", "recall_query": "", "confirmed_facts": ""}
+{"id": "col_ext_crit", "message": "extrae y valora este texto", "trivial": false, "artifact_active": false, "has_attachment": false, "registro": "neutral", "recall_query": "", "confirmed_facts": ""}
+{"id": "col_crit_impl", "message": "revisa este código e implementa el cambio", "trivial": false, "artifact_active": false, "has_attachment": false, "registro": "neutral", "recall_query": "", "confirmed_facts": ""}
+{"id": "col_impl_ana", "message": "implementa y analiza el fallo", "trivial": false, "artifact_active": false, "has_attachment": false, "registro": "neutral", "recall_query": "", "confirmed_facts": ""}
+{"id": "col_ana_exp", "message": "analiza y explica cómo funciona", "trivial": false, "artifact_active": false, "has_attachment": false, "registro": "neutral", "recall_query": "", "confirmed_facts": ""}
+{"id": "col_exp_tell", "message": "explica y cuéntame algo", "trivial": false, "artifact_active": false, "has_attachment": false, "registro": "neutral", "recall_query": "", "confirmed_facts": ""}
+{"id": "col_tell_crea", "message": "cuéntame algo y escribe un poema", "trivial": false, "artifact_active": false, "has_attachment": false, "registro": "neutral", "recall_query": "", "confirmed_facts": ""}
+{"id": "col_crea_ayuda", "message": "escribe esto, ayúdame con el capítulo", "trivial": false, "artifact_active": false, "has_attachment": false, "registro": "neutral", "recall_query": "", "confirmed_facts": ""}
+{"id": "col_ayuda_seg", "message": "ayúdame con esto, cómo seguimos", "trivial": false, "artifact_active": false, "has_attachment": false, "registro": "neutral", "recall_query": "", "confirmed_facts": ""}
+{"id": "col_seg_trivial", "message": "cómo seguimos", "trivial": true, "artifact_active": false, "has_attachment": false, "registro": "neutral", "recall_query": "", "confirmed_facts": ""}
+{"id": "col_trivial_art", "message": "vale", "trivial": true, "artifact_active": true, "has_attachment": false, "registro": "neutral", "recall_query": "", "confirmed_facts": ""}
+{"id": "col_art_pregunta", "message": "¿por qué?", "trivial": false, "artifact_active": true, "has_attachment": false, "registro": "neutral", "recall_query": "", "confirmed_facts": ""}
+{"id": "col_preg_adjunto", "message": "el motor va fino", "trivial": false, "artifact_active": false, "has_attachment": true, "registro": "neutral", "recall_query": "", "confirmed_facts": ""}
+{"id": "col_trivial_saludo_charla", "message": "hola qué tal", "trivial": true, "artifact_active": false, "has_attachment": false, "registro": "neutral", "recall_query": "", "confirmed_facts": ""}
+{"id": "col_trivial_charla_ack", "message": "qué tal me aburro", "trivial": true, "artifact_active": false, "has_attachment": false, "registro": "neutral", "recall_query": "", "confirmed_facts": ""}

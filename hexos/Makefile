@@ -46,7 +46,7 @@ TARGET = $(BINDIR)/hexos
 # Rules
 # ============================================================================
 
-.PHONY: all clean run modules serve runtime-probe runtime-policy-test model-info model-probe-test attachment-bridge-test tools
+.PHONY: all clean run modules serve ck runtime-probe runtime-policy-test model-info model-probe-test attachment-bridge-test tools
 
 all: modules $(TARGET)
 
@@ -132,6 +132,20 @@ $(SERVE_TARGET): $(SERVE_SRC) $(INCDIR)/hexos_serve.h $(INCDIR)/hexos_model.h
 	@echo ""
 	@echo "Build complete: $@"
 	@echo "Arranca con: ./$(SERVE_TARGET) --model /ruta/modelo.hnf"
+
+# ============================================================================
+# CK (E2) — politica portada + volcador para el test diferencial
+# ============================================================================
+
+CK_SRC = $(SRCDIR)/ck/ck_policy.c
+CK_TARGET = $(BINDIR)/ck_dump
+
+ck: $(CK_TARGET)
+
+$(CK_TARGET): $(CK_SRC) tools/ck_dump.c $(INCDIR)/hexos_ck.h
+	@mkdir -p $(BINDIR)
+	$(CC) $(CFLAGS) -I$(INCDIR) $(CK_SRC) tools/ck_dump.c -o $@
+	@echo "Build complete: $@"
 
 tools: $(BINDIR)/hexos_ipc_test
 
