@@ -23,8 +23,9 @@ BINDIR = bin
 # Source files
 CORE_SRC = $(SRCDIR)/hera.c
 STORE_SRC = $(SRCDIR)/hera_store.c
+MENTE_SRC = $(SRCDIR)/hera_profile.c $(SRCDIR)/hera_delta.c
 
-ALL_SRC = $(CORE_SRC) $(STORE_SRC)
+ALL_SRC = $(CORE_SRC) $(STORE_SRC) $(MENTE_SRC)
 
 # Object files
 OBJECTS = $(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(ALL_SRC))
@@ -39,9 +40,9 @@ TEST_TARGET = $(BINDIR)/hera_test
 # Rules
 # ============================================================================
 
-.PHONY: all clean lib test store-test sabotaje
+.PHONY: all clean lib test store-test mente-test sabotaje sabotaje-mente
 
-all: lib test store-test
+all: lib test store-test mente-test
 
 lib: $(LIB_TARGET)
 
@@ -77,6 +78,8 @@ STORE_TEST = $(BINDIR)/hera_store_test
 # Un sabotaje que no compila, que muere o que no se detecta hace fallar la
 # puerta. Antes se tragaba un segfault en silencio y seguia diciendo OK.
 SABOTAJES  = 1 2 3 4 5 6 7 8 9
+MENTE_TEST = $(BINDIR)/hera_mente_test
+MENTE_SABOTAJES = 20 21 22
 
 store-test: $(STORE_TEST)
 
@@ -107,3 +110,31 @@ sabotaje: $(STORE_TEST)
 	  echo "FALLO: algun sabotaje no quedo demostrado"; exit 1; \
 	fi; \
 	echo "los $(words $(SABOTAJES)) sabotajes se detectan"
+
+mente-test: $(MENTE_TEST)
+
+$(MENTE_TEST): tools/hera_mente_test.c $(MENTE_SRC) $(STORE_SRC)
+	@mkdir -p $(BINDIR)
+	$(CC) $(CFLAGS) -DHERA_SABOTAJE=0 -I$(INCDIR) \
+	  $(STORE_SRC) $(MENTE_SRC) tools/hera_mente_test.c -o $@
+
+sabotaje-mente: $(MENTE_TEST)
+	@$(MENTE_TEST) > /dev/null || (echo "FALLO: la bateria de la mente no pasa en limpio"; exit 1)
+	@echo "limpio: 0 fallos"
+	@fallos=0; \
+	for n in $(MENTE_SABOTAJES); do \
+	  if ! $(CC) $(CFLAGS) -DHERA_SABOTAJE=$$n -I$(INCDIR) $(STORE_SRC) \
+	       $(MENTE_SRC) tools/hera_mente_test.c -o $(BINDIR)/hera_mt_$$n 2>/dev/null; then \
+	    echo "  sabotaje $$n: NO COMPILA"; fallos=1; continue; \
+	  fi; \
+	  salida=`$(BINDIR)/hera_mt_$$n --sabotaje $$n 2>&1`; codigo=$$?; \
+	  if [ $$codigo -ne 0 ]; then \
+	    echo "  sabotaje $$n: EL BINARIO MURIO (codigo $$codigo)"; fallos=1; \
+	  elif ! echo "$$salida" | grep -q "se detecta"; then \
+	    echo "  sabotaje $$n: NO SE DETECTA"; fallos=1; \
+	  else \
+	    echo "  sabotaje $$n: `echo "$$salida" | grep -o 'se detecta ([0-9]* fallos)'`"; \
+	  fi; \
+	done; \
+	if [ $$fallos -ne 0 ]; then echo "FALLO: algun sabotaje no quedo demostrado"; exit 1; fi; \
+	echo "los $(words $(MENTE_SABOTAJES)) sabotajes de la mente se detectan"

@@ -648,16 +648,33 @@ static hera_veredicto_t alta(const char *clave, const char *valor,
     return HERA_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Las cuatro operaciones, con bandera de ENSAYO.
+ *
+ * El ensayo recorre EXACTAMENTE las mismas comprobaciones y se para justo
+ * antes de escribir. Comparten camino a propósito: una función de validación
+ * escrita aparte acabaría divergiendo de la de verdad, y entonces el ensayo
+ * diría que sí a cosas que el almacén rechaza — o peor, al revés.
+ * ------------------------------------------------------------------------ */
+
+static hera_veredicto_t proponer_impl(const char *clave, const char *valor,
+                                      const char *texto,
+                                      const char *evidencia_id,
+                                      bool ensayo, char *out_id, size_t cap) {
+    const hera_veredicto_t v = validar(clave, valor, evidencia_id);
+    if (v != HERA_OK) return v;
+    if (es_duplicado(clave, valor)) return HERA_RECHAZO_DUPLICADO;
+    if (ensayo) return HERA_OK;
+    /* Sin parámetro para nacer confirmado: por aquí no se asciende nada. */
+    return alta(clave, valor, texto, evidencia_id, NULL, false, "modelo",
+                NULL, out_id, cap);
+}
+
 hera_veredicto_t hera_store_proponer(const char *clave, const char *valor,
                                      const char *texto,
                                      const char *evidencia_id,
                                      char *out_id, size_t cap) {
-    const hera_veredicto_t v = validar(clave, valor, evidencia_id);
-    if (v != HERA_OK) return v;
-    if (es_duplicado(clave, valor)) return HERA_RECHAZO_DUPLICADO;
-    /* Sin parámetro para nacer confirmado: por aquí no se asciende nada. */
-    return alta(clave, valor, texto, evidencia_id, NULL, false, "modelo",
-                NULL, out_id, cap);
+    return proponer_impl(clave, valor, texto, evidencia_id, false, out_id, cap);
 }
 
 hera_veredicto_t hera_store_registrar(const char *clave, const char *valor,
@@ -674,8 +691,9 @@ hera_veredicto_t hera_store_registrar(const char *clave, const char *valor,
                 "persona", NULL, out_id, cap);
 }
 
-hera_veredicto_t hera_store_confirmar(const char *id,
-                                      const char *confirmacion_id) {
+static hera_veredicto_t confirmar_impl(const char *id,
+                                       const char *confirmacion_id,
+                                       bool ensayo) {
     if (!g_abierto || !id || !*id) return HERA_RECHAZO_INVALIDO;
     /* Explícito y por delante de todo: sin esto, la seguridad frente a NULL
      * dependía de que la comprobación de evidencia se hiciera antes, y basta
@@ -709,6 +727,8 @@ hera_veredicto_t hera_store_confirmar(const char *id,
         return HERA_RECHAZO_SIN_CONFIRMACION;
 #endif
 
+    if (ensayo) return HERA_OK;
+
     char linea[160];
     snprintf(linea, sizeof(linea),
              "{\"r\":\"confirma\",\"id\":\"%s\",\"por\":\"%s\",\"ts\":%lld}",
@@ -719,11 +739,16 @@ hera_veredicto_t hera_store_confirmar(const char *id,
     return HERA_OK;
 }
 
-hera_veredicto_t hera_store_corregir(const char *clave, const char *valor,
-                                     const char *texto,
-                                     const char *evidencia_id,
-                                     const char *confirmacion_id,
-                                     char *out_id, size_t cap) {
+hera_veredicto_t hera_store_confirmar(const char *id,
+                                      const char *confirmacion_id) {
+    return confirmar_impl(id, confirmacion_id, false);
+}
+
+static hera_veredicto_t corregir_impl(const char *clave, const char *valor,
+                                      const char *texto,
+                                      const char *evidencia_id,
+                                      const char *confirmacion_id,
+                                      bool ensayo, char *out_id, size_t cap) {
     if (!hera_store_evidencia(confirmacion_id))
         return HERA_RECHAZO_SIN_CONFIRMACION;
     const hera_veredicto_t v = validar(clave, valor, evidencia_id);
@@ -731,6 +756,7 @@ hera_veredicto_t hera_store_corregir(const char *clave, const char *valor,
 
     hera_hecho_t *viejo = vigente(clave);
     if (!viejo) return HERA_RECHAZO_DESCONOCIDO;
+    if (ensayo) return HERA_OK;
 
 #if HERA_SABOTAJE == 2
     /* Sabotaje: vuelve el bug de las dos escrituras. Si el proceso muere
@@ -757,6 +783,38 @@ hera_veredicto_t hera_store_corregir(const char *clave, const char *valor,
     /* UN solo registro: crear y jubilar van juntos o no van. */
     return alta(clave, valor, texto, evidencia_id, confirmacion_id, true,
                 "persona", viejo->id, out_id, cap);
+}
+
+hera_veredicto_t hera_store_corregir(const char *clave, const char *valor,
+                                     const char *texto,
+                                     const char *evidencia_id,
+                                     const char *confirmacion_id,
+                                     char *out_id, size_t cap) {
+    return corregir_impl(clave, valor, texto, evidencia_id, confirmacion_id,
+                         false, out_id, cap);
+}
+
+/* ------------------------------------------------------------------------
+ * Ensayo: mismo veredicto, cero escrituras.
+ * ------------------------------------------------------------------------ */
+
+hera_veredicto_t hera_store_ensayar_proponer(const char *clave,
+                                             const char *valor,
+                                             const char *evidencia_id) {
+    return proponer_impl(clave, valor, NULL, evidencia_id, true, NULL, 0);
+}
+
+hera_veredicto_t hera_store_ensayar_confirmar(const char *id,
+                                              const char *confirmacion_id) {
+    return confirmar_impl(id, confirmacion_id, true);
+}
+
+hera_veredicto_t hera_store_ensayar_corregir(const char *clave,
+                                             const char *valor,
+                                             const char *evidencia_id,
+                                             const char *confirmacion_id) {
+    return corregir_impl(clave, valor, NULL, evidencia_id, confirmacion_id,
+                         true, NULL, 0);
 }
 
 /* ------------------------------------------------------------------------

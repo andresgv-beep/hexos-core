@@ -163,6 +163,27 @@ hera_veredicto_t hera_store_corregir(const char *clave, const char *valor,
                                      char *out_id, size_t cap);
 
 /* ------------------------------------------------------------------ */
+/* Ensayo — el mismo veredicto sin escribir nada                      */
+/* ------------------------------------------------------------------ */
+/* Recorren EXACTAMENTE las mismas comprobaciones que sus gemelas y se paran
+ * justo antes de tocar el disco. Comparten camino a propósito: una validación
+ * escrita aparte acabaría divergiendo de la de verdad, y un ensayo que dice
+ * que sí a algo que el almacén rechaza no sirve para nada.
+ *
+ * Es lo que permite que la reflexión posterior al turno se valide entera
+ * ANTES de decidir si se aplica — y de momento no se aplica. */
+
+hera_veredicto_t hera_store_ensayar_proponer(const char *clave,
+                                             const char *valor,
+                                             const char *evidencia_id);
+hera_veredicto_t hera_store_ensayar_confirmar(const char *id,
+                                              const char *confirmacion_id);
+hera_veredicto_t hera_store_ensayar_corregir(const char *clave,
+                                             const char *valor,
+                                             const char *evidencia_id,
+                                             const char *confirmacion_id);
+
+/* ------------------------------------------------------------------ */
 /* Lectura                                                            */
 /* ------------------------------------------------------------------ */
 
