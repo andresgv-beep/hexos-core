@@ -32,9 +32,13 @@
 #include "hera_store.h"
 
 #include <ctype.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <fcntl.h>
+#include <pthread.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
@@ -61,6 +65,55 @@ static char         g_ruta[1200];
 static bool         g_abierto;
 static bool         g_importado;
 static unsigned     g_seq_u, g_seq_f;
+
+/* ------------------------------------------------------------------------
+ * CERROJO. El diario es multiproceso: lo tocan HexOS y la CLI a la vez, y
+ * puede que mañana un demonio de consolidación. Sin exclusión, la secuencia
+ * inocente "releo, veo u10, escribo u11" se cruza:
+ *
+ *   HexOS lee (último u10)      hera lee (último u10)
+ *   HexOS calcula u11           hera calcula u11
+ *   HexOS escribe u11           hera escribe u11
+ *
+ * y quedan DOS evidencias distintas con el mismo id. Después una corrección
+ * cita "u11" y se lleva las palabras equivocadas — precisamente la clase de
+ * fallo que todo este almacén existe para hacer imposible.
+ *
+ * DOS CAPAS, porque hacen falta las dos:
+ *   · flock sobre `hera.lock` excluye entre PROCESOS. Fichero aparte y no el
+ *     propio diario, para que el truncado de la cola no se pelee con él.
+ *   · un mutex recursivo excluye entre HILOS del mismo proceso: flock se
+ *     concede por descriptor abierto, así que dos hilos de HexOS lo
+ *     "tendrían" los dos a la vez y no se excluirían en absoluto.
+ *
+ * Todo lo que muta hace RELECTURA + VALIDACIÓN + ID + APPEND dentro del mismo
+ * cerrojo exclusivo. Partirlo en dos tramos es tener la carrera otra vez.
+ * ------------------------------------------------------------------------ */
+static int             g_lock_fd = -1;
+static int             g_lock_prof;
+static pthread_mutex_t g_mtx = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+
+static void recargar(bool puede_reparar);
+
+static void bloquear(int op) {
+    pthread_mutex_lock(&g_mtx);
+#if HERA_SABOTAJE == 10
+    /* Sabotaje: sin exclusión entre procesos. Dos que releen a la vez calculan
+     * el mismo id siguiente y los dos lo escriben. */
+    (void)op; g_lock_prof++; return;
+#endif
+    if (g_lock_prof++ == 0 && g_lock_fd >= 0) {
+        while (flock(g_lock_fd, op) != 0 && errno == EINTR) { }
+    }
+}
+
+static void desbloquear(void) {
+#if HERA_SABOTAJE == 10
+    g_lock_prof--; pthread_mutex_unlock(&g_mtx); return;
+#endif
+    if (--g_lock_prof == 0 && g_lock_fd >= 0) flock(g_lock_fd, LOCK_UN);
+    pthread_mutex_unlock(&g_mtx);
+}
 
 const char *hera_veredicto_nombre(hera_veredicto_t v) {
     switch (v) {
@@ -361,11 +414,20 @@ static int indice_dicho(const char *id) {
     return -1;
 }
 
-const char *hera_store_evidencia(const char *id) {
+/* Sin cerrojo: se llama desde dentro de regiones ya bloqueadas. */
+static const char *evidencia_interna(const char *id) {
     if (!id || !*id) return NULL;
     for (size_t i = 0; i < g_dichos_n; i++)
         if (strcmp(g_dichos[i].id, id) == 0) return g_dichos[i].texto;
     return NULL;
+}
+
+const char *hera_store_evidencia(const char *id) {
+    bloquear(LOCK_SH);
+    recargar(false);
+    const char *r = evidencia_interna(id);
+    desbloquear();
+    return r;
 }
 
 const char *hera_store_ruta(void) { return g_ruta; }
@@ -482,78 +544,92 @@ static void aplicar(const char *linea) {
     if (strcmp(r, "importado") == 0) g_importado = true;
 }
 
-bool hera_store_abrir(void) {
-    char dir[1024];
-    directorio(dir, sizeof(dir));
-    snprintf(g_ruta, sizeof(g_ruta), "%s/hera.jsonl", dir);
-
+/* Relectura del diario. `puede_reparar` SOLO puede venir a true con el
+ * cerrojo EXCLUSIVO tomado: truncar la cola mientras otro proceso está a
+ * medio escribirla es peor que la cola. Un lector con cerrojo compartido la
+ * ignora y se va sin tocar el fichero. */
+static void recargar(bool puede_reparar) {
     g_hechos_n = g_dichos_n = 0;
     g_seq_u = g_seq_f = 0;
     g_importado = false;
 
     FILE *f = fopen(g_ruta, "r");
-    if (f) {
-        char *linea = malloc(LINEA_MAX);
-        /* Byte en el que acaba el último registro COMPLETO. Todo lo que haya
-         * después es una cola que el proceso no llegó a terminar. */
-        long fin_valido = 0;
-        bool cola_incompleta = false;
-        if (linea) {
-            while (fgets(linea, LINEA_MAX, f)) {
-                size_t l = strlen(linea);
-                /* Registro completo = terminado en '\n'. Una línea sin salto
-                 * solo puede ser la última: el proceso murió escribiéndola. */
-                if (l == 0 || linea[l - 1] != '\n') {
-                    /* Salvo que haya llenado el buffer: entonces no es una
-                     * cola, es una línea más larga de lo previsto, y truncar
-                     * ahí se comería registros buenos. Se para sin tocar nada. */
-                    cola_incompleta = (l < LINEA_MAX - 1);
-                    break;
-                }
-                fin_valido += (long)l;
-                linea[--l] = '\0';
-                while (l && (linea[l - 1] == ' ' || linea[l - 1] == '\r'))
-                    linea[--l] = '\0';
-                /* Línea entera pero mal formada: no se aplica, pero SÍ cuenta
-                 * como escritura terminada — recortar por delante de ella se
-                 * llevaría por delante todo lo que vino después. */
-                if (l == 0 || linea[l - 1] != '}') continue;
-                aplicar(linea);
-            }
-            free(linea);
-        }
-        const long tam = (fseek(f, 0, SEEK_END) == 0) ? ftell(f) : fin_valido;
-        fclose(f);
+    if (!f) return;
 
-        /* AQUÍ se cierra la atomicidad de verdad. Ignorar la cola no basta:
-         * la siguiente escritura se pegaría justo detrás, y en el reinicio
-         * siguiente esa mezcla se leería como un registro terminado — la
-         * corrección abortada resucitaría y el recuerdo nuevo se perdería
-         * dentro de ella. La cola se borra del disco. */
-#if HERA_SABOTAJE == 9
-        /* Sabotaje: la cola incompleta se ignora pero no se borra, y la
-         * siguiente escritura se pega detrás. */
-        cola_incompleta = false;
-#endif
-        if (cola_incompleta && tam > fin_valido) {
-            if (truncate(g_ruta, fin_valido) != 0) {
-                g_abierto = false;
-                return false;   /* mejor no abrir que abrir sobre basura */
+    char *linea = malloc(LINEA_MAX);
+    long fin_valido = 0;
+    bool cola_incompleta = false;
+    if (linea) {
+        while (fgets(linea, LINEA_MAX, f)) {
+            size_t l = strlen(linea);
+            /* Registro completo = terminado en '\n'. Una línea sin salto solo
+             * puede ser la última: alguien murió escribiéndola. */
+            if (l == 0 || linea[l - 1] != '\n') {
+                /* Salvo que haya llenado el buffer: entonces no es una cola,
+                 * es una línea más larga de lo previsto, y truncar ahí se
+                 * comería registros buenos. Se para sin tocar nada. */
+                cola_incompleta = (l < LINEA_MAX - 1);
+                break;
             }
+            fin_valido += (long)l;
+            linea[--l] = '\0';
+            while (l && (linea[l - 1] == ' ' || linea[l - 1] == '\r'))
+                linea[--l] = '\0';
+            /* Línea entera pero mal formada: no se aplica, pero SÍ cuenta como
+             * escritura terminada — recortar por delante de ella se llevaría
+             * todo lo que vino después. */
+            if (l == 0 || linea[l - 1] != '}') continue;
+            aplicar(linea);
         }
-    } else {
-        /* Crear el fichero ya, para fallar aquí si el perfil no es escribible
-         * y no a mitad del primer turno. */
-        f = fopen(g_ruta, "a");
-        if (!f) return false;
-        fclose(f);
+        free(linea);
     }
+    const long tam = (fseek(f, 0, SEEK_END) == 0) ? ftell(f) : fin_valido;
+    fclose(f);
+
+#if HERA_SABOTAJE == 9
+    cola_incompleta = false;
+#endif
+    /* Ignorar la cola no basta: la siguiente escritura se pegaría detrás y en
+     * el reinicio siguiente esa mezcla se leería como un registro terminado.
+     * Se borra del disco — pero solo si mandamos nosotros. */
+    if (puede_reparar && cola_incompleta && tam > fin_valido) {
+        if (truncate(g_ruta, fin_valido) != 0) {
+            /* Si no se puede reparar, mejor no fingir que el diario está
+             * sano: se deja el estado leído y el fichero como está. */
+            fprintf(stderr, "[hera] no pude reparar la cola de %s\n", g_ruta);
+        }
+    }
+}
+
+bool hera_store_abrir(void) {
+    char dir[1024];
+    directorio(dir, sizeof(dir));
+    snprintf(g_ruta, sizeof(g_ruta), "%s/hera.jsonl", dir);
+
+    /* El cerrojo va en su propio fichero: si compartiera el del diario, el
+     * truncado de la cola estaría peleándose con el mismo descriptor que
+     * sostiene la exclusión. */
+    if (g_lock_fd < 0) {
+        char ruta_lock[1200];
+        snprintf(ruta_lock, sizeof(ruta_lock), "%s/hera.lock", dir);
+        g_lock_fd = open(ruta_lock, O_RDWR | O_CREAT | O_CLOEXEC, 0644);
+        if (g_lock_fd < 0) return false;
+    }
+
+    bloquear(LOCK_EX);
+    FILE *f = fopen(g_ruta, "a");   /* crearlo ya: fallar aquí, no a mitad */
+    if (!f) { desbloquear(); return false; }
+    fclose(f);
+    recargar(true);
+    desbloquear();
+
     g_abierto = true;
     return true;
 }
 
 void hera_store_cerrar(void) {
     g_abierto = false;
+    if (g_lock_fd >= 0) { close(g_lock_fd); g_lock_fd = -1; g_lock_prof = 0; }
     g_hechos_n = g_dichos_n = 0;
     g_ruta[0] = '\0';
 }
@@ -564,7 +640,13 @@ void hera_store_cerrar(void) {
 
 bool hera_store_dijo(const char *texto, char *out_id, size_t cap) {
     if (!g_abierto || !texto || !*texto) return false;
-    if (g_dichos_n >= DICHOS_MAX) return false;
+
+    /* RELECTURA + ID + APPEND en el MISMO cerrojo exclusivo. Si se releyera
+     * fuera, otro proceso podría escribir entre medias y los dos usarían el
+     * mismo id. */
+    bloquear(LOCK_EX);
+    recargar(true);
+    if (g_dichos_n >= DICHOS_MAX) { desbloquear(); return false; }
 
     char id[HERA_ID_MAX];
     snprintf(id, sizeof(id), "u%u", ++g_seq_u);
@@ -575,12 +657,13 @@ bool hera_store_dijo(const char *texto, char *out_id, size_t cap) {
     snprintf(linea, sizeof(linea),
              "{\"r\":\"dijo\",\"id\":\"%s\",\"ts\":%lld,\"texto\":\"%s\"}",
              id, ahora(), e);
-    if (!anexar(linea)) return false;
+    if (!anexar(linea)) { desbloquear(); return false; }
 
     dicho_t *d = &g_dichos[g_dichos_n++];
     snprintf(d->id, sizeof(d->id), "%s", id);
     snprintf(d->texto, sizeof(d->texto), "%s", texto);
     if (out_id && cap) snprintf(out_id, cap, "%s", id);
+    desbloquear();
     return true;
 }
 
@@ -593,7 +676,7 @@ static hera_veredicto_t validar(const char *clave, const char *valor,
     if (strlen(clave) >= HERA_CLAVE_MAX || strlen(valor) >= HERA_VALOR_MAX)
         return HERA_RECHAZO_INVALIDO;
 
-    const char *dicho = hera_store_evidencia(evidencia_id);
+    const char *dicho = evidencia_interna(evidencia_id);
     if (!dicho) return HERA_RECHAZO_SIN_EVIDENCIA;
     return texto_respalda(dicho, clave, valor);
 }
@@ -674,7 +757,12 @@ hera_veredicto_t hera_store_proponer(const char *clave, const char *valor,
                                      const char *texto,
                                      const char *evidencia_id,
                                      char *out_id, size_t cap) {
-    return proponer_impl(clave, valor, texto, evidencia_id, false, out_id, cap);
+    bloquear(LOCK_EX);
+    recargar(true);
+    const hera_veredicto_t v =
+        proponer_impl(clave, valor, texto, evidencia_id, false, out_id, cap);
+    desbloquear();
+    return v;
 }
 
 hera_veredicto_t hera_store_registrar(const char *clave, const char *valor,
@@ -682,7 +770,7 @@ hera_veredicto_t hera_store_registrar(const char *clave, const char *valor,
                                       const char *evidencia_id,
                                       const char *confirmacion_id,
                                       char *out_id, size_t cap) {
-    if (!hera_store_evidencia(confirmacion_id))
+    if (!evidencia_interna(confirmacion_id))
         return HERA_RECHAZO_SIN_CONFIRMACION;
     const hera_veredicto_t v = validar(clave, valor, evidencia_id);
     if (v != HERA_OK) return v;
@@ -704,7 +792,7 @@ static hera_veredicto_t confirmar_impl(const char *id,
      * Sin esto, "confirmado" solo querría decir "alguien llamó a esta función",
      * y una extracción del modelo podría ascenderse a sí misma. */
 #if HERA_SABOTAJE != 6
-    if (!hera_store_evidencia(confirmacion_id))
+    if (!evidencia_interna(confirmacion_id))
         return HERA_RECHAZO_SIN_CONFIRMACION;
 #endif
     /* Sabotaje 6: confirmar sin que conste que la persona dijo nada — una
@@ -741,7 +829,11 @@ static hera_veredicto_t confirmar_impl(const char *id,
 
 hera_veredicto_t hera_store_confirmar(const char *id,
                                       const char *confirmacion_id) {
-    return confirmar_impl(id, confirmacion_id, false);
+    bloquear(LOCK_EX);
+    recargar(true);
+    const hera_veredicto_t v = confirmar_impl(id, confirmacion_id, false);
+    desbloquear();
+    return v;
 }
 
 static hera_veredicto_t corregir_impl(const char *clave, const char *valor,
@@ -749,7 +841,7 @@ static hera_veredicto_t corregir_impl(const char *clave, const char *valor,
                                       const char *evidencia_id,
                                       const char *confirmacion_id,
                                       bool ensayo, char *out_id, size_t cap) {
-    if (!hera_store_evidencia(confirmacion_id))
+    if (!evidencia_interna(confirmacion_id))
         return HERA_RECHAZO_SIN_CONFIRMACION;
     const hera_veredicto_t v = validar(clave, valor, evidencia_id);
     if (v != HERA_OK) return v;
@@ -790,8 +882,13 @@ hera_veredicto_t hera_store_corregir(const char *clave, const char *valor,
                                      const char *evidencia_id,
                                      const char *confirmacion_id,
                                      char *out_id, size_t cap) {
-    return corregir_impl(clave, valor, texto, evidencia_id, confirmacion_id,
-                         false, out_id, cap);
+    bloquear(LOCK_EX);
+    recargar(true);
+    const hera_veredicto_t v =
+        corregir_impl(clave, valor, texto, evidencia_id, confirmacion_id,
+                      false, out_id, cap);
+    desbloquear();
+    return v;
 }
 
 /* ------------------------------------------------------------------------
@@ -801,12 +898,20 @@ hera_veredicto_t hera_store_corregir(const char *clave, const char *valor,
 hera_veredicto_t hera_store_ensayar_proponer(const char *clave,
                                              const char *valor,
                                              const char *evidencia_id) {
-    return proponer_impl(clave, valor, NULL, evidencia_id, true, NULL, 0);
+    bloquear(LOCK_SH);
+    recargar(false);
+    const hera_veredicto_t v = proponer_impl(clave, valor, NULL, evidencia_id, true, NULL, 0);
+    desbloquear();
+    return v;
 }
 
 hera_veredicto_t hera_store_ensayar_confirmar(const char *id,
                                               const char *confirmacion_id) {
-    return confirmar_impl(id, confirmacion_id, true);
+    bloquear(LOCK_SH);
+    recargar(false);
+    const hera_veredicto_t v = confirmar_impl(id, confirmacion_id, true);
+    desbloquear();
+    return v;
 }
 
 hera_veredicto_t hera_store_ensayar_corregir(const char *clave,
@@ -823,6 +928,8 @@ hera_veredicto_t hera_store_ensayar_corregir(const char *clave,
 
 size_t hera_store_confirmados(hera_hecho_t *out, size_t cap) {
     size_t n = 0;
+    bloquear(LOCK_SH);
+    recargar(false);
     for (size_t i = 0; i < g_hechos_n && n < cap; i++) {
 #if HERA_SABOTAJE == 3
         /* Sabotaje: los candidatos se cuelan entre los hechos vigentes, que
@@ -833,20 +940,27 @@ size_t hera_store_confirmados(hera_hecho_t *out, size_t cap) {
 #endif
         out[n++] = g_hechos[i];
     }
+    desbloquear();
     return n;
 }
 
 size_t hera_store_todos(hera_hecho_t *out, size_t cap) {
     size_t n = 0;
+    bloquear(LOCK_SH);
+    recargar(false);
     for (size_t i = 0; i < g_hechos_n && n < cap; i++) out[n++] = g_hechos[i];
+    desbloquear();
     return n;
 }
 
 size_t hera_store_historial(const char *clave, hera_hecho_t *out, size_t cap) {
     size_t n = 0;
     if (!clave) return 0;
+    bloquear(LOCK_SH);
+    recargar(false);
     for (size_t i = 0; i < g_hechos_n && n < cap; i++)
         if (strcmp(g_hechos[i].clave, clave) == 0) out[n++] = g_hechos[i];
+    desbloquear();
     return n;
 }
 
@@ -899,7 +1013,10 @@ static size_t importar_fichero(const char *nombre) {
 }
 
 size_t hera_store_importar_legacy(void) {
-    if (!g_abierto || g_importado) return 0;
+    if (!g_abierto) return 0;
+    bloquear(LOCK_EX);
+    recargar(true);
+    if (g_importado) { desbloquear(); return 0; }
     const size_t n = importar_fichero("facts.md") +
                      importar_fichero("candidates.md");
     char linea[128];
@@ -907,5 +1024,6 @@ size_t hera_store_importar_legacy(void) {
              "{\"r\":\"importado\",\"ts\":%lld,\"n\":%zu}", ahora(), n);
     anexar(linea);
     g_importado = true;
+    desbloquear();
     return n;
 }

@@ -48,6 +48,12 @@ static pthread_mutex_t  g_lock = PTHREAD_MUTEX_INITIALIZER;
  * un hilo por conexión, dos subidas a la vez intercalarían los bloques y el
  * runtime leería el payload de una como cabecera de la otra. */
 static pthread_mutex_t  g_wr = PTHREAD_MUTEX_INITIALIZER;
+/* Un turno entero, de comprobar IDLE a escribirlo, es una sola operación. Con
+ * un hilo por conexión, dos POST /api/chat a la vez veían LOS DOS el estado
+ * IDLE, los dos pasaban el filtro y los dos mandaban su turno: el runtime
+ * recibía dos peticiones pisándose sobre el mismo KV. Mirar el estado y
+ * actuar en consecuencia no puede ser dos pasos. */
+static pthread_mutex_t  g_turno = PTHREAD_MUTEX_INITIALIZER;
 static engine_state_t   g_state = ENGINE_BOOTING;
 static engine_chunk_cb  g_on_chunk;
 static engine_event_cb  g_on_event;
@@ -145,6 +151,15 @@ static void trazar(const char *direccion, const char *json_linea) {
             direccion, json_linea);
     fflush(g_traza);
     pthread_mutex_unlock(&g_traza_lock);
+}
+
+static bool rt_send_bloqueado(const char *text);
+
+/* Aviso al usuario por su canal propio. Un fallo de memoria no puede quedarse
+ * solo en el log del servidor. */
+static void avisar(const char *texto) {
+    fprintf(stderr, "[serve] %s\n", texto);
+    if (g_on_notice) g_on_notice(texto, strlen(texto), g_user);
 }
 
 static void set_state(engine_state_t st, const char *event) {
@@ -390,6 +405,13 @@ bool rt_attach(const engine_attachment_t *a) {
 }
 
 bool rt_send(const char *text) {
+    pthread_mutex_lock(&g_turno);
+    const bool ok_turno = rt_send_bloqueado(text);
+    pthread_mutex_unlock(&g_turno);
+    return ok_turno;
+}
+
+static bool rt_send_bloqueado(const char *text) {
     if (rt_state() != ENGINE_IDLE) return false;
 
     /* 0. Releer el diario. La memoria puede cambiar desde FUERA de la ruta —
@@ -398,12 +420,24 @@ bool rt_send(const char *text) {
      *    el diario al arrancar seguiría sirviendo un hecho que se corrigió
      *    hace una hora, que es exactamente el fallo que E3 viene a cerrar.
      *    Son unas decenas de líneas: cuesta menos que equivocarse. */
-    hera_store_abrir();
+    if (!hera_store_abrir()) {
+        /* Sin memoria no se sigue con un perfil vacío: sería contestar como
+         * si no supiéramos nada de la persona sin decir que la memoria está
+         * rota, y mañana ese turno sería indistinguible de uno normal. */
+        avisar("(no puedo abrir tu memoria: el turno no se envía)");
+        return false;
+    }
 
     /* 1. Lo que dice la persona se registra como EVIDENCIA. Es lo único que
      *    después podrá respaldar un recuerdo. No crea ningún hecho: sin
-     *    aplicador de MemoryDelta, nadie puede escribir memoria por aquí. */
-    hera_store_dijo(text, NULL, 0);
+     *    aplicador de MemoryDelta, nadie puede escribir memoria por aquí.
+     *    Si esto falla, el turno tampoco sale: una conversación cuyas
+     *    palabras no se han registrado no puede respaldar ningún recuerdo
+     *    después, y el usuario creería que sí. */
+    if (!hera_store_dijo(text, NULL, 0)) {
+        avisar("(no pude registrar tus palabras: el turno no se envía)");
+        return false;
+    }
 
     /* 2. CK clasifica sobre mensaje + estado de artefacto. */
     const bool trae_artefacto =

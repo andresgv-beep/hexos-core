@@ -250,6 +250,72 @@ def main():
         ok(not any(PERFIL_MARCA in c for c in sis),
            "y no se inventa un bloque de perfil vacío", "inyectó perfil sin datos")
 
+    print("\n[8] frontera multiproceso: nadie pisa a nadie")
+    C = os.path.join(raiz, "C")
+    os.makedirs(C)
+
+    # N procesos `hera dijo` a la vez sobre el mismo diario. Sin cerrojo, dos
+    # releen el mismo ultimo id, los dos calculan el siguiente y los dos lo
+    # escriben: quedan dos evidencias distintas con el MISMO id, y una
+    # correccion que cite ese id se lleva las palabras equivocadas.
+    N = 24
+    procs = [subprocess.Popen([args.hera, "dijo", f"frase numero {i}"],
+                              env=dict(os.environ, HELIOS_HOME=C),
+                              stdout=subprocess.PIPE, text=True)
+             for i in range(N)]
+    ids = [p.communicate()[0].strip() for p in procs]
+    ids = [i for i in ids if i]
+    ok(len(ids) == N, f"los {N} procesos escriben", f"solo {len(ids)}")
+    ok(len(set(ids)) == len(ids), "y ningun id se repite",
+       f"{len(ids) - len(set(ids))} ids duplicados")
+
+    diario = os.path.join(C, "hera.jsonl")
+    with open(diario, encoding="utf-8") as f:
+        lineas = f.readlines()
+    ok(all(l.endswith("}\n") for l in lineas),
+       "el diario queda entero: ninguna linea partida ni pegada a otra",
+       "hay lineas corruptas")
+    vistos = set()
+    dup = False
+    for l in lineas:
+        d = json.loads(l)
+        if d.get("r") == "dijo":
+            if d["id"] in vistos:
+                dup = True
+            vistos.add(d["id"])
+    ok(not dup, "y en disco tampoco hay dos evidencias con el mismo id",
+       "el diario tiene ids repetidos")
+    ok(len(vistos) == N, f"estan las {N} evidencias", f"hay {len(vistos)}")
+
+    # Dos /api/chat simultaneos: solo uno puede entrar.
+    with Servidor(args, C, os.path.join(raiz, "c.jsonl")) as s:
+        import threading
+        res = []
+        def disparar():
+            try:
+                req = urllib.request.Request(BASE + "/api/chat",
+                                             data=b"dime hola y nada mas",
+                                             method="POST")
+                with urllib.request.urlopen(req, timeout=20) as r:
+                    res.append(r.status)
+            except urllib.error.HTTPError as e:
+                res.append(e.code)
+            except Exception:
+                res.append(0)
+        hilos = [threading.Thread(target=disparar) for _ in range(2)]
+        for h in hilos: h.start()
+        for h in hilos: h.join()
+        ok(sorted(res) == [202, 409],
+           "de dos peticiones a la vez, una entra y la otra se rechaza",
+           f"respuestas {res}")
+        for _ in range(120):
+            time.sleep(1)
+            if "idle" in pedir("/api/status"):
+                break
+        turnos = [p for p in s.peticiones() if p.get("type") == "turn"]
+        ok(len(turnos) == 1, "y solo se manda UN turno al runtime",
+           f"se mandaron {len(turnos)}")
+
     print(f"\n{pruebas} pruebas · {fallos} fallos")
     shutil.rmtree(raiz, ignore_errors=True)
     return 1 if fallos else 0

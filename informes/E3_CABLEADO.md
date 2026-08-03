@@ -1,6 +1,6 @@
 # E3 · cableado opt-in — memoria por la ruta real
 
-La ruta `--runtime` ya lleva memoria. **22 pruebas · 0 fallos** contra un modelo
+La ruta `--runtime` ya lleva memoria. **29 pruebas · 0 fallos** contra un modelo
 de verdad cargado (`tools/ruta_memoria_test.py`), que es lo único que el almacén
 no podía demostrar solo.
 
@@ -85,6 +85,59 @@ tirar: que aparezca uno quiere decir exactamente una cosa — la memoria cambió
 **El `shutdown` se escribía sin trazarse**, así que su `result` salía en la
 traza sin petición que lo justificara y la conformidad lo cantaba con razón.
 
+## La frontera multiproceso
+
+El almacén pasó a ser multiproceso en cuanto la CLI y HexOS lo tocaron a la
+vez, y no tenía exclusión. La carrera:
+
+```
+HexOS relee (último u10)        hera dijo relee (último u10)
+HexOS calcula u11               hera calcula u11
+HexOS escribe u11               hera escribe u11
+```
+
+Dos evidencias distintas con el mismo id, y una corrección que cite `u11` se
+lleva las palabras equivocadas — la clase exacta de fallo que este almacén
+existe para hacer imposible.
+
+**Dos capas de cerrojo, porque hacen falta las dos:**
+
+- `flock` sobre `hera.lock` excluye entre **procesos**. Fichero aparte, no el
+  diario, para que el truncado de la cola no se pelee con el descriptor que
+  sostiene la exclusión.
+- Un mutex recursivo excluye entre **hilos** del mismo proceso: `flock` se
+  concede por descriptor abierto, así que dos hilos de HexOS lo "tendrían" los
+  dos a la vez y no se excluirían en absoluto.
+
+Relectura, validación, asignación de id y append ocurren **dentro del mismo
+cerrojo exclusivo**. Partirlo en dos tramos es tener la carrera otra vez.
+
+**El truncado de la cola solo bajo exclusivo.** Un lector con cerrojo
+compartido la ignora y se va sin tocar el fichero: reparar mientras otro
+proceso está a medio escribir es peor que la cola.
+
+**Un cerrojo alrededor de `rt_send()` entero.** Con un hilo por conexión, dos
+`POST /api/chat` simultáneos veían los dos `ENGINE_IDLE`, los dos pasaban el
+filtro y los dos mandaban turno sobre el mismo KV. Mirar el estado y actuar en
+consecuencia no puede ser dos pasos.
+
+**Los retornos de HERA ya no se ignoran.** Si `hera_store_abrir()` o
+`hera_store_dijo()` fallan, el turno **se rechaza** con aviso al usuario. Seguir
+con un perfil vacío sería contestar como si no supiéramos nada de la persona sin
+decir que la memoria está rota, y ese turno sería indistinguible de uno normal.
+
+### Y la prueba se ha visto fallar
+
+`make sabotaje-carrera` lanza 24 `hera dijo` en paralelo contra el almacén bueno
+y contra uno compilado sin cerrojo:
+
+```
+con cerrojo:  24 ids únicos
+sin cerrojo:  solo 16 ids únicos (la carrera se reproduce)
+```
+
+Si el saboteado también diera 24, la prueba no estaría probando el cerrojo.
+
 ## Deuda anotada, no bloqueante
 
 - El parser de `MemoryDelta` debe endurecerse (cierre del array, basura fuera de
@@ -94,4 +147,5 @@ traza sin petición que lo justificara y la conformidad lo cantaba con razón.
 - La transcripción canónica se corta a 64 turnos; al reconstruir se pierden los
   más viejos y se avisa por `notice`. La compactación de verdad es otro asunto.
 
-La ruta sigue marcada **EXPERIMENTAL** a la espera de tu revisión.
+La ruta sigue marcada **EXPERIMENTAL**, pero ya no por falta de identidad
+persistente: es porque la reflexión sigue desconectada.

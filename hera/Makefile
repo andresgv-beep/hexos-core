@@ -40,7 +40,7 @@ TEST_TARGET = $(BINDIR)/hera_test
 # Rules
 # ============================================================================
 
-.PHONY: all clean lib test store-test mente-test cli sabotaje sabotaje-mente
+.PHONY: all clean lib test store-test mente-test cli sabotaje sabotaje-mente sabotaje-carrera
 
 all: lib test store-test mente-test cli
 
@@ -86,7 +86,7 @@ store-test: $(STORE_TEST)
 $(STORE_TEST): tools/hera_store_test.c $(STORE_SRC) $(INCDIR)/hera_store.h
 	@mkdir -p $(BINDIR)
 	$(CC) $(CFLAGS) -DHERA_SABOTAJE=0 -I$(INCDIR) \
-	  $(STORE_SRC) tools/hera_store_test.c -o $@
+	  $(STORE_SRC) tools/hera_store_test.c -o $@ -lpthread
 
 sabotaje: $(STORE_TEST)
 	@$(STORE_TEST) > /dev/null || (echo "FALLO: la bateria no pasa en limpio"; exit 1)
@@ -94,7 +94,7 @@ sabotaje: $(STORE_TEST)
 	@fallos=0; \
 	for n in $(SABOTAJES); do \
 	  if ! $(CC) $(CFLAGS) -DHERA_SABOTAJE=$$n -I$(INCDIR) $(STORE_SRC) \
-	       tools/hera_store_test.c -o $(BINDIR)/hera_st_$$n 2>/dev/null; then \
+	       tools/hera_store_test.c -lpthread -o $(BINDIR)/hera_st_$$n 2>/dev/null; then \
 	    echo "  sabotaje $$n: NO COMPILA"; fallos=1; continue; \
 	  fi; \
 	  salida=`$(BINDIR)/hera_st_$$n --sabotaje $$n 2>&1`; codigo=$$?; \
@@ -116,7 +116,7 @@ mente-test: $(MENTE_TEST)
 $(MENTE_TEST): tools/hera_mente_test.c $(MENTE_SRC) $(STORE_SRC)
 	@mkdir -p $(BINDIR)
 	$(CC) $(CFLAGS) -DHERA_SABOTAJE=0 -I$(INCDIR) \
-	  $(STORE_SRC) $(MENTE_SRC) tools/hera_mente_test.c -o $@
+	  $(STORE_SRC) $(MENTE_SRC) tools/hera_mente_test.c -o $@ -lpthread
 
 sabotaje-mente: $(MENTE_TEST)
 	@$(MENTE_TEST) > /dev/null || (echo "FALLO: la bateria de la mente no pasa en limpio"; exit 1)
@@ -124,7 +124,7 @@ sabotaje-mente: $(MENTE_TEST)
 	@fallos=0; \
 	for n in $(MENTE_SABOTAJES); do \
 	  if ! $(CC) $(CFLAGS) -DHERA_SABOTAJE=$$n -I$(INCDIR) $(STORE_SRC) \
-	       $(MENTE_SRC) tools/hera_mente_test.c -o $(BINDIR)/hera_mt_$$n 2>/dev/null; then \
+	       $(MENTE_SRC) tools/hera_mente_test.c -lpthread -o $(BINDIR)/hera_mt_$$n 2>/dev/null; then \
 	    echo "  sabotaje $$n: NO COMPILA"; fallos=1; continue; \
 	  fi; \
 	  salida=`$(BINDIR)/hera_mt_$$n --sabotaje $$n 2>&1`; codigo=$$?; \
@@ -144,4 +144,28 @@ cli: $(BINDIR)/hera
 $(BINDIR)/hera: tools/hera_cli.c $(STORE_SRC) $(MENTE_SRC)
 	@mkdir -p $(BINDIR)
 	$(CC) $(CFLAGS) -DHERA_SABOTAJE=0 -I$(INCDIR) \
-	  $(STORE_SRC) $(MENTE_SRC) tools/hera_cli.c -o $@
+	  $(STORE_SRC) $(MENTE_SRC) tools/hera_cli.c -o $@ -lpthread
+
+# ============================================================================
+# La carrera multiproceso no se puede probar dentro de un binario: hacen falta
+# procesos de verdad peleandose por el mismo diario. Se lanzan 24 `hera dijo`
+# a la vez contra el almacen bueno y contra uno sin cerrojo, y se exige que el
+# bueno de 24 ids unicos y que el saboteado NO lo consiga. Si el saboteado
+# tambien pasara, la prueba no estaria probando el cerrojo.
+# ============================================================================
+
+sabotaje-carrera: cli
+	@$(CC) $(CFLAGS) -DHERA_SABOTAJE=10 -I$(INCDIR) $(STORE_SRC) $(MENTE_SRC) \
+	  tools/hera_cli.c -lpthread -o $(BINDIR)/hera_sin_cerrojo 2>/dev/null
+	@d=`mktemp -d`; for i in `seq 1 24`; do HELIOS_HOME=$$d $(BINDIR)/hera dijo "f$$i" >/dev/null & done; wait; \
+	  u=`grep -o '"id":"u[0-9]*"' $$d/hera.jsonl | sort -u | wc -l`; \
+	  rm -rf $$d; \
+	  if [ "$$u" != "24" ]; then echo "FALLO: con cerrojo solo $$u ids unicos"; exit 1; fi; \
+	  echo "con cerrojo: 24 ids unicos"
+	@d=`mktemp -d`; for i in `seq 1 24`; do HELIOS_HOME=$$d $(BINDIR)/hera_sin_cerrojo dijo "f$$i" >/dev/null & done; wait; \
+	  u=`grep -o '"id":"u[0-9]*"' $$d/hera.jsonl | sort -u | wc -l`; \
+	  rm -rf $$d; \
+	  if [ "$$u" = "24" ]; then \
+	    echo "FALLO: sin cerrojo tambien salen 24 ids unicos — la prueba no prueba nada"; exit 1; \
+	  fi; \
+	  echo "sin cerrojo: solo $$u ids unicos (la carrera se reproduce)"
