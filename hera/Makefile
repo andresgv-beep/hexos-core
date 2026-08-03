@@ -85,7 +85,7 @@ $(STORE_TEST): tools/hera_store_test.c $(STORE_SRC) $(INCDIR)/hera_store.h
 sabotaje: $(STORE_TEST)
 	@$(STORE_TEST) > /dev/null || (echo "la bateria falla en limpio"; exit 1)
 	@echo "limpio: 0 fallos"
-	@for n in 1 2 3; do \
+	@for n in 1 2 3 4 5 6 7; do \
 	  $(CC) $(CFLAGS) -DHERA_SABOTAJE=$$n -I$(INCDIR) $(STORE_SRC) \
 	    tools/hera_store_test.c -o $(BINDIR)/hera_st_$$n 2>/dev/null; \
 	  $(BINDIR)/hera_st_$$n --sabotaje $$n | tail -1; \
