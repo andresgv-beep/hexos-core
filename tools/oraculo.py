@@ -312,7 +312,17 @@ def entrada_sesion(sesion):
     return buf + b"/salir\n"
 
 
-def correr_caso(caso, model, engine, extra_env, tiene_vision):
+# Sidecar de autoajuste COMPARTIDO entre casos y ejecuciones. Sin esto cada
+# perfil temporal arranca sin caché, el motor recronometra los kernels y puede
+# elegir geometrías con árboles de reducción distintos: bits distintos y, en
+# un argmax reñido, texto distinto. El oráculo se volvía no determinista por
+# su propia metodología, incluso en greedy.
+TUNE_COMPARTIDO = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               "..", "informes", ".tune", "tune.cache")
+
+
+def correr_caso(caso, model, engine, extra_env, tiene_vision,
+                temperatura="0"):
     if caso.get("necesita_vision") and not tiene_vision:
         return {"nombre": caso["nombre"], "invariante": caso["invariante"],
                 "estado": "SALTADO", "motivo": "el modelo no declara visión",
@@ -320,6 +330,8 @@ def correr_caso(caso, model, engine, extra_env, tiene_vision):
 
     home = tempfile.mkdtemp(prefix="oraculo_")
     try:
+        if os.path.exists(TUNE_COMPARTIDO):
+            shutil.copy(TUNE_COMPARTIDO, os.path.join(home, "tune.cache"))
         for nombre, contenido in caso["perfil"].items():
             with open(os.path.join(home, nombre), "w", encoding="utf-8") as f:
                 f.write(contenido)
@@ -335,7 +347,7 @@ def correr_caso(caso, model, engine, extra_env, tiene_vision):
             env.update(extra_env)
 
             antes = leer_memoria(home)
-            proc = subprocess.run([engine, model, "0.7"],
+            proc = subprocess.run([engine, model, temperatura],
                                   input=entrada_sesion(sesion), env=env,
                                   capture_output=True, timeout=1200)
             salida = re.sub(r"\x1b\[[0-9;]*m", "",
@@ -393,6 +405,11 @@ def correr_caso(caso, model, engine, extra_env, tiene_vision):
             "turnos": todos,
         }
     finally:
+        # El primer caso que lo genere lo deja para todos los demás.
+        generado = os.path.join(home, "tune.cache")
+        if os.path.exists(generado) and not os.path.exists(TUNE_COMPARTIDO):
+            os.makedirs(os.path.dirname(TUNE_COMPARTIDO), exist_ok=True)
+            shutil.copy(generado, TUNE_COMPARTIDO)
         shutil.rmtree(home, ignore_errors=True)
 
 
@@ -427,6 +444,10 @@ def diff(a_path, b_path):
     cb = {c["nombre"]: c for c in b["casos"]}
 
     pa, pb = a.get("procedencia", {}), b.get("procedencia", {})
+    if a.get("temperatura") != b.get("temperatura"):
+        print(f'· AVISO: temperaturas distintas '
+              f'({a.get("temperatura")} vs {b.get("temperatura")}): '
+              f'las diferencias de texto y memoria no son concluyentes')
     for campo in ("modelo_sha256", "engine_sha256", "hector_commit"):
         if pa.get(campo) != pb.get(campo):
             print(f"· {campo}: {pa.get(campo)} → {pb.get(campo)}")
@@ -461,20 +482,43 @@ def diff(a_path, b_path):
                 fallos += 1
             elif xa["texto"] != xb["texto"]:
                 print(f"[texto] {nombre} turno {i+1}: distinto (informativo)")
-        da = {s["indice"]: s["memoria_delta"] for s in ca[nombre].get("sesiones", [])}
-        db = {s["indice"]: s["memoria_delta"] for s in cb[nombre].get("sesiones", [])}
-        if da != db:
-            print(f"[MEMORIA] {nombre}: cambió lo que se escribió en memoria")
+        # Comparación ESTRUCTURAL, no literal: el contenido de la memoria lo
+        # genera el modelo muestreando, y la destilación lleva marca de
+        # tiempo, así que episodic.md no puede coincidir jamás entre dos
+        # ejecuciones. Comparar el texto producía regresiones falsas. Lo que
+        # sí es una regresión: que deje de escribirse un fichero que antes se
+        # escribía, o que empiece a escribirse uno que no se tocaba.
+        def forma(caso):
+            out = {}
+            for ses in caso.get("sesiones", []):
+                out[ses["indice"]] = sorted(ses["memoria_delta"].keys())
+            return out
+        fa_, fb_ = forma(ca[nombre]), forma(cb[nombre])
+        if fa_ != fb_:
+            print(f"[MEMORIA] {nombre}: cambian los ficheros escritos "
+                  f"{fa_} → {fb_}")
             fallos += 1
+        else:
+            da = {s["indice"]: s["memoria_delta"] for s in ca[nombre].get("sesiones", [])}
+            db = {s["indice"]: s["memoria_delta"] for s in cb[nombre].get("sesiones", [])}
+            if da != db:
+                print(f"[memoria] {nombre}: mismo reparto, distinto contenido "
+                      f"(informativo: la extracción se muestrea)")
         # El delta no ve una sustitución del mismo tamaño (mismo número de
         # bytes, otro contenido): hay que comparar también el estado final.
         # Solo si ambos informes lo traen, para no romper bases anteriores.
+        # El estado final también se compara por forma: qué ficheros acaban
+        # con contenido y cuáles vacíos. Una sustitución que vacíe un fichero
+        # o llene otro sí se ve; una reescritura del mismo hecho con otras
+        # palabras, no — y esa es la diferencia entre medir y adivinar.
         fa, fb = ca[nombre].get("memoria_final"), cb[nombre].get("memoria_final")
-        if fa is not None and fb is not None and fa != fb and da == db:
-            for fich in sorted(set(fa) | set(fb)):
-                if fa.get(fich) != fb.get(fich):
-                    print(f"[MEMORIA] {nombre}: estado final distinto en {fich}")
-            fallos += 1
+        if fa is not None and fb is not None:
+            va = {k: bool(v.strip()) for k, v in fa.items()}
+            vb = {k: bool(v.strip()) for k, v in fb.items()}
+            if va != vb:
+                print(f"[MEMORIA] {nombre}: cambia qué ficheros quedan con "
+                      f"contenido {va} → {vb}")
+                fallos += 1
         # `None` = informe anterior al registro de returncode; no es un cambio.
         rca = [s.get("returncode") for s in ca[nombre].get("sesiones", [])]
         rcb = [s.get("returncode") for s in cb[nombre].get("sesiones", [])]
@@ -498,6 +542,12 @@ def main():
     ap.add_argument("--salida", default="informe_oraculo.json")
     ap.add_argument("--env", action="append", default=[])
     ap.add_argument("--solo")
+    # GREEDY POR DEFECTO. Un oráculo cuyas salidas se muestrean no es un
+    # oráculo: con temperatura, el texto, los candidatos extraídos y hasta QUÉ
+    # ficheros de memoria se escriben cambian entre ejecuciones idénticas, y
+    # el diff produce regresiones falsas. En greedy todo es comparable.
+    ap.add_argument("--temp", default="0",
+                    help="temperatura del motor (0 = greedy, por defecto)")
     ap.add_argument("--sin-sha", action="store_true",
                     help="omitir SHA256 del HNF (rápido, informe no certificable)")
     ap.add_argument("--diff", nargs=2, metavar=("A", "B"))
@@ -522,12 +572,14 @@ def main():
     print("calculando procedencia (SHA256 del HNF)…" if not args.sin_sha else "")
     informe = {"procedencia": procedencia(args.model, args.engine, extra_env,
                                           not args.sin_sha),
+               "temperatura": args.temp,
                "vision_disponible": tiene_vision, "casos": []}
 
     casos = [c for c in BATERIA if not args.solo or c["nombre"] == args.solo]
     for i, caso in enumerate(casos, 1):
         print(f"[{i}/{len(casos)}] {caso['nombre']}…", flush=True)
-        r = correr_caso(caso, args.model, args.engine, extra_env, tiene_vision)
+        r = correr_caso(caso, args.model, args.engine, extra_env,
+                        tiene_vision, args.temp)
         informe["casos"].append(r)
         if r.get("estado") == "FALLO_MOTOR":
             malas = [s for s in r["sesiones"] if s["returncode"] != 0]

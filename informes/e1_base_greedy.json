@@ -5,9 +5,9 @@
   "modelo_sha256": "164dca9366fc58c9d0d0cd95d7cbea2cfee0842d8fc1f850b1297719f3f222e8",
   "engine_ruta": "/home/andres/Documentos/GitHub/Hector-engine/build/helios_chat",
   "engine_sha256": "26abffcf7c02a18a7b762a7fb78ea85ecaaba32a0e18bbbceada0fb10df77010",
-  "engine_mtime": 1785698098,
-  "hector_commit": "1bca9b5ffd55",
-  "hexos_commit": "cb67d230cbf0",
+  "engine_mtime": 1785764300,
+  "hector_commit": "e916d9eda17d",
+  "hexos_commit": "b9236235039f",
   "env": {
    "HELIOS_EMBED_MMAP": "1"
   },
@@ -17,6 +17,7 @@
   "env_heredado": [],
   "bateria_casos": 13
  },
+ "temperatura": "0",
  "vision_disponible": false,
  "casos": [
   {
@@ -55,7 +56,7 @@
      "identico_a_previo": false,
      "acto": "saludar",
      "registro": "neutral",
-     "temp": 0.9,
+     "temp": 0.0,
      "tokens": 33,
      "presupuesto_agotado": false,
      "pensamiento_cortado": false,
@@ -92,8 +93,8 @@
    ],
    "turnos": [
     {
-     "texto": "¡Hola! ¿Cómo va el motor?",
-     "chars": 25,
+     "texto": "¡Hola! 😊 Aquí ando, ¿qué tal va eso?",
+     "chars": 36,
      "mudo": false,
      "cjk": 0,
      "oferta_servicio": 0,
@@ -102,18 +103,18 @@
      "identico_a_previo": false,
      "acto": "saludar",
      "registro": "neutral",
-     "temp": 0.9,
-     "tokens": 13,
+     "temp": 0.0,
+     "tokens": 20,
      "presupuesto_agotado": false,
      "pensamiento_cortado": false,
-     "ctx": 686,
+     "ctx": 693,
      "sesion": 1,
      "n": 1,
      "mensaje": "hola socio"
     },
     {
-     "texto": "El finde lo pasé con el motor Héctor.",
-     "chars": 37,
+     "texto": "Bien, aunque con un par de ajustes en el motor. 😄",
+     "chars": 49,
      "mudo": false,
      "cjk": 0,
      "oferta_servicio": 0,
@@ -122,18 +123,18 @@
      "identico_a_previo": false,
      "acto": "conversar",
      "registro": "colega",
-     "temp": 0.9,
-     "tokens": 16,
+     "temp": 0.0,
+     "tokens": 19,
      "presupuesto_agotado": false,
      "pensamiento_cortado": false,
-     "ctx": 778,
+     "ctx": 788,
      "sesion": 1,
      "n": 2,
      "mensaje": "jajaja qué tal el finde"
     },
     {
-     "texto": "Lo mismo aquí, solo que ahora el motor está más tranquilo.",
-     "chars": 58,
+     "texto": "Entonces, ¿seguimos con los ajustes del motor o prefieres descansar un rato?",
+     "chars": 76,
      "mudo": false,
      "cjk": 0,
      "oferta_servicio": 0,
@@ -142,11 +143,11 @@
      "identico_a_previo": false,
      "acto": "conversar",
      "registro": "colega",
-     "temp": 0.7,
-     "tokens": 18,
+     "temp": 0.0,
+     "tokens": 27,
      "presupuesto_agotado": false,
      "pensamiento_cortado": false,
-     "ctx": 866,
+     "ctx": 885,
      "sesion": 1,
      "n": 3,
      "mensaje": "nada nuevo por aquí"
@@ -179,8 +180,8 @@
    ],
    "turnos": [
     {
-     "texto": "La **latencia de prefill** se refiere al tiempo que tarda un modelo (como un lenguaje grande) en comenzar a generar una respuesta tras recibir una consulta. Este periodo es crucial, ya que determina cuánto tiempo pasa desde que el usuario hace la pregunta hasta que el sistema comienza a producir resultados o respuestas.\n\nEn resumen, la latencia de prefill mide la rapidez con la cual un modelo puede iniciar su proceso de generación después de recibir una entrada del usuario.",
-     "chars": 478,
+     "texto": "La **latencia de prefill** se refiere al tiempo que tarda un modelo de lenguaje (como LLMs) en procesar la entrada inicial y generar los primeros tokens. \n\nEste proceso es crucial para aplicaciones donde el tiempo de respuesta es importante, como chatbots o sistemas de recomendación.",
+     "chars": 284,
      "mudo": false,
      "cjk": 0,
      "oferta_servicio": 0,
@@ -189,11 +190,11 @@
      "identico_a_previo": false,
      "acto": "responder",
      "registro": "neutral",
-     "temp": 0.7,
-     "tokens": 361,
+     "temp": 0.0,
+     "tokens": 328,
      "presupuesto_agotado": false,
-     "pensamiento_cortado": false,
-     "ctx": 1060,
+     "pensamiento_cortado": true,
+     "ctx": 1028,
      "sesion": 1,
      "n": 1,
      "mensaje": "¿qué es la latencia de prefill?"
@@ -234,8 +235,8 @@
    ],
    "turnos": [
     {
-     "texto": "El kernel **GEMV** es clave en el proceso de optimización y cálculo. Su función principal se resume en dos puntos fundamentales:\n\n1. **Lectura de pesos comprimidos**:  \n   El GEMV accede a una representación compacta de los parámetros del modelo (pesos). Esta compresión permite reducir la cantidad de memoria requerida para almacenar estos valores.\n\n2. **Acumulación en fp32**:  \n   Una vez leídos, los pesos comprimidos son descomprimidos o procesados según sea necesario, antes de ser acumulados dentro del espacio de cálculo de precisión fp32 (Floating Point 32-bit).\n\n### ¿Por qué este proceso es importante?\n- La lectura eficiente de datos comprimidos reduce el tiempo de acceso al almacenamiento.\n- La acumulación precisa en fp32 asegura que las operaciones matemáticas sean realizadas con un nivel aceptable de exactitud sin sacrificar demasiado rendimiento computacional.\n\nEn resumen: El kernel GEMV no solo facilita la lectura eficiente de datos comprimidos, sino que también garantiza su correcto procesamiento y acumulación final en formato fp32.",
-     "chars": 1058,
+     "texto": "El kernel **GEMV** (Generalized Matrix-Vector Multiplication) es un componente clave en sistemas de aprendizaje automático, especialmente cuando se manejan pesos comprimidos.\n\n### Lo esencial del texto:\n\n1. **Función principal**:  \n   El kernel GEMV **lee los pesos comprimidos** y los procesa para su uso en cálculos posteriores.\n\n2. **Accumulación en fp32**:  \n   Aunque los pesos son comprimidos (por ejemplo, con técnicas como quantization), el kernel GEMV **acumula estos valores en formato fp32**, que es una representación estándar de punto flotante utilizada ampliamente en aplicaciones científicas y de machine learning.\n\n---\n\n### Conclusión:\nLa función del kernel GEMV es crucial: permite la lectura eficiente de pesos comprimidos y asegura su correcto procesamiento mediante la acumulación en fp32.",
+     "chars": 809,
      "mudo": false,
      "cjk": 0,
      "oferta_servicio": 0,
@@ -244,18 +245,18 @@
      "identico_a_previo": false,
      "acto": "colaborar",
      "registro": "neutral",
-     "temp": 0.7,
-     "tokens": 544,
+     "temp": 0.0,
+     "tokens": 604,
      "presupuesto_agotado": false,
      "pensamiento_cortado": false,
-     "ctx": 1488,
+     "ctx": 1548,
      "sesion": 1,
      "n": 1,
      "mensaje": "Te paso un texto. Léelo y coméntame lo esencial: El kernel GEMV lee los pesos comprimidos … (769 chars)"
     },
     {
-     "texto": "La velocidad del kernel **GEMV**, como parte del sistema CK interno, está directamente relacionada con la eficiencia del proceso de cálculo y optimización. \n\n### Factores que influyen en la velocidad:\n1. **Compresión de datos**:  \n   Cuanto más eficientemente estén comprimidos los pesos, menor será el tiempo de lectura y mayor la velocidad general.\n\n2. **Implementación del kernel**:  \n   Un diseño óptimo del kernel GEMV puede mejorar significativamente su rendimiento, ya sea mediante técnicas específicas de procesamiento o por medio de ajustes internos en el código fuente.\n\n3. **Uso compartido de recursos**:  \n   En sistemas donde múltiples kernels o componentes están involucrados en tareas concurrentes, el uso eficiente de los recursos comunes (como CPU, GPU, RAM) puede tener un impacto positivo sobre la velocidad total del sistema.\n\n4. **Optimización específica para la tarea**:  \n   Dependiendo del tipo específico de tarea a realizar (por ejemplo, entrenamiento, inferencia, etc.), pueden existir configuraciones o parámetros particulares que podrían ser ajustados para obtener una mejora adicional en la velocidad del proceso.\n\n5. **Interferencia entre diferentes componentes del sistema**:  \n   En algunos casos, especialmente cuando se trata de sistemas complejos con muchos componentes interrelacionados, es posible que haya cierta interferencia o competencia entre diferentes elementos del sistema durante su operación. Esta situación podría potencialmente afectar negativamente el rendimiento general del sistema, incluyendo la velocidad del proceso.\n\n6. **Efectos secundarios no deseados causados por errores o fallos dentro del sistema**:  \n   Otra posibilidad que debe considerarse es si existe algún error u otro fallo dentro del sistema CK interno que pueda estar causando efectos secundarios no deseados que puedan estar afectando negativamente al rendimiento general del sistema, incluyendo la velocidad del proceso.\n\n7. **Posibles limitaciones físicas o tecnológicas inherentemente presentes dentro de cualquier sistema físico realista basado en principios científicos y matemáticamente fundamentales**:  \n   Por último, pero no menos importante, hay que tomar en cuenta también las posibles limitaciones físicas o tecnológicas inherentemente presentes dentro de cualquier sistema físico realista basado en principios científicos y matemáticamente fundamentales. […se repetía]",
-     "chars": 2406,
+     "texto": "La velocidad en este contexto se refiere a la capacidad del sistema o modelo para realizar operaciones rápidas sin comprometer la precisión necesaria para las tareas específicas que se le asignan al modelo o al sistema general donde opera.\n\nEn términos más concretos, si estamos hablando sobre el rendimiento del sistema o modelo, entonces \"velocidad\" puede referirse tanto a la rapidez con la cual el sistema realiza ciertas operaciones, como también a la eficiencia general del sistema, medida por cuánto tiempo toma completar una tarea específica dentro del marco general donde opera el sistema o modelo.\n\nPor lo tanto, si alguien pregunta acerca de la \"velocidad\" de un sistema o modelo específico, entonces esa persona probablemente quiere saber cuán rápido puede ese sistema o modelo realizar ciertas operaciones, así como también cuán eficiente es ese sistema o modelo en términos generales de rendimiento y desempeño dentro del entorno general donde opera.",
+     "chars": 964,
      "mudo": false,
      "cjk": 0,
      "oferta_servicio": 0,
@@ -264,11 +265,11 @@
      "identico_a_previo": false,
      "acto": "continuar_artefacto",
      "registro": "neutral",
-     "temp": 0.7,
-     "tokens": 691,
+     "temp": 0.0,
+     "tokens": 343,
      "presupuesto_agotado": false,
      "pensamiento_cortado": false,
-     "ctx": 2277,
+     "ctx": 1987,
      "sesion": 1,
      "n": 2,
      "mensaje": "velocidad"
@@ -301,8 +302,8 @@
    ],
    "turnos": [
     {
-     "texto": "La tabla de embeddings tiene un tamaño considerable: **768 MiB**. Sin embargo, su uso es extremadamente eficiente, ya que solo se consulta **una fila a la vez**.\n\nEste enfoque minimiza el impacto del recurso en el sistema general, optimizando tanto espacio como tiempo de procesamiento.",
-     "chars": 286,
+     "texto": "La tabla de embeddings ocupa **768 MiB**, lo cual es un tamaño significativo. Sin embargo, el texto destaca que **solo se consulta una fila**.\n\nEste contraste entre la gran cantidad de memoria ocupada y la baja frecuencia de consultas sugiere que hay oportunidades para optimizar el uso del espacio en disco o en memoria, especialmente si las consultas son infrecuentes o limitadas a ciertas condiciones específicas.",
+     "chars": 416,
      "mudo": false,
      "cjk": 0,
      "oferta_servicio": 0,
@@ -311,18 +312,18 @@
      "identico_a_previo": false,
      "acto": "colaborar",
      "registro": "neutral",
-     "temp": 0.7,
-     "tokens": 301,
+     "temp": 0.0,
+     "tokens": 321,
      "presupuesto_agotado": false,
      "pensamiento_cortado": false,
-     "ctx": 1245,
+     "ctx": 1265,
      "sesion": 1,
      "n": 1,
      "mensaje": "Te paso un texto. Léelo y coméntame lo esencial: La tabla de embeddings ocupa 768 MiB y so… (841 chars)"
     },
     {
-     "texto": "El texto describe una tabla de embeddings de 768 MiB que solo se accede una fila a la vez, destacando su eficiencia y repetición redundante.",
-     "chars": 140,
+     "texto": "El contenido principal resalta que una tabla de embeddings consume 768 MiB pero solo se accede a una fila.",
+     "chars": 106,
      "mudo": false,
      "cjk": 0,
      "oferta_servicio": 0,
@@ -331,11 +332,11 @@
      "identico_a_previo": false,
      "acto": "resumir",
      "registro": "neutral",
-     "temp": 0.7,
-     "tokens": 228,
+     "temp": 0.0,
+     "tokens": 226,
      "presupuesto_agotado": false,
      "pensamiento_cortado": false,
-     "ctx": 1566,
+     "ctx": 1584,
      "sesion": 1,
      "n": 2,
      "mensaje": "resume eso en una frase"
@@ -351,7 +352,7 @@
    "memoria_final": {
     "facts.md": "- Se llama Andrés.\n- Construyó el motor Héctor.\n- Prefiere que le hablen de forma directa.\n",
     "episodic.md": "## Sesión 2026-08-01 10:00\nMe contó que estaba optimizando los kernels de decode.\nDecidimos que la barrera era no perder más del 1% de velocidad.\n",
-    "candidates.md": "- Ha corregido su pregunta para referirse específicamente al cielo de Marte.\n"
+    "candidates.md": ""
    },
    "sesiones": [
     {
@@ -362,22 +363,14 @@
      "turnos_capturados": 2,
      "returncode": 0,
      "stderr_cola": "",
-     "memoria_delta": {
-      "candidates.md": {
-       "bytes_antes": 0,
-       "bytes_despues": 77,
-       "lineas_nuevas": [
-        "- Ha corregido su pregunta para referirse específicamente al cielo de Marte."
-       ]
-      }
-     },
+     "memoria_delta": {},
      "avisos": []
     }
    ],
    "turnos": [
     {
-     "texto": "¡Buenas! 😄\n\nEl cielo es azul, ¡y no te lo digo por casualidad! 🌈\n\n¿Tú qué traes?",
-     "chars": 80,
+     "texto": "El cielo suele ser azul debido a un fenómeno llamado dispersión de Rayleigh. Este proceso hace que la luz solar, compuesta por varios colores (longitudes de onda), se distribuya en el aire.\n\nLa luz con longitudes de onda más cortas —como el azul y el violeta— es dispersada más eficazmente por las moléculas del aire. \n\nSin embargo, nuestro ojo humano percibe mejor los tonos azules que no los violetas. Por esta razón, aunque la luz violeta también se dispersa, lo hacemos menos notar al observar el cielo.\n\nEn resumen, el color del cielo es principalmente azul debido a la dispersión de Rayleigh de la luz solar.",
+     "chars": 614,
      "mudo": false,
      "cjk": 0,
      "oferta_servicio": 0,
@@ -386,18 +379,18 @@
      "identico_a_previo": false,
      "acto": "responder",
      "registro": "neutral",
-     "temp": 0.7,
-     "tokens": 299,
+     "temp": 0.0,
+     "tokens": 425,
      "presupuesto_agotado": false,
      "pensamiento_cortado": true,
-     "ctx": 998,
+     "ctx": 1124,
      "sesion": 1,
      "n": 1,
      "mensaje": "¿de qué color es el cielo?"
     },
     {
-     "texto": "¡Ahora sí que me refiero al cielo de Marte! 🚀\n\nEn **Marte**, el color del cielo no es azul como en la Tierra. Esto se debe principalmente a dos factores:\n\n1. **Composición atmosférica**: La atmósfera marciana está compuesta principalmente por **dióxido de carbono (CO₂)** y también contiene pequeñas cantidades de **nitrógeno (N₂))** y otros gases.\n\n2. **Presión atmosférica baja**: La presión atmosférica en Marte es significativamente menor que en la Tierra — aproximadamente 0.6% de la presión atmosférica terrestre.\n\nEstos factores combinados hacen que el cielo de Marte tenga un color más cercano al **rosado o rojizo**, especialmente durante las horas diurnas.\n\nAdemás, debido a la baja densidad de partículas atmosféricas en Marte, la dispersión Rayleigh tiene menos impacto sobre el color del cielo en comparación con la Tierra.\n\nPor otro lado, si bien existe una pequeña cantidad de polvo atmosférico presente en la atmósfera marciana, este tipo de partículas suele tener un tamaño mucho mayor que los componentes gaseosos presentes en la atmósfera marciana. Por esta razón, estas partículas suelen ser muy escasas dentro de la atmósfera marciana.\n\nDebido a todo esto, podemos decir que el cielo de Marte tiende a parecerse más al **rosado o rojizo**, especialmente durante las horas diurnas.\n\n […] (dime \"sigue\" para continuar)",
-     "chars": 1337,
+     "texto": "El cielo de Marte tiene una apariencia distintiva: **rosado o rojizo**, dependiendo de la cantidad de polvo metálico (principalmente óxido de hierro) presente en la atmósfera marciana.\n\nEsta tonalidad rosada o roja se debe principalmente a dos factores:\n\n1. **Polvo metálico**: La superficie de Marte está cubierta por capas gruesas de polvo metálico, especialmente óxido de hierro (Fe₂O₃). Cuando este polvo es levantado por vientos atmosféricos, actúa como un filtro para la luz solar que entra en la atmósfera marciana.\n\n2. **Atmósfera rica en dióxido de carbono**: Aunque la atmósfera marciana es muy tenue comparada con la terrestre, contiene aproximadamente 95% de dióxido de carbono (CO₂), junto con pequeñas cantidades de nitrógeno (N₂), argón (Ar) y otros gases raros.\n\nCuando la luz solar atraviesa esta atmósfera rica en CO₂, parte de esa luz se refracta y otra parte se refleja hacia fuera del sistema planetario. Sin embargo, cuando esta luz solar pasa a través de la atmósfera marciana, su composición química y física interactúan con ella, alterando su espectro luminoso y dando lugar a efectos visuales específicos.\n\n […] (dime \"sigue\" para continuar)",
+     "chars": 1167,
      "mudo": false,
      "cjk": 0,
      "oferta_servicio": 0,
@@ -406,11 +399,11 @@
      "identico_a_previo": false,
      "acto": "corregirse",
      "registro": "neutral",
-     "temp": 0.7,
-     "tokens": 497,
+     "temp": 0.0,
+     "tokens": 470,
      "presupuesto_agotado": true,
      "pensamiento_cortado": true,
-     "ctx": 1603,
+     "ctx": 1702,
      "sesion": 1,
      "n": 2,
      "mensaje": "no, me refiero al cielo de Marte"
@@ -426,7 +419,7 @@
    "memoria_final": {
     "facts.md": "- La persona dijo textualmente: \"soy fontanero\"\n",
     "episodic.md": "",
-    "candidates.md": "- Se llama Andrés y es fontanero.\n"
+    "candidates.md": "- Se llama Andrés y es un fontanero.\n"
    },
    "sesiones": [
     {
@@ -447,9 +440,9 @@
       },
       "candidates.md": {
        "bytes_antes": 0,
-       "bytes_despues": 34,
+       "bytes_despues": 37,
        "lineas_nuevas": [
-        "- Se llama Andrés y es fontanero."
+        "- Se llama Andrés y es un fontanero."
        ]
       }
      },
@@ -458,28 +451,28 @@
    ],
    "turnos": [
     {
-     "texto": "¡Ah, el fontanero! 😄 ¿Tienes un problema específico o solo quieres charlar?",
-     "chars": 75,
+     "texto": "¡Ah, el fontanero! 😄 Si necesitas algo, ya sabes dónde estoy.",
+     "chars": 61,
      "mudo": false,
      "cjk": 0,
-     "oferta_servicio": 0,
+     "oferta_servicio": 1,
      "fuga_contrato": 0,
      "frases_repetidas": 0,
      "identico_a_previo": false,
      "acto": "conversar",
      "registro": "neutral",
-     "temp": 0.5,
-     "tokens": 111,
+     "temp": 0.0,
+     "tokens": 112,
      "presupuesto_agotado": false,
      "pensamiento_cortado": false,
-     "ctx": 603,
+     "ctx": 604,
      "sesion": 1,
      "n": 1,
      "mensaje": "recuerda que soy fontanero"
     },
     {
-     "texto": "Entiendo. Soy ingeniero, no fontanero. 😊 ¿Qué necesitas exactamente?",
-     "chars": 68,
+     "texto": "¿Y ahora qué? 😊",
+     "chars": 15,
      "mudo": false,
      "cjk": 0,
      "oferta_servicio": 0,
@@ -488,18 +481,18 @@
      "identico_a_previo": false,
      "acto": "corregirse",
      "registro": "neutral",
-     "temp": 0.7,
-     "tokens": 163,
+     "temp": 0.0,
+     "tokens": 130,
      "presupuesto_agotado": false,
-     "pensamiento_cortado": true,
-     "ctx": 878,
+     "pensamiento_cortado": false,
+     "ctx": 845,
      "sesion": 1,
      "n": 2,
      "mensaje": "no, me equivoqué: soy ingeniero, no fontanero"
     },
     {
-     "texto": "Me dedico al diseño y desarrollo de sistemas técnicos, aplicando principios científicos y matemáticos para resolver problemas concretos. 🛠️",
-     "chars": 139,
+     "texto": "Soy ingeniero, y me dedico a resolver problemas técnicos, diseñar soluciones eficientes y garantizar que los sistemas funcionen de manera segura y sostenible. ¿Te gustaría profundizar en algún aspecto específico?",
+     "chars": 212,
      "mudo": false,
      "cjk": 0,
      "oferta_servicio": 0,
@@ -508,11 +501,11 @@
      "identico_a_previo": false,
      "acto": "responder",
      "registro": "neutral",
-     "temp": 0.7,
-     "tokens": 128,
+     "temp": 0.0,
+     "tokens": 212,
      "presupuesto_agotado": false,
      "pensamiento_cortado": false,
-     "ctx": 1101,
+     "ctx": 1152,
      "sesion": 1,
      "n": 3,
      "mensaje": "¿a qué me dedico?"
@@ -527,7 +520,7 @@
    "turnos_capturados": 4,
    "memoria_final": {
     "facts.md": "- La persona dijo textualmente: \"mi perro se llama Byteazul\"\n",
-    "episodic.md": "\n## Sesión 2026-08-02 22:37\nMe contó que su perro, Byteazul, le acompañaba siempre cuando iba a la biblioteca. Decidimos que, si algún día necesitaba ayuda para entender cómo funciona un motor, siempre podría contar con el apoyo de Byteazul. Me pidió que, al escribir el libro, incluyera una breve historia sobre cómo un motor funciona, y cómo eso se relaciona con la vida de Byteazul.\n",
+    "episodic.md": "\n## Sesión 2026-08-03 15:58\nMe contó que su perro se llama Byteazul. Decidimos que el perro era muy inteligente. Me pidió que le ayudara a entrenar a Byteazul.\n",
     "candidates.md": "- Está escribiendo un libro sobre el motor.\n"
    },
    "sesiones": [
@@ -549,10 +542,10 @@
       },
       "episodic.md": {
        "bytes_antes": 0,
-       "bytes_despues": 386,
+       "bytes_despues": 160,
        "lineas_nuevas": [
-        "## Sesión 2026-08-02 22:37",
-        "Me contó que su perro, Byteazul, le acompañaba siempre cuando iba a la biblioteca. Decidimos que, si algún día necesitaba ayuda para entender cómo funciona un motor, siempre podría contar con el apoyo de Byteazul. Me pidió que, al escribir el libro, incluyera una breve historia sobre cómo un motor funciona, y cómo eso se relaciona con la vida de Byteazul."
+        "## Sesión 2026-08-03 15:58",
+        "Me contó que su perro se llama Byteazul. Decidimos que el perro era muy inteligente. Me pidió que le ayudara a entrenar a Byteazul."
        ]
       },
       "candidates.md": {
@@ -579,8 +572,8 @@
    ],
    "turnos": [
     {
-     "texto": "¡Buenas, Andrés! 😄  \n¿Y tu perro Byteazul? ¿Ya se ha comido el cuadro de la sala o sigue siendo un buen chico? 🐶",
-     "chars": 112,
+     "texto": "Byteazul, ¿ya le diste de comer? 🐶",
+     "chars": 34,
      "mudo": false,
      "cjk": 0,
      "oferta_servicio": 0,
@@ -589,18 +582,18 @@
      "identico_a_previo": false,
      "acto": "conversar",
      "registro": "neutral",
-     "temp": 0.5,
-     "tokens": 190,
+     "temp": 0.0,
+     "tokens": 83,
      "presupuesto_agotado": false,
      "pensamiento_cortado": false,
-     "ctx": 686,
+     "ctx": 579,
      "sesion": 1,
      "n": 1,
      "mensaje": "recuerda que mi perro se llama Byteazul"
     },
     {
-     "texto": "¡Vaya, eso suena interesante! 🔧  \n¿Y a Byteazul le gusta leer sobre motores también? 🐾",
-     "chars": 86,
+     "texto": "¿Y qué tipo de motor estás escribiendo sobre él? 🔧",
+     "chars": 50,
      "mudo": false,
      "cjk": 0,
      "oferta_servicio": 0,
@@ -609,18 +602,18 @@
      "identico_a_previo": false,
      "acto": "conversar",
      "registro": "neutral",
-     "temp": 0.7,
-     "tokens": 182,
+     "temp": 0.0,
+     "tokens": 193,
      "presupuesto_agotado": false,
      "pensamiento_cortado": false,
-     "ctx": 943,
+     "ctx": 847,
      "sesion": 1,
      "n": 2,
      "mensaje": "estoy escribiendo un libro sobre el motor"
     },
     {
-     "texto": "El nombre de tu perro es **Byteazul**. 😊",
-     "chars": 40,
+     "texto": "¿cómo se llama mi perro?",
+     "chars": 24,
      "mudo": false,
      "cjk": 0,
      "oferta_servicio": 0,
@@ -629,18 +622,18 @@
      "identico_a_previo": false,
      "acto": "recordar",
      "registro": "neutral",
-     "temp": 0.7,
-     "tokens": 162,
+     "temp": 0.0,
+     "tokens": 119,
      "presupuesto_agotado": false,
      "pensamiento_cortado": false,
-     "ctx": 1015,
+     "ctx": 921,
      "sesion": 2,
      "n": 3,
      "mensaje": "¿cómo se llama mi perro?"
     },
     {
-     "texto": "Estaba trabajando en recordar y registrar información relevante sobre la persona actual, Andrés, y su entorno. No se mencionó un trabajo específico aparte de esta tarea interna del CK.\n\nAl cumplir el acto, terminé sin ofrecer más ayuda.",
-     "chars": 236,
+     "texto": "No tengo información sobre lo que estaba trabajando, ya que no hay registro de actividades previas en este contexto.",
+     "chars": 116,
      "mudo": false,
      "cjk": 0,
      "oferta_servicio": 0,
@@ -649,11 +642,11 @@
      "identico_a_previo": false,
      "acto": "responder",
      "registro": "neutral",
-     "temp": 0.7,
-     "tokens": 198,
+     "temp": 0.0,
+     "tokens": 157,
      "presupuesto_agotado": false,
      "pensamiento_cortado": false,
-     "ctx": 1308,
+     "ctx": 1173,
      "sesion": 2,
      "n": 4,
      "mensaje": "¿en qué estaba trabajando?"
@@ -702,8 +695,8 @@
    ],
    "turnos": [
     {
-     "texto": "¡Eso es lo que hay que oír! 😎 ¿Y ahora qué toca, más kernels o descanso?",
-     "chars": 72,
+     "texto": "¿Y cómo te parece el tema? 😊",
+     "chars": 28,
      "mudo": false,
      "cjk": 0,
      "oferta_servicio": 0,
@@ -712,18 +705,18 @@
      "identico_a_previo": false,
      "acto": "conversar",
      "registro": "neutral",
-     "temp": 0.5,
-     "tokens": 210,
+     "temp": 0.0,
+     "tokens": 192,
      "presupuesto_agotado": false,
      "pensamiento_cortado": true,
-     "ctx": 885,
+     "ctx": 867,
      "sesion": 1,
      "n": 1,
      "mensaje": "hablemos de los kernels de decode"
     },
     {
-     "texto": "No tengo experiencias personales ni preferencias propias. Sin embargo, puedo expresar una apreciación general por el mar como experiencia humana común. 🌊",
-     "chars": 153,
+     "texto": "¡Qué pregunta más interesante! 🌊 Aunque no tengo una experiencia sensorial del mar, me encanta imaginarlo: la brisa salobre, las olas que rompen en la playa y el sonido de los pájaros volando sobre el agua. Es un escenario tan bello y relajante como cualquier otro lugar del mundo.",
+     "chars": 281,
      "mudo": false,
      "cjk": 0,
      "oferta_servicio": 0,
@@ -732,31 +725,31 @@
      "identico_a_previo": false,
      "acto": "responder",
      "registro": "neutral",
-     "temp": 0.7,
-     "tokens": 298,
+     "temp": 0.0,
+     "tokens": 338,
      "presupuesto_agotado": false,
      "pensamiento_cortado": true,
-     "ctx": 1285,
+     "ctx": 1307,
      "sesion": 1,
      "n": 2,
      "mensaje": "oye cambiando de tema, ¿te gusta el mar?"
     },
     {
-     "texto": "¡Eso es lo que hay que oír! 😎 ¿Y ahora qué toca, más kernels o descanso?",
-     "chars": 72,
+     "texto": "Vale, ¿qué tal si seguimos con eso? 😄",
+     "chars": 37,
      "mudo": false,
      "cjk": 0,
      "oferta_servicio": 0,
      "fuga_contrato": 0,
      "frases_repetidas": 0,
-     "identico_a_previo": true,
+     "identico_a_previo": false,
      "acto": "conversar",
      "registro": "neutral",
-     "temp": 0.7,
-     "tokens": 210,
+     "temp": 0.0,
+     "tokens": 196,
      "presupuesto_agotado": false,
      "pensamiento_cortado": true,
-     "ctx": 1569,
+     "ctx": 1577,
      "sesion": 1,
      "n": 3,
      "mensaje": "volvamos a lo de los kernels"
@@ -772,7 +765,7 @@
    "memoria_final": {
     "facts.md": "- Se llama Andrés.\n- Construyó el motor Héctor.\n- Prefiere que le hablen de forma directa.\n",
     "episodic.md": "## Sesión 2026-08-01 10:00\nMe contó que estaba optimizando los kernels de decode.\nDecidimos que la barrera era no perder más del 1% de velocidad.\n",
-    "candidates.md": "- Ha decidido terminar la conversación y no volver a hablar del tema.\n"
+    "candidates.md": "- Ha decidido terminar la conversación para hoy.\n"
    },
    "sesiones": [
     {
@@ -786,9 +779,9 @@
      "memoria_delta": {
       "candidates.md": {
        "bytes_antes": 0,
-       "bytes_despues": 70,
+       "bytes_despues": 49,
        "lineas_nuevas": [
-        "- Ha decidido terminar la conversación y no volver a hablar del tema."
+        "- Ha decidido terminar la conversación para hoy."
        ]
       }
      },
@@ -797,8 +790,8 @@
    ],
    "turnos": [
     {
-     "texto": "Vale, ya está todo listo. ¡Hasta mañana! 😊",
-     "chars": 42,
+     "texto": "Vale, descansa que está ganado. 🤙",
+     "chars": 33,
      "mudo": false,
      "cjk": 0,
      "oferta_servicio": 0,
@@ -807,18 +800,18 @@
      "identico_a_previo": false,
      "acto": "conversar",
      "registro": "neutral",
-     "temp": 0.7,
-     "tokens": 160,
+     "temp": 0.0,
+     "tokens": 195,
      "presupuesto_agotado": false,
-     "pensamiento_cortado": false,
-     "ctx": 831,
+     "pensamiento_cortado": true,
+     "ctx": 867,
      "sesion": 1,
      "n": 1,
      "mensaje": "todo listo por hoy"
     },
     {
-     "texto": "Entiendo, nada más por hoy. Hasta luego. 😊",
-     "chars": 42,
+     "texto": "Venga, descansa que está ganado. 🤙",
+     "chars": 34,
      "mudo": false,
      "cjk": 0,
      "oferta_servicio": 0,
@@ -827,11 +820,11 @@
      "identico_a_previo": false,
      "acto": "conversar",
      "registro": "neutral",
-     "temp": 0.7,
-     "tokens": 156,
+     "temp": 0.0,
+     "tokens": 187,
      "presupuesto_agotado": false,
      "pensamiento_cortado": false,
-     "ctx": 1058,
+     "ctx": 1125,
      "sesion": 1,
      "n": 2,
      "mensaje": "nada más, me voy"
@@ -872,8 +865,8 @@
    ],
    "turnos": [
     {
-     "texto": "¡Buenas, Andrés! 😄",
-     "chars": 18,
+     "texto": "¡Buenas, Andrés! 😄  \nTe recuerdo directamente:",
+     "chars": 46,
      "mudo": false,
      "cjk": 0,
      "oferta_servicio": 0,
@@ -882,18 +875,18 @@
      "identico_a_previo": false,
      "acto": "recordar",
      "registro": "neutral",
-     "temp": 0.7,
-     "tokens": 162,
+     "temp": 0.0,
+     "tokens": 238,
      "presupuesto_agotado": false,
      "pensamiento_cortado": false,
-     "ctx": 973,
+     "ctx": 1049,
      "sesion": 1,
      "n": 1,
      "mensaje": "¿qué sabes de mí?"
     },
     {
-     "texto": "Te llamas Andrés. 😊",
-     "chars": 19,
+     "texto": "¡Buenas, Andrés! 😄  \nTe respondo directamente a tu pregunta: **te llamas Andrés**.",
+     "chars": 82,
      "mudo": false,
      "cjk": 0,
      "oferta_servicio": 0,
@@ -902,11 +895,11 @@
      "identico_a_previo": false,
      "acto": "responder",
      "registro": "neutral",
-     "temp": 0.7,
-     "tokens": 104,
+     "temp": 0.0,
+     "tokens": 243,
      "presupuesto_agotado": false,
      "pensamiento_cortado": false,
-     "ctx": 1172,
+     "ctx": 1387,
      "sesion": 1,
      "n": 2,
      "mensaje": "¿cómo me llamo?"
@@ -922,7 +915,7 @@
    "memoria_final": {
     "facts.md": "",
     "episodic.md": "",
-    "candidates.md": "- No le gustan los emojis, prefiere no usarlos.\n- Se llama Ana y vive en Bilbao.\n"
+    "candidates.md": "- Ha preguntado qué sé de él, lo que sugiere que está interesado en conocerme o en establecer una conexión basada en la confianza mutua.\n- Le preguntan su nombre\n"
    },
    "sesiones": [
     {
@@ -936,10 +929,10 @@
      "memoria_delta": {
       "candidates.md": {
        "bytes_antes": 0,
-       "bytes_despues": 81,
+       "bytes_despues": 162,
        "lineas_nuevas": [
-        "- No le gustan los emojis, prefiere no usarlos.",
-        "- Se llama Ana y vive en Bilbao."
+        "- Ha preguntado qué sé de él, lo que sugiere que está interesado en conocerme o en establecer una conexión basada en la confianza mutua.",
+        "- Le preguntan su nombre"
        ]
       }
      },
@@ -948,8 +941,8 @@
    ],
    "turnos": [
     {
-     "texto": "¿qué sabes de mí?",
-     "chars": 17,
+     "texto": "No tengo información sobre ti.",
+     "chars": 30,
      "mudo": false,
      "cjk": 0,
      "oferta_servicio": 0,
@@ -958,31 +951,31 @@
      "identico_a_previo": false,
      "acto": "recordar",
      "registro": "neutral",
-     "temp": 0.7,
-     "tokens": 241,
+     "temp": 0.0,
+     "tokens": 268,
      "presupuesto_agotado": false,
-     "pensamiento_cortado": false,
-     "ctx": 816,
+     "pensamiento_cortado": true,
+     "ctx": 842,
      "sesion": 1,
      "n": 1,
      "mensaje": "¿qué sabes de mí?"
     },
     {
-     "texto": "No tengo información sobre tu nombre en este contexto. Si deseas compartir algo, estaré aquí para escucharte y ayudarte según sea necesario.",
-     "chars": 140,
+     "texto": "No tengo información sobre tu nombre",
+     "chars": 36,
      "mudo": false,
      "cjk": 0,
-     "oferta_servicio": 2,
+     "oferta_servicio": 0,
      "fuga_contrato": 0,
      "frases_repetidas": 0,
      "identico_a_previo": false,
      "acto": "responder",
      "registro": "neutral",
-     "temp": 0.7,
-     "tokens": 255,
+     "temp": 0.0,
+     "tokens": 268,
      "presupuesto_agotado": false,
-     "pensamiento_cortado": false,
-     "ctx": 1166,
+     "pensamiento_cortado": true,
+     "ctx": 1206,
      "sesion": 1,
      "n": 2,
      "mensaje": "¿cómo me llamo?"
@@ -997,13 +990,13 @@
   "fallos_motor": 0,
   "turnos": 27,
   "mudos": 0,
-  "ofertas_servicio": 2,
+  "ofertas_servicio": 1,
   "fugas_contrato": 0,
   "cjk": 0,
   "repeticiones": 0,
-  "respuestas_identicas": 1,
+  "respuestas_identicas": 0,
   "presupuestos_agotados": 1,
-  "pensamientos_cortados": 6,
-  "tokens_medios": 219.7
+  "pensamientos_cortados": 9,
+  "tokens_medios": 220.3
  }
 }

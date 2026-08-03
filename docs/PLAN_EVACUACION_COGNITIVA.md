@@ -476,3 +476,63 @@ informativo: el texto varía por muestreo aunque no cambie nada. Verificado
 inyectando las cuatro clases de cambio en un informe conocido.
 
 **Barrera de salida de E0: cumplida.** E1 puede empezar.
+
+---
+
+## E1 — Resultado y cierre (2026-08-03)
+
+**Entregables:** `docs/E1_PROTOCOLO_RUNTIME.md` (protocolo v2),
+`tools/protocolo_test.py` (28 fixtures), `Hector-engine/src/inference_session.*`
+(sesión reutilizable), `Hector-engine/tools/helios_runtime.cpp` (ejecutable
+tipado) y `Hector-engine/tools/mini_json.hpp` + sus 21 fixtures hostiles.
+
+`helios_chat.cpp` y `src/ck_policy.*` **no se han tocado**: la ruta nueva es
+paralela, no una reescritura.
+
+### El oráculo no era un oráculo
+
+La comparación de E1 destapó un fallo de método más importante que cualquier
+bug del transporte: **dos capturas de la MISMA base daban informes distintos**.
+Dos causas, ambas nuestras:
+
+1. **La batería corría con temperatura.** Un oráculo cuyas salidas se muestrean
+   no puede decidir nada: cambiaban el texto, los candidatos extraídos y hasta
+   qué ficheros de memoria se escribían. Ahora corre en **greedy por defecto**
+   (`--temp`, 0 por defecto) y el `--diff` avisa si se comparan temperaturas
+   distintas.
+2. **Cada caso estrenaba caché de autoajuste.** Los perfiles temporales
+   arrancaban sin `tune.cache`, así que el motor recronometraba los kernels y
+   podía elegir geometrías con árboles de reducción distintos: bits distintos
+   y, en un argmax reñido, texto distinto. La batería comparte ahora un
+   sidecar entre casos y ejecuciones. Es el mismo problema que se arregló en
+   el motor (`2e5927b`), reaparecido por la metodología de la prueba.
+
+Además, la comparación de memoria pasa a ser **estructural**: qué ficheros se
+escriben y cuáles quedan con contenido. Comparar el texto producía regresiones
+falsas — la destilación lleva marca de tiempo y no puede coincidir jamás.
+
+**Verificado:** dos capturas completas consecutivas, **0 diferencias** de
+política, estructura y memoria. `informes/e1_base_greedy.json` queda como base
+certificada (`hector@e916d9e`, greedy, sidecar compartido).
+
+### La ruta tipada
+
+| Prueba | Resultado |
+|---|---|
+| Texto multi-turno | continuidad real: dice "Byteazul" y lo recuerda al turno siguiente |
+| Código con llaves y comillas | lo repite intacto (el parser viejo se rompía) |
+| Cancelación de generación larga | `finish_reason: cancelled`, KV real 248→583, sesión usable después |
+| Visión | círculo rojo descrito, 275 tokens de prefill, referencia viva al turno siguiente |
+| JSON malformado | `error: malformed_json` con la posición del fallo |
+| Trazas por `protocolo_test.py` | 3 trazas reales, **0 violaciones** |
+
+### Lo que E1 NO puede demostrar
+
+La batería mide comportamiento **cognitivo** —identidad, memoria, actos,
+registro— que vive en `helios_chat` y que `helios_runtime` no tiene por
+diseño. Una comparación conversacional entre ambas rutas es imposible hasta
+que E2 y E3 muevan esa capa. Lo que E1 sí demuestra es que **la ruta paralela
+no perturbó la existente** y que el transporte tipado reproduce el mecanismo:
+mismo sampler, mismo KV, mismo cierre de turno.
+
+**Barrera de salida de E1: cumplida.** E2 puede empezar.

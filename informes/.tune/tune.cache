@@ -1,0 +1,6 @@
+# helios tune.cache v1 NVIDIA GeForce RTX 5070 Laptop GPU
+hq51k 4096 151936 C
+hq41k 4096 4096 A
+hq41k 4096 1024 C
+hq41k 4096 12288 A
+hq41k 12288 4096 B

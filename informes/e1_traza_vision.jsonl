@@ -1,0 +1,88 @@
+{"direction": "event", "payload": {"type": "ready", "protocol": 2, "model": {"architecture": "gemma4", "max_seq_len": 4096, "multimodal": true, "vision_adapter": "helios.gemma4.vision.v1"}}}
+{"direction": "request", "payload": {"type": "attachment", "request_id": "a1", "kind": "rgb8", "width": 192, "height": 192, "stride": 576, "bytes": 110592}}
+{"direction": "event", "payload": {"type": "result", "request_id": "a1", "ok": true, "model_state": {"cache_position_before": 0, "cache_position": 0, "max_seq_len": 0}}}
+{"direction": "request", "payload": {"type": "turn", "request_id": "r1", "attachment_ids": ["a1"], "messages": [{"role": "user", "content": "¿Qué ves en esta imagen?"}], "generation": {"max_visible_tokens": 60, "max_thinking_tokens": 60}}}
+{"direction": "event", "payload": {"type": "prefill", "request_id": "r1", "tokens": 275, "ms": 467.139224}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": "La"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " imagen"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " que"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " has"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " proporcion"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": "ado"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " es"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " un"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " **"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": "c"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": "ír"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": "culo"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " de"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " color"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " rojo"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " intenso"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " o"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " bur"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": "deos"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": "**"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " sobre"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " un"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " fondo"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " blanco"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": "."}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": "\n\n"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": "Es"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " una"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " forma"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " muy"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " simple"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " y"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " de"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " alto"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " contraste"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": "."}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": "\n\n"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": "Si"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " me"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " das"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " más"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " contexto"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " sobre"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " dónde"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " encontr"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": "aste"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " esta"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " imagen"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " o"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " qué"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " esper"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": "as"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " que"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " represent"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": "e"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": ","}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " podría"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " dar"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": "te"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r1", "text": " una"}}
+{"direction": "event", "payload": {"type": "completed", "request_id": "r1", "visible_text": "La imagen que has proporcionado es un **círculo de color rojo intenso o burdeos** sobre un fondo blanco.\n\nEs una forma muy simple y de alto contraste.\n\nSi me das más contexto sobre dónde encontraste esta imagen o qué esperas que represente, podría darte una", "finish_reason": "max_tokens", "usage": {"prefill_tokens": 275, "generated_tokens": 60, "thinking_tokens": 0}, "timings": {"prefill_ms": 467.139224, "decode_ms": 586.365658, "tokens_per_second": 102.325229}, "model_state": {"cache_position_before": 0, "cache_position": 337, "max_seq_len": 4096}}}
+{"direction": "request", "payload": {"type": "turn", "request_id": "r2", "messages": [{"role": "user", "content": "¿De qué color era la figura?"}], "generation": {"max_visible_tokens": 40, "max_thinking_tokens": 40}}}
+{"direction": "event", "payload": {"type": "prefill", "request_id": "r2", "tokens": 16, "ms": 47.821735}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r2", "text": "La"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r2", "text": " figura"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r2", "text": " es"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r2", "text": " de"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r2", "text": " color"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r2", "text": " **"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r2", "text": "ro"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r2", "text": "jo"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r2", "text": " intenso"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r2", "text": "**"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r2", "text": " o"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r2", "text": " **"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r2", "text": "bur"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r2", "text": "deos"}}
+{"direction": "event", "payload": {"type": "text_delta", "request_id": "r2", "text": "**."}}
+{"direction": "event", "payload": {"type": "completed", "request_id": "r2", "visible_text": "La figura es de color **rojo intenso** o **burdeos**.", "finish_reason": "eos", "usage": {"prefill_tokens": 16, "generated_tokens": 15, "thinking_tokens": 0}, "timings": {"prefill_ms": 47.821735, "decode_ms": 166.263507, "tokens_per_second": 90.218234}, "model_state": {"cache_position_before": 337, "cache_position": 370, "max_seq_len": 4096}}}
+{"direction": "request", "payload": {"type": "turn", "request_id": "r3", "attachment_ids": ["a1"], "messages": [{"role": "user", "content": "otra vez"}], "generation": {"max_visible_tokens": 30, "max_thinking_tokens": 30}}}
+{"direction": "event", "payload": {"type": "error", "request_id": "r3", "code": "unknown_attachment", "message": "adjunto inexistente o ya consumido", "model_state": {"cache_position_before": 370, "cache_position": 370, "max_seq_len": 4096}}}
+{"direction": "request", "payload": {"type": "shutdown", "request_id": "q1"}}
+{"direction": "event", "payload": {"type": "result", "request_id": "q1", "ok": true, "model_state": {"cache_position_before": 370, "cache_position": 370, "max_seq_len": 4096}}}
