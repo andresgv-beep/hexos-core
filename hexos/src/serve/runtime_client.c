@@ -24,7 +24,9 @@
 #endif
 #include "hexos_serve.h"
 #include "hexos_ck.h"
+#include "hexos_chats.h"
 #include "hera_profile.h"
+#include "hera_queue.h"
 #include "hera_delta.h"
 
 #include <errno.h>
@@ -53,7 +55,7 @@ static pthread_mutex_t  g_wr = PTHREAD_MUTEX_INITIALIZER;
  * IDLE, los dos pasaban el filtro y los dos mandaban su turno: el runtime
  * recibía dos peticiones pisándose sobre el mismo KV. Mirar el estado y
  * actuar en consecuencia no puede ser dos pasos. */
-static pthread_mutex_t  g_turno = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t  g_turno_lock = PTHREAD_MUTEX_INITIALIZER;
 static engine_state_t   g_state = ENGINE_BOOTING;
 static engine_chunk_cb  g_on_chunk;
 static engine_event_cb  g_on_event;
@@ -83,17 +85,37 @@ static char g_registro[32] = "neutral";
  * vigente. Es más caro y es la única forma de que una corrección sea real.
  * ------------------------------------------------------------------------ */
 
-#define TRANSCRIPCION_MAX 64
+/* La transcripcion canonica ya NO vive aqui: la lleva el registro de chats,
+ * que es durable y sobrevive a que muera Hector. Aqui solo queda el
+ * acumulador de la respuesta en curso y el rastro de que perfil se metio en
+ * el KV de cada chat. */
 
-typedef struct { char rol[16]; char *texto; } linea_t;
-static linea_t         g_transcripcion[TRANSCRIPCION_MAX];
-static size_t          g_transcripcion_n;
+typedef struct {
+    char id[CHAT_ID_MAX];
+    unsigned long long perfil_hash;
+} kv_chat_t;
+
+#define KV_CHATS_MAX 64
+static kv_chat_t       g_kv[KV_CHATS_MAX];
+static size_t          g_kv_n;
 static pthread_mutex_t g_tr_lock = PTHREAD_MUTEX_INITIALIZER;
 static char           *g_respuesta;      /* lo que va diciendo este turno */
 static size_t          g_respuesta_len, g_respuesta_cap;
-static unsigned long long g_perfil_hash;  /* del bloque metido en el KV */
-static bool            g_perfil_puesto;
-static bool            g_kv_con_algo;   /* ¿hay ya contexto que tirar? */
+static char            g_chat_en_curso[CHAT_ID_MAX];
+
+/* Entrada congelada del turno en vuelo, para encolarlo a reflexión cuando
+ * termine BIEN. Se guarda al enviar porque después ya no se puede reconstruir
+ * con fidelidad: el perfil habrá podido cambiar y el marco es de este turno.
+ * Ni contrato ni razonamiento — el job no tiene dónde meterlos. */
+static struct {
+    char mensaje[HERA_JOB_TEXTO_MAX];
+    char acto[32], registro[32];
+    int  vis, think;
+    char evidencia[HERA_ID_MAX];
+    char perfil_hash[24];
+    unsigned turno;
+    bool listo;
+} g_turno;
 
 static unsigned long long hash64(const char *s) {
     unsigned long long h = 1469598103934665603ULL;
@@ -103,35 +125,14 @@ static unsigned long long hash64(const char *s) {
     return h;
 }
 
-/* La transcripción canónica guarda SOLO lo que se dijo: nunca el perfil ni el
- * contrato. Son contexto efímero, y meterlos aquí los volvería permanentes
- * por la puerta de atrás. */
-static void transcribir(const char *rol, const char *texto) {
-    if (!texto || !*texto) return;
-    pthread_mutex_lock(&g_tr_lock);
-    if (g_transcripcion_n == TRANSCRIPCION_MAX) {
-        free(g_transcripcion[0].texto);
-        memmove(&g_transcripcion[0], &g_transcripcion[1],
-                sizeof(linea_t) * (TRANSCRIPCION_MAX - 1));
-        g_transcripcion_n--;
-        if (g_on_notice) {
-            const char *aviso = "(la sesión es larga: al reconstruir el "
-                                "contexto se perderán los turnos más viejos)";
-            g_on_notice(aviso, strlen(aviso), g_user);
-        }
-    }
-    linea_t *l = &g_transcripcion[g_transcripcion_n];
-    snprintf(l->rol, sizeof(l->rol), "%s", rol);
-    l->texto = strdup(texto);
-    if (l->texto) g_transcripcion_n++;
-    pthread_mutex_unlock(&g_tr_lock);
-}
-
-static void transcripcion_liberar(void) {
-    pthread_mutex_lock(&g_tr_lock);
-    for (size_t i = 0; i < g_transcripcion_n; i++) free(g_transcripcion[i].texto);
-    g_transcripcion_n = 0;
-    pthread_mutex_unlock(&g_tr_lock);
+static kv_chat_t *kv_de(const char *id) {
+    for (size_t i = 0; i < g_kv_n; i++)
+        if (strcmp(g_kv[i].id, id) == 0) return &g_kv[i];
+    if (g_kv_n >= KV_CHATS_MAX) return NULL;
+    kv_chat_t *k = &g_kv[g_kv_n++];
+    memset(k, 0, sizeof(*k));
+    snprintf(k->id, sizeof(k->id), "%s", id);
+    return k;
 }
 
 /* ------------------------------------------------------------------------
@@ -154,6 +155,15 @@ static void trazar(const char *direccion, const char *json_linea) {
 }
 
 static bool rt_send_bloqueado(const char *text);
+
+/* Nombre corto del perfil: el último tramo de HELIOS_HOME. Es lo que hace que
+ * el id del job sea `perfil/sesion/turno` y no una ruta entera. */
+static const char *perfil_corto(void) {
+    const char *h = getenv("HELIOS_HOME");
+    if (!h || !*h) return "default";
+    const char *b = strrchr(h, '/');
+    return (b && b[1]) ? b + 1 : h;
+}
 
 /* Aviso al usuario por su canal propio. Un fallo de memoria no puede quedarse
  * solo en el log del servidor. */
@@ -289,8 +299,45 @@ static void *reader_thread(void *arg) {
              * turno ahí emitiría un "end" que la UI cuenta como respuesta
              * terminada — y no había turno. */
             if (rt_state() != ENGINE_IDLE) {
-                if (g_respuesta && g_respuesta_len)
-                    transcribir("assistant", g_respuesta);
+                /* Lo dicho va al registro durable, no a una lista en RAM que
+                 * muere con el proceso. Se anota tambien lo cancelado a
+                 * medias: representarlo honestamente es parte del trato. */
+                if (g_respuesta && g_respuesta_len && g_chat_en_curso[0])
+                    chats_anotar(g_chat_en_curso, "assistant", g_respuesta);
+
+                /* REFLEXIÓN: solo tras un `completed` normal. Nada después de
+                 * un error ni de una cancelación — reflexionar sobre media
+                 * respuesta es reflexionar sobre algo que no ocurrió. Y va
+                 * DESPUÉS de emitir el texto: encolar no puede retrasar lo que
+                 * el usuario está esperando. Encolar no ejecuta nada: no hay
+                 * trabajador todavía. */
+                char razon[32] = "";
+                campo_str(linea, "finish_reason", razon, sizeof(razon));
+                if (!strcmp(tipo, "completed") && strcmp(razon, "cancelled") &&
+                    g_turno.listo && g_chat_en_curso[0]) {
+                    hera_job_t j;
+                    memset(&j, 0, sizeof(j));
+                    snprintf(j.perfil, sizeof(j.perfil), "%s",
+                             hera_store_ruta());
+                    snprintf(j.sesion, sizeof(j.sesion), "%s", g_chat_en_curso);
+                    j.turno = g_turno.turno;
+                    snprintf(j.id, sizeof(j.id), "%s/%s/%u",
+                             perfil_corto(), g_chat_en_curso, j.turno);
+                    snprintf(j.mensaje, sizeof(j.mensaje), "%s", g_turno.mensaje);
+                    snprintf(j.respuesta, sizeof(j.respuesta), "%s",
+                             g_respuesta ? g_respuesta : "");
+                    snprintf(j.acto, sizeof(j.acto), "%s", g_turno.acto);
+                    snprintf(j.registro, sizeof(j.registro), "%s", g_turno.registro);
+                    j.visible_budget = g_turno.vis;
+                    j.thinking_budget = g_turno.think;
+                    snprintf(j.evidencia, sizeof(j.evidencia), "%s",
+                             g_turno.evidencia);
+                    snprintf(j.perfil_hash, sizeof(j.perfil_hash), "%s",
+                             g_turno.perfil_hash);
+                    snprintf(j.perfil, sizeof(j.perfil), "%s", perfil_corto());
+                    hera_cola_encolar(&j);
+                }
+                g_turno.listo = false;
                 g_respuesta_len = 0;
                 if (g_respuesta) g_respuesta[0] = '\0';
                 set_state(ENGINE_IDLE, "end");
@@ -338,6 +385,15 @@ bool rt_start(const char *binary, const char *model, const char *ctx,
         fprintf(stderr, "[serve] %zu recuerdos legacy importados EN CUARENTENA "
                         "(candidatos: no gobiernan nada hasta que los "
                         "confirmes)\n", importados);
+    }
+
+    if (!hera_cola_abrir()) {
+        fprintf(stderr, "[serve] no pude abrir la cola de reflexión\n");
+        return false;
+    }
+    if (!chats_abrir()) {
+        fprintf(stderr, "[serve] no pude abrir el registro de chats\n");
+        return false;
     }
 
     const char *traza = getenv("HEXOS_RT_TRACE");
@@ -405,9 +461,9 @@ bool rt_attach(const engine_attachment_t *a) {
 }
 
 bool rt_send(const char *text) {
-    pthread_mutex_lock(&g_turno);
+    pthread_mutex_lock(&g_turno_lock);
     const bool ok_turno = rt_send_bloqueado(text);
-    pthread_mutex_unlock(&g_turno);
+    pthread_mutex_unlock(&g_turno_lock);
     return ok_turno;
 }
 
@@ -434,7 +490,8 @@ static bool rt_send_bloqueado(const char *text) {
      *    Si esto falla, el turno tampoco sale: una conversación cuyas
      *    palabras no se han registrado no puede respaldar ningún recuerdo
      *    después, y el usuario creería que sí. */
-    if (!hera_store_dijo(text, NULL, 0)) {
+    char ev_id[HERA_ID_MAX] = "";
+    if (!hera_store_dijo(text, ev_id, sizeof(ev_id))) {
         avisar("(no pude registrar tus palabras: el turno no se envía)");
         return false;
     }
@@ -451,7 +508,25 @@ static bool rt_send_bloqueado(const char *text) {
     const int vis = ck_visible_token_budget(&frame);
     const int think = ck_thinking_token_budget(&frame, strlen(text));
 
-    /* 3. Perfil vigente. EFÍMERO: vive en esta pila y muere al salir. */
+    /* 3. Chat activo. Sin ninguno, se crea uno: escribir es abrir conversación,
+     *    y obligar a crearla antes seria ceremonia. */
+    /* COPIA, no el puntero. `chats_activo()` devuelve el buffer estático del
+     * registro: si otro hilo activa un chat a mitad de este turno, una
+     * variable local que apuntara ahí cambiaría de valor sola y lo dicho se
+     * anotaría en el chat equivocado. Justo lo que pasa al cambiar de chat
+     * mientras el motor genera, que es el caso normal, no el raro. */
+    char chat[CHAT_ID_MAX];
+    snprintf(chat, sizeof(chat), "%s", chats_activo() ? chats_activo() : "");
+    if (!chat[0]) {
+        if (!chats_crear(NULL, chat, sizeof(chat))) {
+            avisar("(no puedo abrir un chat: el turno no se envia)");
+            return false;
+        }
+        chats_activar(chat);
+    }
+    snprintf(g_chat_en_curso, sizeof(g_chat_en_curso), "%s", chat);
+
+    /* 4. Perfil vigente. EFÍMERO: vive en esta pila y muere al salir. */
     char perfil[8192];
     const size_t perfil_n = hera_recuperar(perfil, sizeof(perfil), 3000);
     const unsigned long long h = perfil_n ? hash64(perfil) : 0;
@@ -460,7 +535,17 @@ static bool rt_send_bloqueado(const char *text) {
      * no basta con mandar el hecho nuevo: el viejo sigue FÍSICAMENTE en el KV
      * y el modelo lo sigue leyendo. Hay que tirar el KV y rearmarlo desde la
      * transcripción canónica con el perfil de ahora. */
-    const bool reconstruir = (!g_perfil_puesto || h != g_perfil_hash);
+    /* Se reconstruye por DOS motivos distintos, y conviene no confundirlos:
+     *   · la memoria confirmada cambio -> el KV lleva un hecho ya corregido;
+     *   · este chat no tiene sesion viva -> o nunca la tuvo, o se cerro, o
+     *     Hector murio y se llevo todas. En ese caso hay que rehacer el
+     *     contexto desde la transcripcion durable: es lo que convierte una
+     *     sesion vacia del motor en el chat que la persona recuerda. */
+    pthread_mutex_lock(&g_tr_lock);
+    kv_chat_t *kv = kv_de(chat);
+    const bool viva = chats_sesion_viva(chat);
+    const bool reconstruir = !viva || !kv || kv->perfil_hash != h;
+    pthread_mutex_unlock(&g_tr_lock);
 
     /* 4. Telemetría: acto, registro y presupuestos VISIBLES. El contrato no. */
     if (g_on_frame) {
@@ -478,11 +563,11 @@ static bool rt_send_bloqueado(const char *text) {
     }
 
     /* 6. Mensajes tipados. */
+    const chat_t *info_chat = chats_buscar(chat);
     size_t cap = strlen(text) * 2 + contrato.len * 2 + perfil_n * 2 + 8192;
-    pthread_mutex_lock(&g_tr_lock);
-    for (size_t i = 0; i < g_transcripcion_n; i++)
-        cap += strlen(g_transcripcion[i].texto) * 2 + 64;
-    pthread_mutex_unlock(&g_tr_lock);
+    if (info_chat)
+        for (size_t i = 0; i < info_chat->lineas_n; i++)
+            cap += strlen(info_chat->lineas[i].texto) * 2 + 64;
 
     char *esc_txt = malloc(cap), *esc_aux = malloc(cap), *linea = malloc(cap * 2);
     if (!esc_txt || !esc_aux || !linea) {
@@ -490,8 +575,11 @@ static bool rt_send_bloqueado(const char *text) {
         return false;
     }
 
+    char chat_esc[CHAT_ID_MAX * 2];
+    esc_into(chat, chat_esc, sizeof(chat_esc));
     int n = snprintf(linea, cap * 2,
-        "{\"type\":\"turn\",\"request_id\":\"r%u\",\"messages\":[", ++g_seq);
+        "{\"type\":\"turn\",\"request_id\":\"r%u\",\"session\":\"%s\","
+        "\"messages\":[", ++g_seq, chat_esc);
     const char *coma = "";
 
     if (reconstruir && perfil_n) {
@@ -500,18 +588,16 @@ static bool rt_send_bloqueado(const char *text) {
                       "{\"role\":\"system\",\"content\":\"%s\"}", esc_aux);
         coma = ",";
     }
-    if (reconstruir) {
-        /* La transcripción canónica: solo lo que se dijo. Ni perfil ni
-         * contrato viejos — esos se recomponen, nunca se replican. */
-        pthread_mutex_lock(&g_tr_lock);
-        for (size_t i = 0; i < g_transcripcion_n; i++) {
-            esc_into(g_transcripcion[i].texto, esc_aux, cap);
+    if (reconstruir && info_chat) {
+        /* La transcripción canónica del REGISTRO: solo lo que se dijo. Ni
+         * perfil ni contrato viejos — esos se recomponen, nunca se replican. */
+        for (size_t i = 0; i < info_chat->lineas_n; i++) {
+            esc_into(info_chat->lineas[i].texto, esc_aux, cap);
             n += snprintf(linea + n, cap * 2 - n,
                           "%s{\"role\":\"%s\",\"content\":\"%s\"}",
-                          coma, g_transcripcion[i].rol, esc_aux);
+                          coma, info_chat->lineas[i].rol, esc_aux);
             coma = ",";
         }
-        pthread_mutex_unlock(&g_tr_lock);
     }
     if (contrato.len > 0) {
         esc_into(contrato.data ? contrato.data : "", esc_aux, cap);
@@ -546,12 +632,13 @@ static bool rt_send_bloqueado(const char *text) {
      * vacío y resetear no borra nada: sería una ida y vuelta de más y, peor,
      * dejaría el `reset` sin significado. Que aparezca uno tiene que querer
      * decir exactamente una cosa: la memoria cambió y había contexto rancio. */
-    if (reconstruir && g_kv_con_algo) {
+    if (reconstruir && viva) {
         /* Va primero y por el mismo cerrojo: si se colara una escritura entre
          * el reset y el turno, el KV se rearmaría a medias. */
         char r[128];
         snprintf(r, sizeof(r),
-                 "{\"type\":\"reset\",\"request_id\":\"x%u\"}", g_seq);
+                 "{\"type\":\"reset\",\"request_id\":\"x%u\",\"session\":\"%s\"}",
+                 g_seq, chat_esc);
         trazar("request", r);
         ok = escribir(r) && escribir("\n");
     }
@@ -559,11 +646,24 @@ static bool rt_send_bloqueado(const char *text) {
     pthread_mutex_unlock(&g_wr);
 
     if (ok) {
+        const chat_t *ci = chats_buscar(chat);
+        g_turno.listo = true;
+        g_turno.turno = (unsigned)(ci ? ci->lineas_n : 0);
+        snprintf(g_turno.mensaje, sizeof(g_turno.mensaje), "%s", text);
+        snprintf(g_turno.acto, sizeof(g_turno.acto), "%s",
+                 ck_response_act_name(frame.act));
+        snprintf(g_turno.registro, sizeof(g_turno.registro), "%s", g_registro);
+        g_turno.vis = vis;
+        g_turno.think = think;
+        snprintf(g_turno.evidencia, sizeof(g_turno.evidencia), "%s", ev_id);
+        snprintf(g_turno.perfil_hash, sizeof(g_turno.perfil_hash), "%llx", h);
+
         g_adjuntos_n = 0;
-        g_perfil_hash = h;
-        g_perfil_puesto = true;
-        g_kv_con_algo = true;
-        transcribir("user", text);
+        pthread_mutex_lock(&g_tr_lock);
+        if (kv) kv->perfil_hash = h;
+        pthread_mutex_unlock(&g_tr_lock);
+        chats_marcar_sesion(chat, true);
+        chats_anotar(chat, "user", text);
     } else {
         set_state(ENGINE_IDLE, NULL);
     }
@@ -592,7 +692,7 @@ size_t rt_memoria_json(char *out, size_t cap) {
         "{\"nombre\":\"%s\",\"confirmados\":%zu,\"candidatos\":%zu,"
         "\"sustituidos\":%zu,\"perfil_en_kv\":%s}",
         nombre, p.propias_n + p.ajenas_n, candidatos, sustituidos,
-        g_perfil_puesto ? "true" : "false");
+        chats_sesion_viva(chats_activo()) ? "true" : "false");
     return (n > 0) ? (size_t)n : 0;
 }
 
@@ -614,6 +714,50 @@ size_t rt_memoria_ensayo(const char *json_delta, char *out, size_t cap) {
     }
     n += snprintf(out + n, cap - n, "],\"aceptables\":%zu}", d.aceptables);
     return (n > 0) ? (size_t)n : 0;
+}
+
+/* Cancela lo que se esté generando. Es lo que convierte "activar otro chat"
+ * en una pausa de verdad: sin esto, el motor sigue ocupado, el chat nuevo
+ * recibe un 409 y la persona tiene que esperar a que termine algo que ya no
+ * está mirando. La cancelación es la de siempre: para en un límite de token y
+ * conserva lo emitido. */
+bool rt_cancelar(void) {
+    if (rt_state() == ENGINE_IDLE || rt_state() == ENGINE_DEAD) return false;
+    /* El objetivo se calcula ANTES de tocar el contador: `++g_seq` y
+     * `g_seq - 1` en la misma expresión es orden de evaluación indefinido, y
+     * el cancel podía apuntar a un turno que no era. */
+    const unsigned objetivo = g_seq;
+    char linea[160];
+    snprintf(linea, sizeof(linea),
+             "{\"type\":\"cancel\",\"request_id\":\"x%u\",\"target\":\"r%u\"}",
+             ++g_seq, objetivo);
+    trazar("request", linea);
+    pthread_mutex_lock(&g_wr);
+    const bool ok = escribir(linea) && escribir("\n");
+    pthread_mutex_unlock(&g_wr);
+    return ok;
+}
+
+bool rt_cerrar_sesion(const char *chat) {
+    if (!chat || !*chat) return false;
+    if (!chats_sesion_viva(chat)) { chats_cerrar_sesion(chat); return true; }
+    char linea[256], id[CHAT_ID_MAX * 2];
+    esc_into(chat, id, sizeof(id));
+    snprintf(linea, sizeof(linea),
+             "{\"type\":\"session_close\",\"request_id\":\"k%u\","
+             "\"session\":\"%s\"}", ++g_seq, id);
+    trazar("request", linea);
+    pthread_mutex_lock(&g_wr);
+    const bool ok = escribir(linea) && escribir("\n");
+    pthread_mutex_unlock(&g_wr);
+    if (ok) {
+        chats_cerrar_sesion(chat);
+        pthread_mutex_lock(&g_tr_lock);
+        kv_chat_t *k = kv_de(chat);
+        if (k) k->perfil_hash = 0;
+        pthread_mutex_unlock(&g_tr_lock);
+    }
+    return ok;
 }
 
 void rt_set_registro(const char *registro) {
@@ -640,12 +784,12 @@ void rt_stop(void) {
     }
     if (g_out_f) { fclose(g_out_f); g_out_f = NULL; g_out = -1; }
     if (g_traza) { fclose(g_traza); g_traza = NULL; }
-    transcripcion_liberar();
     free(g_respuesta); g_respuesta = NULL;
     g_respuesta_len = g_respuesta_cap = 0;
-    g_perfil_puesto = false;
-    g_kv_con_algo = false;
+    g_kv_n = 0;
     hera_store_cerrar();
+    hera_cola_cerrar();
+    chats_cerrar();
 }
 
 /* ------------------------------------------------------------------------

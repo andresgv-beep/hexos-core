@@ -78,6 +78,8 @@ ESQUEMA_PETICIONES = {
     "shutdown":   ({"request_id"}, set()),
 }
 FINISH_REASONS = {"eos", "max_tokens", "stop", "cancelled"}
+# Sin campo `session`, todo va a la de siempre.
+SESION_DEF = "0"
 # Mismo tope que el /adjunto-rgb8 de helios_chat: la cabecera no puede pedir
 # que se reserve una cantidad arbitraria de memoria.
 MAX_ADJUNTO = 300 * 1024 * 1024
@@ -149,6 +151,8 @@ def validar(traza):
     terminado = {}           # request_id -> tipo terminal
     ready_vistos = 0
     ultima_pos = None
+    pos_por_sesion = {}
+    sesion_de = {}
     autoriza_bajada = None   # request_id que acaba de justificar un retroceso
 
     for i, linea in enumerate(traza):
@@ -178,6 +182,7 @@ def validar(traza):
             if rid in peticiones:
                 fallos.append(f"inv7: [{i}] request_id duplicado: {rid!r}")
             peticiones[rid] = tipo
+            sesion_de[rid] = p.get("session", SESION_DEF)
             # OJO: el permiso para que baje el KV NO se concede aquí. Un reset
             # que termina en error autorizaría retrocesos para siempre. Se
             # concede al procesar su terminal exitoso.
@@ -288,19 +293,29 @@ def validar(traza):
             # La posición observada pasa a ser la de después: si no, la bajada
             # real se detectaría más tarde y fuera de su permiso.
             if isinstance(despues_c, int):
-                ultima_pos = despues_c
+                pos_por_sesion[sesion_de.get(rid, SESION_DEF)] = despues_c
         st = p.get("model_state") or {}
         if "cache_position" in st:
             pos = st["cache_position"]
-            if ultima_pos is not None and pos < ultima_pos:
+            # POR SESIÓN. Cada una tiene su propio KV, así que su propia línea
+            # de posición: comparar la de un chat contra la de otro daría
+            # "retrocesos" que solo son otra conversación.
+            ses = sesion_de.get(rid, SESION_DEF)
+            previa = pos_por_sesion.get(ses)
+            if previa is not None and pos < previa:
+                # Cerrar una sesión libera su KV: esa bajada es su razón de
+                # ser, no una anomalía. Cuenta igual que un reset, y por el
+                # mismo motivo se concede al confirmarse, no al pedirse.
                 permitido = (autoriza_bajada is not None and
                              (autoriza_bajada == rid or
-                              peticiones.get(autoriza_bajada) == "reset"))
+                              peticiones.get(autoriza_bajada) in
+                              ("reset", "session_close")))
                 if not permitido:
                     fallos.append(f"inv6: cache_position retrocede "
-                                  f"{ultima_pos} → {pos} en {rid} sin reset "
-                                  f"confirmado ni context_compacted")
-            ultima_pos = pos
+                                  f"{previa} → {pos} en {rid} (sesión {ses}) "
+                                  f"sin reset ni cierre confirmados, ni "
+                                  f"context_compacted")
+            pos_por_sesion[ses] = pos
             autoriza_bajada = None
 
         escanear_cognitivo(p, tipo, fallos)

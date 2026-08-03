@@ -308,6 +308,18 @@ retomar, corregir, referir artefacto y cerrar—. HERA mantiene la autoridad y
 las reglas deterministas conservan fallback. Nunca genera la respuesta ni
 escribe memoria directamente.
 
+### E8 — Agente de código, solo después de validar Cortex
+
+Probar una secuencia tipada entre el modelo conversacional y un coder sobre una
+única GPU. Para la persona sigue siendo un solo turno de Helios: la UI muestra
+estados mecánicos mientras el coder produce el artefacto y, al terminar, el
+modelo de texto redacta la respuesta visible sobre el resultado real.
+
+El diseño, los contratos `CodeTask`/`CodeResult`, la prioridad de GPU y las
+barreras están en
+[`AGENTES_ESPECIALISTAS_PLAN.md`](AGENTES_ESPECIALISTAS_PLAN.md). No forma parte
+del rescate E0-E6 y no autoriza todavía otra residencia de modelo.
+
 ## 6. Orden de commits
 
 Cada fase se divide en commits pequeños y reversibles:

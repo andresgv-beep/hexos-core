@@ -179,10 +179,28 @@ def main():
         rid_corto, _ = rt.turno("Di solo: hola.", session="chatB")
         rt._fin(rid_largo)
 
-        _, pausa = rt.esperar("session_paused", desde=desde, timeout=30)
+        i_pausa, pausa = rt.esperar("session_paused", desde=desde, timeout=30)
         ok(pausa is not None and pausa.get("session") == "chatA",
            "el runtime anuncia que pausó el chat que generaba",
            str(pausa))
+
+        # CAUSALIDAD. "Pausada" tiene que significar pausada, no
+        # "pausándose": si el evento saliera al PEDIR la cancelación, después
+        # de él seguiría llegando texto de A mientras termina su token. Quien
+        # lea la traza deduciría lo contrario, y HexOS va a consumir esto.
+        with rt._lock:
+            antes_de_pausa = [e.get("type") for e in rt.eventos[:i_pausa]
+                              if e.get("request_id") == rid_largo]
+            despues = [e for e in rt.eventos[i_pausa + 1:]
+                       if e.get("request_id") == rid_largo
+                       and e.get("type") in ("text_delta", "prefill",
+                                             "thinking")]
+        ok("completed" in antes_de_pausa or "error" in antes_de_pausa,
+           "el terminal de A sale ANTES de anunciar la pausa",
+           str(antes_de_pausa[-3:]))
+        ok(not despues,
+           "y después de session_paused(A) no llega ni un token más de A",
+           str([e.get("type") for e in despues[:3]]))
         # Que lo anuncie no basta: el turno largo tiene que haber PARADO por la
         # conmutación. Sin esto, la prueba pasaría igual si simplemente se
         # hubiera terminado solo antes de que llegara el otro.

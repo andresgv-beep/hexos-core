@@ -98,6 +98,14 @@ bool rt_start(const char *binary, const char *model, const char *ctx,
               const char *temp);
 bool rt_send(const char *text);
 bool rt_attach(const engine_attachment_t *attachment);
+
+/* Cierra la sesion de un chat en el motor: libera su KV y CONSERVA la
+ * conversacion. Borrar el chat es otra cosa y se pide aparte. */
+bool rt_cerrar_sesion(const char *chat);
+
+/* Cancela la generacion en curso: es lo que hace que activar otro chat sea
+ * una pausa y no una espera. */
+bool rt_cancelar(void);
 void rt_set_registro(const char *registro);
 engine_state_t rt_state(void);
 void rt_set_callbacks(engine_chunk_cb on_chunk, engine_event_cb on_event,

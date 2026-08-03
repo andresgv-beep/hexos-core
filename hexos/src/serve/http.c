@@ -19,6 +19,7 @@
 #define _GNU_SOURCE
 #endif
 #include "hexos_serve.h"
+#include "hexos_chats.h"
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -368,6 +369,63 @@ static void *conn_thread(void *arg)
         serve_sse(fd);
     } else if (!strcmp(method, "GET") && !strcmp(path, "/api/status")) {
         serve_status(fd);
+    } else if (!strncmp(path, "/api/chats", 10) && ruta_activa_tipada()) {
+        /* Registro de chats. Solo en la ruta tipada: la legacy no tiene
+         * sesiones que multiplexar. */
+        char *json = malloc(256 * 1024);
+        if (!json) { close(fd); free(body); return NULL; }
+        size_t n = 0;
+        const char *estado = "200 OK";
+
+        if (!strcmp(method, "GET") && !strcmp(path, "/api/chats")) {
+            n = chats_listar_json(json, 256 * 1024);
+        } else if (!strcmp(method, "POST") && !strcmp(path, "/api/chats")) {
+            char id[CHAT_ID_MAX] = "";
+            char titulo[CHAT_TITULO_MAX] = "";
+            if (body && body_len && body_len < sizeof(titulo))
+                memcpy(titulo, body, body_len);
+            if (chats_crear(titulo, id, sizeof(id))) {
+                n = (size_t)snprintf(json, 256 * 1024, "{\"id\":\"%s\"}", id);
+            } else { estado = "409 Conflict"; n = (size_t)snprintf(json, 64, "{\"ok\":false}"); }
+        } else {
+            /* /api/chats/<id>[/accion] */
+            const char *resto = path + 10;
+            if (*resto == '/') resto++;
+            char id[CHAT_ID_MAX] = "", accion[32] = "";
+            const char *barra = strchr(resto, '/');
+            const size_t l = barra ? (size_t)(barra - resto) : strlen(resto);
+            if (l && l < sizeof(id)) memcpy(id, resto, l);
+            if (barra) snprintf(accion, sizeof(accion), "%s", barra + 1);
+
+            bool ok = false;
+            if (!strcmp(method, "GET") && !accion[0]) {
+                n = chats_json(id, json, 256 * 1024);
+                ok = n > 0;
+            } else if (!strcmp(method, "POST") && !strcmp(accion, "activar")) {
+                /* Activar NO cierra el anterior: queda pausado con su KV.
+                 * Pero sí para lo que estuviera generando — mirar otro chat
+                 * no puede obligar a esperar a uno que ya no se mira. */
+                if (strcmp(id, chats_activo() ? chats_activo() : "")) {
+                    rt_cancelar();
+                    for (int t = 0; t < 200 && ruta_state() != ENGINE_IDLE; t++)
+                        usleep(20000);   /* que la pausa sea real al volver */
+                }
+                ok = chats_activar(id);
+            } else if (!strcmp(method, "POST") && !strcmp(accion, "cerrar")) {
+                /* Libera el KV; la conversación se queda entera. */
+                ok = rt_cerrar_sesion(id);
+            } else if ((!strcmp(method, "DELETE") && !accion[0]) ||
+                       (!strcmp(method, "POST") && !strcmp(accion, "borrar"))) {
+                /* Operación distinta y explícita. */
+                rt_cerrar_sesion(id);
+                ok = chats_borrar(id);
+            }
+            if (!n) n = (size_t)snprintf(json, 64, "{\"ok\":%s}",
+                                         ok ? "true" : "false");
+            if (!ok && n <= 16) estado = "404 Not Found";
+        }
+        respond(fd, estado, "application/json; charset=utf-8", json, n);
+        free(json);
     } else if (!strcmp(method, "GET") && !strcmp(path, "/api/memoria")) {
         if (!ruta_activa_tipada()) {
             respond(fd, "404 Not Found", "text/plain", "solo ruta tipada", 16);
