@@ -22,8 +22,9 @@ BINDIR = bin
 
 # Source files
 CORE_SRC = $(SRCDIR)/hera.c
+STORE_SRC = $(SRCDIR)/hera_store.c
 
-ALL_SRC = $(CORE_SRC)
+ALL_SRC = $(CORE_SRC) $(STORE_SRC)
 
 # Object files
 OBJECTS = $(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(ALL_SRC))
@@ -38,9 +39,9 @@ TEST_TARGET = $(BINDIR)/hera_test
 # Rules
 # ============================================================================
 
-.PHONY: all clean lib test
+.PHONY: all clean lib test store-test sabotaje
 
-all: lib test
+all: lib test store-test
 
 lib: $(LIB_TARGET)
 
@@ -64,3 +65,28 @@ $(TEST_TARGET): tools/hera_test.c $(LIB_TARGET)
 
 clean:
 	rm -rf $(OBJDIR) $(BINDIR)
+
+# ============================================================================
+# E3 — barrera del almacén de memoria
+# ============================================================================
+# `make sabotaje` compila el almacén roto de tres formas distintas y exige que
+# la batería lo detecte. Una batería que solo se ha visto pasar no demuestra
+# nada: hay que verla fallar cuando el código está mal.
+
+STORE_TEST = $(BINDIR)/hera_store_test
+
+store-test: $(STORE_TEST)
+
+$(STORE_TEST): tools/hera_store_test.c $(STORE_SRC) $(INCDIR)/hera_store.h
+	@mkdir -p $(BINDIR)
+	$(CC) $(CFLAGS) -DHERA_SABOTAJE=0 -I$(INCDIR) \
+	  $(STORE_SRC) tools/hera_store_test.c -o $@
+
+sabotaje: $(STORE_TEST)
+	@$(STORE_TEST) > /dev/null || (echo "la bateria falla en limpio"; exit 1)
+	@echo "limpio: 0 fallos"
+	@for n in 1 2 3; do \
+	  $(CC) $(CFLAGS) -DHERA_SABOTAJE=$$n -I$(INCDIR) $(STORE_SRC) \
+	    tools/hera_store_test.c -o $(BINDIR)/hera_st_$$n 2>/dev/null; \
+	  $(BINDIR)/hera_st_$$n --sabotaje $$n | tail -1; \
+	done

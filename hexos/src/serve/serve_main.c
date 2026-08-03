@@ -101,10 +101,12 @@ static void usage(const char *prog)
         "  --bind <ip>       interfaz (por defecto %s, toda la LAN)\n"
         "  --root <dir>      raíz de ficheros web (por defecto %s)\n"
         "  --no-distill      no consolidar la memoria episódica al salir\n"
-        "  --runtime <ruta>  RUTA TIPADA (E2, opt-in): HexOS clasifica el turno\n"
-        "                    con su propio CK y habla con helios_runtime por\n"
-        "                    eventos tipados. Sin este flag manda la legacy,\n"
-        "                    que sigue siendo la predeterminada y el oráculo.\n"
+        "  --runtime <ruta>  RUTA TIPADA — EXPERIMENTAL (E2, opt-in). HexOS\n"
+        "                    clasifica el turno con su propio CK y habla con\n"
+        "                    helios_runtime por eventos tipados. NO tiene\n"
+        "                    identidad persistente ni memoria: eso llega en E3.\n"
+        "                    Sin este flag manda la legacy, que sigue siendo la\n"
+        "                    predeterminada y el oráculo.\n"
         "\n"
         "Usa --no-distill mientras desarrollas. Cada cierre destila la sesión\n"
         "al diario de Héctor, así que veinte reinicios de prueba dejan veinte\n"
@@ -193,9 +195,12 @@ int main(int argc, char **argv)
             fprintf(stderr, "[serve] no pude arrancar helios_runtime\n");
             return 1;
         }
-        fprintf(stderr, "[serve] RUTA TIPADA (E2, opt-in): CK en HexOS.\n"
-                        "[serve] Sin identidad ni memoria todavía — eso es "
-                        "E3/E5. La legacy sigue siendo el oráculo.\n");
+        fprintf(stderr,
+            "[serve] ***** RUTA TIPADA — EXPERIMENTAL *****\n"
+            "[serve] El CK vive en HexOS, pero esta ruta NO tiene identidad\n"
+            "[serve] persistente ni memoria: no sabe quién eres y no recuerda\n"
+            "[serve] nada de una sesión a la siguiente. Sigue así hasta cerrar\n"
+            "[serve] E3. La legacy es la predeterminada y el oráculo.\n");
     } else {
         engine_set_notice_cb(on_notice);
         engine_set_callbacks(on_chunk, on_event, NULL);
