@@ -89,6 +89,14 @@ bool hera_cola_tomar(hera_job_t *out);
 bool hera_cola_hecho(const char *id, size_t ops, size_t aceptables);
 bool hera_cola_fallido(const char *id, const char *motivo);
 
+/* APLAZADO: el trabajo se apartó para dejar la GPU a alguien con más
+ * prioridad. Vuelve a PENDIENTE y **no gasta un intento**, porque no ha
+ * fallado nada: que un chat mande sobre la reflexión es planificación normal,
+ * no un error del job. Contarlo como fallo haría que un rato de conversación
+ * agotara los intentos de un trabajo perfectamente sano y lo diera por
+ * imposible. */
+bool hera_cola_aplazado(const char *id);
+
 size_t hera_cola_pendientes(void);
 
 /* Telemetría: recuentos por estado y nada más. Ni el mensaje, ni la respuesta,

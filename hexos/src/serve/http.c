@@ -443,6 +443,10 @@ static void *conn_thread(void *arg)
         }
         respond(fd, estado, "application/json; charset=utf-8", json, n);
         free(json);
+    } else if (!strcmp(method, "GET") && !strcmp(path, "/api/reflexion")) {
+        char json[512];
+        const size_t n = reflexion_telemetria_json(json, sizeof(json));
+        respond(fd, "200 OK", "application/json; charset=utf-8", json, n);
     } else if (!strcmp(method, "GET") && !strcmp(path, "/api/memoria")) {
         if (!ruta_activa_tipada()) {
             respond(fd, "404 Not Found", "text/plain", "solo ruta tipada", 16);

@@ -106,6 +106,14 @@ bool rt_cerrar_sesion(const char *chat);
 /* Cancela la generacion en curso: es lo que hace que activar otro chat sea
  * una pausa y no una espera. */
 bool rt_cancelar(void);
+
+/* Ejecuta UN trabajo de reflexion sobre la sesion reservada del motor. No es
+ * un chat: no esta en el registro y sus eventos no tocan SSE ni transcripcion.
+ * Resetea antes y despues — cada job es una evaluacion independiente.
+ * Devuelve lo dicho (el llamante libera) o NULL si se aplazo o fallo. */
+char *rt_reflexionar(const char *prompt_sistema, const char *entrada,
+                     int max_tokens, int max_pensamiento, bool *aplazada);
+bool rt_reflexion_en_vuelo(void);
 void rt_set_registro(const char *registro);
 engine_state_t rt_state(void);
 void rt_set_callbacks(engine_chunk_cb on_chunk, engine_event_cb on_event,
@@ -121,6 +129,16 @@ size_t rt_memoria_json(char *out, size_t cap);
 /* Ensayo de un MemoryDelta: veredictos SIN aplicar nada. En E3 no hay
  * aplicador y esto no lo es. */
 size_t rt_memoria_ensayo(const char *json_delta, char *out, size_t cap);
+
+/* ============================================================================
+ * TRABAJADOR DE REFLEXION (reflexion.c) — E4, SOLO ENSAYO
+ * ============================================================================
+ * Parsea y ensaya; NO aplica nada. Se enciende con --reflexion y apagarlo no
+ * toca ni el chat ni la cola: es el interruptor de rollback. */
+bool   reflexion_arrancar(void);
+void   reflexion_parar(void);
+bool   reflexion_activa(void);
+size_t reflexion_telemetria_json(char *out, size_t cap);
 
 /* Despacho: http.c no necesita saber que ruta esta activa. */
 void ruta_usar_tipada(bool tipada);

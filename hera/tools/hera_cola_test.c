@@ -34,6 +34,8 @@
 static int g_fallos, g_pruebas;
 static char g_base[512], g_dir[700];
 
+static void ok_silencioso(bool cond) { (void)cond; }
+
 static void ok(bool cond, const char *nombre, const char *detalle) {
     g_pruebas++;
     if (cond) printf("  \033[32m✓\033[0m %s\n", nombre);
@@ -258,6 +260,40 @@ static void prueba_fallar_no_bloquea(void) {
     ok(llega_el_otro, "el segundo job llega igual", "el fallido atascó la cola");
 }
 
+/* Aplazar no es fallar. */
+static void prueba_aplazado(void) {
+    printf("\n[5b] aplazar devuelve el job SIN gastar intentos\n");
+    perfil_nuevo("c5b");
+    hera_job_t j = hacer(1);
+    hera_cola_encolar(&j);
+
+    /* Se aplaza más veces que intentos hay: si contara como fallo, a la
+     * tercera el job estaría muerto. Un rato de conversación no puede dar por
+     * imposible un trabajo que no ha fallado nunca. */
+    for (int i = 0; i < HERA_JOB_INTENTOS + 3; i++) {
+        hera_job_t x;
+        ok_silencioso(hera_cola_tomar(&x));
+        hera_cola_aplazado(x.id);
+    }
+    ok(hera_cola_pendientes() == 1,
+       "tras aplazarlo más veces que intentos hay, sigue pendiente",
+       "se dio por fallido");
+
+    char json[256];
+    hera_cola_estado_json(json, sizeof(json));
+    ok(strstr(json, "\"fallidos\":0") != NULL,
+       "y no consta ningún fallo", json);
+
+    /* Y sigue pudiendo fallar de verdad las veces que le tocan. */
+    hera_job_t x;
+    for (int i = 0; i < HERA_JOB_INTENTOS; i++) {
+        if (hera_cola_tomar(&x)) hera_cola_fallido(x.id, "delta corrupto");
+    }
+    hera_cola_estado_json(json, sizeof(json));
+    ok(strstr(json, "\"fallidos\":1") != NULL,
+       "los intentos de verdad seguían enteros y se gastan al fallar", json);
+}
+
 static void prueba_telemetria(void) {
     printf("\n[6] la telemetría no lleva contenido privado\n");
     perfil_nuevo("c6");
@@ -347,6 +383,7 @@ int main(int argc, char **argv) {
     prueba_recuperacion();
     prueba_no_robar();
     prueba_fallar_no_bloquea();
+    prueba_aplazado();
     prueba_telemetria();
     prueba_entrada_congelada();
 

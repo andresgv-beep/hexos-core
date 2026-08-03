@@ -234,6 +234,9 @@ static void aplicar(const char *linea) {
     else if (strcmp(r, "fallido") == 0) {
         j->estado = HERA_JOB_FALLIDO;
         campo(linea, "motivo", j->motivo, sizeof(j->motivo));
+    } else if (strcmp(r, "aplazado") == 0) {
+        /* Vuelve a la cola SIN tocar los intentos. */
+        j->estado = HERA_JOB_PENDIENTE;
     } else if (strcmp(r, "reintento") == 0) {
         j->estado = HERA_JOB_PENDIENTE;
         j->intentos = (int)numero(linea, "intentos");
@@ -452,6 +455,22 @@ bool hera_cola_fallido(const char *id, const char *motivo) {
             snprintf(j->motivo, sizeof(j->motivo), "%s", motivo ? motivo : "");
         }
     }
+    desbloquear();
+    return ok;
+}
+
+bool hera_cola_aplazado(const char *id) {
+    if (!g_abierta || !id) return false;
+    bloquear(LOCK_EX);
+    recargar();
+    hera_job_t *j = buscar(id);
+    if (!j) { desbloquear(); return false; }
+    char linea[HERA_JOB_ID_MAX + 128];
+    snprintf(linea, sizeof(linea),
+             "{\"r\":\"aplazado\",\"job\":\"%.*s\",\"ts\":%lld}",
+             (int)sizeof(j->id) - 1, id, ahora());
+    const bool ok = anexar(linea);
+    if (ok) j->estado = HERA_JOB_PENDIENTE;   /* intentos intactos */
     desbloquear();
     return ok;
 }

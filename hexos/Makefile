@@ -122,7 +122,7 @@ RUNTIME_SRC = $(SRCDIR)/runtime/policy.c
 MODEL_PROBE_SRC = $(SRCDIR)/model/probe.c
 CK_POLICY_SRC = $(SRCDIR)/ck/ck_policy.c
 HERA_SRC = ../hera/src/hera_store.c ../hera/src/hera_profile.c ../hera/src/hera_delta.c ../hera/src/hera_queue.c
-SERVE_SRC = $(SRCDIR)/serve/engine.c $(SRCDIR)/serve/http.c $(SRCDIR)/serve/chats.c \
+SERVE_SRC = $(SRCDIR)/serve/engine.c $(SRCDIR)/serve/http.c $(SRCDIR)/serve/chats.c $(SRCDIR)/serve/reflexion.c \
             $(SRCDIR)/serve/serve_main.c $(SRCDIR)/serve/runtime_client.c \
             $(CK_POLICY_SRC) $(RUNTIME_SRC) $(MODEL_PROBE_SRC)
 SERVE_TARGET = $(BINDIR)/hexos_serve

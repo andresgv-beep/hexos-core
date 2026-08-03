@@ -101,6 +101,10 @@ static void usage(const char *prog)
         "  --bind <ip>       interfaz (por defecto %s, toda la LAN)\n"
         "  --root <dir>      raíz de ficheros web (por defecto %s)\n"
         "  --no-distill      no consolidar la memoria episódica al salir\n"
+        "  --reflexion       enciende el trabajador de reflexión (solo con\n"
+        "                    --runtime). SOLO ENSAYA: parsea y valida lo que\n"
+        "                    propone el modelo y no aplica NADA. Apagarlo no\n"
+        "                    toca el chat ni la cola.\n"
         "  --runtime <ruta>  RUTA TIPADA — EXPERIMENTAL (opt-in). HexOS\n"
         "                    clasifica el turno con su propio CK y lleva la\n"
         "                    memoria (HERA): solo entran al prompt los hechos\n"
@@ -128,12 +132,14 @@ int main(int argc, char **argv)
     bool no_distill = false;
     const char *runtime_bin = NULL;
     bool no_probe = false;
+    bool reflexion = false;
 
     for (int i = 1; i < argc; i++) {
         const char *next = (i + 1 < argc) ? argv[i + 1] : NULL;
         if (!strcmp(argv[i], "--no-distill")) { no_distill = true; }
         else if (!strcmp(argv[i], "--runtime") && next) { runtime_bin = next; i++; }
         else if (!strcmp(argv[i], "--no-probe")) { no_probe = true; }
+        else if (!strcmp(argv[i], "--reflexion")) { reflexion = true; }
         else if (!strcmp(argv[i], "--model")  && next) { model = next; i++; }
         else if (!strcmp(argv[i], "--engine") && next) { engine = next; i++; }
         else if (!strcmp(argv[i], "--probe")  && next) { probe = next; i++; }
@@ -212,6 +218,16 @@ int main(int argc, char **argv)
             return 1;
         }
     }
+    if (reflexion && runtime_bin) {
+        if (reflexion_arrancar())
+            fprintf(stderr, "[serve] reflexión ENCENDIDA — solo ensaya: "
+                            "no escribe memoria y no hay aplicador\n");
+        else
+            fprintf(stderr, "[serve] no pude arrancar la reflexión\n");
+    } else if (reflexion) {
+        fprintf(stderr, "[serve] --reflexion necesita --runtime; ignorada\n");
+    }
+
     fprintf(stderr, "[serve] cargando %s...\n", model);
     fprintf(stderr, "[serve] http://localhost:%d  (y en la LAN por %s)\n",
             port, bind_addr);
@@ -219,6 +235,7 @@ int main(int argc, char **argv)
     serve_run(root);
 
     fprintf(stderr, "\n[serve] cerrando: dejo que Héctor destile la memoria\n");
+    reflexion_parar();
     if (ruta_activa_tipada()) rt_stop(); else engine_stop();
     return 0;
 }

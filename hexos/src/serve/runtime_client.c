@@ -103,6 +103,34 @@ static char           *g_respuesta;      /* lo que va diciendo este turno */
 static size_t          g_respuesta_len, g_respuesta_cap;
 static char            g_chat_en_curso[CHAT_ID_MAX];
 
+/* ------------------------------------------------------------------------
+ * REFLEXIÓN. Corre sobre una sesión reservada del motor que NO es un chat:
+ * no está en el registro, así que no puede salir en la barra lateral. Sus
+ * eventos no tocan el canal del usuario — ni SSE, ni burbujas, ni estado del
+ * motor. Si la reflexión moviera el estado a "escribiendo", la UI diría que
+ * Héctor está contestando algo que nadie le preguntó.
+ *
+ * Y no tiene continuidad: cada trabajo se resetea antes de empezar. Dos jobs
+ * seguidos no pueden compartir KV ni muestreador — si lo hicieran, el segundo
+ * estaría evaluando un turno con el anterior todavía delante.
+ * ------------------------------------------------------------------------ */
+#define SESION_REFLEXION "hera:reflection"
+
+static pthread_mutex_t g_ref_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t  g_ref_cond = PTHREAD_COND_INITIALIZER;
+static char            g_ref_rid[32];     /* petición en vuelo, si la hay */
+static char           *g_ref_texto;
+static size_t          g_ref_len, g_ref_cap;
+static bool            g_ref_fin;
+static bool            g_ref_cancelada;
+
+bool rt_reflexion_en_vuelo(void) {
+    pthread_mutex_lock(&g_ref_lock);
+    const bool v = g_ref_rid[0] != '\0';
+    pthread_mutex_unlock(&g_ref_lock);
+    return v;
+}
+
 /* Entrada congelada del turno en vuelo, para encolarlo a reflexión cuando
  * termine BIEN. Se guarda al enviar porque después ya no se puede reconstruir
  * con fidelidad: el perfil habrá podido cambiar y el marco es de este turno.
@@ -170,6 +198,18 @@ static const char *perfil_corto(void) {
 static void avisar(const char *texto) {
     fprintf(stderr, "[serve] %s\n", texto);
     if (g_on_notice) g_on_notice(texto, strlen(texto), g_user);
+}
+
+/* Traza una línea que ya trae su '\n' al final. */
+static void trazar_sin_salto(const char *linea_con_salto) {
+    const size_t l = strlen(linea_con_salto);
+    if (!l || !g_traza) return;
+    char *copia = malloc(l + 1);
+    if (!copia) return;
+    memcpy(copia, linea_con_salto, l);
+    copia[l - 1] = '\0';           /* fuera el salto */
+    trazar("request", copia);
+    free(copia);
 }
 
 static void set_state(engine_state_t st, const char *event) {
@@ -262,6 +302,45 @@ static void *reader_thread(void *arg) {
             size_t l = strlen(linea);
             if (l && linea[l - 1] == '\n') linea[l - 1] = '\0';
             trazar("event", linea);
+        }
+
+        /* ¿Es de la reflexión? Entonces no sale por ningún canal del usuario.
+         * Se acumula aquí y punto. */
+        {
+            char rid[32] = "";
+            campo_str(linea, "request_id", rid, sizeof(rid));
+            pthread_mutex_lock(&g_ref_lock);
+            const bool mia = g_ref_rid[0] && !strcmp(rid, g_ref_rid);
+            if (mia) {
+                if (!strcmp(tipo, "text_delta")) {
+                    char *t = malloc(RT_LINEA_MAX);
+                    if (t && campo_str(linea, "text", t, RT_LINEA_MAX)) {
+                        const size_t l = strlen(t);
+                        if (g_ref_len + l + 1 > g_ref_cap) {
+                            size_t nc = g_ref_cap ? g_ref_cap : 4096;
+                            while (nc < g_ref_len + l + 1) nc *= 2;
+                            char *n = realloc(g_ref_texto, nc);
+                            if (n) { g_ref_texto = n; g_ref_cap = nc; }
+                        }
+                        if (g_ref_texto && g_ref_len + l + 1 <= g_ref_cap) {
+                            memcpy(g_ref_texto + g_ref_len, t, l);
+                            g_ref_len += l;
+                            g_ref_texto[g_ref_len] = '\0';
+                        }
+                    }
+                    free(t);
+                } else if (!strcmp(tipo, "completed") || !strcmp(tipo, "error")) {
+                    char razon[32] = "";
+                    campo_str(linea, "finish_reason", razon, sizeof(razon));
+                    g_ref_cancelada = !strcmp(razon, "cancelled") ||
+                                      !strcmp(tipo, "error");
+                    g_ref_fin = true;
+                    pthread_cond_broadcast(&g_ref_cond);
+                }
+                pthread_mutex_unlock(&g_ref_lock);
+                continue;   /* NUNCA llega al usuario */
+            }
+            pthread_mutex_unlock(&g_ref_lock);
         }
 
         if (!strcmp(tipo, "ready")) {
@@ -474,6 +553,24 @@ bool rt_send(const char *text) {
 }
 
 static bool rt_send_bloqueado(const char *text) {
+    /* PRIORIDAD DEL CHAT. Si la reflexión está usando la GPU, se corta ya: la
+     * persona está esperando. No es un fallo del trabajo — se aplaza, y el
+     * trabajador lo devolverá a la cola sin gastarle un intento. */
+    if (rt_reflexion_en_vuelo()) {
+        char linea[160];
+        snprintf(linea, sizeof(linea),
+                 "{\"type\":\"cancel\",\"request_id\":\"xr%u\",\"target\":\"%s\"}\n",
+                 ++g_seq, g_ref_rid);
+        pthread_mutex_lock(&g_wr);
+        escribir(linea);
+        pthread_mutex_unlock(&g_wr);
+        /* Se espera a que run_turn REGRESE. Mandar el turno del chat antes
+         * sería pisarle los buffers al trabajo que aún corre. */
+        pthread_mutex_lock(&g_ref_lock);
+        while (g_ref_rid[0] && !g_ref_fin)
+            pthread_cond_wait(&g_ref_cond, &g_ref_lock);
+        pthread_mutex_unlock(&g_ref_lock);
+    }
     if (rt_state() != ENGINE_IDLE) return false;
 
     /* 0. Releer el diario. La memoria puede cambiar desde FUERA de la ruta —
@@ -728,6 +825,86 @@ size_t rt_memoria_ensayo(const char *json_delta, char *out, size_t cap) {
  * recibe un 409 y la persona tiene que esperar a que termine algo que ya no
  * está mirando. La cancelación es la de siempre: para en un límite de token y
  * conserva lo emitido. */
+/* Ejecuta UN trabajo de reflexión y devuelve lo que dijo el modelo, o NULL si
+ * se aplazó o falló. Resetea la sesión ANTES: cada job es una evaluación
+ * independiente, sin continuidad conversacional. El llamante libera. */
+char *rt_reflexionar(const char *prompt_sistema, const char *entrada,
+                     int max_tokens, int max_pensamiento, bool *aplazada) {
+    if (aplazada) *aplazada = false;
+    if (rt_state() == ENGINE_DEAD) return NULL;
+
+    pthread_mutex_lock(&g_ref_lock);
+    g_ref_len = 0;
+    if (g_ref_texto) g_ref_texto[0] = '\0';
+    g_ref_fin = false;
+    g_ref_cancelada = false;
+    snprintf(g_ref_rid, sizeof(g_ref_rid), "f%u", ++g_seq);
+    char rid[32];
+    snprintf(rid, sizeof(rid), "%s", g_ref_rid);
+    pthread_mutex_unlock(&g_ref_lock);
+
+    const size_t cap = strlen(prompt_sistema) * 2 + strlen(entrada) * 2 + 2048;
+    char *sis = malloc(cap), *ent = malloc(cap), *linea = malloc(cap * 2);
+    char *reset = malloc(256);
+    if (!sis || !ent || !linea || !reset) {
+        free(sis); free(ent); free(linea); free(reset);
+        pthread_mutex_lock(&g_ref_lock); g_ref_rid[0] = '\0';
+        pthread_mutex_unlock(&g_ref_lock);
+        return NULL;
+    }
+    esc_into(prompt_sistema, sis, cap);
+    esc_into(entrada, ent, cap);
+
+    /* Reset + turno, bajo el mismo cerrojo de escritura: si se colara algo en
+     * medio, el trabajo evaluaría con restos del anterior delante. */
+    snprintf(reset, 256,
+             "{\"type\":\"reset\",\"request_id\":\"fr%u\",\"session\":\"%s\"}\n",
+             g_seq, SESION_REFLEXION);
+    snprintf(linea, cap * 2,
+             "{\"type\":\"turn\",\"request_id\":\"%s\",\"session\":\"%s\","
+             "\"messages\":[{\"role\":\"system\",\"content\":\"%s\"},"
+             "{\"role\":\"user\",\"content\":\"%s\"}],"
+             "\"generation\":{\"temperature\":0.0,\"max_visible_tokens\":%d,"
+             "\"max_thinking_tokens\":%d}}\n",
+             rid, SESION_REFLEXION, sis, ent, max_tokens, max_pensamiento);
+    /* Se traza lo que se manda DE VERDAD, no un marcador parecido: una traza
+     * que dice otra cosa es peor que no tenerla, porque se usa para demostrar
+     * propiedades. Ya pasó con el `shutdown`. */
+    trazar_sin_salto(reset);
+    trazar_sin_salto(linea);
+
+    pthread_mutex_lock(&g_wr);
+    const bool ok = escribir(reset) && escribir(linea);
+    pthread_mutex_unlock(&g_wr);
+    free(sis); free(ent); free(linea); free(reset);
+    if (!ok) {
+        pthread_mutex_lock(&g_ref_lock); g_ref_rid[0] = '\0';
+        pthread_mutex_unlock(&g_ref_lock);
+        return NULL;
+    }
+
+    pthread_mutex_lock(&g_ref_lock);
+    while (!g_ref_fin) pthread_cond_wait(&g_ref_cond, &g_ref_lock);
+    const bool cancelada = g_ref_cancelada;
+    char *salida = (!cancelada && g_ref_texto) ? strdup(g_ref_texto) : NULL;
+    g_ref_rid[0] = '\0';
+    pthread_mutex_unlock(&g_ref_lock);
+
+    if (cancelada && aplazada) *aplazada = true;
+
+    /* Se suelta el KV de reflexión al terminar: no hay nada que conservar
+     * entre trabajos, y dejarlo cargado gasta VRAM que es de los chats. */
+    char cierre[256];
+    snprintf(cierre, sizeof(cierre),
+             "{\"type\":\"reset\",\"request_id\":\"fz%u\",\"session\":\"%s\"}\n",
+             ++g_seq, SESION_REFLEXION);
+    trazar_sin_salto(cierre);
+    pthread_mutex_lock(&g_wr);
+    escribir(cierre);
+    pthread_mutex_unlock(&g_wr);
+    return salida;
+}
+
 bool rt_cancelar(void) {
     if (rt_state() == ENGINE_IDLE || rt_state() == ENGINE_DEAD) return false;
     /* El objetivo se calcula ANTES de tocar el contador: `++g_seq` y
