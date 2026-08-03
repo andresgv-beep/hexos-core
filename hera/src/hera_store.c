@@ -770,13 +770,19 @@ hera_veredicto_t hera_store_registrar(const char *clave, const char *valor,
                                       const char *evidencia_id,
                                       const char *confirmacion_id,
                                       char *out_id, size_t cap) {
+    bloquear(LOCK_EX);
+    recargar(true);
+    hera_veredicto_t v = HERA_OK;
     if (!evidencia_interna(confirmacion_id))
-        return HERA_RECHAZO_SIN_CONFIRMACION;
-    const hera_veredicto_t v = validar(clave, valor, evidencia_id);
-    if (v != HERA_OK) return v;
-    if (es_duplicado(clave, valor)) return HERA_RECHAZO_DUPLICADO;
-    return alta(clave, valor, texto, evidencia_id, confirmacion_id, true,
-                "persona", NULL, out_id, cap);
+        v = HERA_RECHAZO_SIN_CONFIRMACION;
+    else if ((v = validar(clave, valor, evidencia_id)) != HERA_OK) { /* ya está */ }
+    else if (es_duplicado(clave, valor))
+        v = HERA_RECHAZO_DUPLICADO;
+    else
+        v = alta(clave, valor, texto, evidencia_id, confirmacion_id, true,
+                 "persona", NULL, out_id, cap);
+    desbloquear();
+    return v;
 }
 
 static hera_veredicto_t confirmar_impl(const char *id,
@@ -918,8 +924,13 @@ hera_veredicto_t hera_store_ensayar_corregir(const char *clave,
                                              const char *valor,
                                              const char *evidencia_id,
                                              const char *confirmacion_id) {
-    return corregir_impl(clave, valor, NULL, evidencia_id, confirmacion_id,
-                         true, NULL, 0);
+    bloquear(LOCK_SH);
+    recargar(false);
+    const hera_veredicto_t v =
+        corregir_impl(clave, valor, NULL, evidencia_id, confirmacion_id,
+                      true, NULL, 0);
+    desbloquear();
+    return v;
 }
 
 /* ------------------------------------------------------------------------

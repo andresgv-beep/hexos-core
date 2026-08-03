@@ -40,9 +40,9 @@ TEST_TARGET = $(BINDIR)/hera_test
 # Rules
 # ============================================================================
 
-.PHONY: all clean lib test store-test mente-test cli sabotaje sabotaje-mente sabotaje-carrera
+.PHONY: all clean lib test store-test mente-test cli sabotaje sabotaje-mente sabotaje-carrera carrera auditar
 
-all: lib test store-test mente-test cli
+all: lib test store-test mente-test cli auditar
 
 lib: $(LIB_TARGET)
 
@@ -88,7 +88,7 @@ $(STORE_TEST): tools/hera_store_test.c $(STORE_SRC) $(INCDIR)/hera_store.h
 	$(CC) $(CFLAGS) -DHERA_SABOTAJE=0 -I$(INCDIR) \
 	  $(STORE_SRC) tools/hera_store_test.c -o $@ -lpthread
 
-sabotaje: $(STORE_TEST)
+sabotaje: $(STORE_TEST) auditar
 	@$(STORE_TEST) > /dev/null || (echo "FALLO: la bateria no pasa en limpio"; exit 1)
 	@echo "limpio: 0 fallos"
 	@fallos=0; \
@@ -154,18 +154,50 @@ $(BINDIR)/hera: tools/hera_cli.c $(STORE_SRC) $(MENTE_SRC)
 # tambien pasara, la prueba no estaria probando el cerrojo.
 # ============================================================================
 
-sabotaje-carrera: cli
+sabotaje-carrera: cli auditar
 	@$(CC) $(CFLAGS) -DHERA_SABOTAJE=10 -I$(INCDIR) $(STORE_SRC) $(MENTE_SRC) \
 	  tools/hera_cli.c -lpthread -o $(BINDIR)/hera_sin_cerrojo 2>/dev/null
-	@d=`mktemp -d`; for i in `seq 1 24`; do HELIOS_HOME=$$d $(BINDIR)/hera dijo "f$$i" >/dev/null & done; wait; \
-	  u=`grep -o '"id":"u[0-9]*"' $$d/hera.jsonl | sort -u | wc -l`; \
-	  rm -rf $$d; \
-	  if [ "$$u" != "24" ]; then echo "FALLO: con cerrojo solo $$u ids unicos"; exit 1; fi; \
-	  echo "con cerrojo: 24 ids unicos"
-	@d=`mktemp -d`; for i in `seq 1 24`; do HELIOS_HOME=$$d $(BINDIR)/hera_sin_cerrojo dijo "f$$i" >/dev/null & done; wait; \
-	  u=`grep -o '"id":"u[0-9]*"' $$d/hera.jsonl | sort -u | wc -l`; \
-	  rm -rf $$d; \
-	  if [ "$$u" = "24" ]; then \
-	    echo "FALLO: sin cerrojo tambien salen 24 ids unicos — la prueba no prueba nada"; exit 1; \
-	  fi; \
-	  echo "sin cerrojo: solo $$u ids unicos (la carrera se reproduce)"
+	@$(MAKE) --no-print-directory carrera BIN=$(BINDIR)/hera        ESPERA=si
+	@$(MAKE) --no-print-directory carrera BIN=$(BINDIR)/hera_sin_cerrojo ESPERA=no
+
+# Una tirada de concurrencia sobre el mismo diario, en dos fases:
+#
+#   fase 1: 24 `dijo` en paralelo            -> ids uN
+#   fase 2: UN `dijo` con todos los valores, y luego 24 `guarda` en paralelo
+#           citandolo                        -> ids fN
+#
+# La fase 2 necesita una evidencia SECUENCIAL: con las 24 en paralelo no se
+# sabe que texto quedo en que id, asi que ninguna cita cuadraba y salian CERO
+# hechos... y la puerta pasaba igual. Por eso ahora se exige el recuento: 24
+# hechos escritos, no "los que sean".
+#
+# ESPERA=si -> 24 uN y 24 fN unicos, diario entero.
+# ESPERA=no -> algun id repetido; si no, la prueba no prueba nada.
+carrera:
+	@d=`mktemp -d`; \
+	for i in `seq 1 24`; do HELIOS_HOME=$$d $(BIN) dijo "frase numero $$i" >/dev/null & done; wait; \
+	ev=`HELIOS_HOME=$$d $(BIN) dijo "guarda esto: Rufo1 Rufo2 Rufo3 Rufo4 Rufo5 Rufo6 Rufo7 Rufo8 Rufo9 Rufo10 Rufo11 Rufo12 Rufo13 Rufo14 Rufo15 Rufo16 Rufo17 Rufo18 Rufo19 Rufo20 Rufo21 Rufo22 Rufo23 Rufo24"`; \
+	for i in `seq 1 24`; do \
+	  HELIOS_HOME=$$d $(BIN) guarda "yo/mote$$i" "Rufo$$i" "Le llaman Rufo$$i" $$ev >/dev/null & \
+	done; wait; \
+	u=`grep -o '"id":"u[0-9]*"' $$d/hera.jsonl | sort -u | wc -l`; \
+	f=`grep -o '"id":"f[0-9]*"' $$d/hera.jsonl | sort -u | wc -l`; \
+	nu=`grep -c '"r":"dijo"' $$d/hera.jsonl`; \
+	nf=`grep -c '"r":"hecho"' $$d/hera.jsonl`; \
+	rotas=`grep -cv '}$$' $$d/hera.jsonl || true`; \
+	rm -rf $$d; \
+	echo "  `basename $(BIN)`: $$nu dijo/$$u ids · $$nf hechos/$$f ids · $$rotas lineas rotas"; \
+	if [ "$$nf" != "24" ]; then \
+	  echo "  FALLO: se escribieron $$nf hechos y no 24 — la fase 2 no esta probando nada"; exit 1; fi; \
+	if [ "$(ESPERA)" = "si" ]; then \
+	  if [ "$$u" != "$$nu" ] || [ "$$f" != "$$nf" ] || [ "$$rotas" != "0" ]; then \
+	    echo "  FALLO: con cerrojo se repitio algun id o se rompio el diario"; exit 1; fi; \
+	  echo "  con cerrojo: 24+1 evidencias y 24 hechos, todos con id unico"; \
+	else \
+	  if [ "$$u" = "$$nu" ] && [ "$$f" = "$$nf" ]; then \
+	    echo "  FALLO: sin cerrojo tambien salen todos unicos — la prueba no prueba nada"; exit 1; fi; \
+	  echo "  sin cerrojo: la carrera se reproduce"; \
+	fi
+
+auditar:
+	@python3 tools/auditar_cerrojos.py src/hera_store.c

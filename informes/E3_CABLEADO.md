@@ -126,17 +126,43 @@ consecuencia no puede ser dos pasos.
 con un perfil vacío sería contestar como si no supiéramos nada de la persona sin
 decir que la memoria está rota, y ese turno sería indistinguible de uno normal.
 
-### Y la prueba se ha visto fallar
+### Dos puertas, y por qué hacen falta las dos
 
-`make sabotaje-carrera` lanza 24 `hera dijo` en paralelo contra el almacén bueno
-y contra uno compilado sin cerrojo:
+`make sabotaje-carrera` lanza 24 `hera dijo` y luego 24 `hera guarda` en
+paralelo, contra el almacén bueno y contra uno compilado sin cerrojo:
 
 ```
-con cerrojo:  24 ids únicos
-sin cerrojo:  solo 16 ids únicos (la carrera se reproduce)
+con cerrojo:  25 evidencias/25 ids · 24 hechos/24 ids · 0 líneas rotas
+sin cerrojo:  25 evidencias/23 ids · 24 hechos/18 ids
 ```
 
-Si el saboteado también diera 24, la prueba no estaría probando el cerrojo.
+`make auditar` comprueba estáticamente que **toda** puerta pública del almacén
+llame a `bloquear(`, con una lista de exentas donde cada excepción hay que
+justificar por escrito.
+
+**Y no es redundante: cada una caza lo que la otra no.** Dos envolturas de
+cerrojo se aplicaron con un reemplazo de texto que no encajó — el fichero
+compiló, las baterías pasaron, y `hera_store_registrar()` (la que usa
+`hera guarda`) se quedó escribiendo sin cerrojo. Medido contra ese binario:
+
+| Detector | ¿Caza una sola función suelta? |
+|---|---|
+| `auditar` (estático) | **sí**, las dos al primer intento, determinista |
+| `sabotaje-carrera` | **solo a veces** — 1 de cada 4 tiradas |
+
+La carrera falla poco ahí porque las llamadas de alrededor (`abrir`,
+`importar_legacy`) sí toman el cerrojo, y la ventana que queda abierta es
+diminuta. Detecta muy bien la ausencia **total** de exclusión y muy mal una
+puerta olvidada. Por eso el auditor corre con las demás puertas y no como
+adorno: un parche que no aplica es silencioso, y ninguna prueba de
+concurrencia razonable lo habría cazado a tiempo.
+
+### La fase de `guarda` pasaba sin probar nada
+
+Al montarla, las 24 evidencias en paralelo no tienen ids deterministas, así que
+ninguna cita cuadraba y salían **cero hechos** — y la puerta daba OK igual.
+Ahora la fase 2 cita una evidencia escrita en secuencia y se exige el recuento:
+24 hechos escritos, no "los que sean".
 
 ## Deuda anotada, no bloqueante
 
