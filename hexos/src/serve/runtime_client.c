@@ -329,7 +329,7 @@ static void *reader_thread(void *arg) {
                         }
                     }
                     free(t);
-                } else if (!strcmp(tipo, "completed") || !strcmp(tipo, "error")) {
+                } else if (!strcmp(tipo, "completed")) {
                     char razon[32] = "";
                     campo_str(linea, "finish_reason", razon, sizeof(razon));
                     g_ref_cancelada = !strcmp(razon, "cancelled") ||
@@ -368,12 +368,31 @@ static void *reader_thread(void *arg) {
                 }
             }
             free(texto);
+        } else if (!strcmp(tipo, "error")) {
+            /* Un error del motor tiene que LLEGAR al usuario. Sin esto,
+             * quedarse sin VRAM se ve igual que un sistema que no hace nada:
+             * escribes, no pasa nada, y no hay forma de saber por qué. */
+            char code[64] = "", mensaje[512] = "";
+            campo_str(linea, "code", code, sizeof(code));
+            campo_str(linea, "message", mensaje, sizeof(mensaje));
+            char aviso[700];
+            if (!strcmp(code, "session_unavailable")) {
+                snprintf(aviso, sizeof(aviso),
+                         "(no cabe otro chat en la GPU: %s. Libera la memoria "
+                         "de algún chat desde su menú ⋮, o arranca con menos "
+                         "contexto)", mensaje);
+            } else {
+                snprintf(aviso, sizeof(aviso), "(el motor falló: %s — %s)",
+                         code, mensaje);
+            }
+            if (g_on_notice) g_on_notice(aviso, strlen(aviso), g_user);
+            if (rt_state() != ENGINE_IDLE) set_state(ENGINE_IDLE, "end");
         } else if (!strcmp(tipo, "notice")) {
             char aviso[512];
             if (campo_str(linea, "text", aviso, sizeof(aviso)) && g_on_notice) {
                 g_on_notice(aviso, strlen(aviso), g_user);
             }
-        } else if (!strcmp(tipo, "completed") || !strcmp(tipo, "error")) {
+        } else if (!strcmp(tipo, "completed")) {
             /* Un `error` de adjunto llega con el motor ya en IDLE. Cerrar el
              * turno ahí emitiría un "end" que la UI cuenta como respuesta
              * terminada — y no había turno. */
