@@ -1,5 +1,9 @@
 # Agentes especialistas locales — propuesta posterior a E6
 
+> Aparcado desde 2026-09-12. La dirección vigente es el
+> [agente doméstico de un solo modelo y un chat](AGENTE_DOMESTICO_PLAN.md).
+> Se conserva este documento como antecedente, no como trabajo pendiente.
+
 ## Propósito y alcance
 
 Helios mantiene una sola identidad visible, aunque varios modelos o sesiones

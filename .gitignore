@@ -9,6 +9,7 @@ runtime/memory/
 runtime/hnf/
 runtime/lora/
 runtime/logs/
+runtime/workspace/
 
 # Archivos de identidad/memoria de prueba
 *.hnf-ext

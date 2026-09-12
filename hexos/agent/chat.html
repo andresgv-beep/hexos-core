@@ -1,0 +1,70 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Helios · Agente doméstico</title>
+<style>
+body{margin:0;background:#101719;color:#e5edef;font:17px system-ui}main{max-width:1000px;margin:auto;padding:24px}header{display:flex;align-items:center;gap:18px}h1{font-size:23px}.orb{width:44px;height:44px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#b7ffff,#1889aa 40%,#092637 75%);box-shadow:0 0 22px #219abd}article{padding:16px;border-bottom:1px solid #304045;white-space:pre-wrap;overflow-wrap:anywhere}article.progress{color:#a9d9df;font-style:italic}article.user{background:#1c292b}textarea{box-sizing:border-box;width:100%;min-height:140px;background:#19262a;color:inherit;padding:14px;border:1px solid #597578;border-radius:8px;font:inherit}button{padding:10px 18px;background:#b3edef;border:0;border-radius:8px;margin:8px 0;cursor:pointer}#state{color:#8dd6dd}#error{color:#ffb1a4}details{padding:10px;background:#192428;margin-top:8px}pre{white-space:pre-wrap;overflow-wrap:anywhere}small{color:#b1c3c7}#jobs{margin-top:25px}.job{border:1px solid #3b575c;padding:12px;margin:10px 0}
+</style><main>
+<header><div class="orb" aria-hidden="true"></div><div><h1>Helios</h1><div id="state">Conectando…</div></div></header>
+<p><small>Una conversación · Fichas de trabajo · Documentos completos hasta 8 MiB</small></p>
+<section id="log" aria-label="Conversación"></section>
+<dialog id="access">
+  <form method="dialog" id="accessform">
+    <h2>Helios pide acceso</h2>
+    <p id="accesstarget"></p>
+    <label>Usuario <input id="accessuser" autocomplete="off" required></label>
+    <label>Contraseña <input id="accesspass" type="password" autocomplete="off" required></label>
+    <p id="accesserror" role="alert"></p>
+    <menu>
+      <button value="cancel" type="submit" id="accesscancel">Ahora no</button>
+      <button value="save" type="button" id="accesssave">Guardar acceso</button>
+    </menu>
+    <small>Se guarda en este equipo con permisos 600. No pasa por la conversación ni por el modelo.</small>
+  </form>
+</dialog>
+<p id="error" role="alert"></p>
+<form id="form"><textarea id="input" aria-label="Mensaje" placeholder="Habla con Helios o pega un documento…"></textarea><button id="send">Enviar</button></form>
+<button id="reset" type="button">Limpiar contexto del modelo</button><small> Conserva conversación, documentos, encargos e informes en disco.</small>
+<details id="jobs"><summary>Trabajos y clasificación propuesta</summary><div id="cards"></div></details>
+<script>
+let historyReady=false;
+const seenProgress=new Set();
+function progress(data){for(const item of data?.messages||[]){if(seenProgress.has(item.id))continue;seenProgress.add(item.id);message('assistant progress',item.text)}}
+const log=document.querySelector('#log'), input=document.querySelector('#input'), error=document.querySelector('#error');
+document.querySelector('#reset').onclick=async()=>{try{const r=await fetch('/api/context/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});const d=await r.json();if(!r.ok)throw Error(d.error);error.textContent='Contexto limpiado. Los registros siguen guardados.'}catch(e){error.textContent=e.message}};
+function message(role,text){const e=document.createElement('article');e.className=role;e.textContent=(role==='user'?'TÚ':'HELIOS')+'\n'+text;log.append(e)}
+async function jobs(){const r=await fetch('/api/work');if(!r.ok)return;const data=await r.json(), cards=document.querySelector('#cards');cards.replaceChildren();for(const j of data){const c=document.createElement('div');c.className='job';const p=j.classification_proposal;const title=document.createElement('strong');title.textContent=j.title;c.append(title);const body=document.createElement('p');body.textContent=(p?'Propuesta: '+p.kind+' · '+p.scope:(j.kind||'Sin clasificar'))+'\nEstado: '+j.state+' · '+new Date(j.updated_at).toLocaleString();c.append(body);
+const kind=document.createElement('select');kind.setAttribute('aria-label','Tipo de trabajo');for(const k of ['consulta','diagnostico','mantenimiento','documento','codigo']){const o=document.createElement('option');o.value=k;o.textContent=k;kind.append(o)}kind.value=j.kind||p?.kind||'consulta';
+const scope=document.createElement('input');scope.setAttribute('aria-label','Ámbito');scope.value=j.scope||p?.scope||'';
+const save=document.createElement('button');save.textContent='Guardar clasificación';save.onclick=async()=>{try{const r=await fetch('/api/work',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'classify',id:j.id,revision:j.revision,kind:kind.value,scope:scope.value,tags:p?.tags||j.tags,reason:'Clasificación confirmada desde la interfaz'})});const d=await r.json();if(!r.ok)throw Error(d.error);await jobs()}catch(e){error.textContent=e.message}};c.append(kind,scope,save);cards.append(c)}}
+// Se recuerda la última petición para poder retomarla tras dar el acceso.
+let lastRequest=null;
+async function send(text){document.querySelector('#send').disabled=true;error.textContent='';message('user',text);try{const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'text/plain; charset=utf-8'},body:text});const d=await r.json();if(!r.ok)throw Error(d.error);progress(d.progress);input.value='';message('assistant',d.reply);if(d.document){const note=document.createElement('p');note.textContent='Documento guardado completo: '+d.document.lines+' líneas · '+d.document.bytes+' bytes · '+d.document.id;log.append(note)}for(const t of d.tools){const panel=document.createElement('details'), label=document.createElement('summary'),out=document.createElement('pre');label.textContent=t.tool;out.textContent=JSON.stringify(t,null,2);panel.append(label,out);log.append(panel)}await jobs()}catch(e){error.textContent=e.message}finally{document.querySelector('#send').disabled=false}}
+document.querySelector('#form').onsubmit=async e=>{e.preventDefault();const text=input.value;if(!text.trim())return;lastRequest=text;await send(text)};
+// La ventana enseña el equipo que ha resuelto el servidor, para saber a qué máquina se da el acceso.
+let askedFor=null;
+function access(request){const dialog=document.querySelector('#access');
+ if(!request){askedFor=null;if(dialog.open)dialog.close();return}
+ if(askedFor===request.device)return;
+ askedFor=request.device;
+ document.querySelector('#accesstarget').textContent=request.host
+  ?request.device+' · '+request.host+(request.mac?' · MAC '+request.mac:''):
+   request.device+' · sin dirección en el inventario todavía';
+ document.querySelector('#accesserror').textContent='';
+ document.querySelector('#accesspass').value='';
+ if(!dialog.open)dialog.showModal()}
+document.querySelector('#accesssave').onclick=async()=>{
+ const user=document.querySelector('#accessuser').value.trim(), pass=document.querySelector('#accesspass').value;
+ const warn=document.querySelector('#accesserror');
+ if(!user||!pass){warn.textContent='Faltan usuario o contraseña';return}
+ try{const r=await fetch('/api/credentials',{method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({device:askedFor,user:user,password:pass})});
+  const d=await r.json();if(!r.ok)throw Error(d.error);
+  document.querySelector('#accesspass').value='';
+  document.querySelector('#access').close();askedFor=null;
+  message('assistant','Acceso a '+d.device+' ('+d.host+') guardado en este equipo.');
+  // Retomar la petición que provocó la ventana, para no tener que repetirla a mano.
+  if(lastRequest)await send(lastRequest)
+ }catch(e){warn.textContent=e.message}};
+document.querySelector('#accesscancel').onclick=()=>{document.querySelector('#accesspass').value=''};
+async function status(){try{const r=await fetch('/api/status');const d=await r.json();if(historyReady)progress(d.progress);access(d.credential_request);document.querySelector('#state').textContent=(( {idle:'Disponible',thinking:'Pensando…',tool:'Consultando herramienta…'})[d.state]||d.state)+' · '+(d.mode==='native-experimental'?'Herramientas nativas · EXPERIMENTAL':'Herramientas JSON')}catch{document.querySelector('#state').textContent='Sin conexión'}}
+(async()=>{try{const r=await fetch('/api/history');for(const row of await r.json()){message(row.role,row.text);progress({messages:row.progress})}await jobs()}catch(e){error.textContent=e.message}historyReady=true;await status()})();setInterval(status,1000);
+</script></main></html>

@@ -1,5 +1,9 @@
 # HELIOS Cognitive Ecosystem
 
+> Dirección vigente (2026-09-12): [agente doméstico con un modelo, un chat y
+> herramientas](docs/AGENTE_DOMESTICO_PLAN.md). El contenido histórico de este
+> README no constituye una verificación del estado actual de cada capacidad.
+
 **"El cuerpo que protege la mente"**
 
 Sistema cognitivo modular con memoria persistente, identidad y continuidad.

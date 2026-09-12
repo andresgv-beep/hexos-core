@@ -53,7 +53,8 @@ int main(int argc, char **argv) {
         fprintf(stderr, "no pude abrir la memoria del perfil\n");
         return 1;
     }
-    hera_store_importar_legacy();
+    /* El agente solo recupera confirmados: no importa ficheros legacy al leer. */
+    if (strcmp(argv[1], "perfil-agente")) hera_store_importar_legacy();
 
     const char *o = argv[1];
     char id[HERA_ID_MAX] = "";
@@ -103,7 +104,7 @@ int main(int argc, char **argv) {
         if (!n) printf("(nada bajo esa clave)\n");
         return 0;
     }
-    if (!strcmp(o, "perfil")) {
+    if (!strcmp(o, "perfil") || !strcmp(o, "perfil-agente")) {
         char buf[8192];
         const size_t n = hera_recuperar(buf, sizeof(buf), 3000);
         if (!n) printf("(perfil vacío: nada confirmado todavía)\n");
