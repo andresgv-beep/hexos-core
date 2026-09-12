@@ -6,13 +6,15 @@ export interface Attachment {
   name: string;
   preview?: string;
   text?: string;
-  status: "reading" | "ready" | "vision" | "error";
+  /** base64 de la imagen, sin la cabecera `data:`. Solo una por mensaje. */
+  image?: string;
+  status: "reading" | "ready" | "error";
   error?: string;
 }
 export function ChatAttachments({ files, onRemove }: { files: Attachment[]; onRemove: (id: string) => void }) {
   return <div className="attachment-list">{files.map(file => <div className="attachment-chip" key={file.id}>
     {file.preview ? <span className="attachment-thumbnail" style={{ backgroundImage: `url("${file.preview}")` }} role="img" aria-label={file.name} /> : <FileText size={22} />}
-    <div><strong>{file.name}</strong><span>{file.status === "reading" ? "Leyendo…" : file.status === "vision" ? "Visión todavía no conectada" : file.status === "error" ? file.error : "Listo para enviar"}</span></div>
+    <div><strong>{file.name}</strong><span>{file.status === "reading" ? "Leyendo…" : file.status === "error" ? file.error : file.image ? "Helios la verá" : "Listo para enviar"}</span></div>
     <button className="icon-button" aria-label={`Quitar ${file.name}`} onClick={() => onRemove(file.id)}><X size={15} /></button>
   </div>)}</div>;
 }

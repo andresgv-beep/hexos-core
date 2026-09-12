@@ -195,9 +195,14 @@ class NativeRuntime:
                     for k,v in (s['required']|s['optional']).items()},'required':list(s['required'])}}})
         self.messages=[];self.pending=deque();self.current=None
         self.repair_call = False
+        # Imagen de un solo uso: se consume en la generación siguiente.
+        self.pending_image = None
         self.log=open(Path(workspace)/'hector-native.log','a')
         self.proc=subprocess.Popen([binary,model,str(ctx),'<|tool_response>'],stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,stderr=self.log,env=dict(os.environ,HELIOS_EMBED_MMAP='1'))
+            stdout=subprocess.PIPE,stderr=self.log,
+            # Los pesos de visión (322 MB) se quedan paginados en RAM del host:
+            # cuestan +0 MiB de VRAM y dejan sitio al scratch del prefill visual.
+            env=dict(os.environ,HELIOS_EMBED_MMAP='1',HELIOS_VISION_MMAP='1'))
         self.events=queue.Queue()
         threading.Thread(target=self.reader,daemon=True).start()
         try:
@@ -225,6 +230,25 @@ class NativeRuntime:
         if isinstance(result,Exception):raise RuntimeError(str(result))
         return result
 
+    def attach_image(self, pixels, width, height):
+        """Adjunta una imagen RGB8 al turno siguiente. Se consume una sola vez."""
+        if width <= 0 or height <= 0 or len(pixels) != width * height * 3:
+            raise ValueError('la imagen debe ser RGB8 con tamaño coherente')
+        self.pending_image = (pixels, width, height)
+
+    def send(self, prompt, image=None):
+        """Cabecera corta sin imagen; con imagen añade tamaño y geometría."""
+        data = prompt.encode()
+        if len(data) > 1024*1024: raise ValueError('prompt nativo demasiado grande')
+        if image is None:
+            header = str(len(data)).encode(); body = data
+        else:
+            pixels, width, height = image
+            header = ('%d %d %d %d %d' % (len(data), len(pixels), width, height, width*3)).encode()
+            body = data + pixels
+        self.proc.stdin.write(header + b'\n' + body); self.proc.stdin.flush()
+        return data
+
     def call(self,request):
         if request!={'type':'reset'}:raise ValueError('solo reset en adaptador nativo')
         self.messages=[];self.pending.clear();self.current=None
@@ -250,12 +274,21 @@ class NativeRuntime:
         self.repair_call = False
         # Recuperar el protocolo no concede una autorización de escritura.
         tools = [t for t in self.tools if catalog.TOOLS[self.names[t['function']['name']]]['effect']=='read'] if prefix else self.tools
-        prompt=self.template.render(messages=self.messages,tools=tools,bos_token='<bos>',
+        image = getattr(self, 'pending_image', None)
+        self.pending_image = None
+        rendered = self.messages
+        if image:
+            # El marcador vive solo en este render. Dejarlo en el historial haría que
+            # el turno siguiente lo enviara sin píxeles: image_marker_mismatch.
+            rendered = [dict(m) for m in self.messages]
+            for message in reversed(rendered):
+                if message['role'] == 'user':
+                    message['content'] = '<|image|>\n' + message['content']
+                    break
+        prompt=self.template.render(messages=rendered,tools=tools,bos_token='<bos>',
                                     add_generation_prompt=True,enable_thinking=getattr(self, 'thinking', False))
         prompt += prefix
-        data=prompt.encode()
-        if len(data)>1024*1024:raise ValueError('prompt nativo demasiado grande')
-        self.proc.stdin.write(str(len(data)).encode()+b'\n'+data);self.proc.stdin.flush()
+        data = self.send(prompt, image)
         header,completion=self.event()
         raw = prefix + completion
         self.last_raw=raw
@@ -324,8 +357,8 @@ class NativeRuntime:
                 operation=catalog.TOOLS[tool]['description'],arguments=arguments),ensure_ascii=False)}]
         prompt=self.template.render(messages=messages,tools=[],bos_token='<bos>',
                                     add_generation_prompt=True,enable_thinking=False)
-        data=prompt.encode()
-        self.proc.stdin.write(str(len(data)).encode()+b'\n'+data);self.proc.stdin.flush()
+        # El preámbulo nunca lleva imagen: es una frase corta sobre la herramienta elegida.
+        data = self.send(prompt)
         header,raw=self.event()
         self.last_announcement_generation=dict(kind='announcement',raw=raw,finish_reason=header[4],
             tokens=int(header[2]),ms=int(header[1]),prompt=prompt)

@@ -1,6 +1,9 @@
 """Un chat, un proceso Héctor, fichas de trabajo y documentos sin recorte."""
 import argparse
+import base64
+import binascii
 import hashlib
+import io
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
@@ -94,6 +97,40 @@ class Runtime:
                 self.proc.kill()
                 self.proc.wait()
         self.log.close()
+
+
+MAX_IMAGE_SIDE = 1536
+
+
+def decode_image(encoded):
+    """base64 de PNG/JPEG -> (píxeles RGB8, ancho, alto). None si no hay imagen."""
+    if encoded is None:
+        return None
+    if not isinstance(encoded, str) or not encoded:
+        raise ValueError('image debe ser una cadena base64 de una imagen')
+    try:
+        crudo = base64.b64decode(encoded, validate=True)
+    except (ValueError, binascii.Error) as exc:
+        raise ValueError('image no es base64 válido') from exc
+    if len(crudo) > 16 * 1024 * 1024:
+        raise ValueError('imagen mayor de 16 MiB')
+    try:
+        from PIL import Image
+    except ImportError as exc:
+        raise ValueError('falta Pillow en el servidor; no se pueden leer imágenes') from exc
+    try:
+        imagen = Image.open(io.BytesIO(crudo))
+        imagen.load()
+    except Exception as exc:
+        raise ValueError('no se pudo leer la imagen: ' + str(exc)) from exc
+    imagen = imagen.convert('RGB')
+    # El preprocesado de Gemma reescala a su propio tamaño; por encima de esto
+    # solo se transportarían píxeles que se van a tirar.
+    if max(imagen.size) > MAX_IMAGE_SIDE:
+        escala = MAX_IMAGE_SIDE / max(imagen.size)
+        imagen = imagen.resize((max(1, round(imagen.width * escala)),
+                                max(1, round(imagen.height * escala))))
+    return imagen.tobytes(), imagen.width, imagen.height
 
 
 class Agent:
@@ -216,7 +253,7 @@ class Agent:
         return dict(lines=selected, total_lines=len(lines),
                     next_line=start + len(selected), limited=len(selected) < count)
 
-    def chat(self, text):
+    def chat(self, text, image=None):
         if not isinstance(text, str) or not text.strip() or len(text.encode()) > MAX_INPUT:
             raise ValueError('Mensaje vacío o mayor de 8 MiB; no se ha guardado')
         if not self.lock.acquire(blocking=False):
@@ -229,6 +266,17 @@ class Agent:
                 self.progress = {'turn_id':uid, 'messages':[]}
                 document = None
                 prompt_text = text
+                nota_imagen = ''
+                if image is not None:
+                    if not hasattr(self.runtime, 'attach_image'):
+                        raise ValueError('este motor no admite imágenes; no se ha enviado nada')
+                    pixels, width, height = image
+                    self.runtime.attach_image(pixels, width, height)
+                    # La imagen no vive en el historial: queda constancia de que la hubo,
+                    # para que un turno posterior sepa que se habló sobre algo visto.
+                    nota_imagen = ('[La persona adjuntó una imagen de %dx%d en este turno. '
+                                   'La estás viendo ahora; en turnos posteriores solo quedará '
+                                   'lo que digas de ella.]\n' % (width, height))
                 if len(text) > 6000:
                     digest = hashlib.sha256(text.encode()).hexdigest()
                     document = dict(id=uuid4().hex, bytes=len(text.encode()),
@@ -239,8 +287,9 @@ class Agent:
                         'El texto completo está guardado como documento: ' + json.dumps(document) +
                         '. Usa document.read o document.search según la petición. '
                         'Si no contiene una tarea concreta, pregunta qué desea hacer con él.]')
+                prompt_text = nota_imagen + prompt_text
                 store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
-                                 (uid, now(), 'user', text, prompt_text))
+                                 (uid, now(), 'user', nota_imagen + text, prompt_text))
                 store.db.commit()
                 boundary = store.db.execute("SELECT value FROM agent_state WHERE key='context_boundary'").fetchone()
                 history = store.db.execute('SELECT id,ts,role,model_text AS text FROM conversation WHERE id<>? '
@@ -561,6 +610,14 @@ def main():
                     with agent.store() as store:
                         result = store.dispatch(strict_json(data.decode('utf-8')), actor='user')
                     self.respond(200, result)
+                elif self.headers.get('Content-Type','').startswith('application/json'):
+                    # Forma con adjunto: {"text": "...", "image": "<base64 de PNG/JPEG>"}.
+                    # El text/plain de siempre sigue valiendo para un turno sin imagen.
+                    payload = strict_json(data.decode('utf-8'))
+                    if set(payload) - {'text', 'image'}:
+                        raise ValueError('campos permitidos: text, image')
+                    mensaje = string(payload.get('text'), 'text', MAX_INPUT)
+                    self.respond(200, agent.chat(mensaje, decode_image(payload.get('image'))))
                 else:
                     self.respond(200, agent.chat(data.decode('utf-8')))
             except (ValueError, RuntimeError, OSError) as exc:

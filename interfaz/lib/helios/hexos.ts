@@ -8,7 +8,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export interface HeliosTransport {
   status(signal?: AbortSignal): Promise<{ phase: HeliosPhase; mode: string }>;
   history(signal?: AbortSignal): Promise<HistoryMessage[]>;
-  send(text: string, signal?: AbortSignal): Promise<ChatReply>;
+  /** `image` es base64 de PNG/JPEG/WebP, sin la cabecera `data:`. Una por turno. */
+  send(text: string, signal?: AbortSignal, image?: string): Promise<ChatReply>;
 }
 
 /** Existing HexOS HTTP contract, inspected 2026-09-12. No connection at import time.
@@ -36,9 +37,13 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
       if (!Array.isArray(data) || !data.every(row => row && (row.role === "user" || row.role === "assistant") && typeof row.text === "string")) throw new Error("Historial de HexOS no válido");
       return data.map(({ role, text }) => ({ role, text }));
     },
-    async send(text, signal) {
+    async send(text, signal, image) {
       if (!text.trim()) throw new Error("Escribe un mensaje");
-      const data = await request("chat", { method: "POST", headers: { "Content-Type": "text/plain; charset=utf-8" }, body: text, signal });
+      // Con imagen el contrato es JSON; sin ella se mantiene el text/plain de siempre.
+      const init: RequestInit = image
+        ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, image }), signal }
+        : { method: "POST", headers: { "Content-Type": "text/plain; charset=utf-8" }, body: text, signal };
+      const data = await request("chat", init);
       if (!isRecord(data) || typeof data.reply !== "string" || !data.reply.trim() || !Array.isArray(data.tools)) throw new Error("HexOS no devolvió una respuesta completa");
       return { reply: data.reply, tools: data.tools, document: data.document };
     },
