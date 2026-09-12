@@ -6,6 +6,7 @@ import Link from "next/link";
 import { HeliosOrb } from "./orb/HeliosOrb";
 import { AttachmentButton, ChatAttachments, type Attachment } from "./ChatAttachments";
 import { ChatHistory } from "./ChatHistory";
+import { SystemMonitor } from "./SystemMonitor";
 import { FloatingMessage, type MessageWindow } from "./FloatingMessage";
 import { phases } from "@/lib/helios/state";
 import { createHexosTransport, type HeliosTransport, type HistoryMessage } from "@/lib/helios/hexos";
@@ -191,6 +192,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       <Link className="brand" href="/" aria-label="Helios, inicio"><span className="brand-symbol" aria-hidden="true">✳</span><span>HELIOS</span></Link>
       <button ref={settingsRef} className={`icon-button ${settings ? "selected" : ""}`} aria-label="Ajustar luminosidad" aria-expanded={settings} onClick={() => setSettings(true)}><SlidersHorizontal size={19} /></button>
     </header>
+    <SystemMonitor />
     <section className="presence" aria-label="Presencia de Helios">
       <div className="orb-stage">
         <div className="orbit-guide guide-one" aria-hidden="true" /><div className="orbit-guide guide-two" aria-hidden="true" /><div className="orb-halo" aria-hidden="true" />

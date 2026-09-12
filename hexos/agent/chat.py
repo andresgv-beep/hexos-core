@@ -22,6 +22,7 @@ from .context import native_messages
 from .network import snapshot as network_snapshot
 from .nas_session import read as nas_read
 from .progress import announcement
+from .telemetry import SystemTelemetry
 
 MAX_INPUT = 8 * 1024 * 1024
 PROMPT = catalog.prompt()
@@ -528,6 +529,7 @@ def main():
         runtime = Runtime(args.runtime, args.model, args.ctx, args.workspace)
     agent = Agent(args.workspace, runtime,
                   HeraProfile(args.hera, args.memory_home) if args.hera else None)
+    system_telemetry = SystemTelemetry()
     allowed_origins = {'http://127.0.0.1:%d' % args.port, 'http://localhost:%d' % args.port,
                        'http://[::1]:%d' % args.port}
 
@@ -552,6 +554,8 @@ def main():
                 self.respond(200, {'state': agent.state, 'progress':agent.progress,
                                    'credential_request': agent.credential_request,
                                    'mode':'native-experimental' if args.native_template else 'json'})
+            elif self.path == '/api/telemetry':
+                self.respond(200, system_telemetry.snapshot())
             elif self.path == '/api/work':
                 with agent.store() as store:
                     jobs = [json.loads(r['body']) for r in store.db.execute('SELECT body FROM jobs ORDER BY rowid DESC LIMIT 100')]
