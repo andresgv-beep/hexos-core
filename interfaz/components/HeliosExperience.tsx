@@ -15,7 +15,7 @@ const localTransport = createHexosTransport("/api/helios");
 
 /** The host can supply the existing HexOS transport without coupling windows to the model. */
 export function HeliosExperience({ transport = localTransport }: { transport?: HeliosTransport }) {
-  const [brightness, setBrightness] = useState(1);
+  const [brightness, setBrightness] = useState(1.8);
   const [settings, setSettings] = useState(false);
   const [draft, setDraft] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
