@@ -22,3 +22,22 @@ runtime/workspace/
 # Python
 __pycache__/
 *.pyc
+
+# Interfaz web (Next.js): dependencias y artefactos generados, nunca al repo
+interfaz/node_modules/
+interfaz/.next/
+interfaz/.vinext/
+interfaz/.wrangler/
+interfaz/dist/
+interfaz/out/
+interfaz/build/client/
+interfaz/build/server/
+interfaz/outputs/
+interfaz/backups/
+interfaz/coverage/
+interfaz/*.tsbuildinfo
+interfaz/.env
+interfaz/.env.*
+!interfaz/.env.example
+interfaz/.vercel/
+interfaz/.turbo/
