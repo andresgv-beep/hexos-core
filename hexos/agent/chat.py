@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import queue
+import re
 import subprocess
 import threading
 import time
@@ -198,8 +199,39 @@ class Agent:
                     note='Guardado en credentials.json con permisos 600. '
                          'No se ha escrito en la conversación ni se ha mostrado al modelo.')
 
+    def remember_fact(self, store, args, turn_id):
+        """Guarda en el perfil un dato que la persona acaba de decir de sí misma.
+
+        La evidencia es su mensaje de este turno, no una cita que aporte el modelo,
+        y el valor tiene que aparecer en él: así no puede confirmar lo que deduzca.
+        """
+        if not self.profile:
+            raise ValueError('Esta sesión no tiene perfil HERA; el dato no se ha guardado en ninguna parte')
+        key = string(args.get('key'), 'key', 60).strip().casefold()
+        value = string(args.get('value'), 'value', 200).strip()
+        # Una sola barra: es el separador sujeto/atributo de HERA, no una ruta.
+        if not re.fullmatch(r'[a-záéíóúñü0-9_ -]{1,30}(/[a-záéíóúñü0-9_ -]{1,30})?', key):
+            raise ValueError('key debe ser una etiqueta simple como nombre, o sujeto/atributo como gato/nombre')
+        row = store.db.execute("SELECT text FROM conversation WHERE id=? AND role='user'",
+                               (turn_id,)).fetchone() if turn_id else None
+        if not row:
+            raise ValueError('No hay mensaje de este turno del que tomar la evidencia')
+        quote = row['text']
+        if value.casefold() not in quote.casefold():
+            raise ValueError('Ese valor no aparece en el mensaje de la persona. Guarda solo lo que '
+                             'acaba de decir, con sus palabras; no lo que deduzcas ni recuerdes de antes.')
+        # HERA deriva el sujeto de la clave: sin «yo/» lo tomaría por otra persona
+        # y exigiría que esa palabra apareciese en la frase.
+        clave = key if '/' in key else 'yo/' + key
+        self.profile.remember(clave, value, 'Su ' + key + ' es ' + value, quote[:1000])
+        return dict(saved=True, key=clave, value=value, source='user_statement',
+                    note='Confirmado en el perfil HERA; estará disponible en los próximos turnos '
+                         'aunque se limpie el contexto. Guardar no lo hace cierto: lo respalda su mensaje.')
+
     def tool(self, store, name, args, *, turn_id=None):
         catalog.validate(name, args)
+        if name == 'profile.remember':
+            return self.remember_fact(store, args, turn_id)
         if name in ('nas.read', 'nas.container'):
             extra = {'section':'container'} if name == 'nas.container' else {}
             try:

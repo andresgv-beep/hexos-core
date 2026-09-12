@@ -18,6 +18,36 @@ class HeraProfile:
         value = result.stdout.strip()
         return '' if value == '(perfil vacío: nada confirmado todavía)' else value
 
+    def say(self, text):
+        """Registra un enunciado de la persona y devuelve su id. HERA solo acepta
+        como evidencia un dicho suyo ya registrado, no una cita suelta."""
+        result = subprocess.run([self.binary, 'dijo', text],
+            env=dict(os.environ, HELIOS_HOME=self.home), capture_output=True,
+            text=True, timeout=10)
+        identifier = (result.stdout or '').strip()
+        if result.returncode or not identifier:
+            raise ValueError('HERA no registró el mensaje como evidencia')
+        return identifier
+
+    def remember(self, key, value, text, evidence):
+        """Confirma un hecho en el perfil. `guarda` y no `propon`: el agente solo
+        lee confirmados, así que un candidato se quedaría invisible para siempre.
+
+        `evidence` es el texto de la persona; aquí se registra con `dijo` para
+        obtener el id que HERA exige. Y la clave lleva sujeto: `yo/nombre`, no
+        `nombre`, o la rechaza por sujeto_ajeno.
+        """
+        result = subprocess.run([self.binary, 'guarda', key, value, text, self.say(evidence)],
+            env=dict(os.environ, HELIOS_HOME=self.home), capture_output=True,
+            text=True, timeout=10)
+        salida = (result.stdout or '').strip()
+        # HERA rechaza con código de salida 0 y un "rechazado: <motivo>" en stdout.
+        # Mirar solo returncode daba por guardado lo que nunca entró en el perfil.
+        if result.returncode or salida.startswith('rechazado'):
+            detalle = salida or (result.stderr or '').strip()
+            raise ValueError('HERA no guardó el dato' + (': ' + detalle if detalle else ''))
+        return salida
+
 
 def history_tool(store, name, args):
     if name == 'history.recent':
