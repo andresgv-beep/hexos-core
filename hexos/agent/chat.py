@@ -270,6 +270,12 @@ class Agent:
             candidatos = self.runtime.extract_facts(text)
         except Exception:
             return ''
+        # Queda registrada como cualquier otra generación: sin esto su coste es invisible.
+        generacion = getattr(self.runtime, 'last_extraction_generation', None)
+        if generacion is not None:
+            store.db.execute('INSERT INTO generation_events(turn_id,ts,body) VALUES (?,?,?)',
+                             (turn_id, now(), json.dumps(generacion, ensure_ascii=False)))
+            store.db.commit()
         anotado = []
         for hecho in candidatos:
             try:
@@ -357,6 +363,12 @@ class Agent:
                 self.progress = {'turn_id':uid, 'messages':[]}
                 document = None
                 prompt_text = text
+                # Si el mensaje trae un dato suyo, la cosecha lo guardará al cerrar
+                # el turno: se le retira la herramienta para que no lo haga él también.
+                cosechara = bool(self.profile and hasattr(self.runtime, 'extract_facts')
+                                 and AFIRMACION.search(text or ''))
+                if hasattr(self.runtime, 'harvest_pending') or cosechara:
+                    self.runtime.harvest_pending = cosechara
                 nota_imagen = ''
                 if image is not None:
                     if not hasattr(self.runtime, 'attach_image'):

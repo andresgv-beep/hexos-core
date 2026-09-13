@@ -146,12 +146,13 @@ class ProfileMemoryTest(unittest.TestCase):
         # Solo confirmados, y el valor sin arrastrar la sustitución ni la cita.
         self.assertEqual(claves, {'yo/nombre': 'Andrés', 'yo/gato': 'Turbo'})
 
-    def test_el_modelo_sabe_que_existe(self):
+    def test_la_politica_no_nombra_la_herramienta(self):
         from hexos.agent.native import POLICY
-        self.assertIn('profile_remember', POLICY)
-        self.assertIn('No pidas permiso', POLICY)
-        # Un ejemplo con los argumentos exactos es lo que sí sigue este modelo.
-        self.assertIn('key="nombre", value="Andrés"', POLICY)
+        # La política NO debe nombrar la herramienta: el protocolo nativo parsea
+        # la llamada del texto, así que mencionarla —aunque sea para prohibirla—
+        # basta para que el modelo la emita y gaste una generación de más.
+        self.assertNotIn('profile_remember', POLICY)
+        self.assertIn('HexOS lo anota solo al cerrar el turno', POLICY)
         # Fase 3: consultar el perfil antes de preguntar un dato que ya consta.
         self.assertIn('Antes de preguntar un dato de la persona', POLICY)
 

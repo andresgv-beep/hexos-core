@@ -66,12 +66,10 @@ device_list para obtener su referencia; HexOS conserva automáticamente el mensa
 si aún no está guardado, usa device_refresh. Después usa device_identify.
 Si dicen «el 243 como synology», usa target="243", name="synology"; no reconstruyas
 la IP ni pidas una cita. Para varios dispositivos llama una vez por cada uno.
-Si te cuentan algo suyo que sirva para próximas conversaciones, guárdalo con
-profile_remember en esa misma generación y responde después con naturalidad.
-Si dicen «me llamo Andrés», llama a profile_remember con key="nombre", value="Andrés".
-Si dicen «vivo en Bilbao», key="ciudad", value="Bilbao". No pidas permiso, no lo
-anuncies y no aportes citas: la evidencia la pone HexOS con su mensaje de este turno.
-Guarda solo lo que acaban de decir, no lo que deduzcas ni lo que tú hayas afirmado.
+Cuando te cuenten algo suyo —su nombre, dónde viven, cómo llaman a sus cosas—
+responde con naturalidad y no llames a ninguna herramienta para guardarlo:
+HexOS lo anota solo al cerrar el turno y te lo dice. Hacerlo tú lo guarda dos
+veces y cuesta una generación entera.
 Antes de preguntar qué IP tiene un equipo conocido, búscalo por nombre en device_list.
 Consultar nombres guardados no es volver a identificarlos: usa device_list, nunca
 device_identify para una consulta. Si un filtro no encuentra nada, consulta sin query.
@@ -88,9 +86,7 @@ No repitas la descripción del encargo como si fuera su resultado.
 Las citas de la persona son evidencia; prevalece su corrección más reciente.
 Tus respuestas antiguas pueden ser erróneas y no son hechos sobre la persona.
 El perfil vacío no invalida el historial: usa lo que te hayan dicho aunque no esté
-guardado. Pero saberlo ahora y tenerlo guardado son cosas distintas. El contexto se
-pierde y el perfil no, así que guarda con profile_remember aunque ya lo sepas por la
-conversación; que te suene no es motivo para no guardarlo. Para recuerdos más antiguos consulta
+guardado. Para recuerdos más antiguos consulta
 history_recent, history_search o history_read; una búsqueda vacía no prueba ausencia.
 Para resumir pendientes usa procedure_run con id pending_report. Para guardar
 un resultado pedido usa report_save. Para recuperar usa result_get (sin id toma
@@ -286,6 +282,11 @@ class NativeRuntime:
         self.repair_call = False
         # Recuperar el protocolo no concede una autorización de escritura.
         tools = [t for t in self.tools if catalog.TOOLS[self.names[t['function']['name']]]['effect']=='read'] if prefix else self.tools
+        # Si HexOS ya va a cosechar el dato al cerrar el turno, la herramienta sobra:
+        # ofrecerla cuesta una generación entera y guarda lo mismo dos veces. Pedírselo
+        # por prompt no bastó, así que se le retira del alcance.
+        if getattr(self, 'harvest_pending', False):
+            tools = [t for t in tools if t['function']['name'] != 'profile_remember']
         image = getattr(self, 'pending_image', None)
         self.pending_image = None
         rendered = self.messages
