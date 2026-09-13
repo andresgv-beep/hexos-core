@@ -144,6 +144,39 @@ def address(value):
     return texto.casefold()
 
 
+def endpoint(value):
+    """Lo que la gente pega de verdad → (dirección, puerto o None).
+
+    Acepta `1.2.3.4`, `nas.ddns.net`, `https://nas.ddns.net`, `nas.ddns.net:30`,
+    `ssh://nas:30` y `[::1]:30`. El esquema se descarta porque SSH no usa ninguno,
+    pero la dirección que uno tiene a mano es la del panel web. El puerto sí se
+    conserva: tirarlo obligaba a volver a decirlo, y era el dato que faltaba.
+    """
+    texto = (value or '').strip()
+    texto = re.sub(r'^[a-z][a-z0-9+.-]*://', '', texto, flags=re.I)
+    # Nada de usuario ni contraseña en la dirección: no es sitio para una credencial
+    # y aceptarlo sería una vía silenciosa para colarla.
+    if '@' in texto:
+        raise ValueError('No pongas usuario ni contraseña en la dirección, solo el equipo')
+    texto = texto.split('/')[0].split('?')[0]
+    puerto = None
+    if texto.startswith('['):
+        cierre = texto.find(']')
+        if cierre < 0:
+            raise ValueError('Dirección IPv6 sin cerrar')
+        resto = texto[cierre + 1:]
+        texto = texto[1:cierre]
+        if resto.startswith(':'):
+            puerto = resto[1:]
+    elif texto.count(':') == 1:
+        texto, _, puerto = texto.partition(':')
+    if puerto is not None:
+        if not puerto.isdigit() or not 1 <= int(puerto) <= 65535:
+            raise ValueError('Puerto no válido en la dirección')
+        puerto = int(puerto)
+    return address(texto), puerto
+
+
 def credentials(workspace, name):
     return load(workspace).get((name or '').casefold())
 
@@ -209,6 +242,7 @@ def resolve(workspace, name):
     # aparecer entre los vecinos, así que no hay nada que observar.
     if device.get('pinned_host'):
         return dict(name=wanted, host=device['pinned_host'], mac=device.get('mac'),
+                    port=device.get('pinned_port'),
                     observed_at=None, reachable=None, pinned=True)
     # Direcciones de la última observación pasiva; REACHABLE antes que STALE.
     addresses = device.get('latest_addresses') or device.get('addresses') or []

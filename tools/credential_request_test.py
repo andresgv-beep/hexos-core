@@ -193,6 +193,45 @@ class RetomarTrasGuardarTest(unittest.TestCase):
                                                   password='x', host='casa.ddns.net'))['resume'])
 
 
+class ConectarTest(unittest.TestCase):
+    """«Conéctate a X» tiene que encontrar herramienta; antes no encajaba en ninguna."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix='hexos-conectar-')
+        class Runtime:
+            def call(self, request): pass
+            def generate(self, messages): return {'reply': '', 'work': None}
+        from hexos.agent.chat import Agent
+        self.agente = Agent(self.tmp.name, Runtime())
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_conectar_sin_credencial_abre_la_ventana(self):
+        from unittest.mock import patch
+        from hexos.agent import hosts
+        with self.agente.store() as store:
+            texto = 'conéctate a servidor 1'
+            store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
+                             ('u1', now(), 'user', texto, texto))
+            store.db.commit()
+            with patch('hexos.agent.chat.nas_read',
+                       side_effect=hosts.AccessNeeded('servidor 1', dict(host='x.ddns.net', port=30))):
+                r = self.agente.tool(store, 'device.connect', {'device': 'servidor 1'}, turn_id='u1')
+        self.assertTrue(r['access_required'])
+        self.assertEqual(self.agente.credential_request['device'], 'servidor 1')
+        # El puerto que traía la dirección al registrarlo llega a la ventana.
+        self.assertEqual(self.agente.credential_request['port'], 30)
+
+    def test_conectar_usa_la_lectura_mas_barata(self):
+        from unittest.mock import patch
+        with self.agente.store() as store:
+            with patch('hexos.agent.chat.nas_read', return_value={'ok': True}) as leer:
+                self.agente.tool(store, 'device.connect', {'device': 'servidor 1'})
+        self.assertEqual(leer.call_args.kwargs['section'], 'system')
+        self.assertEqual(leer.call_args.kwargs['device'], 'servidor 1')
+
+
 class DescartarPeticionTest(unittest.TestCase):
     """«Ahora no» tiene que valer también en el servidor."""
 

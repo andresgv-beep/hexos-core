@@ -446,8 +446,13 @@ class Agent:
         catalog.validate(name, args)
         if name == 'profile.remember':
             return self.remember_fact(store, args, turn_id)
-        if name in ('nas.read', 'nas.container'):
-            extra = {'section':'container'} if name == 'nas.container' else {}
+        if name in ('nas.read', 'nas.container', 'device.connect'):
+            # Conectar es la lectura más barata que existe: si entra, hay acceso, y
+            # si no, salta la misma petición de credencial. Sin esta puerta, un
+            # «conéctate a servidor 1» no encontraba herramienta que le encajara y
+            # el turno acababa en que solo sabía registrar equipos.
+            extra = ({'section':'container'} if name == 'nas.container' else
+                     {'section':'system'} if name == 'device.connect' else {})
             try:
                 return nas_read(self.workspace, **extra, **args)
             except hosts.AccessNeeded as needed:
@@ -460,11 +465,15 @@ class Agent:
                 pedido = store.db.execute(
                     "SELECT text FROM conversation WHERE id=? AND role='user'",
                     (turn_id,)).fetchone() if turn_id else None
+                # El puerto que ya se sabe, en este orden: el de la credencial guardada,
+                # el que venía en la dirección al registrar el equipo, y si no el 22.
+                sabido = guardado.get('port') or (needed.located or {}).get('port') or 22
                 self.credential_request = dict(device=needed.device, requested_at=now(),
-                                               reason=needed.reason, port=guardado.get('port', 22),
+                                               reason=needed.reason, port=sabido,
                                                user=guardado.get('user'),
                                                pending_request=pedido['text'][:2000] if pedido else None,
-                                               **(needed.located or {}))
+                                               **{k: v for k, v in (needed.located or {}).items()
+                                                  if k != 'port'})
                 return dict(access_required=True, device=needed.device,
                             located=needed.located, reason=needed.reason,
                             asked_through='interface_credential_dialog',

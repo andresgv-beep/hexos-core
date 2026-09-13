@@ -34,8 +34,16 @@ TOOLS = {
     'device.list': spec('Consultar inventario persistente e identidades atribuidas al usuario. '
                         'query opcional filtra nombre, IP, MAC o tipo; admite OR entre nombres. '
                         'Sin query devuelve todos, con identificados primero. identity null: sin identificar.', optional={'query':'str'}),
+    'device.connect': spec('Conectar con un equipo ya registrado para comprobar que se puede entrar. '
+                           'Úsala cuando pidan conectarse, probar el acceso o entrar en un equipo, sin '
+                           'pedir todavía un diagnóstico. Si falta la credencial, HexOS abre la ventana '
+                           'de la interfaz para que la persona la rellene: no la pidas por el chat. '
+                           'device es el nombre guardado.', {'device':'str'}),
     'device.remote': spec('Registrar un equipo que NO está en esta red, con la dirección que la persona '
-                          'acaba de dar: una IP o un nombre como servidor.ddns.net. Úsala cuando pidan '
+                          'acaba de dar, TAL CUAL la escribió: vale una IP, un nombre como '
+                          'servidor.ddns.net, una URL completa como https://servidor.ddns.net:30 o '
+                          'nombre:puerto. No la recortes ni le quites el https ni el puerto: HexOS lo '
+                          'normaliza y se queda con el puerto si viene. Úsala cuando pidan '
                           'añadir o conectar un equipo de otro sitio, o cuando device_identify diga que no '
                           'está en el inventario. La dirección debe aparecer literal en su mensaje; no la '
                           'inventes ni la completes. No comprueba que se llegue al equipo.',

@@ -104,7 +104,8 @@ def dispatch(store, name, args, turn_id=None):
         # device.identify no puede alcanzarlo: no hay nada que nombrar. Este
         # registra el nombre CON su dirección, y se resuelve por ella.
         etiqueta = string(args['name'], 'name', 100)
-        destino = hosts.address(args['host'])
+        # Acepta la URL tal cual se pega, con su puerto si lo trae.
+        destino, puerto = hosts.endpoint(args['host'])
         fila = store.db.execute("SELECT id,text FROM conversation WHERE id=? AND role='user'",
                                 (turn_id,)).fetchone() if turn_id else None
         if not fila:
@@ -119,6 +120,7 @@ def dispatch(store, name, args, turn_id=None):
         clave = 'remoto/' + etiqueta.casefold()
         anterior = rows.get(clave, {})
         registro = dict(anterior, id=clave, mac=None, interface=None, pinned_host=destino,
+                        pinned_port=puerto or anterior.get('pinned_port'),
                         addresses=anterior.get('addresses', []), latest_addresses=[],
                         in_latest_snapshot=False, last_observed_at=None,
                         identity=dict(name=etiqueta, kind=args.get('kind') or None,
@@ -127,7 +129,8 @@ def dispatch(store, name, args, turn_id=None):
         store.db.execute('INSERT OR REPLACE INTO network_devices VALUES (?,?)',
                          (clave, json.dumps(registro)))
         store.db.commit()
-        return dict(saved=True, device=etiqueta, host=destino, pinned=True,
+        return dict(saved=True, device=etiqueta, host=destino,
+                    port=registro['pinned_port'], pinned=True,
                     note='Registrado con dirección fija: no se busca en los vecinos de la red y '
                          'sigue valiendo desde cualquier sitio. Esto no comprueba que se llegue a '
                          'él ni concede acceso; las credenciales se piden aparte por la ventana.')

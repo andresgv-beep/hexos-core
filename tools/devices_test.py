@@ -132,6 +132,21 @@ class DevicesTest(unittest.TestCase):
                            if d['identity']]
                 self.assertIn('synology 1', nombres)
 
+    def test_acepta_la_url_tal_cual_se_pega_y_se_queda_el_puerto(self):
+        # Rechazar «https://…» obligaba a la persona a reescribirla a mano, y el
+        # puerto que traía dentro era justo el dato que faltaba.
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(tmp, None)
+            with agent.store() as s:
+                dicho = 'conéctate a https://servidorsrv1.ddns.net:30 y llámalo servidor 1'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u','now','user',dicho,dicho))
+                s.db.commit()
+                r = agent.tool(s, 'device.remote',
+                               dict(name='servidor 1', host='https://servidorsrv1.ddns.net:30'), turn_id='u')
+                self.assertEqual((r['host'], r['port']), ('servidorsrv1.ddns.net', 30))
+                from hexos.agent.hosts import resolve
+                self.assertEqual(resolve(tmp, 'servidor 1')['port'], 30)
+
     def test_no_registra_una_direccion_que_la_persona_no_dijo(self):
         with tempfile.TemporaryDirectory() as tmp:
             agent = Agent(tmp, None)
