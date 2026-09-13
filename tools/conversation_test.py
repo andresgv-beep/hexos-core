@@ -14,6 +14,15 @@ from hexos.agent.decisions import InvalidDecision, validate_reply
 from hexos.agent.native import NativeRuntime, NativeSyntax, split_thinking
 
 
+def referencias(messages):
+    """El bloque de datos, esté donde esté. Va al final para no invalidar el
+    prefijo del KV, así que buscarlo por índice sería fijar justo lo que cambió."""
+    for m in messages:
+        if isinstance(m.get('content'), str) and m['content'].startswith('REFERENCIAS DE CONTEXTO'):
+            return m['content']
+    return ''
+
+
 def runtime_with_outputs(*outputs):
     runtime = object.__new__(NativeRuntime)
     runtime.messages = []
@@ -186,9 +195,11 @@ class Tests(unittest.TestCase):
                 dict(id='u2',role='user',text='Corrijo: soy Elena.'),
                 dict(id='a2',role='assistant',text='history_recent()')]
         messages = native_messages(rows, 'PERFIL: vacío', '¿Cómo me llamo?')
-        self.assertEqual([m['role'] for m in messages], ['system','user','assistant','user','user'])
-        self.assertIn('Elena', messages[0]['content'])
-        self.assertNotIn('No sé tu nombre', messages[0]['content'])
+        # Los turnos van primero y el bloque volátil al final, delante de la petición.
+        self.assertEqual([m['role'] for m in messages], ['user','assistant','user','user','user'])
+        self.assertEqual(messages[0]['content'], 'Soy Marta.')
+        self.assertIn('Elena', referencias(messages))
+        self.assertNotIn('No sé tu nombre', referencias(messages))
         self.assertFalse(any('history_recent()' in m['content'] for m in messages))
         self.assertTrue(messages[-1]['content'].startswith('¿Cómo me llamo?'))
         self.assertIn('Corrijo: soy Elena.', messages[-1]['content'])
@@ -215,9 +226,9 @@ class Tests(unittest.TestCase):
         events = {'u1':[dict(tool='procedure.run',arguments={'id':'pending_report'},
                              result={'id':'r1','text':'Revisar copias'})]}
         messages = native_messages(rows, 'Perfil vacío', '¿Qué tal?', events)
-        self.assertEqual(messages[2]['tool_calls'][0]['function']['name'], 'procedure_run')
-        self.assertEqual(messages[2]['tool_responses'][0]['response']['id'], 'r1')
-        self.assertEqual(messages[3]['content'], 'Resumen preparado.')
+        self.assertEqual(messages[1]['tool_calls'][0]['function']['name'], 'procedure_run')
+        self.assertEqual(messages[1]['tool_responses'][0]['response']['id'], 'r1')
+        self.assertEqual(messages[2]['content'], 'Resumen preparado.')
         self.assertNotIn('r1', messages[-1]['content'])
 
     def test_una_lectura_recortada_dice_como_completarse(self):
@@ -231,14 +242,14 @@ class Tests(unittest.TestCase):
         events = {'u1': [dict(tool='network.local', arguments={},
                               result=dict(unidentified_neighbors=vecinos))]}
         messages = native_messages(rows, 'Perfil vacío', 'Y sus macs.', events)
-        respuesta = messages[2]['tool_responses'][0]['response']
+        respuesta = messages[1]['tool_responses'][0]['response']
         self.assertTrue(respuesta['truncated'])
         self.assertIn('network_local', respuesta['note'])
         self.assertIn('vuelve a llamar', respuesta['note'])
         # Un resultado que cabe entero no se toca ni se le añade nota.
         cortos = {'u1': [dict(tool='network.local', arguments={}, result=dict(ok=True))]}
         breve = native_messages(rows, 'Perfil vacío', 'Y sus macs.', cortos)
-        self.assertEqual(breve[2]['tool_responses'][0]['response'], dict(ok=True))
+        self.assertEqual(breve[1]['tool_responses'][0]['response'], dict(ok=True))
 
     def test_anunciar_una_lista_sin_escribirla_no_es_una_respuesta(self):
         # «Te muestro las 16 direcciones IP y MACs» y ahí acababa el turno.
@@ -279,8 +290,9 @@ class Tests(unittest.TestCase):
                 store.db.execute("INSERT INTO agent_state VALUES ('active',?)", ('{"result_id":"OLD_RESULT"}',))
                 store.db.commit()
             agent.chat('Hola.')
-            self.assertIn('OLD_RESULT', runtime.messages[0]['content'])
-            self.assertEqual(runtime.messages[1]['content'], 'Hola.')
+            self.assertIn('OLD_RESULT', referencias(runtime.messages))
+            # Lo que importa: la petición actual es el ÚLTIMO mensaje y es solo eso.
+            self.assertEqual(runtime.messages[-1]['content'], 'Hola.')
             with agent.store() as store:
                 self.assertEqual(agent.tool(store, 'task.current', {})['result_id'], 'OLD_RESULT')
 
@@ -303,9 +315,13 @@ class Tests(unittest.TestCase):
             agent.chat('Soy Elena.')
             agent.clear_context()
             agent.chat('Hola.')
-            self.assertEqual([m['role'] for m in runtime.messages], ['system','user','assistant'])
-            self.assertIn('Soy Elena.', runtime.messages[0]['content'])
-            self.assertNotIn('Soy Marta.', runtime.messages[0]['content'])
+            # system(POLICY) · user(referencias) · user(petición) · assistant:
+            # el bloque de datos ya no se funde con la política, va aparte y al final.
+            self.assertEqual([m['role'] for m in runtime.messages],
+                             ['system','user','user','assistant'])
+            self.assertEqual(runtime.messages[2]['content'], 'Hola.')
+            self.assertIn('Soy Elena.', referencias(runtime.messages))
+            self.assertNotIn('Soy Marta.', referencias(runtime.messages))
 
     def test_context_resource_reads_are_explicit_and_do_not_recalculate(self):
         with tempfile.TemporaryDirectory() as tmp:
