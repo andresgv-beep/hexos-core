@@ -39,6 +39,11 @@ TOOLS = {
                            'pedir todavía un diagnóstico. Si falta la credencial, HexOS abre la ventana '
                            'de la interfaz para que la persona la rellene: no la pidas por el chat. '
                            'device es el nombre guardado.', {'device':'str'}),
+    'device.forget': spec('Olvidar un equipo: su nombre guardado y su acceso. target es su nombre, '
+                          'su IP, su MAC o su dirección. Un equipo registrado de otra red desaparece '
+                          'entero; uno que está en esta red pierde el nombre pero volverá a salir sin '
+                          'él en la próxima lectura, porque sigue conectado. Solo lo que la persona '
+                          'nombre en su mensaje.', {'target':'str'}, effect='write_inventory'),
     'device.remote': spec('Registrar un equipo que NO aparece en la lectura de la red, porque está en otro '
                           'sitio. Si el equipo SÍ sale en network_local, la que toca es device_identify. '
                           'Lleva la dirección que la persona '

@@ -172,6 +172,66 @@ class DevicesTest(unittest.TestCase):
                     agent.tool(s, 'device.remote',
                                dict(name='servidor', host='-oProxyCommand=id'), turn_id='u')
 
+    def test_olvidar_un_equipo_remoto_lo_borra_entero_y_su_acceso(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            from hexos.agent.hosts import save, load
+            agent = Agent(tmp, None)
+            with agent.store() as s:
+                dicho = 'registra servidor 1 en 10.9.9.9'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u','now','user',dicho,dicho))
+                s.db.commit()
+                agent.tool(s, 'device.remote', dict(name='servidor 1', host='10.9.9.9'), turn_id='u')
+                save(tmp, 'servidor 1', 'helios', 'clave', 22, host='10.9.9.9')
+                borra = 'olvida servidor 1, ya no lo uso'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u2','now','user',borra,borra))
+                s.db.commit()
+                r = agent.tool(s, 'device.forget', dict(target='servidor 1'), turn_id='u2')
+                self.assertTrue(r['removed_record'])
+                self.assertEqual(r['forgotten_access'], 'servidor 1')
+                # Era el único registro: no queda ninguno.
+                self.assertEqual(agent.tool(s, 'device.list', {})['total'], 0)
+            self.assertEqual(load(tmp), {}, 'el acceso se va con el equipo')
+
+    def test_olvidar_uno_de_esta_red_quita_el_nombre_pero_no_el_equipo(self):
+        # No se puede des-ver un vecino: volverá en la próxima lectura, sin nombre.
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(tmp, None)
+            with agent.store() as s:
+                with patch('hexos.agent.devices.snapshot', return_value=observation()):
+                    agent.tool(s, 'device.refresh', {})
+                dicho = 'el 192.168.1.10 es mi impresora'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u','now','user',dicho,dicho))
+                s.db.commit()
+                agent.tool(s, 'device.identify', dict(target='192.168.1.10', name='impresora'), turn_id='u')
+                borra = 'olvida la impresora'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u2','now','user',borra,borra))
+                s.db.commit()
+                r = agent.tool(s, 'device.forget', dict(target='impresora'), turn_id='u2')
+                self.assertFalse(r['removed_record'])
+                self.assertIn('sigue en la red', r['note'])
+                registros = agent.tool(s, 'device.list', {})['devices']
+                self.assertEqual(len(registros), 1)
+                self.assertIsNone(registros[0]['identity'])
+
+    def test_no_borra_lo_que_la_persona_no_nombro(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(tmp, None)
+            with agent.store() as s:
+                dicho = 'registra servidor 1 en 10.9.9.9'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u','now','user',dicho,dicho))
+                s.db.commit()
+                agent.tool(s, 'device.remote', dict(name='servidor 1', host='10.9.9.9'), turn_id='u')
+                otro = 'limpia lo que sobre'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u2','now','user',otro,otro))
+                s.db.commit()
+                with self.assertRaises(ValueError) as caught:
+                    agent.tool(s, 'device.forget', dict(target='servidor 1'), turn_id='u2')
+                self.assertIn('no aparece en el mensaje', str(caught.exception))
+                # Y sin turno tampoco: borrar no se deduce.
+                with self.assertRaises(ValueError):
+                    agent.tool(s, 'device.forget', dict(target='servidor 1'))
+                self.assertEqual(agent.tool(s, 'device.list', {})['total'], 1)
+
     def test_mirar_la_red_deja_registrado_lo_visto(self):
         # Enseñar vecinos sin guardarlos dejaba ver equipos que luego no se podían
         # nombrar, y los de otra red seguían figurando como recién vistos.

@@ -37,6 +37,9 @@ class WorkStore:
     def __init__(self, workspace):
         root = Path(workspace).expanduser().resolve()
         root.mkdir(parents=True, exist_ok=True)
+        # El espacio de trabajo, para quien necesite los otros archivos que viven
+        # a su lado —las credenciales, sin ir más lejos— y solo tenga el almacén.
+        self.root = root
         self.db = sqlite3.connect(root / 'work.sqlite', timeout=10)
         # La conversación entera vive aquí: no debe quedar legible para otras cuentas.
         for name in ('work.sqlite', 'work.sqlite-wal', 'work.sqlite-shm'):

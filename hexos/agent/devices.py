@@ -119,6 +119,54 @@ def dispatch(store, name, args, turn_id=None):
                     note='Inventario histórico. Consulta network.local para el estado actual. '
                          'identity=null significa sin identificar. Un filtro sin coincidencias no significa que el inventario esté vacío: consulta sin query. '
                          'MAC e interfaz agrupan observaciones, no garantizan identidad física.')
+    if name == 'device.forget':
+        objetivo = string(args['target'], 'target', 100).strip()
+        fila = store.db.execute("SELECT id,text FROM conversation WHERE id=? AND role='user'",
+                                (turn_id,)).fetchone() if turn_id else None
+        if not fila:
+            raise ValueError('No hay mensaje de este turno del que tomar la evidencia')
+        # Borrar es la única operación que no se puede deshacer leyendo otra vez, así
+        # que tiene que estar en las palabras de la persona: ni el nombre ni la
+        # dirección pueden salir de una deducción del modelo.
+        if objetivo.casefold() not in fila['text'].casefold():
+            raise ValueError('Ese equipo no aparece en el mensaje de la persona. Borra solo lo que '
+                             'te hayan nombrado, tal cual lo escribieron.')
+        buscado = objetivo.casefold()
+        elegidos = [d for d in rows.values()
+                    if buscado in (d['id'].casefold(), (d.get('mac') or '').casefold())
+                    or (d.get('identity') or {}).get('name', '').casefold() == buscado
+                    or (d.get('pinned_host') or '').casefold() == buscado
+                    or any(a['ip'] == buscado for a in d.get('latest_addresses', []))]
+        if len(elegidos) != 1:
+            conocidos = sorted((d.get('identity') or {}).get('name') for d in rows.values()
+                               if d.get('identity'))
+            raise ValueError('Equipo ausente o ambiguo: ' + repr(objetivo) +
+                             '. Con nombre guardado hay: ' + (', '.join(conocidos) or 'ninguno') + '.')
+        device = elegidos[0]
+        etiqueta = (device.get('identity') or {}).get('name')
+        # Un registro remoto desaparece entero; uno observado en la red volvería a
+        # aparecer en la lectura siguiente, así que lo que se olvida es su nombre.
+        remoto = device['id'].startswith('remoto/')
+        if remoto:
+            store.db.execute('DELETE FROM network_devices WHERE id=?', (device['id'],))
+        else:
+            device['identity'] = None
+            store.db.execute('UPDATE network_devices SET body=? WHERE id=?',
+                             (json.dumps(device), device['id']))
+        store.db.commit()
+        acceso = None
+        if etiqueta:
+            try:
+                acceso = hosts.forget(store.root, etiqueta)['forgotten']
+            except (ValueError, OSError):
+                acceso = None
+        return dict(forgotten=etiqueta or device['id'], removed_record=remoto,
+                    forgotten_access=acceso,
+                    note=('Registro borrado entero.' if remoto else
+                          'Nombre olvidado. El equipo sigue en la red y volverá a salir en la '
+                          'próxima lectura, ya sin nombre.') +
+                         (' También se revocó su acceso guardado.' if acceso else
+                          ' No tenía acceso guardado.'))
     if name == 'device.remote':
         # Un equipo de otra red no aparece nunca en la tabla ARP, así que
         # device.identify no puede alcanzarlo: no hay nada que nombrar. Este
