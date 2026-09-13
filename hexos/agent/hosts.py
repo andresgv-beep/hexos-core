@@ -107,10 +107,15 @@ def forget(workspace, name):
 
 
 def resolve(workspace, name):
-    """Dirección del equipo guardado con ese nombre.
+    """Dirección del equipo guardado con ese nombre, en este orden:
 
-    Manda la dirección fija si la tiene: es la única que sirve fuera de su red.
-    Si no, se cae al inventario pasivo, que solo ve lo que hay en la misma LAN.
+    1. la dirección de su credencial, si se guardó una (`--host`): es la que se
+       usa para entrar, y por eso pesa más que ninguna;
+    2. la dirección fija de su registro, puesta con device.remote desde la
+       conversación;
+    3. lo observado entre los vecinos de la red, que solo vale en la misma LAN.
+
+    Las dos primeras son las únicas que siguen sirviendo desde otro sitio.
     """
     if not NAME.fullmatch(name or ''):
         raise ValueError('Nombre de equipo no válido')
@@ -139,6 +144,11 @@ def resolve(workspace, name):
         raise ValueError('Hay ' + str(len(matches)) + ' equipos guardados como ' + repr(name) +
                          '; el nombre no distingue cuál')
     device = matches[0]
+    # Registrado con dirección fija (device.remote): no está en esta red y no va a
+    # aparecer entre los vecinos, así que no hay nada que observar.
+    if device.get('pinned_host'):
+        return dict(name=wanted, host=device['pinned_host'], mac=device.get('mac'),
+                    observed_at=None, reachable=None, pinned=True)
     # Direcciones de la última observación pasiva; REACHABLE antes que STALE.
     addresses = device.get('latest_addresses') or device.get('addresses') or []
     candidates = []

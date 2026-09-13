@@ -2,6 +2,7 @@
 import json
 import ipaddress
 import re
+from . import hosts
 from .network import snapshot
 from .work import now, string
 
@@ -98,6 +99,38 @@ def dispatch(store, name, args, turn_id=None):
                     note='Inventario histórico. Consulta network.local para el estado actual. '
                          'identity=null significa sin identificar. Un filtro sin coincidencias no significa que el inventario esté vacío: consulta sin query. '
                          'MAC e interfaz agrupan observaciones, no garantizan identidad física.')
+    if name == 'device.remote':
+        # Un equipo de otra red no aparece nunca en la tabla ARP, así que
+        # device.identify no puede alcanzarlo: no hay nada que nombrar. Este
+        # registra el nombre CON su dirección, y se resuelve por ella.
+        etiqueta = string(args['name'], 'name', 100)
+        destino = hosts.address(args['host'])
+        fila = store.db.execute("SELECT id,text FROM conversation WHERE id=? AND role='user'",
+                                (turn_id,)).fetchone() if turn_id else None
+        if not fila:
+            raise ValueError('No hay mensaje de este turno del que tomar la evidencia')
+        cita = fila['text']
+        # Misma regla que identificar y que guardar un hecho: la dirección tiene que
+        # estar en las palabras de la persona. Así no se registra un equipo deducido,
+        # y menos uno al que luego se le mandaría una contraseña.
+        if destino not in cita.casefold():
+            raise ValueError('Esa dirección no aparece en el mensaje de la persona. Registra solo '
+                             'la que te haya dado, tal cual la escribió.')
+        clave = 'remoto/' + etiqueta.casefold()
+        anterior = rows.get(clave, {})
+        registro = dict(anterior, id=clave, mac=None, interface=None, pinned_host=destino,
+                        addresses=anterior.get('addresses', []), latest_addresses=[],
+                        in_latest_snapshot=False, last_observed_at=None,
+                        identity=dict(name=etiqueta, kind=args.get('kind') or None,
+                                      source='user_statement', source_id=fila['id'],
+                                      evidence=cita[:1000], recorded_at=now()))
+        store.db.execute('INSERT OR REPLACE INTO network_devices VALUES (?,?)',
+                         (clave, json.dumps(registro)))
+        store.db.commit()
+        return dict(saved=True, device=etiqueta, host=destino, pinned=True,
+                    note='Registrado con dirección fija: no se busca en los vecinos de la red y '
+                         'sigue valiendo desde cualquier sitio. Esto no comprueba que se llegue a '
+                         'él ni concede acceso; las credenciales se piden aparte por la ventana.')
     target = args['target'].casefold()
     candidates = [d for d in rows.values() if target in (d['id'].casefold(), d['mac'])]
     if not candidates:

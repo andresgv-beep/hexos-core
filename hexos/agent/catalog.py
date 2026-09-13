@@ -34,6 +34,12 @@ TOOLS = {
     'device.list': spec('Consultar inventario persistente e identidades atribuidas al usuario. '
                         'query opcional filtra nombre, IP, MAC o tipo; admite OR entre nombres. '
                         'Sin query devuelve todos, con identificados primero. identity null: sin identificar.', optional={'query':'str'}),
+    'device.remote': spec('Registrar un equipo que NO está en esta red, con la dirección que la persona '
+                          'acaba de dar: una IP o un nombre como servidor.ddns.net. Úsala cuando pidan '
+                          'añadir o conectar un equipo de otro sitio, o cuando device_identify diga que no '
+                          'está en el inventario. La dirección debe aparecer literal en su mensaje; no la '
+                          'inventes ni la completes. No comprueba que se llegue al equipo.',
+                          {'name':'str', 'host':'str'}, {'kind':'str'}, effect='write_inventory'),
     'device.identify': spec('Recordar el nombre y tipo que el usuario atribuye a un dispositivo guardado. '
                             'target: IP completa, último octeto (por ejemplo 243), MAC o id. '
                             'HexOS usa el mensaje actual como evidencia; no aportes citas. '

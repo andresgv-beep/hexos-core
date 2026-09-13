@@ -112,6 +112,51 @@ class DevicesTest(unittest.TestCase):
                 self.assertEqual([n['ip'] for n in vecinos], ['192.168.1.10'])
                 self.assertIn('no dispositivos de la red', enriquecido['lists_note'])
 
+    def test_un_equipo_de_otra_red_se_registra_por_su_direccion(self):
+        # device_identify no puede alcanzarlo: no está ni estará en la tabla ARP.
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(tmp, None)
+            with agent.store() as s:
+                dicho = 'conéctate a servidorsrv1.ddns.net, llámalo synology 1'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u','now','user',dicho,dicho))
+                s.db.commit()
+                resultado = agent.tool(s, 'device.remote',
+                                       dict(name='synology 1', host='servidorsrv1.ddns.net'), turn_id='u')
+                self.assertTrue(resultado['pinned'])
+                from hexos.agent.hosts import resolve
+                located = resolve(tmp, 'synology 1')
+                self.assertEqual(located['host'], 'servidorsrv1.ddns.net')
+                self.assertTrue(located['pinned'])
+                # Y aparece en el inventario como cualquier otro equipo con nombre.
+                nombres = [d['identity']['name'] for d in agent.tool(s, 'device.list', {})['devices']
+                           if d['identity']]
+                self.assertIn('synology 1', nombres)
+
+    def test_no_registra_una_direccion_que_la_persona_no_dijo(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(tmp, None)
+            with agent.store() as s:
+                dicho = 'añade mi servidor de casa'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u','now','user',dicho,dicho))
+                s.db.commit()
+                with self.assertRaises(ValueError) as caught:
+                    agent.tool(s, 'device.remote', dict(name='casa', host='5.183.220.230'), turn_id='u')
+                self.assertIn('no aparece en el mensaje', str(caught.exception))
+                # Y sin turno tampoco: la evidencia no la pone el modelo.
+                with self.assertRaises(ValueError):
+                    agent.tool(s, 'device.remote', dict(name='casa', host='5.183.220.230'))
+
+    def test_una_direccion_que_no_lo_es_no_entra(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(tmp, None)
+            with agent.store() as s:
+                dicho = 'registra -oProxyCommand=id como servidor'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u','now','user',dicho,dicho))
+                s.db.commit()
+                with self.assertRaises(ValueError):
+                    agent.tool(s, 'device.remote',
+                               dict(name='servidor', host='-oProxyCommand=id'), turn_id='u')
+
     def test_identity_persists_without_following_reassigned_ip(self):
         with tempfile.TemporaryDirectory() as tmp:
             agent = Agent(tmp, None)

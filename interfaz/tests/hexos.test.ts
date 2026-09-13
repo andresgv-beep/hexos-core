@@ -36,6 +36,31 @@ test('reads the thinking channel, and null when the engine has none', async () =
   assert.equal(sinCanal.thinking, null);
 });
 
+test('reads the credential request so the dialog can appear mid-turn', async () => {
+  const pedido = await createHexosTransport('/api', fixture({ state: 'thinking', mode: 'native-experimental',
+    credential_request: { device: 'synology 1', host: 'servidorsrv1.ddns.net', pinned: true } })).status();
+  assert.equal(pedido.credentialRequest?.device, 'synology 1');
+  assert.equal(pedido.credentialRequest?.host, 'servidorsrv1.ddns.net');
+  assert.equal(pedido.credentialRequest?.pinned, true);
+  const sin = await createHexosTransport('/api', fixture({ state: 'idle', mode: 'json' })).status();
+  assert.equal(sin.credentialRequest, null);
+});
+
+test('sends the access only when it is complete, and confirms where it went', async () => {
+  const t = createHexosTransport('/api', fixture({ saved: true, device: 'synology 1', user: 'helios',
+    host: 'servidorsrv1.ddns.net', pinned: true }));
+  const guardado = await t.saveAccess({ device: 'synology 1', user: 'helios', password: 'x',
+    host: 'servidorsrv1.ddns.net' });
+  assert.equal(guardado.host, 'servidorsrv1.ddns.net');
+  assert.equal(guardado.pinned, true);
+  // Sin contraseña no se llega a enviar nada.
+  await assert.rejects(() => t.saveAccess({ device: 'a', user: 'b', password: '' }));
+  await assert.rejects(() => t.saveAccess({ device: '', user: 'b', password: 'x' }));
+  // Y si el backend no lo confirma, no se da por guardado.
+  await assert.rejects(() => createHexosTransport('/api', fixture({ ok: true }))
+    .saveAccess({ device: 'a', user: 'b', password: 'x' }));
+});
+
 test('confirms the thinking change instead of assuming it worked', async () => {
   const transporte = createHexosTransport('/api', fixture({ thinking: false, persisted: true }));
   assert.equal(await transporte.setThinking(false), false);

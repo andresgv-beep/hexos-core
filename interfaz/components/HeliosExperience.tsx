@@ -10,7 +10,7 @@ import { SystemMonitor } from "./SystemMonitor";
 import { ToolSatellites } from "./ToolSatellites";
 import { FloatingMessage, type MessageWindow } from "./FloatingMessage";
 import { phases } from "@/lib/helios/state";
-import { createHexosTransport, type ContextCut, type HeliosTransport, type HistoryMessage } from "@/lib/helios/hexos";
+import { createHexosTransport, type ContextCut, type CredentialRequest, type HeliosTransport, type HistoryMessage } from "@/lib/helios/hexos";
 import { mergeToolActivities, type ToolActivity } from "@/lib/helios/tools";
 
 const localTransport = createHexosTransport("/api/helios");
@@ -24,6 +24,10 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const [thinking, setThinking] = useState<boolean | null>(null);
   const [thinkingBusy, setThinkingBusy] = useState(false);
   const [contextCut, setContextCut] = useState<ContextCut | null>(null);
+  const [access, setAccess] = useState<CredentialRequest | null>(null);
+  const [accessForm, setAccessForm] = useState({ user: "", password: "", host: "" });
+  const [accessError, setAccessError] = useState("");
+  const [accessSaving, setAccessSaving] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [attachmentError, setAttachmentError] = useState("");
   const attachmentJobs = useRef(new Map<string, AbortController>());
@@ -137,14 +141,30 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     let disposed = false;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
-    transport.status(controller.signal).then(estado => {
+    let timer: ReturnType<typeof setTimeout>;
+    const mirar = () => transport.status(controller.signal).then(estado => {
       if (disposed) return;
       setConnection("ready");
       setThinking(estado.thinking);
+      // Helios pide el acceso a mitad de turno, así que hay que seguir mirando;
+      // con una sola consulta al montar la ventana no aparecía nunca.
+      setAccess(previo => {
+        const nuevo = estado.credentialRequest;
+        if (!nuevo) return null;
+        if (previo && previo.device === nuevo.device) return previo;
+        setAccessForm({ user: "", password: "", host: nuevo.host ?? "" });
+        setAccessError("");
+        return nuevo;
+      });
     }).catch(() => {
       if (!disposed) setConnection("offline");
-    }).finally(() => clearTimeout(timeout));
-    return () => { disposed = true; clearTimeout(timeout); controller.abort(); };
+    }).finally(() => {
+      clearTimeout(timeout);
+      if (!disposed && !document.hidden) timer = setTimeout(mirar, 2000);
+      else if (!disposed) timer = setTimeout(mirar, 6000);
+    });
+    void mirar();
+    return () => { disposed = true; clearTimeout(timeout); clearTimeout(timer); controller.abort(); };
   }, [transport]);
   useEffect(() => {
     if (!settings) return;
@@ -168,6 +188,26 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     return () => window.removeEventListener("resize", resetPositions);
   }, []);
   function closeSettings() { setSettings(false); settingsRef.current?.focus(); }
+  async function guardarAcceso() {
+    if (!access || accessSaving) return;
+    setAccessSaving(true);
+    setAccessError("");
+    try {
+      const guardado = await transport.saveAccess({
+        device: access.device, user: accessForm.user, password: accessForm.password,
+        host: accessForm.host || undefined,
+      });
+      // La contraseña no se queda en memoria del navegador más de lo necesario.
+      setAccessForm({ user: "", password: "", host: "" });
+      setAccess(null);
+      setAnnouncement(`Acceso de ${guardado.device} guardado en ${guardado.host}`);
+    } catch (error) {
+      setAccessError(error instanceof Error ? error.message : "No se pudo guardar el acceso.");
+    } finally {
+      setAccessSaving(false);
+    }
+  }
+
   async function toggleThinking() {
     if (thinking === null || thinkingBusy) return;
     setThinkingBusy(true);
@@ -278,6 +318,43 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     </section>
     <span className="sr-only" role="status">{announcement}</span>
     {historyOpen && <ChatHistory previous={previous} messages={windows} historyError={historyError} onClose={closeHistory} />}
+    {access && <div className="access-backdrop">
+      <div className="access-panel" role="dialog" aria-modal="true" aria-labelledby="access-title">
+        <h2 id="access-title" className="panel-title">Helios pide acceso a {access.device}</h2>
+        <p className="access-target">
+          {access.host
+            ? <>Se guardará para <strong>{access.host}</strong>{access.pinned ? " (dirección fija)" : ""}
+                {access.mac ? ` · MAC ${access.mac}` : ""}</>
+            : "Todavía sin dirección en el inventario: escribe abajo la del equipo."}
+        </p>
+        <label className="access-field">Usuario
+          <input value={accessForm.user} autoComplete="off"
+            onChange={e => setAccessForm(f => ({ ...f, user: e.target.value }))} />
+        </label>
+        <label className="access-field">Contraseña
+          <input type="password" value={accessForm.password} autoComplete="new-password"
+            onChange={e => setAccessForm(f => ({ ...f, password: e.target.value }))} />
+        </label>
+        <label className="access-field">Dirección <span className="access-hint">IP o nombre; déjalo vacío para buscarlo en esta red</span>
+          <input value={accessForm.host} autoComplete="off" placeholder="192.168.1.243 o servidor.ddns.net"
+            onChange={e => setAccessForm(f => ({ ...f, host: e.target.value }))} />
+        </label>
+        {accessError && <p className="attachment-error" role="alert">{accessError}</p>}
+        <p className="access-note">
+          La contraseña va directa a HexOS y se guarda solo en este equipo. No pasa por la
+          conversación ni la ve el modelo.
+        </p>
+        <div className="access-actions">
+          <button type="button" onClick={() => { setAccess(null); setAccessForm({ user: "", password: "", host: "" }); }}>
+            Ahora no
+          </button>
+          <button type="button" className="access-save" disabled={accessSaving}
+            onClick={() => void guardarAcceso()}>
+            {accessSaving ? "Guardando…" : "Guardar acceso"}
+          </button>
+        </div>
+      </div>
+    </div>}
     {settings && <div className="settings-backdrop"><button className="settings-dismiss" tabIndex={-1} aria-label="Cerrar ajustes" onClick={closeSettings} /><div ref={panelRef} className="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <div className="panel-heading"><h2 id="settings-title">Luminosidad</h2><button ref={closeRef} className="icon-button" onClick={closeSettings} aria-label="Cerrar ajustes"><X size={20} /></button></div>
       <label className="slider-label" htmlFor="brightness">Luz de la esfera<span>{Math.round(brightness * 100)}%</span></label><input id="brightness" type="range" min=".35" max="2" step=".01" value={brightness} onChange={event => setBrightness(Number(event.target.value))} />

@@ -76,6 +76,19 @@ button:focus-visible, a:focus-visible, input:focus-visible, [tabindex="0"]:focus
 .send-button:hover { background: #a0d4fa40; }
 .send-button:disabled { opacity: .35; cursor: default; }
 .connection-note { text-align: center; font-size: 10px; color: #6e91a8; margin: 9px 0 0; }
+.access-backdrop { position: fixed; inset: 0; z-index: 40; background: #000a; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.access-panel { width: min(380px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; background: #0b1b29f5; border: 1px solid #80cfff55; border-radius: 18px; padding: 24px; box-shadow: 0 0 40px #39adff22; }
+.panel-title { margin: 0 0 4px; font-size: 14px; color: #d5ecff; font-weight: 500; }
+.access-target { margin: 0 0 14px; font-size: 11px; color: #7fb2cd; line-height: 1.5; }
+.access-field { display: block; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: #6e91a8; margin-bottom: 11px; }
+.access-field input { display: block; width: 100%; margin-top: 5px; padding: 8px 10px; border: 1px solid #71caff44; border-radius: 9px; background: #071523; color: #d5ecff; font-size: 12px; text-transform: none; letter-spacing: 0; }
+.access-field input:focus { outline: none; border-color: #71caffaa; }
+.access-hint { text-transform: none; letter-spacing: 0; color: #567c93; }
+.access-note { font-size: 10px; color: #6e91a8; line-height: 1.5; margin: 2px 0 14px; }
+.access-actions { display: flex; gap: 9px; justify-content: flex-end; }
+.access-actions button { padding: 8px 14px; border: 1px solid #71caff44; border-radius: 9px; background: transparent; color: #b8e4ff; font-size: 11px; cursor: pointer; }
+.access-actions .access-save { background: #12405e; border-color: #71caff88; }
+.access-actions button:disabled { opacity: .5; cursor: default; }
 .link-button { background: none; border: 0; padding: 0; font: inherit; color: #8fd0ff; text-decoration: underline; cursor: pointer; }
 .window-tray { display: flex; gap: 8px; overflow-x: auto; padding: 7px 3px 12px; scrollbar-width: thin; }
 .window-tray button { display: flex; align-items: center; gap: 7px; flex-shrink: 0; max-width: 165px; padding: 8px 12px; border: 1px solid #71caff50; border-radius: 10px; background: #0c2134ed; color: #b8e4ff; font-size: 11px; }
