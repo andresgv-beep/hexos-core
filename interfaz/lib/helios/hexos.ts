@@ -12,6 +12,9 @@ export interface CredentialRequest {
   device: string; host?: string; mac?: string; pinned?: boolean;
   /** 'rejected' cuando ya había un acceso guardado y el equipo lo rechazó. */
   reason?: string; port?: number; user?: string;
+  /** Marca de la petición. Cambia cada vez que se pide de nuevo, y es lo que
+   *  distingue «la misma que ya descarté» de «me lo está pidiendo otra vez». */
+  requestedAt?: string;
 }
 export interface AccessSaved {
   device: string; user: string; host: string; pinned: boolean;
@@ -30,6 +33,8 @@ export interface HeliosTransport {
    *  entre los vecinos de la red, que solo sirve estando en la misma. */
   saveAccess(input: { device: string; user: string; password: string; host?: string; port?: number },
              signal?: AbortSignal): Promise<AccessSaved>;
+  /** Retira la petición de acceso sin guardar nada, para que no vuelva a abrirse. */
+  dismissAccess(device: string, signal?: AbortSignal): Promise<void>;
   /** Enciende o apaga el canal de pensamiento de Gemma. HexOS lo recuerda. */
   setThinking(enabled: boolean, signal?: AbortSignal): Promise<boolean>;
   history(signal?: AbortSignal): Promise<HistoryMessage[]>;
@@ -62,7 +67,8 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
             mac: typeof r.mac === "string" ? r.mac : undefined, pinned: r.pinned === true,
             reason: typeof r.reason === "string" ? r.reason : undefined,
             port: typeof r.port === "number" ? r.port : undefined,
-            user: typeof r.user === "string" ? r.user : undefined }
+            user: typeof r.user === "string" ? r.user : undefined,
+            requestedAt: typeof r.requested_at === "string" ? r.requested_at : undefined }
         : null;
       return { phase: phaseFromHexos(data.state), mode: data.mode, thinking,
                tools: parseToolActivities(data.active_tools, "running"), credentialRequest };
@@ -81,6 +87,10 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
       return { device: String(data.device), user: String(data.user),
                host: data.host, pinned: data.pinned === true,
                resume: typeof data.resume === "string" && data.resume.trim() ? data.resume : undefined };
+    },
+    async dismissAccess(device, signal) {
+      await request("credentials", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ device, dismiss: true }), signal });
     },
     async setThinking(enabled, signal) {
       const data = await request("thinking", { method: "POST", headers: { "Content-Type": "application/json" },

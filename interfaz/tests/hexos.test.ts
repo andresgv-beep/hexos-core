@@ -69,6 +69,16 @@ test('sends the access only when it is complete, and confirms where it went', as
     .saveAccess({ device: 'a', user: 'b', password: 'x' }));
 });
 
+test('dismissing an access request sends no credential at all', async () => {
+  let enviado: unknown = null;
+  const fetcher = (async (_url: string, init: RequestInit) => {
+    enviado = JSON.parse(String(init.body));
+    return Response.json({ dismissed: 'synology 1', saved: false });
+  }) as unknown as typeof fetch;
+  await createHexosTransport('/api', fetcher).dismissAccess('synology 1');
+  assert.deepEqual(enviado, { device: 'synology 1', dismiss: true });
+});
+
 test('confirms the thinking change instead of assuming it worked', async () => {
   const transporte = createHexosTransport('/api', fixture({ thinking: false, persisted: true }));
   assert.equal(await transporte.setThinking(false), false);

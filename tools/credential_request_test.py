@@ -193,5 +193,38 @@ class RetomarTrasGuardarTest(unittest.TestCase):
                                                   password='x', host='casa.ddns.net'))['resume'])
 
 
+class DescartarPeticionTest(unittest.TestCase):
+    """«Ahora no» tiene que valer también en el servidor."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix='hexos-descartar-')
+        class Runtime:
+            def call(self, request): pass
+            def generate(self, messages): return {'reply': '', 'work': None}
+        from hexos.agent.chat import Agent
+        self.agente = Agent(self.tmp.name, Runtime())
+        self.agente.credential_request = dict(device='synology 1', requested_at=now())
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_retira_la_peticion_sin_guardar_credencial(self):
+        from hexos.agent.hosts import load
+        resultado = self.agente.save_access(dict(device='synology 1', dismiss=True))
+        self.assertFalse(resultado['saved'])
+        self.assertIsNone(self.agente.credential_request)
+        self.assertEqual(load(self.tmp.name), {}, 'descartar no puede escribir nada')
+
+    def test_no_retira_la_de_otro_equipo(self):
+        with self.assertRaises(ValueError):
+            self.agente.save_access(dict(device='otro', dismiss=True))
+        self.assertIsNotNone(self.agente.credential_request)
+
+    def test_descartar_no_admite_colar_una_contrasena(self):
+        with self.assertRaises(ValueError):
+            self.agente.save_access(dict(device='synology 1', dismiss=True, password='x'))
+        self.assertIsNotNone(self.agente.credential_request)
+
+
 if __name__ == '__main__':
     unittest.main()

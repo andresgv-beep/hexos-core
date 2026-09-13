@@ -248,8 +248,27 @@ class Agent:
     def store(self):
         return WorkStore(self.workspace)
 
+    def dismiss_access(self, device):
+        """Retirar una petición de acceso sin guardar nada.
+
+        «Ahora no» tenía que valer también en el servidor: mientras la petición
+        siguiera puesta, la interfaz la volvía a abrir en cuanto se recargara, y
+        la persona se quedaba con la ventana delante sin poder escribir.
+        """
+        device = string(device, 'device', 64)
+        if (self.credential_request or {}).get('device') != device.casefold():
+            raise ValueError('No hay ninguna petición de acceso pendiente para ' + repr(device))
+        self.credential_request = None
+        return dict(dismissed=device.casefold(), saved=False,
+                    note='Petición retirada. No se ha guardado ninguna credencial y el equipo '
+                         'sigue sin acceso; se volverá a pedir cuando se intente leerlo.')
+
     def save_access(self, payload):
         """Guarda una credencial pedida por Helios. No pasa por la conversación ni por el modelo."""
+        if payload.get('dismiss') is True:
+            if set(payload) - {'device', 'dismiss'}:
+                raise ValueError('Para retirar la petición basta con device y dismiss')
+            return self.dismiss_access(payload.get('device'))
         if set(payload) - {'device', 'user', 'password', 'port', 'host'}:
             raise ValueError('Campos permitidos: device, user, password, port, host')
         device = string(payload.get('device'), 'device', 64)

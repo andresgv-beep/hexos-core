@@ -28,6 +28,9 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const [accessForm, setAccessForm] = useState({ user: "", password: "", host: "", port: "22" });
   const [accessError, setAccessError] = useState("");
   const [accessSaving, setAccessSaving] = useState(false);
+  // Qué petición se descartó. Sin esto, «Ahora no» solo limpiaba el estado local
+  // y la consulta siguiente —dos segundos después— la volvía a abrir, en bucle.
+  const accessDismissed = useRef<string | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [attachmentError, setAttachmentError] = useState("");
   const attachmentJobs = useRef(new Map<string, AbortController>());
@@ -150,7 +153,10 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       // con una sola consulta al montar la ventana no aparecía nunca.
       setAccess(previo => {
         const nuevo = estado.credentialRequest;
-        if (!nuevo) return null;
+        if (!nuevo) { accessDismissed.current = null; return null; }
+        // Solo vuelve si es una petición NUEVA: la descartada sigue descartada
+        // hasta que se pida la conexión otra vez desde el chat.
+        if (accessDismissed.current === (nuevo.requestedAt ?? nuevo.device)) return null;
         if (previo && previo.device === nuevo.device) return previo;
         setAccessForm({ user: nuevo.user ?? "", password: "", host: nuevo.host ?? "",
                         port: String(nuevo.port ?? 22) });
@@ -365,7 +371,15 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
           conversación ni la ve el modelo.
         </p>
         <div className="access-actions">
-          <button type="button" onClick={() => { setAccess(null); setAccessForm({ user: "", password: "", host: "", port: "22" }); }}>
+          <button type="button" onClick={() => {
+            // Se recuerda cuál se descartó, y se retira también en el servidor:
+            // si no, volvía a abrirse al recargar la página.
+            accessDismissed.current = access.requestedAt ?? access.device;
+            const equipo = access.device;
+            setAccess(null);
+            setAccessForm({ user: "", password: "", host: "", port: "22" });
+            void transport.dismissAccess(equipo).catch(() => {});
+          }}>
             Ahora no
           </button>
           <button type="button" className="access-save" disabled={accessSaving}
