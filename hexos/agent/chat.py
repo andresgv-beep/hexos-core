@@ -117,6 +117,19 @@ AFIRMACION = re.compile(
     r'|en realidad me llamo|no me llamo)\b', re.I)
 
 
+def frase_del_hecho(clave, valor):
+    """La frase que verá el modelo en el perfil. HERA imprime este texto literal,
+    así que es aquí donde el sujeto tiene que quedar dicho: «Su hermana se llama
+    Lucía», no «Su nombre es Lucía», que valdría igual para la hermana que para
+    el ordenador."""
+    sujeto, _, atributo = clave.partition('/')
+    if sujeto == 'yo':
+        return 'Su ' + atributo + ' es ' + valor
+    if atributo == 'nombre':
+        return 'Su ' + sujeto + ' se llama ' + valor
+    return 'De su ' + sujeto + ', ' + atributo + ': ' + valor
+
+
 def decode_image(encoded):
     """base64 de PNG/JPEG -> (píxeles RGB8, ancho, alto). None si no hay imagen."""
     if encoded is None:
@@ -236,8 +249,10 @@ class Agent:
         # HERA deriva el sujeto de la clave: sin «yo/» lo tomaría por otra persona
         # y exigiría que esa palabra apareciese en la frase.
         clave = key if '/' in key else 'yo/' + key
-        etiqueta = clave.split('/')[-1]
-        texto = 'Su ' + etiqueta + ' es ' + value
+        # El perfil que lee el modelo es esta frase, literal: HERA imprime `texto`
+        # tal cual. Sin el sujeto, hermana/nombre y ordenador/nombre se leen los dos
+        # como «Su nombre es…» y el perfil se contradice solo.
+        texto = frase_del_hecho(clave, value)
         # Corregir y guardar son la misma intención vista desde fuera; lo que
         # cambia es si ya había un hecho vigente. HERA reemplaza de forma atómica
         # y conserva la cadena en `hera historial <clave>`.

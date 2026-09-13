@@ -125,6 +125,20 @@ class ProfileMemoryTest(unittest.TestCase):
                 perfil.remember('nombre', 'Andrés', 'nombre: Andrés', 'me llamo Andrés')
         self.assertIn('sin_confirmacion', str(caught.exception))
 
+    def test_la_frase_del_perfil_nombra_al_sujeto(self):
+        # HERA imprime este texto tal cual en el perfil: si dos hechos de sujetos
+        # distintos se redactan igual, el modelo lee un perfil que se contradice.
+        self.recordar('mi hermana se llama Lucía', 'hermana/nombre', 'Lucía')
+        self.recordar('mi ordenador se llama Rayo', 'ordenador/nombre', 'Rayo')
+        self.recordar('me llamo Andrés', 'nombre', 'Andrés')
+        self.recordar('mi coche tiene 200000 km', 'coche/kilometros', '200000')
+        frases = [g['text'] for g in self.perfil.guardados]
+        self.assertEqual(frases, ['Su hermana se llama Lucía',
+                                  'Su ordenador se llama Rayo',
+                                  'Su nombre es Andrés',
+                                  'De su coche, kilometros: 200000'])
+        self.assertEqual(len(set(frases)), len(frases))
+
     def test_el_catalogo_lo_declara_como_escritura(self):
         from hexos.agent import catalog
         spec = catalog.TOOLS['profile.remember']
