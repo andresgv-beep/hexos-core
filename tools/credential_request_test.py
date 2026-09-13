@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 
 from hexos.agent import hosts
+from hexos.agent.work import now
 from hexos.agent.nas_session import read
 
 
@@ -153,6 +154,43 @@ class AccesoRechazadoTest(unittest.TestCase):
              patch.object(pexpect, 'spawn', return_value=SshFalso('md0 : active raid1 sda1[0]')):
             resultado = nas_session.execute('/tmp', 'synology 1', 'system')
         self.assertIn('md0', resultado['output'])
+
+
+class RetomarTrasGuardarTest(unittest.TestCase):
+    """Rellenar la ventana no debería obligar a repetir la petición."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix='hexos-retomar-')
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_devuelve_lo_que_se_estaba_pidiendo(self):
+        from unittest.mock import patch
+        from hexos.agent import hosts
+        from hexos.agent.chat import Agent
+
+        class Runtime:
+            def call(self, request): pass
+            def generate(self, messages): return {'reply': '', 'work': None}
+
+        agente = Agent(self.tmp.name, Runtime())
+        peticion = 'revisa el estado de synology 1'
+        with agente.store() as store:
+            store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
+                             ('u1', now(), 'user', peticion, peticion))
+            store.db.commit()
+            with patch('hexos.agent.chat.nas_read',
+                       side_effect=hosts.AccessNeeded('synology 1', dict(host='casa.ddns.net'))):
+                agente.tool(store, 'nas.read', {'section': 'diagnosis'}, turn_id='u1')
+        self.assertEqual(agente.credential_request['pending_request'], peticion)
+        guardado = agente.save_access(dict(device='synology 1', user='helios',
+                                           password='x', host='casa.ddns.net', port=30))
+        self.assertEqual(guardado['resume'], peticion)
+        # Y no se queda pegado: el siguiente guardado no reenvía nada.
+        self.assertIsNone(agente.credential_request)
+        self.assertIsNone(agente.save_access(dict(device='synology 1', user='helios',
+                                                  password='x', host='casa.ddns.net'))['resume'])
 
 
 if __name__ == '__main__':

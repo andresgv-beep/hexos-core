@@ -13,7 +13,12 @@ export interface CredentialRequest {
   /** 'rejected' cuando ya había un acceso guardado y el equipo lo rechazó. */
   reason?: string; port?: number; user?: string;
 }
-export interface AccessSaved { device: string; user: string; host: string; pinned: boolean }
+export interface AccessSaved {
+  device: string; user: string; host: string; pinned: boolean;
+  /** Lo que se estaba pidiendo cuando faltó el acceso. La interfaz lo reenvía
+   *  sola: quien acaba de rellenar la ventana no debería repetir la petición. */
+  resume?: string;
+}
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -74,7 +79,8 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
         throw new Error("HexOS no confirmó el acceso");
       }
       return { device: String(data.device), user: String(data.user),
-               host: data.host, pinned: data.pinned === true };
+               host: data.host, pinned: data.pinned === true,
+               resume: typeof data.resume === "string" && data.resume.trim() ? data.resume : undefined };
     },
     async setThinking(enabled, signal) {
       const data = await request("thinking", { method: "POST", headers: { "Content-Type": "application/json" },

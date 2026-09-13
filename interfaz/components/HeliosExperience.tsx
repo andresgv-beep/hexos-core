@@ -206,6 +206,9 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       setAccessForm({ user: "", password: "", host: "", port: "22" });
       setAccess(null);
       setAnnouncement(`Acceso de ${guardado.device} guardado en ${guardado.host}`);
+      // Retomar lo que estaba haciendo cuando pidió el acceso: quien acaba de
+      // rellenar la ventana no tiene por qué repetir la petición.
+      if (guardado.resume) void send({ preventDefault() {} } as FormEvent, guardado.resume);
     } catch (error) {
       setAccessError(error instanceof Error ? error.message : "No se pudo guardar el acceso.");
     } finally {
@@ -226,10 +229,10 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     }
   }
 
-  async function send(event: FormEvent) {
-    event.preventDefault();
-    const question = draft.trim() || (attachments.some(file => file.image) ? "Mira esta imagen y dime qué ves."
-      : attachments.length ? "Lee los documentos adjuntos y resume su contenido." : "");
+  async function send(event: FormEvent, forzado?: string) {
+    event?.preventDefault?.();
+    const question = forzado ?? (draft.trim() || (attachments.some(file => file.image) ? "Mira esta imagen y dime qué ves."
+      : attachments.length ? "Lee los documentos adjuntos y resume su contenido." : ""));
     if (!question || sending || historyLoading || request.current || attachments.some(file => file.status !== "ready")) return;
     const text = question + attachments.map(file => `\n\nAdjunto: ${file.name}`).join("");
     // La imagen viaja aparte, en su propio campo; solo los documentos van en el texto.

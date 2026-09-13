@@ -53,6 +53,14 @@ test('sends the access only when it is complete, and confirms where it went', as
     host: 'servidorsrv1.ddns.net' });
   assert.equal(guardado.host, 'servidorsrv1.ddns.net');
   assert.equal(guardado.pinned, true);
+  // Sin `resume` no hay nada que retomar y la interfaz no debe inventarse un turno.
+  assert.equal(guardado.resume, undefined);
+  const conRetomar = await createHexosTransport('/api', fixture({ saved: true, device: 'd', user: 'u',
+    host: 'h', resume: 'revisa el estado de synology 1' })).saveAccess({ device: 'd', user: 'u', password: 'x' });
+  assert.equal(conRetomar.resume, 'revisa el estado de synology 1');
+  const vacio = await createHexosTransport('/api', fixture({ saved: true, device: 'd', user: 'u',
+    host: 'h', resume: '   ' })).saveAccess({ device: 'd', user: 'u', password: 'x' });
+  assert.equal(vacio.resume, undefined);
   // Sin contraseña no se llega a enviar nada.
   await assert.rejects(() => t.saveAccess({ device: 'a', user: 'b', password: '' }));
   await assert.rejects(() => t.saveAccess({ device: '', user: 'b', password: 'x' }));

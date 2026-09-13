@@ -265,7 +265,9 @@ class Agent:
         fijada = hosts.address(payload['host']) if payload.get('host') else None
         located = dict(host=fijada, pinned=True) if fijada else hosts.resolve(self.workspace, device)
         hosts.save(self.workspace, device, user, password, port, fijada)
+        retomar = None
         if (self.credential_request or {}).get('device') == device.casefold():
+            retomar = self.credential_request.get('pending_request')
             self.credential_request = None
         # Sin esta anotación el modelo sigue leyendo en su contexto que le falta el
         # acceso y responde que no lo tiene en lugar de volver a intentar la lectura.
@@ -280,8 +282,11 @@ class Agent:
             store.db.commit()
         return dict(saved=True, device=device.casefold(), user=user,
                     host=located['host'], mac=located.get('mac'), pinned=bool(fijada),
+                    resume=retomar,
                     note='Guardado en credentials.json con permisos 600. '
-                         'No se ha escrito en la conversación ni se ha mostrado al modelo.')
+                         'No se ha escrito en la conversación ni se ha mostrado al modelo. '
+                         'resume es lo que se estaba pidiendo cuando faltó el acceso: la interfaz '
+                         'lo reenvía para no hacer repetir la petición.')
 
     def remember_fact(self, store, args, turn_id):
         """Guarda en el perfil un dato que la persona acaba de decir de sí misma.
@@ -431,9 +436,15 @@ class Agent:
                 # El puerto guardado viaja con la petición: sin verlo, quien corrige un
                 # acceso rechazado vuelve a escribir el mismo y no entiende por qué falla.
                 guardado = hosts.credentials(self.workspace, needed.device) or {}
+                # Lo que estaba intentando hacer, para retomarlo al guardar el acceso
+                # en vez de obligar a repetir la petición palabra por palabra.
+                pedido = store.db.execute(
+                    "SELECT text FROM conversation WHERE id=? AND role='user'",
+                    (turn_id,)).fetchone() if turn_id else None
                 self.credential_request = dict(device=needed.device, requested_at=now(),
                                                reason=needed.reason, port=guardado.get('port', 22),
                                                user=guardado.get('user'),
+                                               pending_request=pedido['text'][:2000] if pedido else None,
                                                **(needed.located or {}))
                 return dict(access_required=True, device=needed.device,
                             located=needed.located, reason=needed.reason,
