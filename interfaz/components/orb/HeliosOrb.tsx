@@ -17,6 +17,7 @@ export interface HeliosOrbProps {
   brightness?: number;
   motion?: boolean;
   sampleAmplitude?: (timeSeconds: number) => number;
+  onExpansion?: (scale: number) => void;
 }
 
 function FrameTicker({ active }: { active: boolean }) {
@@ -40,7 +41,7 @@ function FrameTicker({ active }: { active: boolean }) {
   return null;
 }
 
-function OrbScene({ signal, brightness = 1, motion = true, sampleAmplitude }: HeliosOrbProps) {
+function OrbScene({ signal, brightness = 1, motion = true, sampleAmplitude, onExpansion }: HeliosOrbProps) {
   const root = useRef<Group>(null);
   // three gives every ShaderMaterial its own copy of the `uniforms` object it is
   // constructed with, so driving them through one material's ref left the points,
@@ -64,6 +65,7 @@ function OrbScene({ signal, brightness = 1, motion = true, sampleAmplitude }: He
   }), []);
   const elapsed = useRef(0);
   const expansion = useRef(.96);
+  const reportedExpansion = useRef(.96);
   const signalTime = useRef(0);
   useEffect(() => { invalidate(); }, [signal, brightness, motion, invalidate]);
   useEffect(() => () => {
@@ -91,6 +93,10 @@ function OrbScene({ signal, brightness = 1, motion = true, sampleAmplitude }: He
     if (root.current) {
       const nextScale = orbTargetScale(signal.phase, signal.energy, values.uAmplitude.value, signalTime.current, motion);
       expansion.current = MathUtils.lerp(expansion.current, nextScale, motion ? 1 - Math.exp(-dt * 9) : 1);
+      if (onExpansion && Math.abs(expansion.current - reportedExpansion.current) > .0008) {
+        reportedExpansion.current = expansion.current;
+        onExpansion(expansion.current);
+      }
       root.current.scale.setScalar(Math.min(viewport.width / 6.2, viewport.height / 5.6) * expansion.current);
       root.current.rotation.y = elapsed.current * .065 + (motion ? state.pointer.x * .035 : 0);
       root.current.rotation.x = .12 + (motion ? Math.sin(elapsed.current * .14) * .08 + state.pointer.y * .025 : 0);

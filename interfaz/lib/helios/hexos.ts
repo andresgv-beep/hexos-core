@@ -1,13 +1,14 @@
 import { phaseFromHexos, type HeliosPhase } from "./state";
+import { parseToolActivities, type ToolActivity } from "./tools";
 
-export interface ChatReply { reply: string; tools: unknown[]; document?: unknown }
+export interface ChatReply { reply: string; tools: ToolActivity[]; document?: unknown }
 export interface HistoryMessage { role: "user" | "assistant"; text: string }
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 export interface HeliosTransport {
   /** `thinking` es null cuando el motor no tiene canal de pensamiento. */
-  status(signal?: AbortSignal): Promise<{ phase: HeliosPhase; mode: string; thinking: boolean | null }>;
+  status(signal?: AbortSignal): Promise<{ phase: HeliosPhase; mode: string; thinking: boolean | null; tools: ToolActivity[] }>;
   /** Enciende o apaga el canal de pensamiento de Gemma. HexOS lo recuerda. */
   setThinking(enabled: boolean, signal?: AbortSignal): Promise<boolean>;
   history(signal?: AbortSignal): Promise<HistoryMessage[]>;
@@ -34,7 +35,7 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
       const data = await request("status", { signal });
       if (!isRecord(data) || typeof data.mode !== "string") throw new Error("Modo de HexOS no válido");
       const thinking = typeof data.thinking === "boolean" ? data.thinking : null;
-      return { phase: phaseFromHexos(data.state), mode: data.mode, thinking };
+      return { phase: phaseFromHexos(data.state), mode: data.mode, thinking, tools: parseToolActivities(data.active_tools, "running") };
     },
     async setThinking(enabled, signal) {
       const data = await request("thinking", { method: "POST", headers: { "Content-Type": "application/json" },
@@ -55,7 +56,7 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
         : { method: "POST", headers: { "Content-Type": "text/plain; charset=utf-8" }, body: text, signal };
       const data = await request("chat", init);
       if (!isRecord(data) || typeof data.reply !== "string" || !data.reply.trim() || !Array.isArray(data.tools)) throw new Error("HexOS no devolvió una respuesta completa");
-      return { reply: data.reply, tools: data.tools, document: data.document };
+      return { reply: data.reply, tools: parseToolActivities(data.tools, "done"), document: data.document };
     },
   };
 }

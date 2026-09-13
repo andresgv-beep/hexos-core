@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createHexosTransport } from '../lib/helios/hexos';
 import { clampEnergy, phaseFromHexos } from '../lib/helios/state';
+import { mergeToolActivities } from '../lib/helios/tools';
 
 function fixture(data: unknown, status = 200) {
   return (async () => Response.json(data, { status })) as typeof fetch;
@@ -76,4 +77,35 @@ test('normalizes external energy so invalid telemetry cannot poison shader unifo
   assert.equal(clampEnergy(-1), 0);
   assert.equal(clampEnergy(7), 1);
   assert.equal(clampEnergy(.4), .4);
+});
+
+test('exposes only bounded tool lifecycle data to the interface', async () => {
+  const status = await createHexosTransport('/api', fixture({
+    state: 'tool', mode: 'native-experimental', active_tools: [
+      { tool: 'nas.read', status: 'running', arguments: { password: 'secret' }, result: { private: true } },
+      { tool: '', status: 'running' },
+    ],
+  })).status();
+  assert.deepEqual(status.tools, [{ id: '0-nas.read', name: 'nas.read', status: 'running', seconds: null }]);
+  assert.equal('arguments' in status.tools[0], false);
+
+  const reply = await createHexosTransport('/api', fixture({ reply: 'Listo', tools: [
+    { tool: 'network.local', failed: false, seconds: .42, result: { addresses: [] } },
+    { tool: 'document.read', failed: true, seconds: 2 },
+  ] })).send('Comprueba');
+  assert.deepEqual(reply.tools.map(tool => [tool.name, tool.status]), [['network.local', 'done'], ['document.read', 'failed']]);
+});
+
+test('keeps a six-tool constellation and updates repeated tools in place', () => {
+  const previous = [
+    { id: 'ssh', name: 'nas.read', status: 'done' as const, seconds: 2 },
+    { id: 'net', name: 'network.local', status: 'done' as const, seconds: 1 },
+  ];
+  const merged = mergeToolActivities(previous, [
+    { id: 'new-net', name: 'network.local', status: 'running', seconds: null },
+    { id: 'doc', name: 'document.read', status: 'done', seconds: .4 },
+  ]);
+  assert.deepEqual(merged.map(tool => [tool.id, tool.name, tool.status]), [
+    ['ssh', 'nas.read', 'done'], ['net', 'network.local', 'running'], ['doc', 'document.read', 'done'],
+  ]);
 });

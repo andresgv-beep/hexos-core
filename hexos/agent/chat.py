@@ -219,6 +219,8 @@ class Agent:
         self.lock = threading.Lock()
         self.state = 'idle'
         self.progress = {'turn_id':None, 'messages':[]}
+        # Resumen público y acotado para la interfaz; nunca expone argumentos ni resultados.
+        self.active_tools = []
         # Acceso que Helios ha pedido y la interfaz debe rellenar. Nunca lleva la credencial.
         self.credential_request = None
         with self.store() as store:
@@ -481,6 +483,7 @@ class Agent:
         if not self.lock.acquire(blocking=False):
             raise RuntimeError('Ya hay un turno en curso')
         self.state = 'thinking'
+        self.active_tools = []
         try:
             with self.store() as store:
                 profile = self.profile.read() if self.profile else ''
@@ -648,6 +651,9 @@ class Agent:
                         if len(trace) >= 6:
                             raise RuntimeError('Se alcanzó el límite de seis herramientas; no se ejecutó la siguiente solicitud')
                         self.state = 'tool'
+                        effect = catalog.TOOLS.get(output['tool'], {}).get('effect', 'read')
+                        activity = dict(tool=output['tool'], status='running', effect=effect, seconds=None)
+                        self.active_tools = [*self.active_tools, activity]
                         started = time.monotonic()
                         try:
                             catalog.validate(output['tool'], output['arguments'])
@@ -669,7 +675,8 @@ class Agent:
                             result = {'error': str(exc)}
                         # La traza dice qué hizo cada llamada, cuánto tardó y si escribió algo:
                         # una interfaz debe poder distinguir una lectura de un cambio real.
-                        effect = catalog.TOOLS.get(output['tool'], {}).get('effect', 'read')
+                        activity.update(status='failed' if isinstance(result, dict) and 'error' in result else 'done',
+                                        seconds=round(time.monotonic() - started, 3))
                         trace.append(dict(tool=output['tool'], arguments=output['arguments'],
                                           effect=effect, changes_state=effect != 'read',
                                           ts=now(), seconds=round(time.monotonic() - started, 3),
@@ -843,6 +850,7 @@ def main():
                 self.wfile.write(data)
             elif self.path == '/api/status':
                 self.respond(200, {'state': agent.state, 'progress':agent.progress,
+                                   'active_tools':[dict(item) for item in agent.active_tools],
                                    'credential_request': agent.credential_request,
                                    'thinking': agent.thinking(),
                                    'mode':'native-experimental' if args.native_template else 'json'})
