@@ -284,7 +284,10 @@ class Agent:
                 continue      # no estaba en su mensaje, o HERA lo rechazó
             if not resultado.get('saved'):
                 continue
-            etiqueta = resultado['key'].split('/')[-1]
+            sujeto, _, atributo = resultado['key'].partition('/')
+            # Con «yo» basta el atributo; con otro sujeto hay que nombrarlo, o
+            # hermana/nombre y ordenador/nombre se leen los dos como «nombre».
+            etiqueta = atributo if sujeto == 'yo' else resultado['key'].replace('/', ' · ')
             anotado.append(('He corregido' if resultado.get('corrected') else 'He anotado')
                            + ' ' + etiqueta + ': ' + resultado['value']
                            + (' (antes ' + resultado['previous'] + ')'

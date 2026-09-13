@@ -104,6 +104,16 @@ class FactExtractionTest(unittest.TestCase):
 
     # --- Corrección ---
 
+    def test_el_aviso_nombra_al_sujeto_cuando_no_eres_tu(self):
+        # hermana/nombre y ordenador/nombre no pueden leerse los dos como «nombre».
+        aviso, _, _ = self.cosechar('mi hermana se llama Lucía',
+                                    [dict(key='hermana/nombre', value='Lucía')])
+        self.assertIn('hermana', aviso)
+        aviso, _, _ = self.cosechar('me llamo Andrés',
+                                    [dict(key='yo/nombre', value='Andrés')])
+        self.assertIn('nombre: Andrés', aviso)
+        self.assertNotIn('yo', aviso)
+
     def test_una_contradiccion_corrige_y_lo_avisa(self):
         aviso, perfil, _ = self.cosechar(
             'en realidad me llamo Andrés García',
