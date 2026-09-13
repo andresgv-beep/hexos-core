@@ -38,21 +38,49 @@ def load(workspace):
     return json.loads(path.read_text())
 
 
-def save(workspace, name, user, password, port=22):
-    """Escribe con permisos restringidos desde la creación, sin ventana legible."""
+def save(workspace, name, user, password, port=22, host=None):
+    """Escribe con permisos restringidos desde la creación, sin ventana legible.
+
+    `host` fija la dirección del equipo. Sin ella se resuelve por los vecinos de
+    la red, que solo sirve estando en la misma: en otra casa, o detrás de una VPN,
+    el equipo no aparece en la tabla ARP y no habría forma de encontrarlo.
+    """
     if not NAME.fullmatch(name or '') or not NAME.fullmatch(user or ''):
         raise ValueError('Nombre de equipo o usuario no válido')
     if type(port) is not int or not 1 <= port <= 65535:
         raise ValueError('Puerto no válido')
+    if host is not None:
+        host = address(host)
     data = load(workspace)
-    data[name.casefold()] = dict(user=user, password=password, port=port)
+    entrada = dict(user=user, password=password, port=port)
+    if host:
+        entrada['host'] = host
+    data[name.casefold()] = entrada
     path = store_path(workspace)
     temporary = path.with_suffix('.tmp')
     handle = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(handle, 'w') as out:
         json.dump(data, out, ensure_ascii=False, indent=2)
     os.replace(temporary, path)
-    return dict(saved=name.casefold(), user=user, port=port)
+    return dict(saved=name.casefold(), user=user, port=port, host=host)
+
+
+HOSTNAME = re.compile(r'[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*', re.I)
+
+
+def address(value):
+    """IPv4, IPv6 o nombre DNS. Se valida aquí porque esto acaba en el argv de ssh
+    y un guion inicial convertiría la dirección en una opción."""
+    texto = (value or '').strip()
+    if not texto or len(texto) > 253:
+        raise ValueError('Dirección vacía o demasiado larga')
+    try:
+        return str(ipaddress.ip_address(texto))
+    except ValueError:
+        pass
+    if not HOSTNAME.fullmatch(texto):
+        raise ValueError('Dirección no válida: usa una IP o un nombre de equipo')
+    return texto.casefold()
 
 
 def credentials(workspace, name):
@@ -79,9 +107,17 @@ def forget(workspace, name):
 
 
 def resolve(workspace, name):
-    """IPv4 actual del equipo guardado con ese nombre, según el inventario pasivo."""
+    """Dirección del equipo guardado con ese nombre.
+
+    Manda la dirección fija si la tiene: es la única que sirve fuera de su red.
+    Si no, se cae al inventario pasivo, que solo ve lo que hay en la misma LAN.
+    """
     if not NAME.fullmatch(name or ''):
         raise ValueError('Nombre de equipo no válido')
+    fijada = (credentials(workspace, name) or {}).get('host')
+    if fijada:
+        return dict(name=name.casefold(), host=fijada, mac=None,
+                    observed_at=None, reachable=None, pinned=True)
     database = Path(workspace) / 'work.sqlite'
     if not database.exists():
         raise ValueError('No hay inventario todavía; pide guardar los dispositivos de la red')
@@ -108,11 +144,11 @@ def resolve(workspace, name):
     candidates = []
     for entry in addresses:
         try:
-            address = ipaddress.ip_address(entry['ip'])
+            direccion = ipaddress.ip_address(entry['ip'])
         except (ValueError, KeyError, TypeError):
             continue
-        if address.version == 4:
-            candidates.append((('REACHABLE' not in (entry.get('state') or [])), entry['observed_at'], str(address)))
+        if direccion.version == 4:
+            candidates.append((('REACHABLE' not in (entry.get('state') or [])), entry['observed_at'], str(direccion)))
     if not candidates:
         raise ValueError(repr(name) + ' está en el inventario pero sin dirección IPv4 observada; '
                          'pide una lectura de la red y reintenta')
@@ -121,7 +157,7 @@ def resolve(workspace, name):
     candidates.sort(key=lambda item: item[0])
     unreachable, observed_at, host = candidates[0]
     return dict(name=wanted, host=host, mac=device.get('mac'),
-                observed_at=observed_at, reachable=not unreachable)
+                observed_at=observed_at, reachable=not unreachable, pinned=False)
 
 
 def main():
@@ -130,13 +166,16 @@ def main():
     parser.add_argument('--device', help='Nombre guardado, por ejemplo synology')
     parser.add_argument('--user', help='Requerido al guardar')
     parser.add_argument('--port', type=int, default=22)
+    parser.add_argument('--host', help='Dirección fija (IP o nombre). Sin ella se busca '
+                                       'en los vecinos de la red, que solo vale en la misma LAN.')
     parser.add_argument('--forget', action='store_true', help='Borrar el acceso guardado de --device')
     parser.add_argument('--list', action='store_true', help='Listar accesos guardados, sin contraseñas')
     args = parser.parse_args()
     if args.list:
         saved = load(args.workspace)
         for name, entry in sorted(saved.items()):
-            print(name, '->', entry['user'] + ':' + str(entry['port']))
+            print(name, '->', entry['user'] + '@' + entry.get('host', '(por inventario)') +
+                  ':' + str(entry['port']))
         if not saved:
             print('No hay ningún acceso guardado.')
         return
@@ -147,16 +186,20 @@ def main():
         return
     if not args.user:
         parser.error('--user es obligatorio al guardar')
-    try:
-        located = resolve(args.workspace, args.device)
-        print('Equipo', located['name'], 'en', located['host'], '(MAC', located['mac'] + ')')
-    except ValueError as exc:
-        print('Aviso:', exc)
-        print('Se guardará igualmente; se resolverá cuando el inventario lo tenga.')
+    if args.host:
+        print('Equipo', args.device, 'fijado en', address(args.host),
+              '- no se buscará en los vecinos de la red.')
+    else:
+        try:
+            located = resolve(args.workspace, args.device)
+            print('Equipo', located['name'], 'en', located['host'], '(MAC', located['mac'] + ')')
+        except ValueError as exc:
+            print('Aviso:', exc)
+            print('Se guardará igualmente; se resolverá cuando el inventario lo tenga.')
     password = getpass.getpass('Contraseña de ' + args.user + ' (no se muestra): ')
     if not password:
         raise SystemExit('Contraseña vacía; no se ha guardado nada.')
-    result = save(args.workspace, args.device, args.user, password, args.port)
+    result = save(args.workspace, args.device, args.user, password, args.port, args.host)
     print('Guardado en', store_path(args.workspace), 'con permisos 600:', result)
 
 

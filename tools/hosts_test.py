@@ -109,5 +109,44 @@ class HostsTest(unittest.TestCase):
             self.assertIn('no distingue', str(caught.exception))
 
 
+class DireccionFijaTest(unittest.TestCase):
+    """Un equipo fuera de su red no aparece en la tabla ARP: hace falta fijarlo."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix='hexos-hosts-fija-')
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_la_direccion_fijada_manda_sobre_el_inventario(self):
+        save(self.tmp.name, 'synology', 'helios', 'x', 22, host='100.83.4.11')
+        located = resolve(self.tmp.name, 'synology')
+        self.assertEqual(located['host'], '100.83.4.11')
+        self.assertTrue(located['pinned'])
+        # Y no necesita inventario ninguno: sin work.sqlite seguiría resolviendo.
+        self.assertFalse((Path(self.tmp.name) / 'work.sqlite').exists())
+
+    def test_admite_nombre_dns_ademas_de_ip(self):
+        # La dirección DDNS del NAS es un nombre, no una IP.
+        save(self.tmp.name, 'synology', 'helios', 'x', 22, host='micasa.synology.me')
+        self.assertEqual(resolve(self.tmp.name, 'synology')['host'], 'micasa.synology.me')
+
+    def test_rechaza_lo_que_no_es_una_direccion(self):
+        from hexos.agent.hosts import address
+        # Un guion inicial convertiría la dirección en una opción de ssh.
+        for malo in ('-oProxyCommand=id', 'a b', '', ' ', 'x' * 254, 'uno;dos', '10.0.0.1 -v'):
+            with self.assertRaises(ValueError, msg=malo):
+                address(malo)
+        # Y lo que sí lo es, pasa y queda normalizado.
+        self.assertEqual(address(' 192.168.1.243 '), '192.168.1.243')
+        self.assertEqual(address('MiCasa.Synology.ME'), 'micasa.synology.me')
+
+    def test_sin_direccion_fijada_se_sigue_usando_el_inventario(self):
+        save(self.tmp.name, 'synology', 'helios', 'x', 22)
+        with self.assertRaises(ValueError) as caught:
+            resolve(self.tmp.name, 'synology')
+        self.assertIn('inventario', str(caught.exception))
+
+
 if __name__ == '__main__':
     unittest.main()

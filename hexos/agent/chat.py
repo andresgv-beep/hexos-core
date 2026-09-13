@@ -250,23 +250,27 @@ class Agent:
 
     def save_access(self, payload):
         """Guarda una credencial pedida por Helios. No pasa por la conversación ni por el modelo."""
-        if set(payload) - {'device', 'user', 'password', 'port'}:
-            raise ValueError('Campos permitidos: device, user, password, port')
+        if set(payload) - {'device', 'user', 'password', 'port', 'host'}:
+            raise ValueError('Campos permitidos: device, user, password, port, host')
         device = string(payload.get('device'), 'device', 64)
         user = string(payload.get('user'), 'user', 64)
         password = payload.get('password')
         if not isinstance(password, str) or not password:
             raise ValueError('Falta la contraseña')
         port = payload.get('port', 22)
-        # La dirección sale del inventario, nunca del cliente: así la ventana no puede
-        # decir un equipo y el acceso acabar en otro.
-        located = hosts.resolve(self.workspace, device)
-        hosts.save(self.workspace, device, user, password, port)
+        # Sin dirección escrita, sale del inventario y nunca del cliente: así la ventana
+        # no puede decir un equipo y mandar el acceso a otro. Con dirección escrita manda
+        # esa —es la única forma de llegar a un equipo que no está en esta red—, se valida
+        # antes de tocar nada y queda anotada en el turno para que se vea a dónde fue.
+        fijada = hosts.address(payload['host']) if payload.get('host') else None
+        located = dict(host=fijada, pinned=True) if fijada else hosts.resolve(self.workspace, device)
+        hosts.save(self.workspace, device, user, password, port, fijada)
         if (self.credential_request or {}).get('device') == device.casefold():
             self.credential_request = None
         # Sin esta anotación el modelo sigue leyendo en su contexto que le falta el
         # acceso y responde que no lo tiene en lugar de volver a intentar la lectura.
         note = ('[El operador acaba de guardar el acceso a ' + device.casefold() + ' (' + located['host'] +
+                (', dirección fija' if located.get('pinned') else '') +
                 ') desde la ventana de la interfaz. Ya está disponible: si te piden algo de ese equipo, '
                 'vuelve a llamar a la herramienta en lugar de decir que faltan credenciales. '
                 'La contraseña no está aquí ni la vas a ver.]')
@@ -275,7 +279,7 @@ class Agent:
                              (uuid4().hex, now(), 'user', note, note))
             store.db.commit()
         return dict(saved=True, device=device.casefold(), user=user,
-                    host=located['host'], mac=located['mac'],
+                    host=located['host'], mac=located.get('mac'), pinned=bool(fijada),
                     note='Guardado en credentials.json con permisos 600. '
                          'No se ha escrito en la conversación ni se ha mostrado al modelo.')
 
