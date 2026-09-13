@@ -220,6 +220,25 @@ class Tests(unittest.TestCase):
         self.assertEqual(messages[3]['content'], 'Resumen preparado.')
         self.assertNotIn('r1', messages[-1]['content'])
 
+    def test_una_lectura_recortada_dice_como_completarse(self):
+        # Con solo `truncated: True` el modelo remataba la lista con «y otros 12»
+        # en vez de volver a leer: la vista parcial tiene que decir qué hacer.
+        vecinos = [dict(ip='192.168.1.%d' % n, mac='aa:bb:cc:dd:ee:%02x' % n) for n in range(60)]
+        rows = [dict(id='u1', role='user', text='Mira la red.'),
+                dict(id='a1', role='assistant', text='Ahí van.'),
+                dict(id='u2', role='user', text='Y sus macs.')]
+        events = {'u1': [dict(tool='network.local', arguments={},
+                              result=dict(unidentified_neighbors=vecinos))]}
+        messages = native_messages(rows, 'Perfil vacío', 'Y sus macs.', events)
+        respuesta = messages[2]['tool_responses'][0]['response']
+        self.assertTrue(respuesta['truncated'])
+        self.assertIn('network_local', respuesta['note'])
+        self.assertIn('vuelve a llamar', respuesta['note'])
+        # Un resultado que cabe entero no se toca ni se le añade nota.
+        cortos = {'u1': [dict(tool='network.local', arguments={}, result=dict(ok=True))]}
+        breve = native_messages(rows, 'Perfil vacío', 'Y sus macs.', cortos)
+        self.assertEqual(breve[2]['tool_responses'][0]['response'], dict(ok=True))
+
     def test_native_chat_does_not_reinject_old_task_as_current_request(self):
         with tempfile.TemporaryDirectory() as tmp:
             runtime = runtime_with_outputs('Hola.')

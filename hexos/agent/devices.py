@@ -20,13 +20,18 @@ def annotate(store, observation):
     `ip neigh`, y alguna IPv6 larga acababa recortada por el camino.
     """
     known = {r['id']: json.loads(r['body']) for r in store.db.execute('SELECT * FROM network_devices')}
+    unresolved = observation['unresolved_entries']
     identified, unidentified = [], []
     for neighbor in observation['neighbors']:
         device = known.get(neighbor['interface'] + '/' + neighbor['mac'].lower())
         identity = device.get('identity') if device else None
         neighbor['identity'] = {k:identity[k] for k in ('name','kind','source')} if identity else None
-        fila = dict(ip=neighbor['ip'], mac=neighbor['mac'], interface=neighbor['interface'],
-                    state=neighbor['state'], recently_reachable=neighbor['recently_reachable'])
+        # Un vecino son cuatro datos, no siete: `interface` es la misma para todos
+        # y `recently_reachable` repetía lo que ya dice `state`. Multiplicado por
+        # diecisiete entradas, esa repetición se comía el contexto del turno
+        # siguiente y la tercera pregunta moría sin sitio para responder.
+        fila = dict(ip=neighbor['ip'], mac=neighbor['mac'],
+                    state=','.join(neighbor['state']), via=neighbor['interface'])
         if identity:
             # `identity_source` y no `source`: leído como «source: static» se
             # confundía con el estado de red del equipo, que es otra cosa.
@@ -36,14 +41,26 @@ def annotate(store, observation):
             unidentified.append(fila)
     propias = sorted({address['ip'] for interface in observation['interfaces']
                       for address in interface['addresses'] if address.get('ip')})
+    # `known_neighbors` es el total y se estaba leyendo como «los que faltan por
+    # identificar»: 16 en vez de 14. Dos contadores para lo mismo es uno de más,
+    # así que el total solo vive en `counts`, con sus dos sumandos al lado.
+    # Fuera `neighbors`: las dos mitades son exactamente esos mismos vecinos con
+    # los mismos campos, así que mandarlo era enviar la red dos veces —2.956 de
+    # 7.813 caracteres— y con eso el segundo turno ya no cabía en el contexto.
+    # `interfaces` se resume en own_addresses y su detalle no lo usa nadie.
+    observation = {k: v for k, v in observation.items()
+                   if k not in ('known_neighbors', 'unresolved_entries',
+                                'neighbors', 'interfaces')}
     return dict(identified_neighbors=identified, unidentified_neighbors=unidentified,
                 counts=dict(identified=len(identified), unidentified=len(unidentified),
-                            unresolved=observation['unresolved_entries']),
+                            total_neighbors=len(identified) + len(unidentified),
+                            unresolved=unresolved),
                 own_addresses=propias,
-                lists_note='identified_neighbors y unidentified_neighbors ya son la partición '
-                           'completa de los vecinos: no hay que deducir una de la otra ni releer '
-                           '`neighbors`. own_addresses son las direcciones DE ESTE EQUIPO, no '
-                           'dispositivos de la red; no las cuentes como vecinos.',
+                lists_note='identified_neighbors y unidentified_neighbors son la partición '
+                           'completa de los vecinos y counts ya trae sus tamaños: no hay que '
+                           'contarlos ni deducir una lista de la otra. Al decir cuántos hay sin '
+                           'identificar, usa counts.unidentified, nunca el total. own_addresses '
+                           'son las direcciones DE ESTE EQUIPO, no dispositivos de la red.',
                 **observation)
 
 

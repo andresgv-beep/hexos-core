@@ -794,7 +794,10 @@ def main():
     parser.add_argument('--runtime', required=True)
     parser.add_argument('--model', required=True)
     parser.add_argument('--port', type=int, default=8080)
-    parser.add_argument('--ctx', type=int, default=8192)
+    # 8192 se quedaba corto en cuanto había dos lecturas de red en la ventana:
+    # el prompt llegaba a ~7.100 tokens y no quedaba sitio para responder.
+    # Con 16384 y visión el pico medido es 5.381 MiB de 8.151.
+    parser.add_argument('--ctx', type=int, default=16384)
     parser.add_argument('--hera', help='CLI HERA para recuperar el perfil confirmado')
     parser.add_argument('--memory-home', help='Perfil HERA existente; requiere --hera')
     parser.add_argument('--native-template', help='Opt-in Gemma nativo: plantilla oficial; --runtime debe ser helios_formatted')

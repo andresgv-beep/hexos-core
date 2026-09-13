@@ -81,7 +81,17 @@ class DevicesTest(unittest.TestCase):
                 enriquecido = annotate(s, data)
                 self.assertEqual([n['ip'] for n in enriquecido['identified_neighbors']], ['192.168.1.10'])
                 self.assertEqual([n['ip'] for n in enriquecido['unidentified_neighbors']], ['192.168.1.11'])
-                self.assertEqual(enriquecido['counts'], dict(identified=1, unidentified=1, unresolved=0))
+                # Cuatro campos por vecino: repetir la interfaz y un booleano
+                # derivable diecisiete veces se comía el contexto del turno siguiente.
+                self.assertEqual(set(enriquecido['unidentified_neighbors'][0]),
+                                 {'ip', 'mac', 'state', 'via'})
+                self.assertEqual(enriquecido['counts'],
+                                 dict(identified=1, unidentified=1, total_neighbors=2, unresolved=0))
+                # Un segundo contador del total se leía como «los que faltan»: 16 en vez de 14.
+                self.assertNotIn('known_neighbors', enriquecido)
+                # Mandar además la lista cruda era enviar la red dos veces, y con
+                # eso el turno siguiente se quedaba sin contexto.
+                self.assertNotIn('neighbors', enriquecido)
                 # Sin la MAC en las dos mitades no se puede hablar de un equipo sin nombre.
                 for lista in ('identified_neighbors', 'unidentified_neighbors'):
                     self.assertTrue(all(n['mac'] for n in enriquecido[lista]), lista)

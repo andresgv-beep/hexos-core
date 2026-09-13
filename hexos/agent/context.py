@@ -28,7 +28,16 @@ def native_messages(history, metadata, request, tool_events=None, memory_evidenc
             event = dict(event)
             encoded = json.dumps(event['result'], ensure_ascii=False)
             if len(encoded) > 1200:
-                event['result'] = {'historical_excerpt':encoded[:1200], 'truncated':True}
+                # `truncated: True` a secas se leía como «esto es lo que hay» y el
+                # modelo remataba con «y otros 12» en vez de volver a mirar. La vista
+                # parcial tiene que decir qué hacer para completarla, con el nombre
+                # de la herramienta dentro: es una lectura, no cuesta permiso.
+                event['result'] = {'historical_excerpt':encoded[:1200], 'truncated':True,
+                    'note':'Vista parcial de una lectura anterior: el resto ya no está en '
+                           'contexto. No la completes de memoria ni la remates con «y otros N». '
+                           'Si hace falta el dato entero, vuelve a llamar a ' +
+                           event['tool'].replace('.', '_') + ', que es una lectura y ya está '
+                           'autorizada.'}
             size = len(json.dumps(event, ensure_ascii=False))
             if size <= event_budget:
                 kept.append(event)
