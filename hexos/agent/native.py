@@ -223,7 +223,10 @@ class NativeRuntime:
             self.events.put('READY')
             while True:
                 header=self.proc.stdout.readline().decode().split()
-                if len(header)!=5:raise RuntimeError('motor nativo terminó o cabecera inválida')
+                # Cinco campos era la cabecera vieja; la nueva añade tokens de
+                # prefill y cuántos se reaprovecharon del KV. Se aceptan las dos
+                # para no exigir que motor y agente se actualicen a la vez.
+                if len(header) not in (5,7):raise RuntimeError('motor nativo terminó o cabecera inválida')
                 n=int(header[0])
                 if not 0<=n<=8*1024*1024:raise RuntimeError('salida excesiva')
                 data=self.proc.stdout.read(n)
@@ -308,6 +311,8 @@ class NativeRuntime:
         self.last_header=header
         self.last_generation = dict(raw=raw, completion=completion, completion_prefix=prefix, finish_reason=header[4],
             stopped_on_token=header[3]=='1', tokens=int(header[2]), ms=int(header[1]),
+            prefill_tokens=int(header[5]) if len(header)>6 else None,
+            prefill_reused=int(header[6]) if len(header)>6 else None,
             prompt=prompt, prompt_sha256=hashlib.sha256(data).hexdigest())
         if header[4]=='error':raise RuntimeError(raw)
         raw, reasoning = split_thinking(raw, prompt.endswith('<|channel>thought\n'))
