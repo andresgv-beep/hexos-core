@@ -737,6 +737,42 @@ class Agent:
             self.state = 'idle'
             self.lock.release()
 
+    def thinking(self):
+        """¿Está abierto el canal de pensamiento? None si el motor no lo admite."""
+        if not hasattr(self.runtime, 'thinking'):
+            return None
+        return bool(self.runtime.thinking)
+
+    def set_thinking(self, enabled):
+        """El canal se decide por render, así que se puede cambiar en caliente.
+
+        Se guarda en agent_state porque si no dependería de cómo se lanzó el
+        proceso, y una preferencia de la persona no debe morir en un reinicio.
+        """
+        if not hasattr(self.runtime, 'thinking'):
+            raise ValueError('Este motor no tiene canal de pensamiento; nada que encender')
+        if not isinstance(enabled, bool):
+            raise ValueError('enabled debe ser true o false')
+        self.runtime.thinking = enabled
+        with self.store() as store:
+            store.db.execute("INSERT INTO agent_state VALUES ('thinking',?) "
+                             'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+                             ('1' if enabled else '0'))
+            store.db.commit()
+        return dict(thinking=enabled, persisted=True,
+                    note='Con el canal abierto el modelo decide cuánto pensar: en charla normal '
+                         'gasta cero. El coste solo aparece en los turnos que hacen trabajo.')
+
+    def restore_thinking(self):
+        """Preferencia guardada por encima del flag de arranque, si la hay."""
+        if not hasattr(self.runtime, 'thinking'):
+            return None
+        with self.store() as store:
+            fila = store.db.execute("SELECT value FROM agent_state WHERE key='thinking'").fetchone()
+        if fila is not None:
+            self.runtime.thinking = fila[0] == '1'
+        return bool(self.runtime.thinking)
+
     def clear_context(self):
         if not self.lock.acquire(blocking=False):
             raise RuntimeError('Ya hay un turno en curso')
@@ -776,6 +812,8 @@ def main():
         runtime = Runtime(args.runtime, args.model, args.ctx, args.workspace)
     agent = Agent(args.workspace, runtime,
                   HeraProfile(args.hera, args.memory_home) if args.hera else None)
+    # Lo que la persona dejó puesto manda sobre el flag con que se arrancó.
+    agent.restore_thinking()
     system_telemetry = SystemTelemetry()
     allowed_origins = {'http://127.0.0.1:%d' % args.port, 'http://localhost:%d' % args.port,
                        'http://[::1]:%d' % args.port}
@@ -800,6 +838,7 @@ def main():
             elif self.path == '/api/status':
                 self.respond(200, {'state': agent.state, 'progress':agent.progress,
                                    'credential_request': agent.credential_request,
+                                   'thinking': agent.thinking(),
                                    'mode':'native-experimental' if args.native_template else 'json'})
             elif self.path == '/api/telemetry':
                 self.respond(200, system_telemetry.snapshot())
@@ -834,7 +873,8 @@ def main():
                 self.respond(404, {'error':'ruta inexistente'})
 
         def do_POST(self):
-            if self.path not in ('/api/chat', '/api/work', '/api/context/reset', '/api/credentials'):
+            if self.path not in ('/api/chat', '/api/work', '/api/context/reset', '/api/credentials',
+                                 '/api/thinking'):
                 self.respond(404, {'error':'ruta inexistente'})
                 return
             # Una página abierta en otra pestaña no puede accionar el agente ni,
@@ -853,6 +893,11 @@ def main():
                     raise ValueError('Mensaje incompleto')
                 if self.path == '/api/credentials':
                     self.respond(200, agent.save_access(strict_json(data.decode('utf-8'))))
+                elif self.path == '/api/thinking':
+                    payload = strict_json(data.decode('utf-8'))
+                    if set(payload) != {'enabled'}:
+                        raise ValueError('se espera {"enabled": true|false}')
+                    self.respond(200, agent.set_thinking(payload['enabled']))
                 elif self.path == '/api/context/reset':
                     if strict_json(data.decode('utf-8')) != {}:
                         raise ValueError('Se espera {}')

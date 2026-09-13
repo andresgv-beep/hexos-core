@@ -6,7 +6,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 export interface HeliosTransport {
-  status(signal?: AbortSignal): Promise<{ phase: HeliosPhase; mode: string }>;
+  /** `thinking` es null cuando el motor no tiene canal de pensamiento. */
+  status(signal?: AbortSignal): Promise<{ phase: HeliosPhase; mode: string; thinking: boolean | null }>;
+  /** Enciende o apaga el canal de pensamiento de Gemma. HexOS lo recuerda. */
+  setThinking(enabled: boolean, signal?: AbortSignal): Promise<boolean>;
   history(signal?: AbortSignal): Promise<HistoryMessage[]>;
   /** `image` es base64 de PNG/JPEG/WebP, sin la cabecera `data:`. Una por turno. */
   send(text: string, signal?: AbortSignal, image?: string): Promise<ChatReply>;
@@ -30,7 +33,14 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
     async status(signal) {
       const data = await request("status", { signal });
       if (!isRecord(data) || typeof data.mode !== "string") throw new Error("Modo de HexOS no válido");
-      return { phase: phaseFromHexos(data.state), mode: data.mode };
+      const thinking = typeof data.thinking === "boolean" ? data.thinking : null;
+      return { phase: phaseFromHexos(data.state), mode: data.mode, thinking };
+    },
+    async setThinking(enabled, signal) {
+      const data = await request("thinking", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }), signal });
+      if (!isRecord(data) || typeof data.thinking !== "boolean") throw new Error("HexOS no confirmó el cambio");
+      return data.thinking;
     },
     async history(signal) {
       const data = await request("history", { signal });

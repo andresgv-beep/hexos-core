@@ -27,6 +27,21 @@ test('maps only states actually exposed by HexOS', async () => {
   }
   assert.throws(() => phaseFromHexos('hallucinated-state'), /no reconocido/);
 });
+test('reads the thinking channel, and null when the engine has none', async () => {
+  const conCanal = await createHexosTransport('/api', fixture({ state: 'idle', mode: 'native-experimental', thinking: true })).status();
+  assert.equal(conCanal.thinking, true);
+  // El adaptador JSON no tiene canal: null, no false, para no ofrecer un botón muerto.
+  const sinCanal = await createHexosTransport('/api', fixture({ state: 'idle', mode: 'json', thinking: null })).status();
+  assert.equal(sinCanal.thinking, null);
+});
+
+test('confirms the thinking change instead of assuming it worked', async () => {
+  const transporte = createHexosTransport('/api', fixture({ thinking: false, persisted: true }));
+  assert.equal(await transporte.setThinking(false), false);
+  // Sin confirmación del backend, el botón no debe cambiar de estado.
+  await assert.rejects(() => createHexosTransport('/api', fixture({ ok: true })).setThinking(true));
+});
+
 test('does not silently accept a missing final answer', async () => {
   for (const data of [{ reply: '', tools: [] }, { reply: '   ', tools: [] }, { reply: 'ok' }, null]) {
     await assert.rejects(createHexosTransport('/api', fixture(data)).send('hola'));

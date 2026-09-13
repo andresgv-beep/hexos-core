@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
-import { ArrowUp, MessageSquare, SlidersHorizontal, X } from "lucide-react";
+import { ArrowUp, Brain, MessageSquare, SlidersHorizontal, X } from "lucide-react";
 import Link from "next/link";
 import { HeliosOrb } from "./orb/HeliosOrb";
 import { AttachmentButton, ChatAttachments, type Attachment } from "./ChatAttachments";
@@ -18,6 +18,9 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const [brightness, setBrightness] = useState(1.8);
   const [settings, setSettings] = useState(false);
   const [draft, setDraft] = useState("");
+  // null = el motor no tiene canal de pensamiento; entonces no se ofrece el botón.
+  const [thinking, setThinking] = useState<boolean | null>(null);
+  const [thinkingBusy, setThinkingBusy] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [attachmentError, setAttachmentError] = useState("");
   const attachmentJobs = useRef(new Map<string, AbortController>());
@@ -91,7 +94,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const closeRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const phase = sending ? "thinking" : "idle";
+  const phase = sending ? "thinking" : windows.some(item => item.revealing) ? "responding" : "idle";
   const active = phases[phase];
   useEffect(() => () => request.current?.abort(), []);
   useEffect(() => {
@@ -112,8 +115,10 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     let disposed = false;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
-    transport.status(controller.signal).then(() => {
-      if (!disposed) setConnection("ready");
+    transport.status(controller.signal).then(estado => {
+      if (disposed) return;
+      setConnection("ready");
+      setThinking(estado.thinking);
     }).catch(() => {
       if (!disposed) setConnection("offline");
     }).finally(() => clearTimeout(timeout));
@@ -141,6 +146,19 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     return () => window.removeEventListener("resize", resetPositions);
   }, []);
   function closeSettings() { setSettings(false); settingsRef.current?.focus(); }
+  async function toggleThinking() {
+    if (thinking === null || thinkingBusy) return;
+    setThinkingBusy(true);
+    try {
+      setThinking(await transport.setThinking(!thinking));
+    } catch {
+      // Si HexOS no lo confirma, el botón no debe mentir sobre el estado real.
+      try { setThinking((await transport.status()).thinking); } catch { setThinking(null); }
+    } finally {
+      setThinkingBusy(false);
+    }
+  }
+
   async function send(event: FormEvent) {
     event.preventDefault();
     const question = draft.trim() || (attachments.some(file => file.image) ? "Mira esta imagen y dime qué ves."
@@ -168,7 +186,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       const result = await transport.send(payload, controller.signal, imagen);
       if (!controller.signal.aborted) {
         setConnection("ready");
-        setWindows(items => items.map(item => item.id === id ? { ...item, pending: false, reply: result.reply } : item));
+        setWindows(items => items.map(item => item.id === id ? { ...item, pending: false, revealing: Boolean(result.reply), reply: result.reply } : item));
         setAnnouncement(`Helios ha respondido en la conversación ${id}`);
       }
     } catch (error) {
@@ -190,6 +208,9 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     <div className="ambient-light" aria-hidden="true" />
     <header className="topbar">
       <Link className="brand" href="/" aria-label="Helios, inicio"><span className="brand-symbol" aria-hidden="true">✳</span><span>HELIOS</span></Link>
+      {thinking !== null && <button className={`icon-button ${thinking ? "selected" : ""}`} aria-pressed={thinking} disabled={thinkingBusy}
+        aria-label={thinking ? "Pensamiento encendido: Helios razona antes de responder" : "Pensamiento apagado: Helios responde directo"}
+        title={thinking ? "Pensamiento encendido" : "Pensamiento apagado"} onClick={() => void toggleThinking()}><Brain size={19} /></button>}
       <button ref={settingsRef} className={`icon-button ${settings ? "selected" : ""}`} aria-label="Ajustar luminosidad" aria-expanded={settings} onClick={() => setSettings(true)}><SlidersHorizontal size={19} /></button>
     </header>
     <SystemMonitor />
@@ -202,9 +223,10 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     </section>
     <section className="floating-workspace" aria-label="Ventanas de conversación">
       {windows.filter(item => !item.minimized).map(message => <FloatingMessage key={message.id} message={message} orbTarget={orbButton} onAbsorbed={finishAbsorption} front={front === message.id} onFocus={setFront}
+        onReplyComplete={id => setWindows(items => items.map(item => item.id === id ? { ...item, revealing: false } : item))}
         onMove={(id, x, y) => setWindows(items => items.map(item => item.id === id ? { ...item, x, y } : item))}
-        onMinimize={id => { setWindows(items => items.map(item => item.id === id ? { ...item, minimized: true } : item)); inputRef.current?.focus(); }}
-        onClose={id => { setWindows(items => items.map(item => item.id === id ? { ...item, minimized: true } : item)); inputRef.current?.focus(); }} />)}
+        onMinimize={id => { setWindows(items => items.map(item => item.id === id ? { ...item, minimized: true, revealing: false } : item)); inputRef.current?.focus(); }}
+        onClose={id => { setWindows(items => items.map(item => item.id === id ? { ...item, minimized: true, revealing: false } : item)); inputRef.current?.focus(); }} />)}
     </section>
     <section className="conversation" aria-label="Chat con Helios">
       {!!attachments.length && <ChatAttachments files={attachments} onRemove={removeAttachment} />}
