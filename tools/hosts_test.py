@@ -150,6 +150,34 @@ class ActualizarSinContrasenaTest(unittest.TestCase):
         self.assertEqual(store_path(self.tmp.name).stat().st_mode & 0o777, 0o600)
 
 
+class ElegirEquipoTest(unittest.TestCase):
+    """Con dos NAS guardados, adivinar cuál es mandar la lectura al que no es."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix='hexos-elegir-')
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_con_uno_solo_no_hace_falta_nombrarlo(self):
+        from hexos.agent.hosts import only_device
+        save(self.tmp.name, 'synology', 'helios', 'x', 22)
+        self.assertEqual(only_device(self.tmp.name), 'synology')
+
+    def test_con_varios_se_niega_y_los_nombra(self):
+        from hexos.agent.hosts import only_device
+        save(self.tmp.name, 'synology', 'helios', 'x', 22)
+        save(self.tmp.name, 'synology 1', 'helios', 'x', 30, host='casa.ddns.net')
+        with self.assertRaises(ValueError) as caught:
+            only_device(self.tmp.name)
+        self.assertIn('synology 1', str(caught.exception))
+        self.assertIn('varios equipos', str(caught.exception))
+
+    def test_sin_ninguno_conserva_el_camino_de_pedir_acceso(self):
+        from hexos.agent.hosts import only_device
+        self.assertEqual(only_device(self.tmp.name), 'synology')
+
+
 class DireccionFijaTest(unittest.TestCase):
     """Un equipo fuera de su red no aparece en la tabla ARP: hace falta fijarlo."""
 

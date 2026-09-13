@@ -7,7 +7,7 @@ def spec(description, required=None, optional=None, effect='read'):
 
 
 TOOLS = {
-    'nas.read': spec('Leer por SSH un equipo guardado en el inventario. device es su nombre guardado (por defecto synology); '
+    'nas.read': spec('Leer por SSH un equipo guardado en el inventario. device es su nombre guardado, e indícalo SIEMPRE si hay más de uno; '
                      'la dirección se resuelve del inventario y la credencial ya está guardada en local: no pidas IP, usuario ni contraseña. '
                      'Para comprobar estado, advertencias o cortes usa SIEMPRE primero section=diagnosis: recoge RAID, enlaces, kernel y SMART de los discos automáticamente. '
                      'Otras secciones: system, storage (RAID y correspondencia disco/enlace), kernel, messages, '

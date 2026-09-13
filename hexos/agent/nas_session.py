@@ -53,13 +53,14 @@ def command(section, disk=None, container=None, action=None):
     return commands[section]
 
 
-def read(workspace, section, disk=None, device='synology', container=None, action=None):
+def read(workspace, section, disk=None, device=None, container=None, action=None):
     # SMART sin disco significa revisar los discos descubiertos, no pedir al usuario
     # que traduzca su dispositivo a un nombre del kernel.
     requested_section = section
     if section == 'smart' and disk is None:
         section = 'diagnosis'
     command(section, disk, container, action)
+    device = device or hosts.only_device(workspace)
     if not hosts.credentials(workspace, device):
         # Resolver aquí permite enseñar en la ventana a qué máquina se da el acceso.
         try:

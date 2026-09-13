@@ -75,6 +75,24 @@ def save(workspace, name, user, password, port=22, host=None):
     return dict(saved=name.casefold(), user=user, port=port, host=host)
 
 
+def only_device(workspace):
+    """El único equipo con acceso guardado, o un error que los nombra.
+
+    `device` tenía por defecto 'synology', y con dos equipos guardados eso mandaba
+    la lectura al que no era sin avisar: se pedía el estado de uno y contestaba
+    por el otro. Con uno solo el atajo se conserva; con varios hay que decir cuál.
+    """
+    guardados = sorted(load(workspace))
+    if len(guardados) == 1:
+        return guardados[0]
+    if not guardados:
+        # Sin ninguno, el nombre habitual mantiene el camino de pedir el acceso.
+        return 'synology'
+    raise ValueError('Hay varios equipos guardados y no has dicho cuál: ' +
+                     ', '.join(repr(n) for n in guardados) +
+                     '. Repite la lectura indicando device.')
+
+
 def update(workspace, name, port=None, host=None):
     """Cambia puerto o dirección de un acceso ya guardado, sin tocar la contraseña.
 
