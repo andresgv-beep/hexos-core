@@ -25,7 +25,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const [thinkingBusy, setThinkingBusy] = useState(false);
   const [contextCut, setContextCut] = useState<ContextCut | null>(null);
   const [access, setAccess] = useState<CredentialRequest | null>(null);
-  const [accessForm, setAccessForm] = useState({ user: "", password: "", host: "" });
+  const [accessForm, setAccessForm] = useState({ user: "", password: "", host: "", port: "22" });
   const [accessError, setAccessError] = useState("");
   const [accessSaving, setAccessSaving] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -152,7 +152,8 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         const nuevo = estado.credentialRequest;
         if (!nuevo) return null;
         if (previo && previo.device === nuevo.device) return previo;
-        setAccessForm({ user: "", password: "", host: nuevo.host ?? "" });
+        setAccessForm({ user: nuevo.user ?? "", password: "", host: nuevo.host ?? "",
+                        port: String(nuevo.port ?? 22) });
         setAccessError("");
         return nuevo;
       });
@@ -193,12 +194,16 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     setAccessSaving(true);
     setAccessError("");
     try {
+      const puerto = Number(accessForm.port);
+      if (!Number.isInteger(puerto) || puerto < 1 || puerto > 65535) {
+        throw new Error("El puerto debe ser un número entre 1 y 65535");
+      }
       const guardado = await transport.saveAccess({
         device: access.device, user: accessForm.user, password: accessForm.password,
-        host: accessForm.host || undefined,
+        host: accessForm.host || undefined, port: puerto,
       });
       // La contraseña no se queda en memoria del navegador más de lo necesario.
-      setAccessForm({ user: "", password: "", host: "" });
+      setAccessForm({ user: "", password: "", host: "", port: "22" });
       setAccess(null);
       setAnnouncement(`Acceso de ${guardado.device} guardado en ${guardado.host}`);
     } catch (error) {
@@ -320,7 +325,15 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     {historyOpen && <ChatHistory previous={previous} messages={windows} historyError={historyError} onClose={closeHistory} />}
     {access && <div className="access-backdrop">
       <div className="access-panel" role="dialog" aria-modal="true" aria-labelledby="access-title">
-        <h2 id="access-title" className="panel-title">Helios pide acceso a {access.device}</h2>
+        <h2 id="access-title" className="panel-title">
+          {access.reason === "rejected"
+            ? <>{access.device} rechazó el acceso guardado</>
+            : <>Helios pide acceso a {access.device}</>}
+        </h2>
+        {access.reason === "rejected" && <p className="access-warn" role="alert">
+          El equipo dijo que no. Revisa usuario, contraseña y puerto: un puerto reenviado
+          a otra máquina da exactamente este error.
+        </p>}
         <p className="access-target">
           {access.host
             ? <>Se guardará para <strong>{access.host}</strong>{access.pinned ? " (dirección fija)" : ""}
@@ -339,13 +352,17 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
           <input value={accessForm.host} autoComplete="off" placeholder="192.168.1.243 o servidor.ddns.net"
             onChange={e => setAccessForm(f => ({ ...f, host: e.target.value }))} />
         </label>
+        <label className="access-field">Puerto SSH <span className="access-hint">el 22 salvo que el router lo reenvíe por otro</span>
+          <input value={accessForm.port} inputMode="numeric" autoComplete="off"
+            onChange={e => setAccessForm(f => ({ ...f, port: e.target.value }))} />
+        </label>
         {accessError && <p className="attachment-error" role="alert">{accessError}</p>}
         <p className="access-note">
           La contraseña va directa a HexOS y se guarda solo en este equipo. No pasa por la
           conversación ni la ve el modelo.
         </p>
         <div className="access-actions">
-          <button type="button" onClick={() => { setAccess(null); setAccessForm({ user: "", password: "", host: "" }); }}>
+          <button type="button" onClick={() => { setAccess(null); setAccessForm({ user: "", password: "", host: "", port: "22" }); }}>
             Ahora no
           </button>
           <button type="button" className="access-save" disabled={accessSaving}

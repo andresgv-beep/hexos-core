@@ -8,7 +8,11 @@ export interface ChatReply { reply: string; tools: ToolActivity[]; document?: un
 export interface HistoryMessage { role: "user" | "assistant"; text: string }
 /** Helios ha pedido el acceso a un equipo. La contraseña se escribe en la ventana
  *  y va directa a HexOS: no pasa por la conversación ni la ve el modelo. */
-export interface CredentialRequest { device: string; host?: string; mac?: string; pinned?: boolean }
+export interface CredentialRequest {
+  device: string; host?: string; mac?: string; pinned?: boolean;
+  /** 'rejected' cuando ya había un acceso guardado y el equipo lo rechazó. */
+  reason?: string; port?: number; user?: string;
+}
 export interface AccessSaved { device: string; user: string; host: string; pinned: boolean }
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -50,7 +54,10 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
       const r = data.credential_request;
       const credentialRequest = isRecord(r) && typeof r.device === "string"
         ? { device: r.device, host: typeof r.host === "string" ? r.host : undefined,
-            mac: typeof r.mac === "string" ? r.mac : undefined, pinned: r.pinned === true }
+            mac: typeof r.mac === "string" ? r.mac : undefined, pinned: r.pinned === true,
+            reason: typeof r.reason === "string" ? r.reason : undefined,
+            port: typeof r.port === "number" ? r.port : undefined,
+            user: typeof r.user === "string" ? r.user : undefined }
         : null;
       return { phase: phaseFromHexos(data.state), mode: data.mode, thinking,
                tools: parseToolActivities(data.active_tools, "running"), credentialRequest };

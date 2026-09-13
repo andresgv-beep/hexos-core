@@ -106,5 +106,54 @@ class CredentialRequestTest(unittest.TestCase):
             self.assertEqual(os.stat(Path(tmp) / 'work.sqlite').st_mode & 0o077, 0)
 
 
+class AccesoRechazadoTest(unittest.TestCase):
+    """Una credencial rechazada no es una lectura fallida: falta el acceso."""
+
+    def test_el_mensaje_distingue_rechazo_de_ausencia(self):
+        from hexos.agent.hosts import AccessNeeded
+        falta = AccessNeeded('synology 1')
+        rechazo = AccessNeeded('synology 1', dict(host='x'), reason='rejected')
+        self.assertIsNone(falta.reason)
+        self.assertEqual(rechazo.reason, 'rejected')
+        self.assertIn('no tiene todavía el acceso', str(falta))
+        self.assertIn('rechazó el acceso guardado', str(rechazo))
+        # El puerto es la causa más fácil de pasar por alto y la más fácil de arreglar.
+        self.assertIn('puerto', str(rechazo))
+
+    def test_permission_denied_pide_el_acceso_otra_vez(self):
+        import pexpect
+        from unittest.mock import patch
+        from hexos.agent import hosts, nas_session
+
+        class SshFalso:
+            """Contesta el rechazo de OpenSSH y cierra, como el de verdad."""
+            exitstatus = 255
+            def __init__(self, salida): self.before = salida
+            def expect(self, patrones, timeout=None): return 2   # EOF
+            def waitnoecho(self, timeout=None): return True
+            def sendline(self, texto): pass
+            def close(self, force=False): pass
+
+        acceso = dict(user='helios', password='x', port=22)
+        ubicado = dict(name='synology 1', host='servidorsrv1.ddns.net', mac=None,
+                       observed_at=None, reachable=None, pinned=True)
+        rechazos = ['helios@host: Permission denied (publickey,password).',
+                    'Authentication failed.',
+                    'Received disconnect: Too many authentication failures']
+        for salida in rechazos:
+            with patch.object(nas_session.hosts, 'resolve', return_value=ubicado), \
+                 patch.object(nas_session.hosts, 'credentials', return_value=acceso), \
+                 patch.object(pexpect, 'spawn', return_value=SshFalso(salida)):
+                with self.assertRaises(hosts.AccessNeeded, msg=salida) as caught:
+                    nas_session.execute('/tmp', 'synology 1', 'system')
+            self.assertEqual(caught.exception.reason, 'rejected')
+        # Una salida normal no debe confundirse con un rechazo.
+        with patch.object(nas_session.hosts, 'resolve', return_value=ubicado), \
+             patch.object(nas_session.hosts, 'credentials', return_value=acceso), \
+             patch.object(pexpect, 'spawn', return_value=SshFalso('md0 : active raid1 sda1[0]')):
+            resultado = nas_session.execute('/tmp', 'synology 1', 'system')
+        self.assertIn('md0', resultado['output'])
+
+
 if __name__ == '__main__':
     unittest.main()

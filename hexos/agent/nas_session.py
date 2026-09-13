@@ -430,6 +430,12 @@ def execute(workspace, device, section, disk=None, container=None, action=None):
     finally:
         proc.close(force=True)
     text = ''.join(output).replace(password, '[credencial omitida]')
+    # Credencial rechazada: no es una lectura fallida, es que falta el acceso. Se
+    # pide otra vez por la ventana en vez de devolver el error como si fuera un
+    # dato del equipo, que dejaba a la persona sin forma de corregir usuario,
+    # contraseña o puerto.
+    if re.search(r'Permission denied|Authentication failed|Too many authentication failures', text, re.I):
+        raise hosts.AccessNeeded(device, located, reason='rejected')
     return dict(target=device, host=located['host'], observed_at=now(), section=section,
                 disk=disk, container=container, action=action,
                 exit_code=proc.exitstatus, timed_out=timeout,

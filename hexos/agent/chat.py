@@ -428,15 +428,24 @@ class Agent:
                 return nas_read(self.workspace, **extra, **args)
             except hosts.AccessNeeded as needed:
                 # La ventana de la interfaz recoge la credencial; no vuelve por el chat.
+                # El puerto guardado viaja con la petición: sin verlo, quien corrige un
+                # acceso rechazado vuelve a escribir el mismo y no entiende por qué falla.
+                guardado = hosts.credentials(self.workspace, needed.device) or {}
                 self.credential_request = dict(device=needed.device, requested_at=now(),
+                                               reason=needed.reason, port=guardado.get('port', 22),
+                                               user=guardado.get('user'),
                                                **(needed.located or {}))
                 return dict(access_required=True, device=needed.device,
-                            located=needed.located,
+                            located=needed.located, reason=needed.reason,
                             asked_through='interface_credential_dialog',
-                            instruction='Dile a la persona que Helios ha pedido el acceso y que aparece una '
-                                        'ventana en la interfaz para rellenarlo. No pidas la contraseña por el '
-                                        'chat ni la aceptes si la escribe: no quedaría guardada por esta vía. '
-                                        'Esto no dice nada sobre la salud del equipo.')
+                            instruction=('El equipo rechazó el acceso guardado. Dile que la ventana se '
+                                         'ha vuelto a abrir para corregir usuario, contraseña o puerto, y que '
+                                         'un puerto reenviado a otra máquina da este mismo error. '
+                                         if needed.reason == 'rejected' else
+                                         'Dile a la persona que Helios ha pedido el acceso y que aparece una '
+                                         'ventana en la interfaz para rellenarlo. ') +
+                                        'No pidas la contraseña por el chat ni la aceptes si la escribe: no '
+                                        'quedaría guardada por esta vía. Esto no dice nada sobre la salud del equipo.')
         if name.startswith('device.'):
             return devices.dispatch(store, name, args, turn_id)
         if name == 'network.local':

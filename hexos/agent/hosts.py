@@ -15,11 +15,20 @@ NAME = re.compile(r'[A-Za-z0-9 ._-]{1,64}')
 class AccessNeeded(ValueError):
     """Falta la credencial de un equipo. La pide la interfaz, nunca el chat."""
 
-    def __init__(self, device, located=None):
+    def __init__(self, device, located=None, reason=None):
         self.device = device
         # Dirección resuelta por el servidor: la ventana debe enseñar a qué máquina
         # se está dando el acceso, y no puede fiarse de lo que diga el cliente.
         self.located = located
+        # 'rejected' cuando el acceso guardado existía pero el equipo lo rechazó:
+        # la ventana tiene que decirlo, o la persona vuelve a escribir lo mismo.
+        self.reason = reason
+        if reason == 'rejected':
+            super().__init__('El equipo ' + repr(device) + ' rechazó el acceso guardado. '
+                             'La interfaz lo volverá a pedir; no pidas la contraseña por el chat. '
+                             'Revisa también el usuario y el puerto: un puerto reenviado a otra '
+                             'máquina da exactamente este error. Esto no dice nada sobre su salud.')
+            return
         super().__init__('Helios no tiene todavía el acceso de ' + repr(device) +
                          '. La interfaz lo pedirá; no pidas la contraseña por el chat ni la escribas en él. '
                          'Esto no significa que el equipo esté sano.')
