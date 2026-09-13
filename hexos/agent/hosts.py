@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 import sqlite3
+import sys
 
 
 NAME = re.compile(r'[A-Za-z0-9 ._-]{1,64}')
@@ -72,6 +73,39 @@ def save(workspace, name, user, password, port=22, host=None):
         json.dump(data, out, ensure_ascii=False, indent=2)
     os.replace(temporary, path)
     return dict(saved=name.casefold(), user=user, port=port, host=host)
+
+
+def update(workspace, name, port=None, host=None):
+    """Cambia puerto o dirección de un acceso ya guardado, sin tocar la contraseña.
+
+    Existe porque corregir un puerto obligaba a volver a escribir la credencial
+    entera, y eso no siempre se puede: quien la tiene puede no estar delante. La
+    contraseña se conserva tal cual y no se lee para nada más que volver a escribirla
+    en su sitio.
+    """
+    data = load(workspace)
+    clave = (name or '').casefold()
+    if clave not in data:
+        raise ValueError('No hay acceso guardado de ' + repr(name) +
+                         '. Guardados: ' + (', '.join(sorted(data)) or 'ninguno'))
+    if port is None and host is None:
+        raise ValueError('Nada que cambiar: indica puerto, dirección o ambos')
+    entrada = dict(data[clave])
+    if port is not None:
+        if type(port) is not int or not 1 <= port <= 65535:
+            raise ValueError('Puerto no válido')
+        entrada['port'] = port
+    if host is not None:
+        entrada['host'] = address(host)
+    data[clave] = entrada
+    path = store_path(workspace)
+    temporary = path.with_suffix('.tmp')
+    handle = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(handle, 'w') as out:
+        json.dump(data, out, ensure_ascii=False, indent=2)
+    os.replace(temporary, path)
+    return dict(updated=clave, user=entrada['user'], host=entrada.get('host'),
+                port=entrada['port'], password_kept=True)
 
 
 HOSTNAME = re.compile(r'[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*', re.I)
@@ -188,6 +222,8 @@ def main():
     parser.add_argument('--host', help='Dirección fija (IP o nombre). Sin ella se busca '
                                        'en los vecinos de la red, que solo vale en la misma LAN.')
     parser.add_argument('--forget', action='store_true', help='Borrar el acceso guardado de --device')
+    parser.add_argument('--set', action='store_true',
+                        help='Cambiar solo --port y/o --host de un acceso ya guardado, sin tocar la contraseña')
     parser.add_argument('--list', action='store_true', help='Listar accesos guardados, sin contraseñas')
     args = parser.parse_args()
     if args.list:
@@ -202,6 +238,11 @@ def main():
         parser.error('--device es obligatorio salvo con --list')
     if args.forget:
         print('Revocado:', forget(args.workspace, args.device))
+        return
+    if args.set:
+        print('Actualizado:', update(args.workspace, args.device,
+                                     port=args.port if '--port' in sys.argv else None,
+                                     host=args.host))
         return
     if not args.user:
         parser.error('--user es obligatorio al guardar')

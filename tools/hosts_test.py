@@ -109,6 +109,47 @@ class HostsTest(unittest.TestCase):
             self.assertIn('no distingue', str(caught.exception))
 
 
+class ActualizarSinContrasenaTest(unittest.TestCase):
+    """Corregir un puerto no puede exigir volver a escribir la credencial entera."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix='hexos-hosts-set-')
+        save(self.tmp.name, 'synology 1', 'helios', 'secreta', 22, host='casa.ddns.net')
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_cambia_el_puerto_y_conserva_la_contrasena(self):
+        from hexos.agent.hosts import update, credentials
+        resultado = update(self.tmp.name, 'synology 1', port=30)
+        self.assertEqual((resultado['port'], resultado['host']), (30, 'casa.ddns.net'))
+        guardado = credentials(self.tmp.name, 'synology 1')
+        self.assertEqual(guardado['password'], 'secreta')
+        self.assertEqual(guardado['user'], 'helios')
+
+    def test_cambia_la_direccion_y_la_valida(self):
+        from hexos.agent.hosts import update, credentials
+        update(self.tmp.name, 'synology 1', host='100.83.4.11')
+        self.assertEqual(credentials(self.tmp.name, 'synology 1')['host'], '100.83.4.11')
+        with self.assertRaises(ValueError):
+            update(self.tmp.name, 'synology 1', host='-oProxyCommand=id')
+        with self.assertRaises(ValueError):
+            update(self.tmp.name, 'synology 1', port=0)
+
+    def test_no_inventa_accesos_ni_cambia_nada_sin_pedirlo(self):
+        from hexos.agent.hosts import update, load
+        with self.assertRaises(ValueError):
+            update(self.tmp.name, 'no existe', port=30)
+        with self.assertRaises(ValueError):
+            update(self.tmp.name, 'synology 1')
+        self.assertEqual(load(self.tmp.name)['synology 1']['port'], 22)
+
+    def test_el_archivo_sigue_siendo_privado(self):
+        from hexos.agent.hosts import update, store_path
+        update(self.tmp.name, 'synology 1', port=30)
+        self.assertEqual(store_path(self.tmp.name).stat().st_mode & 0o777, 0o600)
+
+
 class DireccionFijaTest(unittest.TestCase):
     """Un equipo fuera de su red no aparece en la tabla ARP: hace falta fijarlo."""
 
