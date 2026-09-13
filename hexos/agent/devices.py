@@ -193,12 +193,28 @@ def dispatch(store, name, args, turn_id=None):
         if destino not in cita.casefold():
             raise ValueError('Esa dirección no aparece en el mensaje de la persona. Registra solo '
                              'la que te haya dado, tal cual la escribió.')
-        clave = 'remoto/' + etiqueta.casefold()
+        # Si ya hay un equipo con ese nombre —visto en la red o registrado antes—,
+        # la dirección se le añade a ÉL. Crear otro registro dejaría dos fichas de
+        # la misma máquina, que es como acabaron 'synology 1' y 'servidor 1'
+        # apuntando al mismo sitio sin que nadie supiera cuál valía.
+        mismos = [d for d in rows.values()
+                  if (d.get('identity') or {}).get('name', '').casefold() == etiqueta.casefold()]
+        if len(mismos) > 1:
+            raise ValueError('Hay varios equipos guardados como ' + repr(etiqueta) +
+                             '; renombra o borra uno antes de darle dirección.')
+        clave = mismos[0]['id'] if mismos else 'remoto/' + etiqueta.casefold()
         anterior = rows.get(clave, {})
-        registro = dict(anterior, id=clave, mac=None, interface=None, pinned_host=destino,
+        # A uno que está en la red se le añade la dirección sin tocar lo observado:
+        # sigue siendo el mismo equipo y se le sigue viendo.
+        observado = bool(anterior.get('mac'))
+        registro = dict(anterior, id=clave, pinned_host=destino,
                         pinned_port=puerto or anterior.get('pinned_port'),
-                        addresses=anterior.get('addresses', []), latest_addresses=[],
-                        in_latest_snapshot=False, last_observed_at=None,
+                        mac=anterior.get('mac') if observado else None,
+                        interface=anterior.get('interface') if observado else None,
+                        addresses=anterior.get('addresses', []),
+                        latest_addresses=anterior.get('latest_addresses', []) if observado else [],
+                        in_latest_snapshot=anterior.get('in_latest_snapshot', False) if observado else False,
+                        last_observed_at=anterior.get('last_observed_at') if observado else None,
                         identity=dict(name=etiqueta, kind=args.get('kind') or None,
                                       source='user_statement', source_id=fila['id'],
                                       evidence=cita[:1000], recorded_at=now()))
@@ -207,6 +223,7 @@ def dispatch(store, name, args, turn_id=None):
         store.db.commit()
         return dict(saved=True, device=etiqueta, host=destino,
                     port=registro['pinned_port'], pinned=True,
+                    attached_to_known=bool(mismos),
                     note='Registrado con dirección fija: no se busca en los vecinos de la red y '
                          'sigue valiendo desde cualquier sitio. Esto no comprueba que se llegue a '
                          'él ni concede acceso; las credenciales se piden aparte por la ventana.')

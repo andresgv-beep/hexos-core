@@ -172,6 +172,35 @@ class DevicesTest(unittest.TestCase):
                     agent.tool(s, 'device.remote',
                                dict(name='servidor', host='-oProxyCommand=id'), turn_id='u')
 
+    def test_darle_una_url_a_un_equipo_que_ya_esta_en_la_red_no_lo_duplica(self):
+        # Antes creaba una segunda ficha de la misma máquina, y luego nadie sabía
+        # cuál valía. La dirección se le añade al que ya existe.
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(tmp, None)
+            with agent.store() as s:
+                with patch('hexos.agent.devices.snapshot', return_value=observation()):
+                    agent.tool(s, 'device.refresh', {})
+                dicho = 'el 192.168.1.10 es el synology 2'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u','now','user',dicho,dicho))
+                s.db.commit()
+                agent.tool(s, 'device.identify', dict(target='192.168.1.10', name='synology 2'), turn_id='u')
+                url = 'synology 2 también está en https://casa.ddns.net:30'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u2','now','user',url,url))
+                s.db.commit()
+                r = agent.tool(s, 'device.remote',
+                               dict(name='synology 2', host='https://casa.ddns.net:30'), turn_id='u2')
+                self.assertTrue(r['attached_to_known'])
+                lista = agent.tool(s, 'device.list', {})
+                self.assertEqual(lista['total'], 1, 'una máquina, una ficha')
+                ficha = lista['identified_devices'][0]
+                self.assertEqual((ficha['pinned_host'], ficha['pinned_port']), ('casa.ddns.net', 30))
+                # Y sigue siendo el equipo que se ve en la red: no se pierde su MAC.
+                self.assertEqual(ficha['mac'], 'aa:bb:cc:dd:ee:ff')
+                self.assertTrue(ficha['in_latest_snapshot'])
+                # La dirección fija manda al resolver, que es la que sirve desde fuera.
+                from hexos.agent.hosts import resolve
+                self.assertEqual(resolve(tmp, 'synology 2')['host'], 'casa.ddns.net')
+
     def test_la_lista_dice_donde_esta_un_equipo_de_otra_red(self):
         # Sin la dirección fija en la lista, un equipo remoto salía sin dirección
         # y la única forma de decir dónde estaba era recordarla de la conversación.
