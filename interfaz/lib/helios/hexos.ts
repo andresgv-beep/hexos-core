@@ -1,7 +1,10 @@
 import { phaseFromHexos, type HeliosPhase } from "./state";
 import { parseToolActivities, type ToolActivity } from "./tools";
 
-export interface ChatReply { reply: string; tools: ToolActivity[]; document?: unknown }
+/** Llega el turno en que HexOS corta el contexto por lleno: lo anterior deja de
+ *  estar en la ventana del modelo, aunque siga entero en el archivo. */
+export interface ContextCut { at: string; messages: number; characters: number }
+export interface ChatReply { reply: string; tools: ToolActivity[]; document?: unknown; contextCut?: ContextCut }
 export interface HistoryMessage { role: "user" | "assistant"; text: string }
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -56,7 +59,12 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
         : { method: "POST", headers: { "Content-Type": "text/plain; charset=utf-8" }, body: text, signal };
       const data = await request("chat", init);
       if (!isRecord(data) || typeof data.reply !== "string" || !data.reply.trim() || !Array.isArray(data.tools)) throw new Error("HexOS no devolvió una respuesta completa");
-      return { reply: data.reply, tools: parseToolActivities(data.tools, "done"), document: data.document };
+      const c = data.context_cut;
+      const contextCut = isRecord(c) && typeof c.at === "string" && typeof c.messages === "number"
+        && typeof c.characters === "number"
+        ? { at: c.at, messages: c.messages, characters: c.characters } : undefined;
+      return { reply: data.reply, tools: parseToolActivities(data.tools, "done"),
+               document: data.document, contextCut };
     },
   };
 }

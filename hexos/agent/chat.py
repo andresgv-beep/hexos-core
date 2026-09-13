@@ -223,6 +223,8 @@ class Agent:
         self.active_tools = []
         # Acceso que Helios ha pedido y la interfaz debe rellenar. Nunca lleva la credencial.
         self.credential_request = None
+        # Último corte automático de contexto, para que la interfaz pueda decirlo.
+        self.context_cut = None
         with self.store() as store:
             store.db.executescript('''
                 CREATE TABLE IF NOT EXISTS conversation (
@@ -538,18 +540,21 @@ class Agent:
                     store.db.execute('INSERT INTO tool_events(turn_id,ts,body) VALUES (?,?,?)',
                         (uid, now(), json.dumps(recuerdo, ensure_ascii=False)))
                     store.db.commit()
-                boundary = store.db.execute("SELECT value FROM agent_state WHERE key='context_boundary'").fetchone()
-                history = store.db.execute('SELECT id,ts,role,model_text AS text FROM conversation WHERE id<>? '
-                    'AND rowid>? ORDER BY rowid DESC LIMIT ?',
-                    (uid, int(boundary[0]) if boundary else 0,
-                     4 if getattr(self.runtime, 'native', False) else 8)).fetchall()[::-1]
+                nativo = bool(getattr(self.runtime, 'native', False))
+                corte = self.history_budget()
+                # Acumulativa, no deslizante. Con una ventana de los últimos N mensajes
+                # el prompt cambiaba por delante en cada turno y el KV no podía
+                # reaprovechar nada; acumulando desde el corte, lo de antes es un
+                # prefijo estable y solo se procesa lo nuevo. Cuando ya no cabe se
+                # corta entero en vez de ir soltando el mensaje más viejo.
+                boundary, history = self.window(store, uid, nativo, corte)
                 context = '\n'.join(r['role'] + ' [' + r['id'] + ' · ' + r['ts'] + ']: ' +
                     (r['text'] if len(r['text']) <= 1000 else
                      r['text'][:700] + '\n[Vista parcial; history.read con este id recupera el mensaje completo]')
                     for r in history)
                 last_tool = store.db.execute('SELECT e.ts,e.body FROM tool_events e '
                     'JOIN conversation c ON c.id=e.turn_id WHERE c.rowid>? '
-                    'ORDER BY e.seq DESC LIMIT 1', (int(boundary[0]) if boundary else 0,)).fetchone()
+                    'ORDER BY e.seq DESC LIMIT 1', (boundary,)).fetchone()
                 evidence = 'Ninguna herramienta registrada.'
                 if last_tool:
                     evidence = last_tool['ts'] + ': ' + last_tool['body']
@@ -571,7 +576,7 @@ class Agent:
                 context_sources = []
                 if getattr(self.runtime, 'native', False):
                     archived = store.db.execute('SELECT COUNT(*) FROM conversation WHERE rowid<=?',
-                        (int(boundary[0]) if boundary else 0,)).fetchone()[0]
+                        (boundary,)).fetchone()[0]
                     metadata = ('PERFIL CONFIRMADO POR HERA (datos):\n' + profile) if profile else ''
                     metadata += bloque_recuerdo
                     saved_task = procedures.state(store) or {}
@@ -604,7 +609,8 @@ class Agent:
                     memory_evidence = store.db.execute(
                         "SELECT id,model_text AS text FROM conversation WHERE role='user' AND id<>? "
                         'ORDER BY rowid DESC LIMIT 8', (uid,)).fetchall()[::-1]
-                    messages = native_messages(history, metadata, prompt_text, tool_history, memory_evidence)
+                    messages = native_messages(history, metadata, prompt_text, tool_history,
+                                               memory_evidence, budget=corte)
                 trace = [recuerdo] if recuerdo else []
                 schema_retries = 0
                 recovery_requests = 0
@@ -739,13 +745,59 @@ class Agent:
                     store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
                         (uuid4().hex, now(), 'assistant', output['reply'], output['reply']))
                     store.db.commit()
+                    corte_avisado, self.context_cut = self.context_cut, None
                     return dict(reply=output['reply'], work=job, document=document, tools=trace, context_sources=context_sources, progress=self.progress,
+                        context_cut=corte_avisado,
                         diagnostics=dict(format_retries=format_retries, schema_retries=schema_retries,
                                          recovery_requests=recovery_requests))
                 raise RuntimeError('Se alcanzó el límite de consultas del turno')
         finally:
             self.state = 'idle'
             self.lock.release()
+
+    def history_budget(self):
+        """Cuántos caracteres de conversación caben antes de tener que cortar.
+
+        Se deriva de la ventana del motor y no de un número a ojo: con 16.384
+        tokens y ~3,6 caracteres por token hay unos 59.000, de los que ya se van
+        fijos el preámbulo con las 23 herramientas (~12.000), los metadatos y las
+        citas (~5.000) y lo que haga falta para responder (~6.000). Lo que sobra
+        es de la conversación, y se deja un tercio de margen porque el resultado
+        de una herramienta puede llegar en mitad del turno.
+        """
+        ctx = getattr(self.runtime, 'ctx', None)
+        if not ctx:
+            return 6000
+        return max(4000, int((ctx * 3.6 - 23000) * 0.66))
+
+    def window(self, store, turn_id, native, budget):
+        """La conversación desde el último corte, y un corte nuevo si ya no cabe.
+
+        Devuelve (corte, mensajes). La ruta JSON antigua conserva su ventana de
+        ocho: no reaprovecha KV y su prompt es de un solo mensaje.
+        """
+        fila = store.db.execute("SELECT value FROM agent_state WHERE key='context_boundary'").fetchone()
+        corte = int(fila[0]) if fila else 0
+        if not native:
+            filas = store.db.execute('SELECT id,ts,role,model_text AS text FROM conversation '
+                'WHERE id<>? AND rowid>? ORDER BY rowid DESC LIMIT 8', (turn_id, corte)).fetchall()
+            return corte, filas[::-1]
+        filas = store.db.execute('SELECT rowid,id,ts,role,model_text AS text FROM conversation '
+            'WHERE id<>? AND rowid>? ORDER BY rowid', (turn_id, corte)).fetchall()
+        if sum(len(f['text']) for f in filas) <= budget:
+            return corte, filas
+        # Ya no cabe: se corta por entero y se empieza limpio. Ir soltando el
+        # mensaje más viejo dejaría el prompt cambiando por delante en cada turno,
+        # que es justo lo que impide reaprovechar nada. El archivo no se toca:
+        # sigue entero en la base y history_search lo alcanza.
+        nuevo = store.db.execute('SELECT COALESCE(MAX(rowid),0) FROM conversation '
+                                 'WHERE id<>?', (turn_id,)).fetchone()[0]
+        store.db.execute("INSERT INTO agent_state VALUES ('context_boundary',?) "
+                         'ON CONFLICT(key) DO UPDATE SET value=excluded.value', (str(nuevo),))
+        store.db.commit()
+        self.context_cut = dict(at=now(), messages=len(filas),
+                                characters=sum(len(f['text']) for f in filas))
+        return nuevo, []
 
     def thinking(self):
         """¿Está abierto el canal de pensamiento? None si el motor no lo admite."""

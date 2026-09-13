@@ -4,13 +4,15 @@ import json
 from .decisions import InvalidDecision, validate_reply
 
 
-def native_messages(history, metadata, request, tool_events=None, memory_evidence=None):
+def native_messages(history, metadata, request, tool_events=None, memory_evidence=None,
+                    budget=6000):
     messages = []
     evidence = []
     tool_events = tool_events or {}
-    # La selección tiene un límite adicional de caracteres para que una serie
-    # de documentos no desplace toda la petición. El motor valida tokens reales.
-    remaining = 6000
+    # Red de seguridad: quien llama ya corta la conversación cuando no cabe, así
+    # que aquí no debería sobrar nada. Si sobra, se suelta lo más viejo antes que
+    # dejar fuera la petición. El motor valida tokens reales.
+    remaining = budget
     selected = []
     for row in reversed(history):
         content = row['text']

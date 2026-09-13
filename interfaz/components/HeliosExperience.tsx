@@ -10,7 +10,7 @@ import { SystemMonitor } from "./SystemMonitor";
 import { ToolSatellites } from "./ToolSatellites";
 import { FloatingMessage, type MessageWindow } from "./FloatingMessage";
 import { phases } from "@/lib/helios/state";
-import { createHexosTransport, type HeliosTransport, type HistoryMessage } from "@/lib/helios/hexos";
+import { createHexosTransport, type ContextCut, type HeliosTransport, type HistoryMessage } from "@/lib/helios/hexos";
 import { mergeToolActivities, type ToolActivity } from "@/lib/helios/tools";
 
 const localTransport = createHexosTransport("/api/helios");
@@ -23,6 +23,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   // null = el motor no tiene canal de pensamiento; entonces no se ofrece el botón.
   const [thinking, setThinking] = useState<boolean | null>(null);
   const [thinkingBusy, setThinkingBusy] = useState(false);
+  const [contextCut, setContextCut] = useState<ContextCut | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [attachmentError, setAttachmentError] = useState("");
   const attachmentJobs = useRef(new Map<string, AbortController>());
@@ -209,6 +210,16 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       if (!controller.signal.aborted) {
         setConnection("ready");
         setTurnTools(items => mergeToolActivities(items, result.tools));
+        if (result.contextCut) {
+          // HexOS ha cortado el contexto por lleno. Las ventanas anteriores ya no
+          // están en la memoria de trabajo del modelo, así que dejarlas en pantalla
+          // haría creer que sigue viéndolas. Se recogen; el archivo no se toca y
+          // Helios puede recuperarlo buscando.
+          // Menos la del turno actual: es la que va a mostrar esta respuesta.
+          setWindows(items => items.filter(item => item.id === id));
+          setPrevious([]);
+          setContextCut(result.contextCut);
+        }
         setWindows(items => items.map(item => item.id === id ? { ...item, pending: false, revealing: Boolean(result.reply), reply: result.reply } : item));
         setAnnouncement(`Helios ha respondido en la conversación ${id}`);
       }
@@ -258,6 +269,11 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         <input ref={inputRef} aria-label="Mensaje para Helios" aria-describedby={connection !== "ready" ? "connection-note" : undefined} placeholder="Escribe a Helios…" value={draft} maxLength={4000} onChange={event => setDraft(event.target.value)} />
         <button className="send-button" type="submit" disabled={(!draft.trim() && !attachments.length) || sending || historyLoading || attachments.some(file => file.status !== "ready")} aria-label="Enviar mensaje"><ArrowUp size={21} /></button>
       </form>
+      {contextCut && <p className="connection-note" role="status">
+        Se llenó la memoria de trabajo y he empezado de cero con {contextCut.messages} mensajes recogidos.
+        No se ha borrado nada: Helios los sigue encontrando si le preguntas por ellos.{" "}
+        <button type="button" className="link-button" onClick={() => setContextCut(null)}>Entendido</button>
+      </p>}
       {connection !== "ready" && <p id="connection-note" className="connection-note" role="status">{connection === "checking" ? "Conectando con Helios…" : "Sin conexión con Helios. Puedes volver a intentar el envío."}</p>}
     </section>
     <span className="sr-only" role="status">{announcement}</span>

@@ -201,6 +201,9 @@ class NativeRuntime:
             self.tools.append({'type':'function','function':{'name':alias,'description':s['description'],
                 'parameters':{'type':'object','properties':{k:{'type':{'str':'string','int':'integer'}[v]}
                     for k,v in (s['required']|s['optional']).items()},'required':list(s['required'])}}})
+        # La ventana del motor, en tokens. El agente la necesita para saber cuánta
+        # conversación puede acumular antes de tener que cortar.
+        self.ctx = ctx
         self.messages=[];self.pending=deque();self.current=None
         self.repair_call = False
         # Imagen de un solo uso: se consume en la generación siguiente.

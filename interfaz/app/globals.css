@@ -76,6 +76,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, [tabindex="0"]:focus
 .send-button:hover { background: #a0d4fa40; }
 .send-button:disabled { opacity: .35; cursor: default; }
 .connection-note { text-align: center; font-size: 10px; color: #6e91a8; margin: 9px 0 0; }
+.link-button { background: none; border: 0; padding: 0; font: inherit; color: #8fd0ff; text-decoration: underline; cursor: pointer; }
 .window-tray { display: flex; gap: 8px; overflow-x: auto; padding: 7px 3px 12px; scrollbar-width: thin; }
 .window-tray button { display: flex; align-items: center; gap: 7px; flex-shrink: 0; max-width: 165px; padding: 8px 12px; border: 1px solid #71caff50; border-radius: 10px; background: #0c2134ed; color: #b8e4ff; font-size: 11px; }
 .window-tray button span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
