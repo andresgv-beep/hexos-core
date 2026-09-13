@@ -31,6 +31,13 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   // Qué petición se descartó. Sin esto, «Ahora no» solo limpiaba el estado local
   // y la consulta siguiente —dos segundos después— la volvía a abrir, en bucle.
   const accessDismissed = useRef<string | null>(null);
+  // Un turno en vuelo, en referencia y no en estado: el reenvío tras guardar el
+  // acceso ocurre fuera del render y necesita el valor de AHORA, no el de antes.
+  const enVuelo = useRef(false);
+  // Lo que hay que reenviar en cuanto el turno actual acabe. Rellenar la ventana
+  // mientras Helios todavía está respondiendo hacía que el reenvío chocara con la
+  // guarda de «ya hay un envío» y se perdiera sin decir nada.
+  const reenvioPendiente = useRef<string | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [attachmentError, setAttachmentError] = useState("");
   const attachmentJobs = useRef(new Map<string, AbortController>());
@@ -239,7 +246,13 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     event?.preventDefault?.();
     const question = forzado ?? (draft.trim() || (attachments.some(file => file.image) ? "Mira esta imagen y dime qué ves."
       : attachments.length ? "Lee los documentos adjuntos y resume su contenido." : ""));
-    if (!question || sending || historyLoading || request.current || attachments.some(file => file.status !== "ready")) return;
+    if (!question || historyLoading || attachments.some(file => file.status !== "ready")) return;
+    if (enVuelo.current || request.current) {
+      // No se descarta: se guarda para lanzarlo en cuanto termine lo de ahora.
+      if (forzado) reenvioPendiente.current = forzado;
+      return;
+    }
+    enVuelo.current = true;
     const text = question + attachments.map(file => `\n\nAdjunto: ${file.name}`).join("");
     // La imagen viaja aparte, en su propio campo; solo los documentos van en el texto.
     const imagen = attachments.find(file => file.image)?.image;
@@ -286,6 +299,12 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     } finally {
       if (!controller.signal.aborted) setSending(false);
       if (request.current === controller) request.current = null;
+      enVuelo.current = false;
+      const encolado = reenvioPendiente.current;
+      reenvioPendiente.current = null;
+      if (encolado && !controller.signal.aborted) {
+        void send({ preventDefault() {} } as FormEvent, encolado);
+      }
     }
   }
   function closeHistory() {
