@@ -258,6 +258,40 @@ class DevicesTest(unittest.TestCase):
                 self.assertEqual(len(registros), 1)
                 self.assertIsNone(registros[0]['identity'])
 
+    def test_con_fichas_duplicadas_dice_cuales_y_deja_borrar_por_id(self):
+        # «Ambiguo» a secas dejaba sin salida: hay que poder quitar la que sobra.
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(tmp, None)
+            with agent.store() as s:
+                with patch('hexos.agent.devices.snapshot', return_value=observation()):
+                    agent.tool(s, 'device.refresh', {})
+                dicho = 'el 192.168.1.10 es el synology 2'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u','now','user',dicho,dicho))
+                s.db.commit()
+                agent.tool(s, 'device.identify', dict(target='192.168.1.10', name='synology 2'), turn_id='u')
+                # Un duplicado como los que dejaba la versión anterior.
+                import json as _json
+                s.db.execute('INSERT INTO network_devices VALUES (?,?)',
+                             ('remoto/synology 2', _json.dumps(dict(
+                                 id='remoto/synology 2', mac=None, interface=None,
+                                 pinned_host='casa.ddns.net', addresses=[], latest_addresses=[],
+                                 identity=dict(name='synology 2', kind=None, source='user_statement',
+                                               source_id='u', evidence=dicho, recorded_at='now')))))
+                borra = 'borra synology 2'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u2','now','user',borra,borra))
+                s.db.commit()
+                with self.assertRaises(ValueError) as caught:
+                    agent.tool(s, 'device.forget', dict(target='synology 2'), turn_id='u2')
+                mensaje = str(caught.exception)
+                self.assertIn('2 fichas', mensaje)
+                self.assertIn('remoto/synology 2', mensaje)
+                # Y por id sí se puede quitar la que sobra.
+                porid = 'borra remoto/synology 2'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u3','now','user',porid,porid))
+                s.db.commit()
+                agent.tool(s, 'device.forget', dict(target='remoto/synology 2'), turn_id='u3')
+                self.assertEqual(agent.tool(s, 'device.list', {})['total'], 1)
+
     def test_no_borra_lo_que_la_persona_no_nombro(self):
         with tempfile.TemporaryDirectory() as tmp:
             agent = Agent(tmp, None)

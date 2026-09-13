@@ -145,11 +145,17 @@ def dispatch(store, name, args, turn_id=None):
                     or (d.get('identity') or {}).get('name', '').casefold() == buscado
                     or (d.get('pinned_host') or '').casefold() == buscado
                     or any(a['ip'] == buscado for a in d.get('latest_addresses', []))]
-        if len(elegidos) != 1:
+        if len(elegidos) > 1:
+            # Decir «ambiguo» y callar deja a la persona sin salida. Se nombran las
+            # fichas para que pueda borrar la que quiera por su id.
+            raise ValueError('Hay ' + str(len(elegidos)) + ' fichas llamadas ' + repr(objetivo) +
+                             ': ' + ', '.join(repr(d['id']) for d in elegidos) +
+                             '. Repite el borrado con el id de la que sobre.')
+        if not elegidos:
             conocidos = sorted((d.get('identity') or {}).get('name') for d in rows.values()
                                if d.get('identity'))
-            raise ValueError('Equipo ausente o ambiguo: ' + repr(objetivo) +
-                             '. Con nombre guardado hay: ' + (', '.join(conocidos) or 'ninguno') + '.')
+            raise ValueError('No hay ningún equipo guardado como ' + repr(objetivo) +
+                             '. Guardados: ' + (', '.join(conocidos) or 'ninguno') + '.')
         device = elegidos[0]
         etiqueta = (device.get('identity') or {}).get('name')
         # Un registro remoto desaparece entero; uno observado en la red volvería a
