@@ -1,6 +1,7 @@
 """Recuperación explícita: historial literal y perfil confirmado por HERA."""
 import os
 from pathlib import Path
+import re
 import subprocess
 
 
@@ -29,6 +30,29 @@ class HeraProfile:
             raise ValueError('HERA no registró el mensaje como evidencia')
         return identifier
 
+    def keys(self):
+        """Claves ya confirmadas. `hera lista` imprime id · estado · clave · valor,
+        con un `-> sustituido_por` opcional para las reemplazadas."""
+        result = subprocess.run([self.binary, 'lista'],
+            env=dict(os.environ, HELIOS_HOME=self.home), capture_output=True,
+            text=True, timeout=10)
+        if result.returncode:
+            raise ValueError('HERA no devolvió la lista de hechos')
+        claves = {}
+        for line in (result.stdout or '').splitlines():
+            campos = line.split(None, 3)
+            if len(campos) == 4 and campos[1] == 'confirmado':
+                # El valor va hasta la marca de sustitución o la cita, lo que llegue antes.
+                valor = re.split(r'\s+->\s|\s{2,}\[', campos[3])[0].strip()
+                claves[campos[2]] = valor
+        return claves
+
+    def correct(self, key, value, text, evidence):
+        """Reemplaza un hecho vigente. HERA lo hace de forma atómica y conserva
+        la cadena: `hera historial <clave>` la enseña entera."""
+        dicho = self.say(evidence)
+        return self._run(['corrige', key, value, text, dicho, dicho])
+
     def remember(self, key, value, text, evidence):
         """Confirma un hecho en el perfil. `guarda` y no `propon`: el agente solo
         lee confirmados, así que un candidato se quedaría invisible para siempre.
@@ -37,7 +61,10 @@ class HeraProfile:
         obtener el id que HERA exige. Y la clave lleva sujeto: `yo/nombre`, no
         `nombre`, o la rechaza por sujeto_ajeno.
         """
-        result = subprocess.run([self.binary, 'guarda', key, value, text, self.say(evidence)],
+        return self._run(['guarda', key, value, text, self.say(evidence)])
+
+    def _run(self, args):
+        result = subprocess.run([self.binary] + args,
             env=dict(os.environ, HELIOS_HOME=self.home), capture_output=True,
             text=True, timeout=10)
         salida = (result.stdout or '').strip()

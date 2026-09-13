@@ -17,10 +17,19 @@ class FakeRuntime:
 
 
 class FakeProfile:
-    def __init__(self): self.guardados = []
+    def __init__(self, confirmados=None):
+        self.guardados = []
+        self.corregidos = []
+        self.confirmados = dict(confirmados or {})
     def read(self): return ''
+    def keys(self): return dict(self.confirmados)
     def remember(self, key, value, text, evidence):
         self.guardados.append(dict(key=key, value=value, text=text, evidence=evidence))
+        self.confirmados[key] = value
+        return 'ok'
+    def correct(self, key, value, text, evidence):
+        self.corregidos.append(dict(key=key, value=value, text=text, evidence=evidence))
+        self.confirmados[key] = value
         return 'ok'
 
 
@@ -90,6 +99,21 @@ class ProfileMemoryTest(unittest.TestCase):
         self.recordar('mi gato se llama Turbo', 'gato/nombre', 'Turbo')
         self.assertEqual(self.perfil.guardados[0]['key'], 'gato/nombre')
 
+    def test_un_dato_nuevo_se_guarda_y_uno_existente_se_corrige(self):
+        self.recordar('me llamo Andrés', 'nombre', 'Andrés')
+        self.assertEqual(len(self.perfil.guardados), 1)
+        self.assertEqual(self.perfil.corregidos, [])
+        # El mismo valor otra vez no toca nada.
+        repetido = self.recordar('sigo siendo Andrés', 'nombre', 'Andrés')
+        self.assertTrue(repetido['unchanged'])
+        self.assertEqual(len(self.perfil.guardados), 1)
+        # Un valor distinto corrige en vez de duplicar.
+        cambio = self.recordar('en realidad me llamo Andrés García', 'nombre', 'Andrés García')
+        self.assertTrue(cambio['corrected'])
+        self.assertEqual(cambio['previous'], 'Andrés')
+        self.assertEqual(self.perfil.corregidos[0]['key'], 'yo/nombre')
+        self.assertEqual(len(self.perfil.guardados), 1, 'corregir no debe crear un segundo hecho')
+
     def test_un_rechazo_de_hera_no_se_reporta_como_guardado(self):
         # HERA rechaza con código 0 y "rechazado: <motivo>" en stdout.
         import subprocess
@@ -109,12 +133,27 @@ class ProfileMemoryTest(unittest.TestCase):
         # Sin esto el modelo pediría una cita en vez de dejar que HexOS la tome.
         self.assertIn('no aportes citas', spec['description'])
 
+    def test_hera_lista_se_parsea_con_sus_columnas(self):
+        import subprocess
+        from hexos.agent.continuity import HeraProfile
+        salida = ('f3    confirmado  yo/nombre                    Andrés   [u71]\n'
+                  'f4    confirmado  yo/gato                      Turbo  -> f9   [u80]\n'
+                  'f1    candidato   legacy/algo suelto           x   [sin cita: legacy]\n')
+        perfil = HeraProfile('/bin/true', '/tmp')
+        with patch('hexos.agent.continuity.subprocess.run',
+                   return_value=subprocess.CompletedProcess([], 0, stdout=salida, stderr='')):
+            claves = perfil.keys()
+        # Solo confirmados, y el valor sin arrastrar la sustitución ni la cita.
+        self.assertEqual(claves, {'yo/nombre': 'Andrés', 'yo/gato': 'Turbo'})
+
     def test_el_modelo_sabe_que_existe(self):
         from hexos.agent.native import POLICY
         self.assertIn('profile_remember', POLICY)
         self.assertIn('No pidas permiso', POLICY)
         # Un ejemplo con los argumentos exactos es lo que sí sigue este modelo.
         self.assertIn('key="nombre", value="Andrés"', POLICY)
+        # Fase 3: consultar el perfil antes de preguntar un dato que ya consta.
+        self.assertIn('Antes de preguntar un dato de la persona', POLICY)
 
 
 if __name__ == '__main__':

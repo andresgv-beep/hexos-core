@@ -103,6 +103,19 @@ class Runtime:
 
 MAX_IMAGE_SIDE = 1536
 
+# Portón barato: solo si el mensaje tiene forma de afirmación sobre uno mismo se
+# gasta una generación en extraer hechos. Un «vale» o un «revisa el NAS» no la
+# gastan, así que la conversación normal no paga nada por esto.
+AFIRMACION = re.compile(
+    r'\b(me llamo|mi nombre es|me puedes llamar|llámame'
+    r'|soy (?:de |el |la |un |una )?\w'
+    r'|vivo en|resido en|estoy en'
+    r'|trabajo (?:de|en|como)|me dedico a|soy programador|soy \w+ de profesión'
+    r'|mi \w+ se llama|a mi \w+ le llamo'
+    r'|prefiero|me gusta|no me gusta|odio|suelo'
+    r'|recuerda que|apunta que|no olvides que'
+    r'|en realidad me llamo|no me llamo)\b', re.I)
+
 
 def decode_image(encoded):
     """base64 de PNG/JPEG -> (píxeles RGB8, ancho, alto). None si no hay imagen."""
@@ -223,10 +236,55 @@ class Agent:
         # HERA deriva el sujeto de la clave: sin «yo/» lo tomaría por otra persona
         # y exigiría que esa palabra apareciese en la frase.
         clave = key if '/' in key else 'yo/' + key
-        self.profile.remember(clave, value, 'Su ' + key + ' es ' + value, quote[:1000])
-        return dict(saved=True, key=clave, value=value, source='user_statement',
+        etiqueta = clave.split('/')[-1]
+        texto = 'Su ' + etiqueta + ' es ' + value
+        # Corregir y guardar son la misma intención vista desde fuera; lo que
+        # cambia es si ya había un hecho vigente. HERA reemplaza de forma atómica
+        # y conserva la cadena en `hera historial <clave>`.
+        anterior = self.profile.keys().get(clave)
+        if anterior is None:
+            self.profile.remember(clave, value, texto, quote[:1000])
+        elif anterior == value:
+            return dict(saved=False, unchanged=True, key=clave, value=value,
+                        note='Ya estaba guardado con ese mismo valor; no se ha tocado nada.')
+        else:
+            self.profile.correct(clave, value, texto, quote[:1000])
+        return dict(saved=True, corrected=anterior is not None, previous=anterior,
+                    key=clave, value=value, source='user_statement',
                     note='Confirmado en el perfil HERA; estará disponible en los próximos turnos '
                          'aunque se limpie el contexto. Guardar no lo hace cierto: lo respalda su mensaje.')
+
+    def harvest_facts(self, store, text, turn_id):
+        """Guardar lo que la persona acaba de contar de sí misma, sin que lo pida.
+
+        Tres filtros en cascada: el patrón decide si merece una generación, la
+        extracción propone, y remember_fact exige que el valor esté literalmente
+        en su mensaje. HERA aplica encima sus reglas de sujeto, valor y polaridad.
+        Nada de esto interrumpe el turno: un fallo aquí no puede tumbar la respuesta.
+        """
+        if not self.profile or not hasattr(self.runtime, 'extract_facts'):
+            return ''
+        if not AFIRMACION.search(text or ''):
+            return ''
+        try:
+            candidatos = self.runtime.extract_facts(text)
+        except Exception:
+            return ''
+        anotado = []
+        for hecho in candidatos:
+            try:
+                resultado = self.remember_fact(store, hecho, turn_id)
+            except (ValueError, TypeError):
+                continue      # no estaba en su mensaje, o HERA lo rechazó
+            if not resultado.get('saved'):
+                continue
+            etiqueta = resultado['key'].split('/')[-1]
+            anotado.append(('He corregido' if resultado.get('corrected') else 'He anotado')
+                           + ' ' + etiqueta + ': ' + resultado['value']
+                           + (' (antes ' + resultado['previous'] + ')'
+                              if resultado.get('previous') else ''))
+        # Decirlo siempre: si se equivoca, que se vea en el momento y no dentro de un mes.
+        return '· ' + '. '.join(anotado) + '.' if anotado else ''
 
     def tool(self, store, name, args, *, turn_id=None):
         catalog.validate(name, args)
@@ -511,6 +569,9 @@ class Agent:
                             request=prompt_text, source_ref='turn:' + uid), actor='user')
                         job = store.dispatch(dict(op='classify', id=job['id'], revision=job['revision'],
                             **{k:v for k,v in proposed.items() if k != 'title'}), actor='model')
+                    recordado = self.harvest_facts(store, text, uid)
+                    if recordado:
+                        output['reply'] = output['reply'].rstrip() + '\n\n' + recordado
                     store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
                         (uuid4().hex, now(), 'assistant', output['reply'], output['reply']))
                     store.db.commit()
