@@ -342,8 +342,12 @@ class NativeRuntime:
         if '<|tool_' in raw or '<|channel>' in raw:raise NativeSyntax('marcadores inesperados en respuesta')
         try:
             validate_reply(raw)
-        except InvalidDecision:
-            self.repair_call = bool(raw.strip())
+        except InvalidDecision as exc:
+            # Reanudar en el canal de llamada solo sirve cuando lo rechazado era una
+            # pseudollamada. Si el rechazo trae instrucción propia —se anunció una
+            # lista y no se escribió—, lo que falta es texto: forzar el canal de
+            # herramienta ahí hacía que la lista se intentara parsear como llamada.
+            self.repair_call = bool(raw.strip()) and getattr(exc, 'repair', None) is None
             raise
         self.messages.append({'role':'assistant','content':raw})
         return {'reply':raw,'work':None}

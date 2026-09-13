@@ -223,7 +223,8 @@ class Tests(unittest.TestCase):
     def test_una_lectura_recortada_dice_como_completarse(self):
         # Con solo `truncated: True` el modelo remataba la lista con «y otros 12»
         # en vez de volver a leer: la vista parcial tiene que decir qué hacer.
-        vecinos = [dict(ip='192.168.1.%d' % n, mac='aa:bb:cc:dd:ee:%02x' % n) for n in range(60)]
+        # Por encima del recorte: una lectura de red normal (3.209 caracteres) cabe entera.
+        vecinos = [dict(ip='192.168.1.%d' % n, mac='aa:bb:cc:dd:ee:%02x' % n) for n in range(200)]
         rows = [dict(id='u1', role='user', text='Mira la red.'),
                 dict(id='a1', role='assistant', text='Ahí van.'),
                 dict(id='u2', role='user', text='Y sus macs.')]
@@ -238,6 +239,37 @@ class Tests(unittest.TestCase):
         cortos = {'u1': [dict(tool='network.local', arguments={}, result=dict(ok=True))]}
         breve = native_messages(rows, 'Perfil vacío', 'Y sus macs.', cortos)
         self.assertEqual(breve[2]['tool_responses'][0]['response'], dict(ok=True))
+
+    def test_anunciar_una_lista_sin_escribirla_no_es_una_respuesta(self):
+        # «Te muestro las 16 direcciones IP y MACs» y ahí acababa el turno.
+        with self.assertRaises(InvalidDecision) as caught:
+            validate_reply('Te muestro las 16 direcciones IP y MACs de los vecinos '
+                           'que no están registradas en la red.')
+        self.assertIn('Escríbela entera', caught.exception.repair)
+
+    def test_una_lista_entregada_pasa_esté_en_viñetas_o_en_línea(self):
+        for respuesta in [
+                'Aquí tienes los 15 vecinos:\n* 192.168.1.187\n* 192.168.1.45',
+                'Estos son los 3 contenedores en marcha: minecraft-java, projectzomboid y n8n.',
+                '| IP | MAC |\n| :-- | :-- |\n| 192.168.1.1 | f8:98:ef:93:cc:11 |',
+                # Prosa legítima que empieza igual: no se rechaza por decir «aquí tienes».
+                'Aquí tienes el diagnóstico: el disco sda tiene el enlace limitado a 1.5 Gbps.',
+                'He revisado el NAS y no hay nada nuevo.']:
+            self.assertEqual(validate_reply(respuesta), respuesta)
+
+    def test_el_reintento_dice_qué_arreglar_y_no_habla_de_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime = runtime_with_outputs('Te muestro las 16 direcciones IP y MACs.',
+                                           'Aquí van:\n* 192.168.1.187\n* 192.168.1.45')
+            agent = Agent(tmp, runtime)
+            resultado = agent.chat('muéstrame las no registradas')
+            self.assertEqual(resultado['diagnostics']['format_retries'], 1)
+            self.assertIn('192.168.1.45', resultado['reply'])
+            self.assertIn('Escríbela entera', ' '.join(
+                m['content'] for m in runtime.messages if isinstance(m.get('content'), str)))
+            # Reanudar en el canal de llamada haría que la lista se parsease como
+            # una llamada y el turno muriese con «valor inválido».
+            self.assertFalse(runtime.repair_call)
 
     def test_native_chat_does_not_reinject_old_task_as_current_request(self):
         with tempfile.TemporaryDirectory() as tmp:

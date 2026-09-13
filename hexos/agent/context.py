@@ -21,18 +21,21 @@ def native_messages(history, metadata, request, tool_events=None, memory_evidenc
         remaining -= len(content)
         selected.append((row, content))
     recent_events = {}
-    event_budget = 4000
+    # 4.000 en total y 1.200 por lectura venían de la ventana de 8.192. Una lectura
+    # de red son 3.209 caracteres: entraban nueve vecinos de dieciséis y el turno
+    # siguiente remataba con «y las otras 7». Con 16.384 de ventana cabe entera.
+    event_budget = 9000
     for row, _ in selected:
         kept = []
         for event in reversed(tool_events.get(row['id'], [])):
             event = dict(event)
             encoded = json.dumps(event['result'], ensure_ascii=False)
-            if len(encoded) > 1200:
+            if len(encoded) > 4000:
                 # `truncated: True` a secas se leía como «esto es lo que hay» y el
                 # modelo remataba con «y otros 12» en vez de volver a mirar. La vista
                 # parcial tiene que decir qué hacer para completarla, con el nombre
                 # de la herramienta dentro: es una lectura, no cuesta permiso.
-                event['result'] = {'historical_excerpt':encoded[:1200], 'truncated':True,
+                event['result'] = {'historical_excerpt':encoded[:4000], 'truncated':True,
                     'note':'Vista parcial de una lectura anterior: el resto ya no está en '
                            'contexto. No la completes de memoria ni la remates con «y otros N». '
                            'Si hace falta el dato entero, vuelve a llamar a ' +

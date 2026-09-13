@@ -624,7 +624,10 @@ class Agent:
                         if format_retries:
                             raise InvalidDecision('No se pudo obtener una respuesta válida tras un reintento. ' + str(exc)) from exc
                         format_retries += 1
-                        repair = getattr(self.runtime, 'repair_instruction', 'Formato de decisión inválido. '
+                        # Si el rechazo trae su propia instrucción, esa manda: al que se
+                        # dejó la lista sin escribir no le sirve que le hablen de JSON.
+                        repair = getattr(exc, 'repair', None) or getattr(
+                            self.runtime, 'repair_instruction', 'Formato de decisión inválido. '
                             'Devuelve solo un objeto JSON válido: reply y work:null para la respuesta, '
                             'o tool y arguments para una herramienta. No repitas operaciones ya completadas.')
                         messages = [dict(role='user', content=repair)]
