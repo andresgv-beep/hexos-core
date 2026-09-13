@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
-import { ArrowUp, Brain, MessageSquare, SlidersHorizontal, X } from "lucide-react";
+import { ArrowUp, MessageSquare, SlidersHorizontal, X } from "lucide-react";
 import Link from "next/link";
 import { HeliosOrb } from "./orb/HeliosOrb";
 import { AttachmentButton, ChatAttachments, type Attachment } from "./ChatAttachments";
@@ -208,12 +208,9 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     <div className="ambient-light" aria-hidden="true" />
     <header className="topbar">
       <Link className="brand" href="/" aria-label="Helios, inicio"><span className="brand-symbol" aria-hidden="true">✳</span><span>HELIOS</span></Link>
-      {thinking !== null && <button className={`icon-button ${thinking ? "selected" : ""}`} aria-pressed={thinking} disabled={thinkingBusy}
-        aria-label={thinking ? "Pensamiento encendido: Helios razona antes de responder" : "Pensamiento apagado: Helios responde directo"}
-        title={thinking ? "Pensamiento encendido" : "Pensamiento apagado"} onClick={() => void toggleThinking()}><Brain size={19} /></button>}
       <button ref={settingsRef} className={`icon-button ${settings ? "selected" : ""}`} aria-label="Ajustar luminosidad" aria-expanded={settings} onClick={() => setSettings(true)}><SlidersHorizontal size={19} /></button>
     </header>
-    <SystemMonitor />
+    <SystemMonitor autoEnabled={thinking} autoBusy={thinkingBusy} onToggleAuto={() => void toggleThinking()} />
     <section className="presence" aria-label="Presencia de Helios">
       <div className="orb-stage">
         <div className="orbit-guide guide-one" aria-hidden="true" /><div className="orbit-guide guide-two" aria-hidden="true" /><div className="orb-halo" aria-hidden="true" />

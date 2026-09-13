@@ -3,12 +3,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 /** Visual reveal for the current complete-response HTTP contract, not token streaming. */
-export function ProgressiveReply({ text }: { text: string }) {
+export function ProgressiveReply({ text, onComplete }: { text: string; onComplete?: () => void }) {
   const characters = useMemo(() => Array.from(text), [text]);
   const [visible, setVisible] = useState(0);
   const paragraph = useRef<HTMLParagraphElement>(null);
   const follow = useRef(true);
   const finish = useRef<() => void>(() => {});
+  const completionReported = useRef(false);
   useEffect(() => {
     let cursor = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -50,6 +51,12 @@ export function ProgressiveReply({ text }: { text: string }) {
     if (container && follow.current) container.scrollTop = container.scrollHeight;
   }, [visible]);
   const complete = visible >= characters.length;
+  useEffect(() => {
+    if (complete && !completionReported.current) {
+      completionReported.current = true;
+      onComplete?.();
+    }
+  }, [complete, onComplete]);
   return <>
     <p ref={paragraph} className="helios-answer"><span className="sr-only">{text}</span><span aria-hidden="true">{characters.slice(0, visible).join("")}{!complete && <span className="reply-cursor" />}</span></p>
     {!complete && <button className="reveal-all" onClick={() => finish.current()}>Mostrar todo</button>}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Activity, Cpu, MemoryStick, Microchip } from "lucide-react";
+import { Activity, Brain, Cpu, MemoryStick, Microchip } from "lucide-react";
 import { parseTelemetry, type SystemTelemetry } from "@/lib/helios/telemetry";
 
 function percent(used: number, total: number) {
@@ -22,7 +22,11 @@ function Metric({ icon, label, value, detail, amount }: {
   </div>;
 }
 
-export function SystemMonitor() {
+export function SystemMonitor({ autoEnabled, autoBusy = false, onToggleAuto }: {
+  autoEnabled: boolean | null;
+  autoBusy?: boolean;
+  onToggleAuto: () => void;
+}) {
   const [telemetry, setTelemetry] = useState<SystemTelemetry | null>(null);
   const [online, setOnline] = useState(true);
   useEffect(() => {
@@ -70,5 +74,15 @@ export function SystemMonitor() {
       </>}
       {!online && <p className="monitor-offline">Datos temporalmente no disponibles</p>}
     </div>
+    {autoEnabled !== null && <div className="monitor-auto">
+      <button className={`auto-thinking${autoEnabled ? " active" : ""}`} type="button" aria-pressed={autoEnabled}
+        disabled={autoBusy} onClick={onToggleAuto}
+        aria-label={autoEnabled ? "Desactivar pensamiento automático" : "Activar pensamiento automático"}
+        title={autoEnabled ? "Pensamiento automático activado" : "Pensamiento automático desactivado"}>
+        <Brain size={31} strokeWidth={1.45} aria-hidden="true" />
+        <span><strong>AUTO</strong><small>{autoBusy ? "Sincronizando" : autoEnabled ? "Activado" : "Desactivado"}</small></span>
+        <i aria-hidden="true" />
+      </button>
+    </div>}
   </aside>;
 }

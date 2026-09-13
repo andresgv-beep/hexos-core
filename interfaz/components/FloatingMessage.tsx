@@ -10,6 +10,7 @@ export interface MessageWindow {
   reply?: string;
   error?: string;
   pending?: boolean;
+  revealing?: boolean;
   absorbing?: boolean;
   slot: number;
   x: number;
@@ -17,7 +18,7 @@ export interface MessageWindow {
   minimized: boolean;
 }
 
-export function FloatingMessage({ message, onMove, onMinimize, onClose, onFocus, front, orbTarget, onAbsorbed }: {
+export function FloatingMessage({ message, onMove, onMinimize, onClose, onFocus, onReplyComplete, front, orbTarget, onAbsorbed }: {
   message: MessageWindow;
   orbTarget?: RefObject<HTMLButtonElement | null>;
   onAbsorbed?: (id: number) => void;
@@ -25,6 +26,7 @@ export function FloatingMessage({ message, onMove, onMinimize, onClose, onFocus,
   onMinimize: (id: number) => void;
   onClose: (id: number) => void;
   onFocus: (id: number) => void;
+  onReplyComplete?: (id: number) => void;
   front: boolean;
 }) {
   const card = useRef<HTMLElement>(null);
@@ -121,7 +123,7 @@ export function FloatingMessage({ message, onMove, onMinimize, onClose, onFocus,
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- Keyboard users need to focus this region to scroll long messages. */}
       <div className="window-content" role="region" tabIndex={0} aria-label="Mensajes">
         {message.pending && <p className="reply-status" role="status">Helios está pensando…</p>}
-        {message.reply && <ProgressiveReply key={message.reply} text={message.reply} />}
+        {message.reply && <ProgressiveReply key={message.reply} text={message.reply} onComplete={() => onReplyComplete?.(message.id)} />}
         {message.error && <p className="reply-status" role="alert">{message.error}</p>}
         <details className="original-message"><summary>Tu mensaje</summary><p>{message.text}</p></details>
       </div>
