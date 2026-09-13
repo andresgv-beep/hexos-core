@@ -16,6 +16,14 @@ class FakeRuntime:
         return {'reply': 'Documento recibido.', 'work': None}
 
 
+class RuntimeConVision(FakeRuntime):
+    def __init__(self):
+        self.imagenes = []
+
+    def attach_image(self, pixels, width, height):
+        self.imagenes.append((len(pixels), width, height))
+
+
 class ChatTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix='hexos-agent-test-')
@@ -58,6 +66,33 @@ class ChatTest(unittest.TestCase):
             corrected = store.dispatch(dict(op='classify',id=job['id'],revision=job['revision'],
                 kind='mantenimiento',scope='Copias',tags=[],reason='Corrección'), actor='user')
             self.assertEqual(corrected['scope'], 'Copias')
+
+
+class TurnoSoloImagenTest(unittest.TestCase):
+    """Adjuntar una foto sin escribir nada es un turno con sentido."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix='hexos-imagen-test-')
+        self.runtime = RuntimeConVision()
+        self.agent = Agent(self.tmp.name, self.runtime)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_una_imagen_sin_texto_se_acepta_con_la_pregunta_implicita(self):
+        from hexos.agent.chat import IMAGEN_SIN_TEXTO
+        self.agent.chat('   ', image=(b'\x00' * 12, 2, 2))
+        self.assertEqual(self.runtime.imagenes, [(12, 2, 2)])
+        with self.agent.store() as store:
+            fila = store.db.execute("SELECT text FROM conversation WHERE role='user'").fetchone()
+        # Queda en el historial la pregunta que se dio por hecha, no un turno en blanco.
+        self.assertIn(IMAGEN_SIN_TEXTO, fila['text'])
+        self.assertIn('adjuntó una imagen', fila['text'])
+
+    def test_sin_imagen_un_mensaje_en_blanco_sigue_siendo_un_error(self):
+        for vacio in ('', '   ', '\n'):
+            with self.assertRaises(ValueError):
+                self.agent.chat(vacio)
 
 
 if __name__ == '__main__':

@@ -117,6 +117,9 @@ AFIRMACION = re.compile(
     r'|en realidad me llamo|no me llamo)\b', re.I)
 
 
+IMAGEN_SIN_TEXTO = 'Mira esta imagen y dime qué ves.'
+
+
 def frase_del_hecho(clave, valor):
     """La frase que verá el modelo en el perfil. HERA imprime este texto literal,
     así que es aquí donde el sujeto tiene que quedar dicho: «Su hermana se llama
@@ -369,8 +372,15 @@ class Agent:
                     next_line=start + len(selected), limited=len(selected) < count)
 
     def chat(self, text, image=None):
-        if not isinstance(text, str) or not text.strip() or len(text.encode()) > MAX_INPUT:
+        if not isinstance(text, str) or len(text.encode()) > MAX_INPUT:
             raise ValueError('Mensaje vacío o mayor de 8 MiB; no se ha guardado')
+        # Adjuntar una foto y no escribir nada es un turno con sentido: la pregunta
+        # está implícita. Se rellena aquí y no en cada cliente, que es como acabaron
+        # la interfaz nueva y chat.html discrepando —una la ponía, la otra daba 409.
+        if not text.strip():
+            if image is None:
+                raise ValueError('Mensaje vacío o mayor de 8 MiB; no se ha guardado')
+            text = IMAGEN_SIN_TEXTO
         if not self.lock.acquire(blocking=False):
             raise RuntimeError('Ya hay un turno en curso')
         self.state = 'thinking'
@@ -743,7 +753,9 @@ def main():
                     payload = strict_json(data.decode('utf-8'))
                     if set(payload) - {'text', 'image'}:
                         raise ValueError('campos permitidos: text, image')
-                    mensaje = string(payload.get('text'), 'text', MAX_INPUT)
+                    # Con imagen el texto puede venir vacío: la pregunta la pone el agente.
+                    mensaje = string(payload.get('text'), 'text', MAX_INPUT,
+                                     empty=payload.get('image') is not None)
                     self.respond(200, agent.chat(mensaje, decode_image(payload.get('image'))))
                 else:
                     self.respond(200, agent.chat(data.decode('utf-8')))
