@@ -11,17 +11,40 @@ def initialize(store):
 
 
 def annotate(store, observation):
-    """Unir lectura actual con identidad persistida, sin guardar ni inferir por IP."""
+    """Unir lectura actual con identidad persistida, sin guardar ni inferir por IP.
+
+    Se devuelven las dos mitades, no solo la identificada: un vecino sin nombre
+    guardado no es un dato que falte, es la respuesta a «cuáles no están
+    registrados». Enumerarlos a mano desde la lista cruda salía mal —se colaban
+    las direcciones de este mismo equipo, que vienen de `ip address` y no de
+    `ip neigh`, y alguna IPv6 larga acababa recortada por el camino.
+    """
     known = {r['id']: json.loads(r['body']) for r in store.db.execute('SELECT * FROM network_devices')}
-    identified = []
+    identified, unidentified = [], []
     for neighbor in observation['neighbors']:
         device = known.get(neighbor['interface'] + '/' + neighbor['mac'].lower())
         identity = device.get('identity') if device else None
         neighbor['identity'] = {k:identity[k] for k in ('name','kind','source')} if identity else None
+        fila = dict(ip=neighbor['ip'], mac=neighbor['mac'], interface=neighbor['interface'],
+                    state=neighbor['state'], recently_reachable=neighbor['recently_reachable'])
         if identity:
-            identified.append(dict(ip=neighbor['ip'], name=identity['name'], kind=identity['kind'],
-                                   state=neighbor['state'], source=identity['source']))
-    return dict(identified_neighbors=identified, **observation)
+            # `identity_source` y no `source`: leído como «source: static» se
+            # confundía con el estado de red del equipo, que es otra cosa.
+            identified.append(dict(fila, name=identity['name'], kind=identity['kind'],
+                                   identity_source=identity['source']))
+        else:
+            unidentified.append(fila)
+    propias = sorted({address['ip'] for interface in observation['interfaces']
+                      for address in interface['addresses'] if address.get('ip')})
+    return dict(identified_neighbors=identified, unidentified_neighbors=unidentified,
+                counts=dict(identified=len(identified), unidentified=len(unidentified),
+                            unresolved=observation['unresolved_entries']),
+                own_addresses=propias,
+                lists_note='identified_neighbors y unidentified_neighbors ya son la partición '
+                           'completa de los vecinos: no hay que deducir una de la otra ni releer '
+                           '`neighbors`. own_addresses son las direcciones DE ESTE EQUIPO, no '
+                           'dispositivos de la red; no las cuentes como vecinos.',
+                **observation)
 
 
 def dispatch(store, name, args, turn_id=None):

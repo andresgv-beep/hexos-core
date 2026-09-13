@@ -7,8 +7,15 @@ from hexos.agent.devices import annotate
 
 
 def observation(mac='aa:bb:cc:dd:ee:ff', ip='192.168.1.10'):
-    return dict(observed_at='2026-09-12T12:00:00Z', truncated=False, note='passive', neighbors=[
-        dict(mac=mac, ip=ip, interface='eth0', state=['STALE'])])
+    """Doble de snapshot(): mismas claves, o annotate no vería lo que ve en real."""
+    return dict(observed_at='2026-09-12T12:00:00Z', truncated=False, note='passive',
+                unresolved_entries=0,
+                interfaces=[dict(name='lo', state='UNKNOWN',
+                                 addresses=[dict(ip='127.0.0.1', prefixlen=8, family='inet')]),
+                            dict(name='eth0', state='UP',
+                                 addresses=[dict(ip='192.168.1.41', prefixlen=24, family='inet')])],
+                neighbors=[dict(mac=mac, ip=ip, interface='eth0', state=['STALE'],
+                                recently_reachable=False)])
 
 
 class DevicesTest(unittest.TestCase):
@@ -17,7 +24,7 @@ class DevicesTest(unittest.TestCase):
             agent=Agent(tmp,None)
             with agent.store() as s:
                 data=observation()
-                data['neighbors'] += [dict(ip='10.0.0.10',mac='11:22:33:44:55:66',interface='eth1',state=['STALE'])]
+                data['neighbors'] += [dict(ip='10.0.0.10',mac='11:22:33:44:55:66',interface='eth1',state=['STALE'],recently_reachable=False)]
                 with patch('hexos.agent.devices.snapshot',return_value=data):
                     agent.tool(s,'device.refresh',{})
                 quote='el 10 es mi NAS'
@@ -32,7 +39,8 @@ class DevicesTest(unittest.TestCase):
             agent = Agent(tmp, None)
             with agent.store() as s:
                 data = observation()
-                data['neighbors'] = [dict(ip='192.168.1.'+str(n), mac=f'aa:bb:cc:dd:ee:{n:02x}', interface='eth0',state=['STALE']) for n in (243,131,249)]
+                data['neighbors'] = [dict(ip='192.168.1.'+str(n), mac=f'aa:bb:cc:dd:ee:{n:02x}', interface='eth0',
+                                          state=['STALE'], recently_reachable=False) for n in (243,131,249)]
                 with patch('hexos.agent.devices.snapshot', return_value=data):
                     agent.tool(s,'device.refresh',{})
                 quote='guara el que termina en 243 como synology, el 131 como nimos nas'
@@ -53,6 +61,46 @@ class DevicesTest(unittest.TestCase):
                 self.assertEqual(s.db.total_changes,before)
                 with self.assertRaises(ValueError):
                     agent.tool(s,'device.identify',dict(target='131',name='synology'),turn_id='u')
+
+    def test_las_dos_mitades_son_la_particion_completa_de_los_vecinos(self):
+        # «Cuáles no están registradas» tiene que ser un campo, no un ejercicio
+        # de resta que el modelo hace a mano sobre la lista cruda.
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(tmp, None)
+            with agent.store() as s:
+                data = observation()
+                data['neighbors'] += [dict(ip='192.168.1.11', mac='11:22:33:44:55:66',
+                                           interface='eth0', state=['REACHABLE'],
+                                           recently_reachable=True)]
+                with patch('hexos.agent.devices.snapshot', return_value=data):
+                    agent.tool(s, 'device.refresh', {})
+                quote = 'el 10 es mi synology'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u','now','user',quote,quote))
+                s.db.commit()
+                agent.tool(s, 'device.identify', dict(target='192.168.1.10', name='synology'), turn_id='u')
+                enriquecido = annotate(s, data)
+                self.assertEqual([n['ip'] for n in enriquecido['identified_neighbors']], ['192.168.1.10'])
+                self.assertEqual([n['ip'] for n in enriquecido['unidentified_neighbors']], ['192.168.1.11'])
+                self.assertEqual(enriquecido['counts'], dict(identified=1, unidentified=1, unresolved=0))
+                # Sin la MAC en las dos mitades no se puede hablar de un equipo sin nombre.
+                for lista in ('identified_neighbors', 'unidentified_neighbors'):
+                    self.assertTrue(all(n['mac'] for n in enriquecido[lista]), lista)
+                # `source: static` se leía como estado de red; el nombre lo desambigua.
+                identificado = enriquecido['identified_neighbors'][0]
+                self.assertIn('identity_source', identificado)
+                self.assertNotIn('source', identificado)
+
+    def test_las_direcciones_propias_no_se_cuelan_entre_los_vecinos(self):
+        # El modelo llegó a listar 127.0.0.1 y la IP del portátil como si fueran
+        # dispositivos de la red: vienen de `ip address`, no de `ip neigh`.
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(tmp, None)
+            with agent.store() as s:
+                enriquecido = annotate(s, observation())
+                self.assertEqual(enriquecido['own_addresses'], ['127.0.0.1', '192.168.1.41'])
+                vecinos = enriquecido['identified_neighbors'] + enriquecido['unidentified_neighbors']
+                self.assertEqual([n['ip'] for n in vecinos], ['192.168.1.10'])
+                self.assertIn('no dispositivos de la red', enriquecido['lists_note'])
 
     def test_identity_persists_without_following_reassigned_ip(self):
         with tempfile.TemporaryDirectory() as tmp:

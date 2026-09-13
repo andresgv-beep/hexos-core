@@ -41,7 +41,10 @@ TOOLS = {
                             'No adivinar identidades.', {'target':'str','name':'str'},
                             {'kind':'str'}, effect='write_inventory'),
     'network.local': spec('Consultar ahora IP propias, rutas y vecinos IPv4/IPv6 conocidos por el equipo. '
-                          'Incluye automáticamente nombres guardados en identified_neighbors e identity; mostrarlos no requiere device.identify. '
+                          'Devuelve los vecinos ya partidos en identified_neighbors (con nombre guardado) y '
+                          'unidentified_neighbors (sin él), ambos con ip y mac, más counts y own_addresses, '
+                          'que son las direcciones de este equipo y no dispositivos de la red. '
+                          'Mostrar los nombres no requiere device.identify. '
                           'Lectura pasiva local, sin sondeo. No descubre todos los dispositivos ni identifica '
                           'cuál es el NAS. STALE no confirma conexión actual. Sin argumentos.'),
     'profile.remember': spec('Guardar en el perfil un dato que la persona acaba de decir sobre sí misma o sobre su '
