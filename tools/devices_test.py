@@ -172,6 +172,79 @@ class DevicesTest(unittest.TestCase):
                     agent.tool(s, 'device.remote',
                                dict(name='servidor', host='-oProxyCommand=id'), turn_id='u')
 
+    def test_mirar_la_red_deja_registrado_lo_visto(self):
+        # Enseñar vecinos sin guardarlos dejaba ver equipos que luego no se podían
+        # nombrar, y los de otra red seguían figurando como recién vistos.
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(tmp, None)
+            with agent.store() as s:
+                vieja = observation()
+                vieja['neighbors'] = [dict(ip='192.168.1.1', mac='f8:98:ef:93:cc:11', interface='eth0',
+                                           state=['REACHABLE'], recently_reachable=True)]
+                with patch('hexos.agent.devices.snapshot', return_value=vieja):
+                    agent.tool(s, 'device.refresh', {})
+                # Otra casa: mismo 192.168.1.1, otro router.
+                nueva = observation()
+                nueva['neighbors'] = [dict(ip='192.168.1.1', mac='d4:86:60:f4:34:6e', interface='eth0',
+                                           state=['REACHABLE'], recently_reachable=True),
+                                      dict(ip='192.168.1.129', mac='fe:b1:96:7c:78:9f', interface='eth0',
+                                           state=['STALE'], recently_reachable=False)]
+                with patch('hexos.agent.devices.snapshot', return_value=nueva), \
+                     patch('hexos.agent.chat.network_snapshot', return_value=nueva):
+                    agent.tool(s, 'network.local', {})
+                dicho = 'la que termina en 129 es el iphone'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u','now','user',dicho,dicho))
+                s.db.commit()
+                # Lo que acaba de verse ya se puede nombrar, sin refrescar aparte.
+                agent.tool(s, 'device.identify', dict(target='129', name='iphone'), turn_id='u')
+                # Y el router de la otra red deja de figurar como recién visto, así
+                # que un sufijo no puede casar con el fantasma.
+                for d in agent.tool(s, 'device.list', {})['devices']:
+                    if d['mac'] == 'f8:98:ef:93:cc:11':
+                        self.assertFalse(d['in_latest_snapshot'])
+                nombres = {d['identity']['name'] for d in agent.tool(s, 'device.list', {})['devices']
+                           if d['identity']}
+                self.assertEqual(nombres, {'iphone'})
+
+    def test_se_puede_nombrar_por_los_dos_ultimos_octetos(self):
+        # «la que termina en 1.129» es como se habla de una IP; con solo el último
+        # octeto la frase de la persona no validaba y no se registraba nada.
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(tmp, None)
+            with agent.store() as s:
+                data = observation()
+                data['neighbors'] = [dict(ip='192.168.1.' + str(n), mac='aa:bb:cc:dd:ee:%02x' % n,
+                                          interface='eth0', state=['REACHABLE'], recently_reachable=True)
+                                     for n in (1, 129)]
+                with patch('hexos.agent.devices.snapshot', return_value=data):
+                    agent.tool(s, 'device.refresh', {})
+                dicho = ('registra la que termina en 1.1 router, '
+                         'la que termina en 1.129 es el iphone 16 pro')
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u','now','user',dicho,dicho))
+                s.db.commit()
+                agent.tool(s, 'device.identify', dict(target='1.1', name='router'), turn_id='u')
+                agent.tool(s, 'device.identify', dict(target='1.129', name='iphone 16 pro'), turn_id='u')
+                nombres = {d['identity']['name'] for d in agent.tool(s, 'device.list', {})['devices']
+                           if d['identity']}
+                self.assertEqual(nombres, {'router', 'iphone 16 pro'})
+
+    def test_unos_octetos_ambiguos_no_nombran_nada(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(tmp, None)
+            with agent.store() as s:
+                data = observation()
+                # Mismos dos últimos octetos en redes distintas: no distingue.
+                data['neighbors'] = [dict(ip=red + '.1.50', mac='aa:bb:cc:dd:ee:%02x' % n,
+                                          interface='eth0', state=['REACHABLE'], recently_reachable=True)
+                                     for n, red in enumerate(('192.168', '10.0'))]
+                with patch('hexos.agent.devices.snapshot', return_value=data):
+                    agent.tool(s, 'device.refresh', {})
+                dicho = 'la que termina en 1.50 es el router'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u','now','user',dicho,dicho))
+                s.db.commit()
+                with self.assertRaises(ValueError):
+                    agent.tool(s, 'device.identify', dict(target='1.50', name='router'), turn_id='u')
+
     def test_identity_persists_without_following_reassigned_ip(self):
         with tempfile.TemporaryDirectory() as tmp:
             agent = Agent(tmp, None)

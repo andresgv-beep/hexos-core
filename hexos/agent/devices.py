@@ -11,6 +11,11 @@ def initialize(store):
     store.db.execute('CREATE TABLE IF NOT EXISTS network_devices (id TEXT PRIMARY KEY, body TEXT NOT NULL)')
 
 
+def cola(ip, suffix):
+    """Los últimos octetos de `ip`, tantos como traiga `suffix`."""
+    return '.'.join(ip.split('.')[-len(suffix.split('.')):])
+
+
 def annotate(store, observation):
     """Unir lectura actual con identidad persistida, sin guardar ni inferir por IP.
 
@@ -65,26 +70,41 @@ def annotate(store, observation):
                 **observation)
 
 
+def observe(store, rows=None):
+    """Mirar la red y dejar constancia de lo visto. Devuelve (lectura, registros).
+
+    Lo hace también `network.local`: enseñar vecinos sin guardarlos dejaba ver
+    equipos que luego no se podían nombrar —«la que termina en 129» no existía en
+    el inventario— y dejaba en pie los de otra red marcados como recién vistos, así
+    que un sufijo casaba con el fantasma. Mostrar y registrar tienen que ser el
+    mismo acto o lo que se ve y lo que se puede tocar se separan.
+    """
+    if rows is None:
+        rows = {r['id']: json.loads(r['body']) for r in store.db.execute('SELECT * FROM network_devices')}
+    observation = snapshot()
+    for device in rows.values():
+        device['in_latest_snapshot'] = False
+    for neighbor in observation['neighbors']:
+        key = neighbor['interface'] + '/' + neighbor['mac'].lower()
+        device = rows.setdefault(key, dict(id=key, mac=neighbor['mac'].lower(),
+            interface=neighbor['interface'], addresses=[], identity=None))
+        if not device.get('in_latest_snapshot'):
+            device['latest_addresses'] = []
+        device['in_latest_snapshot'] = True
+        device['last_observed_at'] = observation['observed_at']
+        address = dict(ip=neighbor['ip'], state=neighbor['state'], observed_at=observation['observed_at'])
+        device['addresses'] = [a for a in device['addresses'] if a['ip'] != address['ip']][-31:] + [address]
+        device['latest_addresses'].append(address)
+    for key, device in rows.items():
+        store.db.execute('INSERT OR REPLACE INTO network_devices VALUES (?,?)', (key, json.dumps(device)))
+    store.db.commit()
+    return observation, rows
+
+
 def dispatch(store, name, args, turn_id=None):
     rows = {r['id']: json.loads(r['body']) for r in store.db.execute('SELECT * FROM network_devices')}
     if name == 'device.refresh':
-        observation = snapshot()
-        for device in rows.values():
-            device['in_latest_snapshot'] = False
-        for neighbor in observation['neighbors']:
-            key = neighbor['interface'] + '/' + neighbor['mac'].lower()
-            device = rows.setdefault(key, dict(id=key, mac=neighbor['mac'].lower(),
-                interface=neighbor['interface'], addresses=[], identity=None))
-            if not device.get('in_latest_snapshot'):
-                device['latest_addresses'] = []
-            device['in_latest_snapshot'] = True
-            device['last_observed_at'] = observation['observed_at']
-            address = dict(ip=neighbor['ip'], state=neighbor['state'], observed_at=observation['observed_at'])
-            device['addresses'] = [a for a in device['addresses'] if a['ip'] != address['ip']][-31:] + [address]
-            device['latest_addresses'].append(address)
-        for key, device in rows.items():
-            store.db.execute('INSERT OR REPLACE INTO network_devices VALUES (?,?)', (key, json.dumps(device)))
-        store.db.commit()
+        observation, rows = observe(store, rows)
         return dict(saved=True, observed_at=observation['observed_at'], devices=len(rows),
                     observed_devices=sum(d['in_latest_snapshot'] for d in rows.values()),
                     truncated=observation['truncated'], note=observation['note'])
@@ -138,14 +158,17 @@ def dispatch(store, name, args, turn_id=None):
     candidates = [d for d in rows.values() if target in (d['id'].casefold(), d['mac'])]
     if not candidates:
         suffix = target.lstrip('.')
-        short = suffix.isdigit() and 0 <= int(suffix) <= 255
+        # «la que termina en 1.129» es como se habla de una IP, no solo «129».
+        short = bool(re.fullmatch(r'\d{1,3}(\.\d{1,3})?', suffix)) and \
+            all(0 <= int(parte) <= 255 for parte in suffix.split('.'))
         try:
             if not short:
                 target = str(ipaddress.ip_address(target))
         except ValueError:
-            raise ValueError('Usa una IP completa, MAC o id del inventario; consulta device.list.')
+            raise ValueError('Usa una IP completa, sus últimos octetos, MAC o id del inventario; '
+                             'consulta device.list.')
         candidates = [d for d in rows.values() if d.get('in_latest_snapshot') and
-                      any(a['ip'] == target or (short and ':' not in a['ip'] and a['ip'].split('.')[-1] == suffix)
+                      any(a['ip'] == target or (short and cola(a['ip'], suffix) == suffix)
                           for a in d.get('latest_addresses', []))]
     if len(candidates) != 1:
         raise ValueError('Dispositivo ausente o ambiguo. Actualiza el inventario o usa su id exacto.')
@@ -163,14 +186,17 @@ def dispatch(store, name, args, turn_id=None):
         raise ValueError('La evidencia debe ser una cita literal de un mensaje reciente del usuario.')
     identifiers = [device['mac'], device['id']] + [a['ip'] for a in device.get('latest_addresses', [])]
     # Un sufijo solo sirve si identifica a un único registro en la última lectura.
+    # Se admiten uno y dos octetos: la gente dice «la que termina en 1.129».
     for address in device.get('latest_addresses', []):
         if ':' in address['ip']:
             continue
-        suffix = address['ip'].split('.')[-1]
-        matches = [d for d in rows.values() if d.get('in_latest_snapshot') and any(
-            ':' not in a['ip'] and a['ip'].split('.')[-1] == suffix for a in d.get('latest_addresses', []))]
-        if len(matches) == 1:
-            identifiers.append(suffix)
+        for trozos in (1, 2):
+            suffix = '.'.join(address['ip'].split('.')[-trozos:])
+            matches = [d for d in rows.values() if d.get('in_latest_snapshot') and any(
+                ':' not in a['ip'] and cola(a['ip'], suffix) == suffix
+                for a in d.get('latest_addresses', []))]
+            if len(matches) == 1:
+                identifiers.append(suffix)
     clauses = re.split(r'[,;\n]', quote.casefold())
     supported = any(label.casefold() in clause and any(re.search(r'(?<![\w.:])' + re.escape(value.casefold()) + r'(?![\w.:])', clause)
                        for value in identifiers) for clause in clauses)

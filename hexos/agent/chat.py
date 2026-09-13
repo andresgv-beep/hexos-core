@@ -488,7 +488,11 @@ class Agent:
         if name.startswith('device.'):
             return devices.dispatch(store, name, args, turn_id)
         if name == 'network.local':
-            return devices.annotate(store, network_snapshot())
+            # Mirar y registrar en el mismo acto: lo que se enseña tiene que poder
+            # nombrarse después, y los vecinos de otra red tienen que dejar de
+            # figurar como recién vistos o un sufijo casa con el equipo equivocado.
+            observacion, _ = devices.observe(store)
+            return devices.annotate(store, observacion)
         if name.startswith('history.'):
             return history_tool(store, name, args)
         if name.startswith('procedure.') or name in ('report.save', 'result.get'):

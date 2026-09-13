@@ -39,7 +39,9 @@ TOOLS = {
                            'pedir todavía un diagnóstico. Si falta la credencial, HexOS abre la ventana '
                            'de la interfaz para que la persona la rellene: no la pidas por el chat. '
                            'device es el nombre guardado.', {'device':'str'}),
-    'device.remote': spec('Registrar un equipo que NO está en esta red, con la dirección que la persona '
+    'device.remote': spec('Registrar un equipo que NO aparece en la lectura de la red, porque está en otro '
+                          'sitio. Si el equipo SÍ sale en network_local, la que toca es device_identify. '
+                          'Lleva la dirección que la persona '
                           'acaba de dar, TAL CUAL la escribió: vale una IP, un nombre como '
                           'servidor.ddns.net, una URL completa como https://servidor.ddns.net:30 o '
                           'nombre:puerto. No la recortes ni le quites el https ni el puerto: HexOS lo '
@@ -48,19 +50,25 @@ TOOLS = {
                           'está en el inventario. La dirección debe aparecer literal en su mensaje; no la '
                           'inventes ni la completes. No comprueba que se llegue al equipo.',
                           {'name':'str', 'host':'str'}, {'kind':'str'}, effect='write_inventory'),
-    'device.identify': spec('Recordar el nombre y tipo que el usuario atribuye a un dispositivo guardado. '
-                            'target: IP completa, último octeto (por ejemplo 243), MAC o id. '
+    'device.identify': spec('REGISTRAR o poner nombre a un dispositivo que YA aparece en la lectura de la red. '
+                            'Es la que toca cuando dicen «registra la que termina en X como Y» sobre lo que '
+                            'acabas de mostrar en network_local. Una por dispositivo. '
+                            'target: IP completa, los dos últimos octetos (por ejemplo 1.129), el último '
+                            'octeto (por ejemplo 243), MAC o id. '
                             'HexOS usa el mensaje actual como evidencia; no aportes citas. '
                             'name: nombre indicado. kind solo si el usuario lo indica; IP no es un tipo de dispositivo. '
                             'No adivinar identidades.', {'target':'str','name':'str'},
                             {'kind':'str'}, effect='write_inventory'),
-    'network.local': spec('Consultar ahora IP propias, rutas y vecinos IPv4/IPv6 conocidos por el equipo. '
+    'network.local': spec('Mirar ahora la red: IP propias, rutas y vecinos IPv4/IPv6 conocidos por el equipo. '
+                          'Deja registrado lo visto, así que después se puede nombrar con device_identify '
+                          'sin volver a leer. '
                           'Devuelve los vecinos ya partidos en identified_neighbors (con nombre guardado) y '
                           'unidentified_neighbors (sin él), ambos con ip y mac, más counts y own_addresses, '
                           'que son las direcciones de este equipo y no dispositivos de la red. '
                           'Mostrar los nombres no requiere device.identify. '
                           'Lectura pasiva local, sin sondeo. No descubre todos los dispositivos ni identifica '
-                          'cuál es el NAS. STALE no confirma conexión actual. Sin argumentos.'),
+                          'cuál es el NAS. STALE no confirma conexión actual. Sin argumentos.',
+                          effect='write_inventory'),
     'profile.remember': spec('Guardar en el perfil un dato que la persona acaba de decir sobre sí misma o sobre su '
                              'entorno: su nombre, dónde vive, cómo llama a sus equipos, qué prefiere. '
                              'key es la etiqueta (nombre, ciudad, preferencia); value, el dato con SUS palabras. '
