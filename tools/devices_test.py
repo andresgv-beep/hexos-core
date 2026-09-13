@@ -172,6 +172,22 @@ class DevicesTest(unittest.TestCase):
                     agent.tool(s, 'device.remote',
                                dict(name='servidor', host='-oProxyCommand=id'), turn_id='u')
 
+    def test_la_lista_dice_donde_esta_un_equipo_de_otra_red(self):
+        # Sin la dirección fija en la lista, un equipo remoto salía sin dirección
+        # y la única forma de decir dónde estaba era recordarla de la conversación.
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(tmp, None)
+            with agent.store() as s:
+                dicho = 'registra servidor 1 en https://casa.ddns.net:30'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u','now','user',dicho,dicho))
+                s.db.commit()
+                agent.tool(s, 'device.remote',
+                           dict(name='servidor 1', host='https://casa.ddns.net:30'), turn_id='u')
+                fila = agent.tool(s, 'device.list', {})['identified_devices'][0]
+                self.assertEqual(fila['pinned_host'], 'casa.ddns.net')
+                self.assertEqual(fila['pinned_port'], 30)
+                self.assertEqual(fila['latest_addresses'], [])
+
     def test_olvidar_un_equipo_remoto_lo_borra_entero_y_su_acceso(self):
         with tempfile.TemporaryDirectory() as tmp:
             from hexos.agent.hosts import save, load

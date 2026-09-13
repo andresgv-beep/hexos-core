@@ -113,10 +113,18 @@ def dispatch(store, name, args, turn_id=None):
         terms = [v.strip() for v in re.split(r'\s+or\s+', query) if v.strip()]
         found = [d for d in rows.values() if not terms or any(q in json.dumps(d, ensure_ascii=False).casefold() for q in terms)]
         found.sort(key=lambda d: (d['identity'] is None, d['id']))
-        compact = [{k:d.get(k) for k in ('id','mac','interface','last_observed_at','in_latest_snapshot','latest_addresses')} |
+        # `pinned_host` va dentro: sin él, un equipo de otra red salía en la lista
+        # sin dirección ninguna —`latest_addresses` está vacío porque no se le ve
+        # en la red— y la única forma de decir dónde está era recordarla de la
+        # conversación, que es como empiezan las direcciones inventadas.
+        compact = [{k:d.get(k) for k in ('id','mac','interface','last_observed_at',
+                                         'in_latest_snapshot','latest_addresses',
+                                         'pinned_host','pinned_port')} |
                    {'identity':{k:d['identity'][k] for k in ('name','kind','source')} if d['identity'] else None} for d in found[:64]]
         return dict(identified_devices=[d for d in compact if d['identity']], devices=compact, total=len(found), truncated=len(found)>64,
                     note='Inventario histórico. Consulta network.local para el estado actual. '
+                         'pinned_host es la dirección fija de un equipo de otra red; los de esta '
+                         'red no la tienen y se ven por latest_addresses. '
                          'identity=null significa sin identificar. Un filtro sin coincidencias no significa que el inventario esté vacío: consulta sin query. '
                          'MAC e interfaz agrupan observaciones, no garantizan identidad física.')
     if name == 'device.forget':
