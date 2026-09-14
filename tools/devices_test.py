@@ -217,6 +217,55 @@ class DevicesTest(unittest.TestCase):
                 self.assertEqual(fila['pinned_port'], 30)
                 self.assertEqual(fila['latest_addresses'], [])
 
+    def test_dos_nombres_para_un_equipo_se_señalan_sin_tocarlos(self):
+        # Dar acceso a uno y pedir lecturas por el otro parece falta de credenciales.
+        with tempfile.TemporaryDirectory() as tmp:
+            from hexos.agent.hosts import save
+            agent = Agent(tmp, None)
+            with agent.store() as s:
+                dicho = 'registra servidorsrv1 en casa.ddns.net y synology en casa.ddns.net'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u','now','user',dicho,dicho))
+                s.db.commit()
+                agent.tool(s, 'device.remote', dict(name='servidorsrv1', host='casa.ddns.net'), turn_id='u')
+                agent.tool(s, 'device.remote', dict(name='synology', host='casa.ddns.net'), turn_id='u')
+                r = agent.tool(s, 'device.list', {})
+                self.assertEqual(len(r['duplicates']), 1)
+                self.assertEqual(r['duplicates'][0]['devices'], ['servidorsrv1', 'synology'])
+                self.assertIn('pregunta cuál conservar', r['duplicates'][0]['note'].casefold())
+                # Señalar no es borrar: los dos siguen ahí hasta que la persona decida.
+                self.assertEqual(r['total'], 2)
+
+    def test_la_credencial_manda_al_decidir_si_son_el_mismo(self):
+        # Uno puede tener dirección fija y el otro llevar la suya en la credencial.
+        with tempfile.TemporaryDirectory() as tmp:
+            from hexos.agent.hosts import save
+            agent = Agent(tmp, None)
+            with agent.store() as s:
+                dicho = 'registra remoto1 en casa.ddns.net'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u','now','user',dicho,dicho))
+                s.db.commit()
+                agent.tool(s, 'device.remote', dict(name='remoto1', host='casa.ddns.net'), turn_id='u')
+                with patch('hexos.agent.devices.snapshot', return_value=observation()):
+                    agent.tool(s, 'device.refresh', {})
+                otro = 'el 192.168.1.10 es el nas de casa'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u2','now','user',otro,otro))
+                s.db.commit()
+                agent.tool(s, 'device.identify', dict(target='192.168.1.10', name='nas de casa'), turn_id='u2')
+                # Sin credencial no se parecen: uno es una MAC y el otro un nombre.
+                self.assertEqual(agent.tool(s, 'device.list', {})['duplicates'], [])
+                # Con la credencial apuntando al mismo sitio, sí.
+                save(tmp, 'nas de casa', 'helios', 'x', 22, host='casa.ddns.net')
+                dup = agent.tool(s, 'device.list', {})['duplicates']
+                self.assertEqual([d['devices'] for d in dup], [['nas de casa', 'remoto1']])
+
+    def test_sin_repetidos_no_señala_nada(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(tmp, None)
+            with agent.store() as s:
+                with patch('hexos.agent.devices.snapshot', return_value=observation()):
+                    agent.tool(s, 'device.refresh', {})
+                self.assertEqual(agent.tool(s, 'device.list', {})['duplicates'], [])
+
     def test_olvidar_un_equipo_remoto_lo_borra_entero_y_su_acceso(self):
         with tempfile.TemporaryDirectory() as tmp:
             from hexos.agent.hosts import save, load

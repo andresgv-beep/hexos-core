@@ -11,6 +11,31 @@ def initialize(store):
     store.db.execute('CREATE TABLE IF NOT EXISTS network_devices (id TEXT PRIMARY KEY, body TEXT NOT NULL)')
 
 
+def duplicados(rows, credenciales):
+    """Equipos registrados que acaban en la misma máquina.
+
+    Dos nombres para un NAS no es un detalle estético: se le puede dar acceso a uno
+    y pedirle lecturas al otro, y parecerá que no tiene credenciales cuando sí las
+    tiene. Aquí solo se SEÑALA; juntarlos o borrar uno lo decide la persona.
+    """
+    porDestino = {}
+    for d in rows.values():
+        nombre = (d.get('identity') or {}).get('name')
+        if not nombre:
+            continue
+        # A dónde va de verdad: manda la dirección de su credencial, luego la fija,
+        # y si no tiene ninguna, su MAC — que es lo que identifica al equipo en la red.
+        destino = ((credenciales.get(nombre.casefold()) or {}).get('host')
+                   or d.get('pinned_host') or d.get('mac'))
+        if destino:
+            porDestino.setdefault(destino.casefold(), []).append(nombre)
+    return [dict(destination=destino, devices=sorted(nombres),
+                 note='Estos nombres llevan al mismo equipo. Pregunta cuál conservar antes de '
+                      'tocar nada; device_forget borra el que sobre. Mientras haya dos, una '
+                      'credencial guardada en uno no sirve al pedir algo por el otro.')
+            for destino, nombres in sorted(porDestino.items()) if len(nombres) > 1]
+
+
 def cola(ip, suffix):
     """Los últimos octetos de `ip`, tantos como traiga `suffix`."""
     return '.'.join(ip.split('.')[-len(suffix.split('.')):])
@@ -121,7 +146,9 @@ def dispatch(store, name, args, turn_id=None):
                                          'in_latest_snapshot','latest_addresses',
                                          'pinned_host','pinned_port')} |
                    {'identity':{k:d['identity'][k] for k in ('name','kind','source')} if d['identity'] else None} for d in found[:64]]
-        return dict(identified_devices=[d for d in compact if d['identity']], devices=compact, total=len(found), truncated=len(found)>64,
+        repetidos = duplicados(rows, hosts.load(store.root))
+        return dict(identified_devices=[d for d in compact if d['identity']], devices=compact,
+                    duplicates=repetidos, total=len(found), truncated=len(found)>64,
                     note='Inventario histórico. Consulta network.local para el estado actual. '
                          'pinned_host es la dirección fija de un equipo de otra red; los de esta '
                          'red no la tienen y se ven por latest_addresses. '

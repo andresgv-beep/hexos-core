@@ -33,7 +33,9 @@ TOOLS = {
                            'No cambia sus nombres confirmados.', effect='write_inventory'),
     'device.list': spec('Consultar inventario persistente e identidades atribuidas al usuario. '
                         'query opcional filtra nombre, IP, MAC o tipo; admite OR entre nombres. '
-                        'Sin query devuelve todos, con identificados primero. identity null: sin identificar.', optional={'query':'str'}),
+                        'Sin query devuelve todos, con identificados primero. identity null: sin identificar. '
+                        'duplicates señala nombres distintos que llevan al MISMO equipo: si aparece alguno, '
+                        'dilo y pregunta cuál conservar antes de tocar nada.', optional={'query':'str'}),
     'device.connect': spec('Conectar con un equipo ya registrado para comprobar que se puede entrar. '
                            'Úsala cuando pidan conectarse, probar el acceso o entrar en un equipo, sin '
                            'pedir todavía un diagnóstico. Si falta la credencial, HexOS abre la ventana '
