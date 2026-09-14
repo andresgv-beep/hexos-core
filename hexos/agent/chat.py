@@ -378,6 +378,25 @@ class Agent:
                 return 'confirmada', 'releído del perfil: ' + result['key'] + ' = ' + guardado
             return 'no_cumplida', ('el perfil dice ' + repr(guardado) +
                                    ' y se pretendía ' + repr(result.get('value')))
+        if name == 'report.save':
+            # Releer lo guardado y contrastarlo con su fuente. No se genera OTRO
+            # informe para comprobar: eso solo demostraría que se sabe repetir.
+            try:
+                guardado = store.db.execute('SELECT body FROM agent_reports WHERE id=?',
+                                            (result.get('id'),)).fetchone()
+                fuente = store.db.execute('SELECT body FROM agent_results WHERE id=?',
+                                          (result.get('result_id'),)).fetchone()
+            except Exception as exc:
+                return 'desconocida', 'no se pudo releer: ' + str(exc)
+            if not guardado:
+                return 'no_cumplida', 'el informe no está en el almacén'
+            if not fuente:
+                return 'desconocida', 'el resultado de origen ya no está con el que contrastar'
+            copia, original = json.loads(guardado[0]), json.loads(fuente[0])
+            if copia.get('text') != original.get('text'):
+                return 'no_cumplida', 'lo guardado no coincide con su instantánea de origen'
+            return 'confirmada', ('releído del almacén y contrastado con su origen: ' +
+                                  str(len(copia.get('text') or '')) + ' caracteres iguales')
         return 'desconocida', 'sin comprobación implementada para ' + name
 
     def pending_effect(self, store, device, target):

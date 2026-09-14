@@ -18,6 +18,16 @@ class Runtime:
         return {'reply': 'ok', 'work': None}
 
 
+class Guion(Runtime):
+    """Devuelve una secuencia fija de decisiones, como haría el modelo."""
+
+    def __init__(self, *decisiones):
+        self.decisiones = list(decisiones)
+
+    def generate(self, messages):
+        return self.decisiones.pop(0)
+
+
 class Tests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -170,6 +180,55 @@ class Tests(unittest.TestCase):
         self.agent.runtime.generate = lambda _: (_ for _ in ()).throw(InvalidDecision('sin JSON'))
         with self.assertRaises(InvalidDecision):
             self.agent.chat('hola')
+
+
+class InformeVerificadoTest(unittest.TestCase):
+    """Guardar un informe se comprueba releyéndolo y contrastándolo con su fuente."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix='hexos-informe-verif-')
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def guardar(self):
+        """Un turno que produce el resultado y otro que lo guarda."""
+        agent = Agent(self.tmp.name, Guion(
+            {'tool': 'procedure.run', 'arguments': {'id': 'pending_report'}},
+            {'reply': 'Listo.', 'work': None}))
+        agent.chat('resume pendientes')
+        with agent.store() as store:
+            resultado = store.db.execute('SELECT id FROM agent_results').fetchone()[0]
+        segundo = Agent(self.tmp.name, Guion(
+            {'tool': 'report.save', 'arguments': {'result_id': resultado}},
+            {'reply': 'Guardado.', 'work': None}))
+        return segundo, segundo.chat('guárdalo')['tools'][0]
+
+    def test_se_confirma_contrastando_con_el_origen(self):
+        _, entrada = self.guardar()
+        self.assertEqual(entrada['verification'], 'confirmada')
+        self.assertIn('contrastado con su origen', entrada['evidence'])
+
+    def test_si_lo_guardado_no_coincide_no_se_da_por_hecho(self):
+        agent, _ = self.guardar()
+        with agent.store() as store:
+            fila = store.db.execute('SELECT id, body FROM agent_reports').fetchone()
+            cuerpo = json.loads(fila[1]); cuerpo['text'] = 'otra cosa'
+            store.db.execute('UPDATE agent_reports SET body=? WHERE id=?',
+                             (json.dumps(cuerpo), fila[0]))
+            store.db.commit()
+            estado, evidencia = agent.verify(store, 'report.save', {},
+                                             dict(id=fila[0], result_id=cuerpo['result_id']))
+        self.assertEqual(estado, 'no_cumplida')
+        self.assertIn('no coincide', evidencia)
+
+    def test_sin_informe_en_el_almacen_es_no_cumplida(self):
+        agent, _ = self.guardar()
+        with agent.store() as store:
+            estado, evidencia = agent.verify(store, 'report.save', {},
+                                             dict(id='no existe', result_id='tampoco'))
+        self.assertEqual(estado, 'no_cumplida')
+        self.assertIn('no está en el almacén', evidencia)
 
 
 if __name__ == '__main__':
