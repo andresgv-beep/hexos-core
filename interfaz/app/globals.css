@@ -78,6 +78,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, [tabindex="0"]:focus
 .connection-note { text-align: center; font-size: 10px; color: #6e91a8; margin: 9px 0 0; }
 .access-backdrop { position: fixed; inset: 0; z-index: 40; background: #000a; display: flex; align-items: center; justify-content: center; padding: 24px; }
 .access-panel { width: min(380px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; background: #0b1b29f5; border: 1px solid #80cfff55; border-radius: 18px; padding: 24px; box-shadow: 0 0 40px #39adff22; }
+.reply-progress { margin: 0 0 10px; padding: 0; list-style: none; border-left: 2px solid #71caff44; padding-left: 11px; }
+.reply-progress li { font-size: 12px; line-height: 1.55; color: #8fb8d0; margin-bottom: 4px; }
 .panel-title { margin: 0 0 4px; font-size: 14px; color: #d5ecff; font-weight: 500; }
 .access-warn { margin: 0 0 12px; padding: 9px 11px; border: 1px solid #ffb04955; border-radius: 9px; background: #2a1c0a66; color: #ffcf94; font-size: 11px; line-height: 1.5; }
 .access-target { margin: 0 0 14px; font-size: 11px; color: #7fb2cd; line-height: 1.5; }

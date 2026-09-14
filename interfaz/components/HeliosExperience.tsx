@@ -34,6 +34,10 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   // Un turno en vuelo, en referencia y no en estado: el reenvío tras guardar el
   // acceso ocurre fuera del render y necesita el valor de AHORA, no el de antes.
   const enVuelo = useRef(false);
+  // La ventana que está esperando respuesta: los anuncios llegan por la consulta
+  // de estado, a mitad de turno, y hay que saber a cuál pegarlos.
+  const ventanaEnCurso = useRef<number | null>(null);
+  const anunciosVistos = useRef(new Set<string>());
   // Lo que hay que reenviar en cuanto el turno actual acabe. Rellenar la ventana
   // mientras Helios todavía está respondiendo hacía que el reenvío chocara con la
   // guarda de «ya hay un envío» y se perdiera sin decir nada.
@@ -156,6 +160,17 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       if (disposed) return;
       setConnection("ready");
       setThinking(estado.thinking);
+      // Lo que Helios dice que va a hacer, mientras lo hace. Sin esto la ventana
+      // se quedaba en «pensando…» y lo anunciado —que lo escribe el modelo, no
+      // nosotros— se perdía; el chat viejo sí lo enseñaba.
+      const nuevos = estado.progress.messages.filter(m => !anunciosVistos.current.has(m.id));
+      const destino = ventanaEnCurso.current;
+      if (nuevos.length && destino !== null) {
+        nuevos.forEach(m => anunciosVistos.current.add(m.id));
+        setWindows(items => items.map(item => item.id === destino
+          ? { ...item, progress: [...(item.progress ?? []), ...nuevos.map(m => m.text)] }
+          : item));
+      }
       // Helios pide el acceso a mitad de turno, así que hay que seguir mirando;
       // con una sola consulta al montar la ventana no aparecía nunca.
       setAccess(previo => {
@@ -267,6 +282,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     ]);
     attachments.forEach(file => removeAttachment(file.id));
     setAttachmentError("");
+    ventanaEnCurso.current = id;
     setFront(id); setDraft(""); setAnnouncement(`Esperando a Helios en la ventana ${id}`);
     inputRef.current?.focus();
     setSending(true);
@@ -299,6 +315,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     } finally {
       if (!controller.signal.aborted) setSending(false);
       if (request.current === controller) request.current = null;
+      if (ventanaEnCurso.current === id) ventanaEnCurso.current = null;
       enVuelo.current = false;
       const encolado = reenvioPendiente.current;
       reenvioPendiente.current = null;

@@ -10,6 +10,8 @@ export interface MessageWindow {
   reply?: string;
   error?: string;
   pending?: boolean;
+  /** Lo que Helios anuncia que va a hacer, mientras lo hace. Palabras suyas. */
+  progress?: string[];
   revealing?: boolean;
   absorbing?: boolean;
   slot: number;
@@ -122,7 +124,12 @@ export function FloatingMessage({ message, onMove, onMinimize, onClose, onFocus,
       </header>
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- Keyboard users need to focus this region to scroll long messages. */}
       <div className="window-content" role="region" tabIndex={0} aria-label="Mensajes">
-        {message.pending && <p className="reply-status" role="status">Helios está pensando…</p>}
+        {!!message.progress?.length && <ul className="reply-progress">
+          {message.progress.map((linea, i) => <li key={i}>{linea}</li>)}
+        </ul>}
+        {message.pending && <p className="reply-status" role="status">
+          {message.progress?.length ? "Helios está en ello…" : "Helios está pensando…"}
+        </p>}
         {message.reply && <ProgressiveReply key={message.reply} text={message.reply} onComplete={() => onReplyComplete?.(message.id)} />}
         {message.error && <p className="reply-status" role="alert">{message.error}</p>}
         <details className="original-message"><summary>Tu mensaje</summary><p>{message.text}</p></details>

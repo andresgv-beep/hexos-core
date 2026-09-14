@@ -6,6 +6,9 @@ import { parseToolActivities, type ToolActivity } from "./tools";
 export interface ContextCut { at: string; messages: number; characters: number }
 export interface ChatReply { reply: string; tools: ToolActivity[]; document?: unknown; contextCut?: ContextCut }
 export interface HistoryMessage { role: "user" | "assistant"; text: string }
+/** Lo que Helios dice que va a hacer, antes de hacerlo. Lo escribe el modelo, no
+ *  HexOS, y llega a mitad de turno: por eso viaja aparte de la respuesta. */
+export interface Progress { turnId: string | null; messages: { id: string; text: string }[] }
 /** Helios ha pedido el acceso a un equipo. La contraseña se escribe en la ventana
  *  y va directa a HexOS: no pasa por la conversación ni la ve el modelo. */
 export interface CredentialRequest {
@@ -25,10 +28,21 @@ export interface AccessSaved {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
+function parseProgress(value: unknown): Progress {
+  if (!isRecord(value)) return { turnId: null, messages: [] };
+  const filas = Array.isArray(value.messages) ? value.messages : [];
+  return {
+    turnId: typeof value.turn_id === "string" ? value.turn_id : null,
+    // Solo las que traen id y texto: el id es lo que evita repetirlas en cada consulta.
+    messages: filas.filter(isRecord)
+      .filter(m => typeof m.id === "string" && typeof m.text === "string" && m.text.trim())
+      .map(m => ({ id: String(m.id), text: String(m.text) })),
+  };
+}
 export interface HeliosTransport {
   /** `thinking` es null cuando el motor no tiene canal de pensamiento. */
   status(signal?: AbortSignal): Promise<{ phase: HeliosPhase; mode: string; thinking: boolean | null;
-    tools: ToolActivity[]; credentialRequest: CredentialRequest | null }>;
+    tools: ToolActivity[]; credentialRequest: CredentialRequest | null; progress: Progress }>;
   /** Guarda el acceso de un equipo. `host` fija su dirección: sin ella se busca
    *  entre los vecinos de la red, que solo sirve estando en la misma. */
   saveAccess(input: { device: string; user: string; password: string; host?: string; port?: number },
@@ -71,7 +85,8 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
             requestedAt: typeof r.requested_at === "string" ? r.requested_at : undefined }
         : null;
       return { phase: phaseFromHexos(data.state), mode: data.mode, thinking,
-               tools: parseToolActivities(data.active_tools, "running"), credentialRequest };
+               tools: parseToolActivities(data.active_tools, "running"), credentialRequest,
+               progress: parseProgress(data.progress) };
     },
     async saveAccess({ device, user, password, host, port }, signal) {
       if (!device.trim() || !user.trim()) throw new Error("Faltan el equipo y el usuario");

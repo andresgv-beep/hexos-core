@@ -79,6 +79,21 @@ test('dismissing an access request sends no credential at all', async () => {
   assert.deepEqual(enviado, { device: 'synology 1', dismiss: true });
 });
 
+test('reads what Helios announces mid-turn, and ignores what is not usable', async () => {
+  const d = await createHexosTransport('/api', fixture({ state: 'thinking', mode: 'native-experimental',
+    progress: { turn_id: 't1', messages: [
+      { id: 'p1', text: 'Voy a revisar el diagnóstico de ambos NAS.' },
+      { id: 'p2', text: '   ' },            // vacío: no se enseña
+      { text: 'sin id' },                    // sin id no se puede deduplicar
+      'suelto',
+    ] } })).status();
+  assert.equal(d.progress.turnId, 't1');
+  assert.deepEqual(d.progress.messages, [{ id: 'p1', text: 'Voy a revisar el diagnóstico de ambos NAS.' }]);
+  // Y un estado sin progreso no rompe nada.
+  const vacio = await createHexosTransport('/api', fixture({ state: 'idle', mode: 'json' })).status();
+  assert.deepEqual(vacio.progress, { turnId: null, messages: [] });
+});
+
 test('confirms the thinking change instead of assuming it worked', async () => {
   const transporte = createHexosTransport('/api', fixture({ thinking: false, persisted: true }));
   assert.equal(await transporte.setThinking(false), false);
