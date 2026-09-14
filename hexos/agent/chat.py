@@ -719,19 +719,29 @@ class Agent:
                         started = time.monotonic()
                         try:
                             catalog.validate(output['tool'], output['arguments'])
-                            if not self.progress['messages']:
-                                preamble=getattr(self.runtime,'last_preamble',None)
-                                if not preamble and hasattr(self.runtime,'announce'):
-                                    preamble=self.runtime.announce(output['tool'],output['arguments'],text)
-                                    generation=getattr(self.runtime,'last_announcement_generation',None)
-                                    if generation is not None:
-                                        store.db.execute('INSERT INTO generation_events(turn_id,ts,body) VALUES (?,?,?)',
-                                            (uid,now(),json.dumps(generation,ensure_ascii=False)))
+                            # Un aviso por cada llamada, no solo por la primera: en un turno
+                            # con cuatro herramientas se veía la primera y las otras tres
+                            # pasaban mudas, así que el recorrido era invisible.
+                            preamble=getattr(self.runtime,'last_preamble',None)
+                            primera = not self.progress['messages']
+                            # La inferencia de respaldo solo en la primera. Pedir una
+                            # generación entera en cada paso para redactar «voy a mirarlo»
+                            # cuesta más que el paso mismo; si el modelo no dice nada por su
+                            # cuenta, la herramienta que corre ya se ve en la traza.
+                            if not preamble and primera and hasattr(self.runtime,'announce'):
+                                preamble=self.runtime.announce(output['tool'],output['arguments'],text)
+                                generation=getattr(self.runtime,'last_announcement_generation',None)
+                                if generation is not None:
+                                    store.db.execute('INSERT INTO generation_events(turn_id,ts,body) VALUES (?,?,?)',
+                                        (uid,now(),json.dumps(generation,ensure_ascii=False)))
+                            if preamble or primera:
                                 event=dict(id=uuid4().hex, turn_id=uid, ts=now(), text=announcement(preamble))
                                 store.db.execute('INSERT INTO progress_events VALUES (?,?,?,?)',
                                     (event['id'],uid,event['ts'],event['text']))
                                 store.db.commit()
-                                self.progress={'turn_id':uid,'messages':[event]}
+                                # Se añade, no se reemplaza: el estado final no borra los avances.
+                                self.progress={'turn_id':uid,
+                                               'messages':[*self.progress['messages'], event]}
                             result = self.tool(store, output['tool'], output['arguments'], turn_id=uid)
                         except (ValueError, TypeError) as exc:
                             result = {'error': str(exc)}

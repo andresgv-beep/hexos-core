@@ -78,5 +78,73 @@ class TraceTest(unittest.TestCase):
             self.assertIn(field, saved[0])
 
 
+class AvancePorPasoTest(unittest.TestCase):
+    """Un turno con varias herramientas tiene que verse entero, no solo su primer paso."""
+
+    class ConPreambulo(ScriptedRuntime):
+        """Como el modelo nativo: a veces antecede la llamada con una frase suya."""
+
+        def __init__(self, *decisions, preambulos=()):
+            super().__init__(*decisions)
+            self.preambulos = list(preambulos)
+            self.last_preamble = None
+            self.anuncios = 0
+
+        def generate(self, messages):
+            self.last_preamble = self.preambulos.pop(0) if self.preambulos else None
+            return super().generate(messages)
+
+        def announce(self, tool, arguments, request):
+            self.anuncios += 1
+            return 'Voy a mirarlo.'
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix='hexos-avance-test-')
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def turno(self, runtime):
+        agent = Agent(self.tmp.name, runtime)
+        return agent, agent.chat('revisa y luego mira los equipos')
+
+    def test_cada_llamada_deja_su_aviso(self):
+        runtime = self.ConPreambulo(
+            {'tool': 'device.list', 'arguments': {}},
+            {'tool': 'device.list', 'arguments': {'query': 'nas'}},
+            {'reply': 'Listo.', 'work': None},
+            preambulos=['Primero miro el inventario.', 'Ahora filtro por nas.', None])
+        agent, resultado = self.turno(runtime)
+        textos = [m['text'] for m in resultado['progress']['messages']]
+        self.assertEqual(textos, ['Primero miro el inventario.', 'Ahora filtro por nas.'])
+        # Y quedan guardados en orden, no solo en la respuesta.
+        with agent.store() as store:
+            filas = [r['text'] for r in store.db.execute(
+                'SELECT text FROM progress_events ORDER BY rowid')]
+        self.assertEqual(filas, textos)
+
+    def test_la_inferencia_de_respaldo_solo_se_paga_una_vez(self):
+        # Una generación entera por paso solo para redactar «voy a mirarlo» costaría
+        # más que el paso; sin preámbulo propio, la herramienta ya se ve en la traza.
+        runtime = self.ConPreambulo(
+            {'tool': 'device.list', 'arguments': {}},
+            {'tool': 'device.list', 'arguments': {'query': 'nas'}},
+            {'reply': 'Listo.', 'work': None},
+            preambulos=[None, None, None])
+        agent, resultado = self.turno(runtime)
+        self.assertEqual(runtime.anuncios, 1)
+        self.assertEqual([m['text'] for m in resultado['progress']['messages']],
+                         ['Voy a mirarlo.'])
+
+    def test_el_estado_final_no_borra_los_avances(self):
+        runtime = self.ConPreambulo(
+            {'tool': 'device.list', 'arguments': {}},
+            {'reply': 'Ya está.', 'work': None},
+            preambulos=['Miro el inventario.', None])
+        agent, resultado = self.turno(runtime)
+        self.assertEqual(resultado['reply'], 'Ya está.')
+        self.assertEqual(len(resultado['progress']['messages']), 1)
+
+
 if __name__ == '__main__':
     unittest.main()
