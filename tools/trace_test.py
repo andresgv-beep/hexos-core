@@ -227,5 +227,56 @@ class VerificacionTest(unittest.TestCase):
         self.assertIn('no se pudo releer', entrada['evidence'])
 
 
+class CierreTest(unittest.TestCase):
+    """El cierre sale de lo comprobado, no de que el modelo decidiera responder."""
+
+    def cierre(self, *estados, acceso=False):
+        traza = [dict(tool='t%d' % i, verification=e, evidence='por qué',
+                      result=dict(access_required=True) if acceso and i == 0 else {})
+                 for i, e in enumerate(estados)]
+        return Agent.closure(traza)
+
+    def test_todo_comprobado(self):
+        r = self.cierre('confirmada', 'no_requerida')
+        self.assertEqual(r['reason'], 'comprobado')
+        self.assertEqual(r['unverified'], [])
+
+    def test_una_que_no_llego_deja_el_turno_parcial(self):
+        r = self.cierre('confirmada', 'no_cumplida')
+        self.assertEqual(r['reason'], 'parcial')
+        self.assertEqual([p['tool'] for p in r['unverified']], ['t1'])
+
+    def test_no_poder_comprobar_deja_el_turno_incierto(self):
+        r = self.cierre('confirmada', 'desconocida')
+        self.assertEqual(r['reason'], 'incierto')
+        self.assertIn('No saber no es haberlo hecho', r['note'])
+
+    def test_lo_que_no_llego_pesa_mas_que_lo_que_no_se_sabe(self):
+        # Con las dos, lo que falló es la noticia; lo incierto viene detrás.
+        r = self.cierre('desconocida', 'no_cumplida')
+        self.assertEqual(r['reason'], 'parcial')
+        self.assertEqual(len(r['unverified']), 2)
+
+    def test_faltar_acceso_manda_sobre_todo_lo_demas(self):
+        r = self.cierre('no_cumplida', acceso=True)
+        self.assertEqual(r['reason'], 'bloqueado')
+
+    def test_responder_sin_ejecutar_nada_se_dice_tal_cual(self):
+        r = Agent.closure([])
+        self.assertEqual(r['reason'], 'sin_operaciones')
+        self.assertEqual(r['unverified'], [])
+
+    def test_el_cierre_viaja_con_la_respuesta(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(tmp, ScriptedRuntime(
+                {'tool': 'device.identify', 'arguments': {'target': 'no existe', 'name': 'x'}},
+                {'reply': 'Hecho.', 'work': None}))
+            resultado = agent.chat('identifica algo')
+        # El modelo dice «Hecho.»; la traza dice que no.
+        self.assertEqual(resultado['reply'], 'Hecho.')
+        self.assertEqual(resultado['closure']['reason'], 'parcial')
+        self.assertEqual(resultado['closure']['unverified'][0]['tool'], 'device.identify')
+
+
 if __name__ == '__main__':
     unittest.main()

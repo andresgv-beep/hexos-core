@@ -347,6 +347,34 @@ class Agent:
                 desde = donde + 1
         return hallados[0] if len(hallados) == 1 else None
 
+    @staticmethod
+    def closure(trace):
+        """Cómo se cierra el turno, según lo COMPROBADO y no según lo que diga el modelo.
+
+        Marcar «objetivo cumplido» porque el modelo decidió responder sería
+        decoración: se calcula de la traza, que es donde están las comprobaciones.
+        No cambia la respuesta ni cuesta otra inferencia; dice lo que se sostiene.
+        """
+        estados = [paso.get('verification') for paso in trace]
+        pendientes = [dict(tool=paso['tool'], verification=paso.get('verification'),
+                           evidence=paso.get('evidence'))
+                      for paso in trace
+                      if paso.get('verification') in ('no_cumplida', 'desconocida')]
+        if any(isinstance(paso.get('result'), dict) and paso['result'].get('access_required')
+               for paso in trace):
+            razon, nota = 'bloqueado', 'Falta el acceso a un equipo; lo pedido no se pudo comprobar.'
+        elif 'no_cumplida' in estados:
+            razon, nota = 'parcial', ('Alguna operación no llegó a su objetivo. Lo que no esté '
+                                      'en la lista de comprobadas no se ha verificado.')
+        elif 'desconocida' in estados:
+            razon, nota = 'incierto', ('Algo quedó sin poder comprobarse. No saber no es haberlo '
+                                       'hecho, y tampoco autoriza a repetirlo.')
+        elif trace:
+            razon, nota = 'comprobado', 'Cada operación del turno quedó comprobada o no requería comprobación.'
+        else:
+            razon, nota = 'sin_operaciones', 'El turno se respondió sin ejecutar nada.'
+        return dict(reason=razon, note=nota, unverified=pendientes)
+
     def verify(self, store, name, args, result):
         """¿La herramienta logró lo que pretendía? Lo declara el catálogo y lo
         ejecuta HexOS, para que no dependa de que el modelo se acuerde.
@@ -983,10 +1011,11 @@ class Agent:
                     store.db.commit()
                     corte_avisado, self.context_cut = self.context_cut, None
                     return dict(reply=output['reply'], work=job, document=document, tools=trace, context_sources=context_sources, progress=self.progress,
-                        context_cut=corte_avisado,
+                        context_cut=corte_avisado, closure=self.closure(trace),
                         diagnostics=dict(format_retries=format_retries, schema_retries=schema_retries,
                                          recovery_requests=recovery_requests))
-                raise RuntimeError('Se alcanzó el límite de consultas del turno')
+                raise RuntimeError('Se alcanzó el límite de consultas del turno; lo hecho hasta '
+                                   'aquí queda en la traza y no se ha comprobado lo que faltaba')
         finally:
             self.state = 'idle'
             self.lock.release()

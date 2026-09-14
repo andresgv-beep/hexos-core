@@ -94,6 +94,18 @@ test('reads what Helios announces mid-turn, and ignores what is not usable', asy
   assert.deepEqual(vacio.progress, { turnId: null, messages: [] });
 });
 
+test('reads how the turn closed, and ignores a malformed closure', async () => {
+  const t = createHexosTransport('/api', fixture({ reply: 'Hecho.', tools: [],
+    closure: { reason: 'parcial', note: 'Alguna operación no llegó a su objetivo.',
+               unverified: [{ tool: 'device_identify', verification: 'no_cumplida' }, { mal: 1 }] } }));
+  const d = await t.send('haz algo');
+  assert.equal(d.closure?.reason, 'parcial');
+  // Las entradas sin herramienta no se cuelan como si fueran pasos reales.
+  assert.deepEqual(d.closure?.unverified.map(u => u.tool), ['device_identify']);
+  const sin = await createHexosTransport('/api', fixture({ reply: 'Hecho.', tools: [] })).send('x');
+  assert.equal(sin.closure, undefined);
+});
+
 test('confirms the thinking change instead of assuming it worked', async () => {
   const transporte = createHexosTransport('/api', fixture({ thinking: false, persisted: true }));
   assert.equal(await transporte.setThinking(false), false);

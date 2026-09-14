@@ -12,6 +12,8 @@ export interface MessageWindow {
   pending?: boolean;
   /** Lo que Helios anuncia que va a hacer, mientras lo hace. Palabras suyas. */
   progress?: string[];
+  /** Solo cuando la respuesta NO se sostiene entera en lo comprobado. */
+  caveat?: { note: string; tools: string[] };
   revealing?: boolean;
   absorbing?: boolean;
   slot: number;
@@ -131,6 +133,10 @@ export function FloatingMessage({ message, onMove, onMinimize, onClose, onFocus,
           {message.progress?.length ? "Helios está en ello…" : "Helios está pensando…"}
         </p>}
         {message.reply && <ProgressiveReply key={message.reply} text={message.reply} onComplete={() => onReplyComplete?.(message.id)} />}
+        {message.caveat && <p className="reply-caveat" role="note">
+          {message.caveat.note}
+          {message.caveat.tools.length > 0 && <> Sin comprobar: {message.caveat.tools.join(", ")}.</>}
+        </p>}
         {message.error && <p className="reply-status" role="alert">{message.error}</p>}
         <details className="original-message"><summary>Tu mensaje</summary><p>{message.text}</p></details>
       </div>

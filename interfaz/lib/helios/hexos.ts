@@ -4,7 +4,9 @@ import { parseToolActivities, type ToolActivity } from "./tools";
 /** Llega el turno en que HexOS corta el contexto por lleno: lo anterior deja de
  *  estar en la ventana del modelo, aunque siga entero en el archivo. */
 export interface ContextCut { at: string; messages: number; characters: number }
-export interface ChatReply { reply: string; tools: ToolActivity[]; document?: unknown; contextCut?: ContextCut }
+/** Cómo se cierra el turno según lo COMPROBADO, no según lo que diga la respuesta. */
+export interface Closure { reason: string; note: string; unverified: { tool: string; verification?: string; evidence?: string }[] }
+export interface ChatReply { reply: string; tools: ToolActivity[]; document?: unknown; contextCut?: ContextCut; closure?: Closure }
 export interface HistoryMessage { role: "user" | "assistant"; text: string }
 /** Lo que Helios dice que va a hacer, antes de hacerlo. Lo escribe el modelo, no
  *  HexOS, y llega a mitad de turno: por eso viaja aparte de la respuesta. */
@@ -130,8 +132,17 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
       const contextCut = isRecord(c) && typeof c.at === "string" && typeof c.messages === "number"
         && typeof c.characters === "number"
         ? { at: c.at, messages: c.messages, characters: c.characters } : undefined;
+      const c2 = data.closure;
+      const closure = isRecord(c2) && typeof c2.reason === "string" && typeof c2.note === "string"
+        ? { reason: c2.reason, note: c2.note,
+            unverified: (Array.isArray(c2.unverified) ? c2.unverified : []).filter(isRecord)
+              .filter(u => typeof u.tool === "string")
+              .map(u => ({ tool: String(u.tool),
+                           verification: typeof u.verification === "string" ? u.verification : undefined,
+                           evidence: typeof u.evidence === "string" ? u.evidence : undefined })) }
+        : undefined;
       return { reply: data.reply, tools: parseToolActivities(data.tools, "done"),
-               document: data.document, contextCut };
+               document: data.document, contextCut, closure };
     },
   };
 }

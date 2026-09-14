@@ -303,7 +303,13 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
           setPrevious([]);
           setContextCut(result.contextCut);
         }
-        setWindows(items => items.map(item => item.id === id ? { ...item, pending: false, revealing: Boolean(result.reply), reply: result.reply } : item));
+        // Si lo comprobado no sostiene la respuesta, se dice junto a ella. No se
+        // corrige lo que escribió el modelo: se añade lo que la traza sí sabe.
+        const cierre = result.closure;
+        const reparo = cierre && !["comprobado", "sin_operaciones"].includes(cierre.reason)
+          ? { note: cierre.note, tools: cierre.unverified.map(u => u.tool) }
+          : undefined;
+        setWindows(items => items.map(item => item.id === id ? { ...item, pending: false, revealing: Boolean(result.reply), reply: result.reply, caveat: reparo } : item));
         setAnnouncement(`Helios ha respondido en la conversación ${id}`);
       }
     } catch (error) {
