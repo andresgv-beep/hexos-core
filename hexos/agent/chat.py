@@ -615,7 +615,7 @@ class Agent:
                                      'el modelo no lo pidió. Cero coincidencias no demuestra '
                                      'ausencia: history_search con otra palabra puede encontrarlo.'))
 
-    def harvest_facts(self, store, text, turn_id):
+    def harvest_facts(self, store, text, turn_id, trace=None):
         """Guardar lo que la persona acaba de contar de sí misma, sin que lo pida.
 
         Tres filtros en cascada: el patrón decide si merece una generación, la
@@ -627,6 +627,7 @@ class Agent:
             return ''
         if not AFIRMACION.search(text or ''):
             return ''
+        empezado = time.monotonic()
         try:
             candidatos = self.runtime.extract_facts(text)
         except Exception:
@@ -638,6 +639,7 @@ class Agent:
                              (turn_id, now(), json.dumps(generacion, ensure_ascii=False)))
             store.db.commit()
         anotado = []
+        guardados = []
         for hecho in candidatos:
             try:
                 resultado = self.remember_fact(store, hecho, turn_id)
@@ -649,10 +651,24 @@ class Agent:
             # Con «yo» basta el atributo; con otro sujeto hay que nombrarlo, o
             # hermana/nombre y ordenador/nombre se leen los dos como «nombre».
             etiqueta = atributo if sujeto == 'yo' else resultado['key'].replace('/', ' · ')
+            guardados.append(resultado['key'] + ' = ' + resultado['value'])
             anotado.append(('He corregido' if resultado.get('corrected') else 'He anotado')
                            + ' ' + etiqueta + ': ' + resultado['value']
                            + (' (antes ' + resultado['previous'] + ')'
                               if resultado.get('previous') else ''))
+        # Queda en la traza como cualquier otra escritura. Sin esto, el turno decía
+        # «he anotado tu trato» con la traza vacía y el cierre lo marcaba como
+        # afirmación sin respaldo: el hecho estaba en HERA, pero no constaba.
+        if guardados and trace is not None:
+            trace.append(dict(tool='profile.remember', arguments=dict(count=len(guardados)),
+                              effect='write', changes_state=True, ts=now(),
+                              seconds=round(time.monotonic() - empezado, 3), failed=False,
+                              verification='confirmada',
+                              evidence='releído del perfil: ' + ', '.join(guardados),
+                              result=dict(saved=guardados, requested_by='hexos',
+                                          note='Lo guardó HexOS al ver que la persona contaba algo '
+                                               'de sí misma; el modelo no lo pidió. Las palabras son '
+                                               'suyas y HERA conserva la frase como evidencia.')))
         # Decirlo siempre: si se equivoca, que se vea en el momento y no dentro de un mes.
         return '· ' + '. '.join(anotado) + '.' if anotado else ''
 
@@ -1076,7 +1092,7 @@ class Agent:
                             request=prompt_text, source_ref='turn:' + uid), actor='user')
                         job = store.dispatch(dict(op='classify', id=job['id'], revision=job['revision'],
                             **{k:v for k,v in proposed.items() if k != 'title'}), actor='model')
-                    recordado = self.harvest_facts(store, text, uid)
+                    recordado = self.harvest_facts(store, text, uid, trace)
                     if recordado:
                         output['reply'] = output['reply'].rstrip() + '\n\n' + recordado
                     store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',

@@ -297,3 +297,28 @@ class TratoTest(unittest.TestCase):
                       'saca el listado de vecinos', 'gracias socio'):
             with self.subTest(texto):
                 self.assertIsNone(AFIRMACION.search(texto), texto)
+
+
+class TrazaDelPerfilTest(unittest.TestCase):
+    """Lo que HexOS guarda en el perfil tiene que constar, o el propio cierre lo
+    lee como una afirmación sin respaldo."""
+
+    class Runtime:
+        def call(self, request): pass
+        def generate(self, messages): return {'reply': 'Listo.', 'work': None}
+        def extract_facts(self, text): return [{'key': 'yo/trato', 'value': 'más cercano'}]
+
+    def test_el_guardado_queda_en_la_traza_y_el_turno_cierra_comprobado(self):
+        from hexos.agent.chat import Agent
+        tmp = tempfile.TemporaryDirectory(prefix='hexos-traza-perfil-')
+        self.addCleanup(tmp.cleanup)
+        agent = Agent(tmp.name, self.Runtime())
+        agent.profile = FakeProfile()
+        r = agent.chat('me gustaría que seas más cercano')
+        pasos = [t['tool'] for t in r['tools']]
+        self.assertIn('profile.remember', pasos)
+        paso = next(t for t in r['tools'] if t['tool'] == 'profile.remember')
+        self.assertEqual(paso['effect'], 'write')
+        self.assertEqual(paso['result']['requested_by'], 'hexos')
+        # Y por tanto el turno no se cierra como «dice haber guardado y no consta».
+        self.assertEqual(r['closure']['reason'], 'comprobado')
