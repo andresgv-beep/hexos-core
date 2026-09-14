@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import sqlite3
 import sys
+from uuid import uuid4
 
 
 NAME = re.compile(r'[A-Za-z0-9 ._-]{1,64}')
@@ -39,7 +40,18 @@ def store_path(workspace):
     return Path(workspace) / 'credentials.json'
 
 
-def load(workspace):
+def devices_path(workspace):
+    """Las fichas de los equipos, con todo menos el secreto."""
+    return Path(workspace) / 'devices.json'
+
+
+def secrets(workspace):
+    """Solo contraseñas, indexadas por id de equipo.
+
+    Vive aparte de work.sqlite a propósito: ese es el almacén de la conversación,
+    el que se vuelca, se grepea y se lee para armar el prompt. Una contraseña ahí
+    acaba un día al lado del modelo. Aquí no hay nada más que el secreto.
+    """
     path = store_path(workspace)
     if not path.exists():
         return {}
@@ -48,12 +60,78 @@ def load(workspace):
     return json.loads(path.read_text())
 
 
-def save(workspace, name, user, password, port=22, host=None):
-    """Escribe con permisos restringidos desde la creación, sin ventana legible.
+def _write_private(path, data):
+    """Sin ventana legible: se crea ya con 600, no se corrige después."""
+    temporary = path.with_suffix('.tmp')
+    handle = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(handle, 'w') as out:
+        json.dump(data, out, ensure_ascii=False, indent=2)
+    os.replace(temporary, path)
 
-    `host` fija la dirección del equipo. Sin ella se resuelve por los vecinos de
-    la red, que solo sirve estando en la misma: en otra casa, o detrás de una VPN,
-    el equipo no aparece en la tabla ARP y no habría forma de encontrarlo.
+
+def cards(workspace):
+    """Fichas de equipo por nombre: todo lo que se sabe menos la contraseña.
+
+    Un equipo era tres cosas en dos almacenes —una MAC en la red, una dirección
+    fija, y una credencial guardada por nombre—, y cada función las cosía por su
+    cuenta. De ahí que renombrar dejara la credencial huérfana y que borrar dejara
+    restos. Aquí está entero y en un sitio.
+    """
+    migrate(workspace)
+    path = devices_path(workspace)
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text())
+
+
+def card(workspace, name):
+    return cards(workspace).get((name or '').casefold())
+
+
+def migrate(workspace):
+    """Pasa el formato viejo —credencial por nombre con usuario y puerto dentro— al
+    nuevo: ficha con todo, y en el archivo de secretos solo la contraseña, por id."""
+    path = store_path(workspace)
+    if not path.exists():
+        return
+    if path.stat().st_mode & 0o077:
+        raise ValueError('credentials.json es legible por otros; corrige con chmod 600')
+    datos = json.loads(path.read_text())
+    if not datos or not any(isinstance(v, dict) and 'user' in v for v in datos.values()):
+        return
+    fichas = json.loads(devices_path(workspace).read_text()) if devices_path(workspace).exists() else {}
+    claves = {}
+    for nombre, entrada in datos.items():
+        if not isinstance(entrada, dict) or 'user' not in entrada:
+            claves[nombre] = entrada
+            continue
+        identificador = fichas.get(nombre, {}).get('id') or ('equipo/' + uuid4().hex[:12])
+        fichas[nombre] = dict(fichas.get(nombre, {}), id=identificador, name=nombre,
+                              user=entrada['user'], port=entrada.get('port', 22),
+                              host=entrada.get('host'))
+        claves[identificador] = entrada['password']
+    _write_private(devices_path(workspace), fichas)
+    _write_private(path, claves)
+
+
+def load(workspace):
+    """Compatibilidad: la forma de antes, ensamblada desde la ficha y el secreto.
+
+    Se conserva para que lo que ya funciona no tenga que cambiar de golpe; quien
+    solo necesite saber qué equipos hay debería usar `cards`.
+    """
+    fichas, claves = cards(workspace), secrets(workspace)
+    return {nombre: dict(user=f['user'], password=claves.get(f['id'], ''), port=f['port'],
+                         **({'host': f['host']} if f.get('host') else {}))
+            for nombre, f in fichas.items() if f.get('user')}
+
+
+def save(workspace, name, user, password, port=22, host=None):
+    """Guarda el acceso de un equipo: la ficha con todo y el secreto aparte.
+
+    `host` fija la dirección. Sin ella se resuelve por los vecinos de la red, que
+    solo sirve estando en la misma: en otra casa, o detrás de una VPN, el equipo no
+    aparece en la tabla ARP y no habría forma de encontrarlo.
     """
     if not NAME.fullmatch(name or '') or not NAME.fullmatch(user or ''):
         raise ValueError('Nombre de equipo o usuario no válido')
@@ -61,18 +139,67 @@ def save(workspace, name, user, password, port=22, host=None):
         raise ValueError('Puerto no válido')
     if host is not None:
         host = address(host)
-    data = load(workspace)
-    entrada = dict(user=user, password=password, port=port)
-    if host:
-        entrada['host'] = host
-    data[name.casefold()] = entrada
-    path = store_path(workspace)
-    temporary = path.with_suffix('.tmp')
-    handle = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(handle, 'w') as out:
-        json.dump(data, out, ensure_ascii=False, indent=2)
-    os.replace(temporary, path)
-    return dict(saved=name.casefold(), user=user, port=port, host=host)
+    clave = name.casefold()
+    fichas = cards(workspace)
+    anterior = fichas.get(clave, {})
+    # El id no cambia al renombrar ni al reescribir: es lo que ata el secreto a su
+    # equipo. Guardarlo por nombre dejaba la contraseña huérfana al renombrarlo.
+    identificador = anterior.get('id') or ('equipo/' + uuid4().hex[:12])
+    fichas[clave] = dict(anterior, id=identificador, name=clave, user=user, port=port,
+                         host=host or anterior.get('host'))
+    claves = secrets(workspace)
+    claves[identificador] = password
+    _write_private(devices_path(workspace), fichas)
+    _write_private(store_path(workspace), claves)
+    return dict(saved=clave, user=user, port=port, host=fichas[clave].get('host'))
+
+
+def update(workspace, name, port=None, host=None):
+    """Cambia puerto o dirección sin tocar la contraseña.
+
+    Existe porque corregir un puerto obligaba a reescribir la credencial entera, y
+    eso no siempre se puede: quien la tiene puede no estar delante.
+    """
+    fichas = cards(workspace)
+    clave = (name or '').casefold()
+    if clave not in fichas:
+        raise ValueError('No hay acceso guardado de ' + repr(name) +
+                         '. Guardados: ' + (', '.join(sorted(fichas)) or 'ninguno'))
+    if port is None and host is None:
+        raise ValueError('Nada que cambiar: indica puerto, dirección o ambos')
+    ficha = dict(fichas[clave])
+    if port is not None:
+        if type(port) is not int or not 1 <= port <= 65535:
+            raise ValueError('Puerto no válido')
+        ficha['port'] = port
+    if host is not None:
+        ficha['host'] = address(host)
+    fichas[clave] = ficha
+    _write_private(devices_path(workspace), fichas)
+    return dict(updated=clave, user=ficha.get('user'), host=ficha.get('host'),
+                port=ficha.get('port'), password_kept=True)
+
+
+def forget(workspace, name):
+    """Borra el acceso de un equipo: su ficha y su secreto, juntos.
+
+    Borrar tiene que llevárselo todo. Dejar el secreto de un equipo que ya no
+    existe es dejar una contraseña en disco sin nada que la reclame.
+    """
+    fichas = cards(workspace)
+    clave = (name or '').casefold()
+    if clave not in fichas:
+        raise ValueError('No hay acceso guardado de ' + repr(name) +
+                         '. Guardados: ' + (', '.join(sorted(fichas)) or 'ninguno'))
+    retirada = fichas.pop(clave)
+    claves = secrets(workspace)
+    claves.pop(retirada.get('id'), None)
+    _write_private(devices_path(workspace), fichas)
+    if claves:
+        _write_private(store_path(workspace), claves)
+    elif store_path(workspace).exists():
+        store_path(workspace).unlink()
+    return dict(forgotten=clave, user=retirada.get('user'), remaining=sorted(fichas))
 
 
 def only_device(workspace):
@@ -91,39 +218,6 @@ def only_device(workspace):
     raise ValueError('Hay varios equipos guardados y no has dicho cuál: ' +
                      ', '.join(repr(n) for n in guardados) +
                      '. Repite la lectura indicando device.')
-
-
-def update(workspace, name, port=None, host=None):
-    """Cambia puerto o dirección de un acceso ya guardado, sin tocar la contraseña.
-
-    Existe porque corregir un puerto obligaba a volver a escribir la credencial
-    entera, y eso no siempre se puede: quien la tiene puede no estar delante. La
-    contraseña se conserva tal cual y no se lee para nada más que volver a escribirla
-    en su sitio.
-    """
-    data = load(workspace)
-    clave = (name or '').casefold()
-    if clave not in data:
-        raise ValueError('No hay acceso guardado de ' + repr(name) +
-                         '. Guardados: ' + (', '.join(sorted(data)) or 'ninguno'))
-    if port is None and host is None:
-        raise ValueError('Nada que cambiar: indica puerto, dirección o ambos')
-    entrada = dict(data[clave])
-    if port is not None:
-        if type(port) is not int or not 1 <= port <= 65535:
-            raise ValueError('Puerto no válido')
-        entrada['port'] = port
-    if host is not None:
-        entrada['host'] = address(host)
-    data[clave] = entrada
-    path = store_path(workspace)
-    temporary = path.with_suffix('.tmp')
-    handle = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(handle, 'w') as out:
-        json.dump(data, out, ensure_ascii=False, indent=2)
-    os.replace(temporary, path)
-    return dict(updated=clave, user=entrada['user'], host=entrada.get('host'),
-                port=entrada['port'], password_kept=True)
 
 
 HOSTNAME = re.compile(r'[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*', re.I)
@@ -179,25 +273,6 @@ def endpoint(value):
 
 def credentials(workspace, name):
     return load(workspace).get((name or '').casefold())
-
-
-def forget(workspace, name):
-    """Revoca el acceso guardado de un equipo. El archivo se reescribe sin él."""
-    data = load(workspace)
-    if (name or '').casefold() not in data:
-        raise ValueError('No hay acceso guardado de ' + repr(name) +
-                         '. Guardados: ' + (', '.join(sorted(data)) or 'ninguno'))
-    removed = data.pop(name.casefold())
-    path = store_path(workspace)
-    if data:
-        temporary = path.with_suffix('.tmp')
-        handle = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(handle, 'w') as out:
-            json.dump(data, out, ensure_ascii=False, indent=2)
-        os.replace(temporary, path)
-    else:
-        path.unlink()
-    return dict(forgotten=name.casefold(), user=removed['user'], remaining=sorted(data))
 
 
 def resolve(workspace, name):

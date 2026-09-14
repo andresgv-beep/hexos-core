@@ -321,5 +321,62 @@ class EquipoNombradoTest(unittest.TestCase):
             self.assertIsNone(self.agent.device_in_message(store, None))
 
 
+class FichaUnicaTest(unittest.TestCase):
+    """Un equipo es una ficha; la contraseña vive aparte y atada por id."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix='hexos-ficha-')
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_la_ficha_lleva_todo_menos_el_secreto(self):
+        from hexos.agent.hosts import cards, secrets, devices_path
+        save(self.tmp.name, 'synology', 'helios', 'clave', 30, host='casa.ddns.net')
+        ficha = cards(self.tmp.name)['synology']
+        self.assertEqual((ficha['user'], ficha['port'], ficha['host']),
+                         ('helios', 30, 'casa.ddns.net'))
+        self.assertNotIn('password', json.dumps(ficha))
+        # La contraseña, en su archivo y bajo el id del equipo, no bajo su nombre.
+        self.assertEqual(list(secrets(self.tmp.name)), [ficha['id']])
+        self.assertNotIn('clave', devices_path(self.tmp.name).read_text())
+
+    def test_el_secreto_sigue_al_equipo_aunque_cambie_lo_demas(self):
+        from hexos.agent.hosts import cards, credentials, update
+        save(self.tmp.name, 'synology', 'helios', 'clave', 22)
+        identificador = cards(self.tmp.name)['synology']['id']
+        update(self.tmp.name, 'synology', port=30, host='casa.ddns.net')
+        self.assertEqual(cards(self.tmp.name)['synology']['id'], identificador)
+        acceso = credentials(self.tmp.name, 'synology')
+        self.assertEqual((acceso['password'], acceso['port'], acceso['host']),
+                         ('clave', 30, 'casa.ddns.net'))
+
+    def test_borrar_se_lleva_tambien_la_contraseña(self):
+        from hexos.agent.hosts import cards, secrets, forget
+        save(self.tmp.name, 'synology', 'helios', 'clave', 22)
+        save(self.tmp.name, 'otro', 'helios', 'otra', 22)
+        forget(self.tmp.name, 'synology')
+        self.assertEqual(list(cards(self.tmp.name)), ['otro'])
+        # Dejar el secreto de un equipo que ya no existe es dejar una contraseña
+        # en disco sin nada que la reclame.
+        self.assertEqual(list(secrets(self.tmp.name).values()), ['otra'])
+
+    def test_el_formato_viejo_se_migra_solo(self):
+        from hexos.agent.hosts import cards, secrets, credentials, store_path, _write_private
+        _write_private(store_path(self.tmp.name), {
+            'synology': dict(user='helios', password='clave', port=30, host='casa.ddns.net')})
+        ficha = cards(self.tmp.name)['synology']
+        self.assertEqual((ficha['user'], ficha['port'], ficha['host']),
+                         ('helios', 30, 'casa.ddns.net'))
+        self.assertEqual(list(secrets(self.tmp.name).values()), ['clave'])
+        self.assertEqual(credentials(self.tmp.name, 'synology')['password'], 'clave')
+
+    def test_los_dos_archivos_se_crean_privados(self):
+        from hexos.agent.hosts import store_path, devices_path
+        save(self.tmp.name, 'synology', 'helios', 'clave', 22)
+        for ruta in (store_path(self.tmp.name), devices_path(self.tmp.name)):
+            self.assertEqual(ruta.stat().st_mode & 0o777, 0o600, ruta.name)
+
+
 if __name__ == '__main__':
     unittest.main()
