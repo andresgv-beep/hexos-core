@@ -274,3 +274,26 @@ class ProfileMemoryTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TratoTest(unittest.TestCase):
+    """Cómo quiere que se le trate es un dato suyo, como su ciudad o su moto."""
+
+    def test_sus_frases_reales_abren_el_porton(self):
+        from hexos.agent.chat import AFIRMACION
+        # Del 14/09/2026: ninguna de estas guardó nada, porque no pasaban el filtro.
+        for texto in ('tambien me gustaria que seas un poco mas cercano como si fueras mi compañero',
+                      'que lo recuerdes no que lo anotes',
+                      'prefiero que me hables de tú',
+                      'trátame como un compañero',
+                      'no me hables así',
+                      'no seas tan seco'):
+            with self.subTest(texto):
+                self.assertTrue(AFIRMACION.search(texto), texto)
+
+    def test_la_conversación_de_trabajo_no_gasta_una_generación(self):
+        from hexos.agent.chat import AFIRMACION
+        for texto in ('revisa el nas', 'vale', 'qué contenedores hay', 'para el contenedor n8n',
+                      'saca el listado de vecinos', 'gracias socio'):
+            with self.subTest(texto):
+                self.assertIsNone(AFIRMACION.search(texto), texto)

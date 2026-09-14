@@ -114,7 +114,13 @@ AFIRMACION = re.compile(
     r'|trabajo (?:de|en|como)|me dedico a|soy programador|soy \w+ de profesión'
     r'|mi \w+ se llama|a mi \w+ le llamo'
     r'|prefiero|me gusta|no me gusta|odio|suelo'
-    r'|recuerda que|apunta que|no olvides que'
+    # Cómo quiere que se le trate, y su corrección cuando no le gusta. Sus frases
+    # reales —«me gustaría que seas más cercano», «que lo recuerdes»— no pasaban:
+    # «me gusta» no encaja con «me gustaría», y el turno no guardaba nada.
+    r'|me gustar[ií]a|prefiero que|quiero que (?:seas|me)'
+    r'|tr[aá]tame|h[aá]blame|no me (?:hables|trates|contestes|respondas)'
+    r'|no seas|s[eé] m[aá]s|te pido que'
+    r'|recuerda que|apunta que|no olvides que|que lo recuerdes'
     r'|en realidad me llamo|no me llamo)\b', re.I)
 
 

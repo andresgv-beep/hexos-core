@@ -405,6 +405,11 @@ class NativeRuntime:
             '"mi ordenador se llama Rayo" -> [{"key":"ordenador/nombre","value":"Rayo"}]\n'
             '"trabajo de electricista" -> [{"key":"yo/oficio","value":"electricista"}]\n'
             '"prefiero respuestas cortas" -> [{"key":"yo/preferencia","value":"respuestas cortas"}]\n'
+            '"me gustaría que seas más cercano" -> [{"key":"yo/trato","value":"más cercano"}]\n'
+            '"trátame como un compañero" -> [{"key":"yo/trato","value":"como un compañero"}]\n'
+            # Un rechazo sin referente no se completa: «así» señala a la respuesta
+            # anterior, que no está en su mensaje, e inventarlo sería deducir.
+            '"no me hables así" -> []\n'
             '"buenas noches" -> []\n'
             '"revisa el disco" -> []\n'
             'No deduzcas ni completes nada que no esté escrito. '
