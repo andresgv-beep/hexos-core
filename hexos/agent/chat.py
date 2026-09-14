@@ -347,6 +347,39 @@ class Agent:
                 desde = donde + 1
         return hallados[0] if len(hallados) == 1 else None
 
+    def verify(self, store, name, args, result):
+        """¿La herramienta logró lo que pretendía? Lo declara el catálogo y lo
+        ejecuta HexOS, para que no dependa de que el modelo se acuerde.
+
+        Devuelve (estado, evidencia). Estado: no_requerida, confirmada, no_cumplida
+        o desconocida. «Desconocida» no es un fallo: es no saber, y no autoriza a
+        repetir nada.
+        """
+        modo = catalog.TOOLS.get(name, {}).get('verify', 'none')
+        if modo == 'none' or (isinstance(result, dict) and 'error' in result):
+            return ('no_requerida' if modo == 'none' else 'no_cumplida'), None
+        if modo == 'local':
+            return 'confirmada', 'escritura local que devuelve lo escrito'
+        if modo == 'self':
+            # La herramienta ya trajo la comprobación; aquí solo se traduce.
+            outcome = (result or {}).get('outcome')
+            return ({'hecho': 'confirmada', 'no_se_sostuvo': 'no_cumplida'}
+                    .get(outcome, 'desconocida')), outcome
+        if name == 'profile.remember':
+            # HERA rechaza con código de salida 0, así que «lo guardé» no vale como
+            # prueba: hay que volver a leer el perfil y ver el dato dentro.
+            if not self.profile or not result.get('key'):
+                return 'desconocida', 'sin perfil con el que comprobar'
+            try:
+                guardado = self.profile.keys().get(result['key'])
+            except Exception as exc:
+                return 'desconocida', 'no se pudo releer el perfil: ' + str(exc)
+            if guardado == result.get('value'):
+                return 'confirmada', 'releído del perfil: ' + result['key'] + ' = ' + guardado
+            return 'no_cumplida', ('el perfil dice ' + repr(guardado) +
+                                   ' y se pretendía ' + repr(result.get('value')))
+        return 'desconocida', 'sin comprobación implementada para ' + name
+
     def pending_effect(self, store, device, target):
         """Escritura sin resolver sobre ese destino, si la hay."""
         return store.db.execute(
@@ -834,10 +867,15 @@ class Agent:
                             result = {'error': str(exc)}
                         # La traza dice qué hizo cada llamada, cuánto tardó y si escribió algo:
                         # una interfaz debe poder distinguir una lectura de un cambio real.
+                        comprobacion, evidencia = self.verify(store, output['tool'], output['arguments'], result)
                         activity.update(status='failed' if isinstance(result, dict) and 'error' in result else 'done',
+                                        verification=comprobacion,
                                         seconds=round(time.monotonic() - started, 3))
                         trace.append(dict(tool=output['tool'], arguments=output['arguments'],
                                           effect=effect, changes_state=effect != 'read',
+                                          # «Se ejecutó» y «logró lo que pretendía» son cosas
+                                          # distintas, y hasta ahora se decían con el mismo campo.
+                                          verification=comprobacion, evidence=evidencia,
                                           ts=now(), seconds=round(time.monotonic() - started, 3),
                                           failed='error' in result if isinstance(result, dict) else False,
                                           result=result))

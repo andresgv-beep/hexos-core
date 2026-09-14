@@ -146,5 +146,86 @@ class AvancePorPasoTest(unittest.TestCase):
         self.assertEqual(len(resultado['progress']['messages']), 1)
 
 
+class VerificacionTest(unittest.TestCase):
+    """«Se ejecutó» y «logró lo que pretendía» no son lo mismo."""
+
+    class Perfil:
+        def __init__(self, confirmados=None, rompe=False):
+            self.confirmados = dict(confirmados or {})
+            self.rompe = rompe
+        def read(self): return ''
+        def keys(self):
+            if self.rompe: raise RuntimeError('HERA no contesta')
+            return dict(self.confirmados)
+        def remember(self, key, value, text, evidence): self.confirmados[key] = value
+        def correct(self, key, value, text, evidence): self.confirmados[key] = value
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix='hexos-verif-')
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def agente(self, perfil=None, *decisions):
+        return Agent(self.tmp.name, ScriptedRuntime(*decisions), perfil)
+
+    def test_una_lectura_no_tiene_nada_que_comprobar(self):
+        agent = self.agente(None,
+            {'tool': 'device.list', 'arguments': {}}, {'reply': 'Ya.', 'work': None})
+        entrada = agent.chat('mira')['tools'][0]
+        self.assertEqual(entrada['verification'], 'no_requerida')
+
+    def test_una_escritura_local_se_da_por_confirmada(self):
+        agent = self.agente(None,
+            {'tool': 'device.refresh', 'arguments': {}}, {'reply': 'Ya.', 'work': None})
+        entrada = agent.chat('actualiza')['tools'][0]
+        self.assertEqual(entrada['verification'], 'confirmada')
+
+    def test_un_error_nunca_es_confirmacion(self):
+        agent = self.agente(None,
+            {'tool': 'device.identify', 'arguments': {'target': 'no existe', 'name': 'x'}},
+            {'reply': 'Ya.', 'work': None})
+        entrada = agent.chat('identifica')['tools'][0]
+        self.assertEqual(entrada['verification'], 'no_cumplida')
+
+    def test_el_perfil_se_relee_para_poder_decir_guardado(self):
+        # HERA rechaza con código 0, así que «lo guardé» no vale como prueba.
+        perfil = self.Perfil()
+        agent = self.agente(perfil,
+            {'tool': 'profile.remember', 'arguments': {'key': 'nombre', 'value': 'Andrés'}},
+            {'reply': 'Ya.', 'work': None})
+        entrada = agent.chat('me llamo Andrés')['tools'][0]
+        self.assertEqual(entrada['verification'], 'confirmada')
+        self.assertIn('yo/nombre = Andrés', entrada['evidence'])
+
+    def test_si_el_perfil_no_lo_tiene_no_se_dice_hecho(self):
+        class Traidor(self.Perfil):
+            def remember(self, key, value, text, evidence): pass   # como el rechazo de HERA
+        perfil = Traidor()
+        agent = self.agente(perfil,
+            {'tool': 'profile.remember', 'arguments': {'key': 'nombre', 'value': 'Andrés'}},
+            {'reply': 'Ya.', 'work': None})
+        entrada = agent.chat('me llamo Andrés')['tools'][0]
+        self.assertEqual(entrada['verification'], 'no_cumplida')
+        self.assertIn('Andrés', entrada['evidence'])
+
+    def test_no_poder_comprobar_no_es_ni_exito_ni_fallo(self):
+        # HERA contesta al mirar si el dato existía y se cae al ir a comprobarlo.
+        # Si fallara antes, el turno entero falla y eso ya es otro caso.
+        class SeCaeAlComprobar(self.Perfil):
+            def __init__(self): super().__init__(); self.veces = 0
+            def keys(self):
+                self.veces += 1
+                if self.veces > 1: raise RuntimeError('HERA no contesta')
+                return dict(self.confirmados)
+        perfil = SeCaeAlComprobar()
+        agent = self.agente(perfil,
+            {'tool': 'profile.remember', 'arguments': {'key': 'nombre', 'value': 'Andrés'}},
+            {'reply': 'Ya.', 'work': None})
+        entrada = agent.chat('me llamo Andrés')['tools'][0]
+        self.assertEqual(entrada['verification'], 'desconocida')
+        self.assertIn('no se pudo releer', entrada['evidence'])
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -147,6 +147,34 @@ class ProfileMemoryTest(unittest.TestCase):
         # Sin esto el modelo pediría una cita en vez de dejar que HexOS la tome.
         self.assertIn('no aportes citas', spec['description'])
 
+    def test_una_clave_con_espacios_se_lee_entera(self):
+        # `hera lista` usa anchos fijos "%-5s %-11s %-28s %s". Partir por espacios
+        # troceaba 'yo/coche nuevo' en clave 'yo/coche' y valor 'nuevo  Bruno', y
+        # entonces un dato bien guardado parecía no estar.
+        import subprocess
+        from hexos.agent.continuity import HeraProfile
+        salida = ('f19   confirmado  yo/coche nuevo               Bruno   [u91]\n'
+                  'f18   confirmado  yo/nombre                    Andrés   [u90]\n')
+        perfil = HeraProfile('/bin/true', '/tmp')
+        with patch('hexos.agent.continuity.subprocess.run',
+                   return_value=subprocess.CompletedProcess([], 0, stdout=salida, stderr='')):
+            self.assertEqual(perfil.keys(),
+                             {'yo/coche nuevo': 'Bruno', 'yo/nombre': 'Andrés'})
+
+    def test_una_clave_desbordada_se_salta_en_vez_de_leerse_mal(self):
+        # Más de 28 caracteres: no hay forma de saber dónde acaba sin adivinar, y
+        # leerla mal es peor que no leerla.
+        import subprocess
+        from hexos.agent.continuity import HeraProfile
+        larga = 'yo/' + 'x' * 40
+        salida = ('f20   confirmado  ' + larga + ' Valor   [u92]\n'
+                  'f18   confirmado  yo/nombre                    Andrés   [u90]\n')
+        perfil = HeraProfile('/bin/true', '/tmp')
+        with patch('hexos.agent.continuity.subprocess.run',
+                   return_value=subprocess.CompletedProcess([], 0, stdout=salida, stderr='')):
+            claves = perfil.keys()
+        self.assertEqual(claves, {'yo/nombre': 'Andrés'})
+
     def test_hera_lista_se_parsea_con_sus_columnas(self):
         import subprocess
         from hexos.agent.continuity import HeraProfile

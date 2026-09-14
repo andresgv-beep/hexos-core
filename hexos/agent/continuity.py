@@ -30,9 +30,19 @@ class HeraProfile:
             raise ValueError('HERA no registró el mensaje como evidencia')
         return identifier
 
+    # `hera lista` imprime con anchos fijos: "%-5s %-11s %-28s %s".
+    CLAVE_DESDE, CLAVE_HASTA = 18, 46
+
     def keys(self):
-        """Claves ya confirmadas. `hera lista` imprime id · estado · clave · valor,
-        con un `-> sustituido_por` opcional para las reemplazadas."""
+        """Claves ya confirmadas, leídas por POSICIÓN y no partiendo por espacios.
+
+        Partir por espacios troceaba mal cualquier clave que llevara uno: 'yo/coche
+        nuevo' se leía como clave 'yo/coche' y valor 'nuevo  Bruno', y entonces el
+        dato guardado parecía no estar. Las columnas son de ancho fijo, así que la
+        posición sí es fiable... mientras la clave quepa. Si se desborda no hay
+        forma de saber dónde acaba, y ahí se salta la línea: leerla mal es peor que
+        no leerla.
+        """
         result = subprocess.run([self.binary, 'lista'],
             env=dict(os.environ, HELIOS_HOME=self.home), capture_output=True,
             text=True, timeout=10)
@@ -40,11 +50,16 @@ class HeraProfile:
             raise ValueError('HERA no devolvió la lista de hechos')
         claves = {}
         for line in (result.stdout or '').splitlines():
-            campos = line.split(None, 3)
-            if len(campos) == 4 and campos[1] == 'confirmado':
-                # El valor va hasta la marca de sustitución o la cita, lo que llegue antes.
-                valor = re.split(r'\s+->\s|\s{2,}\[', campos[3])[0].strip()
-                claves[campos[2]] = valor
+            campos = line.split(None, 2)
+            if len(campos) < 3 or campos[1] != 'confirmado':
+                continue
+            if len(line) <= self.CLAVE_HASTA or line[self.CLAVE_HASTA - 1] != ' ':
+                continue   # clave desbordada: no se puede separar sin adivinar
+            clave = line[self.CLAVE_DESDE:self.CLAVE_HASTA].strip()
+            # El valor va hasta la marca de sustitución o la cita, lo que llegue antes.
+            valor = re.split(r'\s+->\s|\s{2,}\[', line[self.CLAVE_HASTA:])[0].strip()
+            if clave:
+                claves[clave] = valor
         return claves
 
     def correct(self, key, value, text, evidence):
