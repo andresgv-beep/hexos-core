@@ -213,6 +213,34 @@ class PreguntasAbiertasTest(unittest.TestCase):
         self.assertIn('Nunca llegó a arrancar', pregunta['unknown'])
         self.assertIsNone(pregunta['ask'])
 
+    def test_uno_en_bucle_se_señala_sin_afirmar_que_el_bucle_siga(self):
+        # «fallo repetido» de la lista de aceptación: se veía `restarting` y pasaba
+        # por el listado como un estado más.
+        r = self.listar([('d', 'restarting', 'Restarting (1) 5 seconds ago', 'img')])
+        fila = r['containers'][0]
+        self.assertEqual(fila['restarting']['exit_code'], 1)
+        pregunta = r['open_questions'][0]
+        self.assertIn('levantando otra vez', pregunta['unknown'])
+        # Un estado puntual no demuestra un bucle: puede ser el primer reintento.
+        self.assertIn('puede ser el primer reintento', pregunta['unknown'])
+        self.assertIn('no se pueden leer', pregunta['ask'])
+
+    def test_un_codigo_de_caida_que_no_conozco_no_se_interpreta(self):
+        r = self.listar([('f', 'restarting', 'Restarting (99) 2 seconds ago', 'img')])
+        self.assertFalse(r['containers'][0]['restarting']['known'])
+        self.assertIn('no interpreto', r['open_questions'][0]['unknown'])
+
+    def test_el_healthy_se_marca_como_chequeo_de_docker(self):
+        # Leerlo como garantía de que el servicio sirve es fácil, y es falso.
+        r = self.listar([('e', 'running', 'Up 2 weeks (healthy)', 'img'),
+                         ('n8n', 'running', 'Up 2 weeks', 'img')])
+        porNombre = {c['name']: c for c in r['containers']}
+        self.assertTrue(porNombre['e']['health_is_dockers'])
+        self.assertNotIn('health_is_dockers', porNombre['n8n'])
+        self.assertIn('no prueba de que el servicio funcione', r['note_state'])
+        # Y estar sano según docker no abre preguntas: no es un problema.
+        self.assertEqual(r['open_questions'], [])
+
     def test_sin_nada_parado_no_hay_preguntas_que_perseguir(self):
         r = self.listar([('n8n', 'running', 'Up 2 weeks', 'img')])
         self.assertEqual(r['open_questions'], [])

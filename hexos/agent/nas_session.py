@@ -200,6 +200,9 @@ RECIEN = re.compile(r'^Up\s+(?:Less than a second|\d+\s+seconds?)\b', re.I)
 
 
 SALIDA = re.compile(r'^Exited\s+\((\d+)\)', re.I)
+# «Restarting (1) 5 seconds ago»: docker lo está levantando otra vez porque se
+# volvió a caer. El número es su último código de salida, no cuántas veces pasó.
+REINTENTO = re.compile(r'^Restarting\s+\((\d+)\)', re.I)
 # Los que dicen algo por sí solos. Lo que no está aquí se deja sin interpretar.
 CODIGOS = {0: 'terminó por su cuenta sin error, o lo pararon',
            1: 'terminó con error',
@@ -220,6 +223,21 @@ def porque_termino(status):
     codigo = int(encontrado.group(1))
     return dict(exit_code=codigo, reading=CODIGOS.get(codigo),
                 known=bool(CODIGOS.get(codigo)))
+
+
+def esta_en_bucle(status):
+    """¿Docker lo está levantando otra vez? Entonces se volvió a caer.
+
+    Un contenedor en bucle se ve `restarting`, y sin interpretarlo pasaba por el
+    listado como un estado más. El código que trae es el de su última caída; no
+    dice cuántas veces ha pasado, y este estado tampoco demuestra que el bucle
+    siga —puede ser el primer reintento.
+    """
+    encontrado = REINTENTO.match((status or '').strip())
+    if not encontrado:
+        return None
+    codigo = int(encontrado.group(1))
+    return dict(exit_code=codigo, reading=CODIGOS.get(codigo), known=bool(CODIGOS.get(codigo)))
 
 
 def arranco_ahora(status):
@@ -383,7 +401,27 @@ def present_result(result, section, requested_section=None):
                 terminacion = porque_termino(fila.get('status'))
                 if terminacion:
                     fila['ended'] = terminacion
-                if fila['state'] == 'created':
+                bucle = esta_en_bucle(fila.get('status'))
+                if bucle:
+                    fila['restarting'] = bucle
+                # `(healthy)` es el chequeo que el propio contenedor declara, no
+                # prueba de que el servicio haga su trabajo. Se dice, porque leerlo
+                # como garantía es fácil.
+                if 'health' in (fila.get('status') or '').lower():
+                    fila['health_is_dockers'] = True
+                if bucle:
+                    lectura = bucle.get('reading')
+                    preguntas.append(dict(
+                        about=fila['name'],
+                        unknown=('Docker lo está levantando otra vez: se cayó y ' +
+                                 ('terminó así: ' + lectura + '.' if lectura else
+                                  'salió con un código que no interpreto.') +
+                                 ' No se sabe cuántas veces ha pasado ni si sigue pasando: este '
+                                 'estado puede ser el primer reintento.'),
+                        ask='nas_read section=containers container=' + fila['name'] +
+                            ' repetido en el tiempo enseña si vuelve a caer; los registros del '
+                            'contenedor, que dirían por qué, no se pueden leer desde aquí.'))
+                elif fila['state'] == 'created':
                     preguntas.append(dict(
                         about=fila['name'],
                         unknown='Nunca llegó a arrancar; no hay estado del que deducir por qué.',
@@ -399,7 +437,11 @@ def present_result(result, section, requested_section=None):
                             ' añade su imagen; los registros del contenedor no se pueden leer desde aquí.'))
             result = dict(containers=rows, total=len(rows),
                           open_questions=preguntas,
-                          note_state='State running/exited/created; Status es el texto de docker. '
+                          note_state='State running/exited/created/restarting; Status es el texto de '
+                                     'docker. `restarting` significa que se cayó y docker lo levanta '
+                                     'otra vez. `health_is_dockers` avisa de que el (healthy) del '
+                                     'Status es el chequeo declarado por el contenedor, no prueba de '
+                                     'que el servicio funcione. '
                                      'Un contenedor created nunca llegó a arrancar. `ended` interpreta '
                                      'el código de salida de los parados. open_questions dice lo que '
                                      'esta lectura NO responde y con qué se puede seguir: si algo de '
