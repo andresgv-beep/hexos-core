@@ -200,12 +200,28 @@ class AfirmacionSinTrazaTest(unittest.TestCase):
         self.assertEqual(cierre['reason'], 'no_consta')
         self.assertIn('compruébalo en el núcleo', cierre['note'])
 
+    def test_lo_que_hizo_el_NAS_no_es_lo_que_hizo_helios(self):
+        # Salida real, 14/09/2026: una revisión sin nada que guardar disparaba la red
+        # por «el sistema ha registrado», que habla del NAS y no de Helios.
+        for texto in ('El sistema ha registrado múltiples eventos de desconexión.',
+                      'El kernel ha reiniciado el enlace varias veces.',
+                      'DSM ha creado una instantánea automática.',
+                      'He vuelto a revisar srv1 y sigue igual.',
+                      # «registrar» lo hace también un NAS en su log: fuera de las
+                      # formas impersonales, solo cuenta en primera persona.
+                      'El evento quedó registrado en el kernel.'):
+            with self.subTest(texto):
+                self.assertEqual(self.cerrar(texto, self.LECTURA)['reason'], 'comprobado')
+
+    def test_negar_haberlo_guardado_no_es_afirmarlo(self):
+        self.assertEqual(self.cerrar('No he guardado nada todavía.', self.LECTURA)['reason'], 'comprobado')
+
     def test_las_formas_con_las_que_este_modelo_canta_una_escritura(self):
         for texto in ('La he guardado en una nota.', 'He anotado el problema.',
                       'Te había preparado y guardado esa información.',
                       'Ya la había creado.', 'Hemos actualizado la nota.',
                       'He apuntado lo que me dices.', 'He creado la nota.',
-                      'He reiniciado el contenedor.', 'Quedó registrado.'):
+                      'He reiniciado el contenedor.', 'Quedó guardada.'):
             with self.subTest(texto):
                 self.assertEqual(self.cerrar(texto, self.LECTURA)['reason'], 'no_consta')
 

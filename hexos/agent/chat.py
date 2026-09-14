@@ -355,11 +355,16 @@ class Agent:
     HECHO = ('guardad|anotad|apuntad|cread|registrad|reiniciad|parad|arrancad|'
              'encendid|apagad|detenid|borrad|eliminad|actualizad')
     ESCRITURA_DICHA = re.compile(
-        # Auxiliar + participio, admitiendo un verbo intercalado: la frase con la que
-        # falló de verdad era «te había preparado y guardado esa información».
-        r'\b(?:he|ha|hemos|hab[íi]a|hab[íi]amos|hab[íi]as)\b(?:\s+\w+)?(?:\s+y)?\s+(?:' + HECHO + r')[oa]s?\b'
-        r'|\bqued[óo]\s+(?:' + HECHO + r')[oa]s?\b'
-        r'|\b(?:la |lo |las |los )\s*(?:' + HECHO + r')[oa]s?\s+en\s+una\s+nota\b', re.I)
+        # PRIMERA persona y nada más. Con «ha» valía también «el sistema ha registrado
+        # múltiples eventos», que describe lo que hizo el NAS y no lo que hizo Helios:
+        # saltaba la red en una revisión donde no había nada que guardar.
+        # «había» es ambiguo entre yo y él, así que solo cuenta con un pronombre
+        # delante —«te había preparado y guardado»—, que es como falló de verdad.
+        # Y «no he guardado nada» no es una afirmación de haber guardado.
+        r'(?<!no )\b(?:he|hemos|hab[íi]amos)\b(?:\s+\w+)?(?:\s+y)?\s+(?:' + HECHO + r')[oa]s?\b'
+        r'|\b(?:me|te|le|lo|la|se)\s+hab[íi]a\b(?:\s+\w+)?(?:\s+y)?\s+(?:' + HECHO + r')[oa]s?\b'
+        r'|\bqued[óo]\s+(?:guardad|anotad|apuntad)[oa]s?\b'
+        r'|\b(?:guardad|anotad|apuntad)[oa]s?\s+en\s+una\s+nota\b', re.I)
 
     @classmethod
     def unsupported_claim(cls, reply, trace):
