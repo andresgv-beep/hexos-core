@@ -217,6 +217,54 @@ class DevicesTest(unittest.TestCase):
                 self.assertEqual(fila['pinned_port'], 30)
                 self.assertEqual(fila['latest_addresses'], [])
 
+    def test_identificar_en_casa_absorbe_el_registro_remoto_del_mismo_nombre(self):
+        # Al volver a su red, «el 192.168.1.10 es servidorsrv1» creaba una SEGUNDA
+        # ficha y volvía el duplicado. Ahora se juntan en una con los dos caminos.
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(tmp, None)
+            with agent.store() as s:
+                fuera = 'registra servidorsrv1 en https://casa.ddns.net:30'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u','now','user',fuera,fuera))
+                s.db.commit()
+                agent.tool(s, 'device.remote', dict(name='servidorsrv1', host='https://casa.ddns.net:30'), turn_id='u')
+                # En casa y a la vista: REACHABLE, que es lo que hace mandar a la IP local.
+                encasa = observation()
+                encasa['neighbors'][0].update(state=['REACHABLE'], recently_reachable=True)
+                with patch('hexos.agent.devices.snapshot', return_value=encasa):
+                    agent.tool(s, 'device.refresh', {})
+                dentro = 'el 192.168.1.10 es servidorsrv1'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u2','now','user',dentro,dentro))
+                s.db.commit()
+                r = agent.tool(s, 'device.identify', dict(target='192.168.1.10', name='servidorsrv1'), turn_id='u2')
+                self.assertEqual(r['absorbed'], 'remoto/servidorsrv1')
+                lista = agent.tool(s, 'device.list', {})
+                self.assertEqual(lista['duplicates'], [], 'una máquina, una ficha')
+                ficha = lista['identified_devices'][0]
+                self.assertEqual(ficha['mac'], 'aa:bb:cc:dd:ee:ff')
+                self.assertEqual((ficha['pinned_host'], ficha['pinned_port']), ('casa.ddns.net', 30))
+                # Y con los dos caminos: la IP local primero por estar a la vista.
+                from hexos.agent.hosts import resolve
+                ruta = resolve(tmp, 'servidorsrv1')
+                self.assertEqual(ruta['host'], '192.168.1.10')
+                self.assertEqual([a['host'] for a in ruta['alternatives']], ['casa.ddns.net'])
+
+    def test_dos_equipos_de_la_red_no_pueden_llamarse_igual(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(tmp, None)
+            with agent.store() as s:
+                data = observation()
+                data['neighbors'] += [dict(ip='192.168.1.11', mac='11:22:33:44:55:66',
+                                           interface='eth0', state=['REACHABLE'], recently_reachable=True)]
+                with patch('hexos.agent.devices.snapshot', return_value=data):
+                    agent.tool(s, 'device.refresh', {})
+                dicho = 'el 192.168.1.10 es el nas y el 192.168.1.11 es el nas'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u','now','user',dicho,dicho))
+                s.db.commit()
+                agent.tool(s, 'device.identify', dict(target='192.168.1.10', name='el nas'), turn_id='u')
+                with self.assertRaises(ValueError) as caught:
+                    agent.tool(s, 'device.identify', dict(target='192.168.1.11', name='el nas'), turn_id='u')
+                self.assertIn('Ya hay otro equipo guardado', str(caught.exception))
+
     def test_un_equipo_con_solo_acceso_sale_en_la_lista(self):
         # Poder conectarse a algo que no aparece al preguntar qué hay es lo que
         # confunde al modelo: la lista tiene que ser TODO lo alcanzable.

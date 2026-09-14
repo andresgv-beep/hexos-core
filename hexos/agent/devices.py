@@ -338,6 +338,21 @@ def dispatch(store, name, args, turn_id=None):
                        for value in identifiers) for clause in clauses)
     if not supported or (kind and kind.casefold() not in quote.casefold()):
         raise ValueError('El mensaje no atribuye ese nombre a ese dispositivo. Conserva el sufijo y nombre indicados; no cambies la dirección ni inventes el tipo.')
+    # Ese nombre puede existir ya. Si es un registro remoto —el mismo equipo visto
+    # desde fuera—, se absorbe: su dirección fija pasa a esta ficha y el remoto
+    # desaparece. Si es otro equipo observado, dos máquinas no pueden llamarse igual.
+    homonimos = [d for d in rows.values()
+                 if d['id'] != device['id']
+                 and (d.get('identity') or {}).get('name', '').casefold() == label.casefold()]
+    absorbido = None
+    for otro in homonimos:
+        if not otro['id'].startswith('remoto/'):
+            raise ValueError('Ya hay otro equipo guardado como ' + repr(label) +
+                             ' (' + otro['id'] + '). Dale otro nombre, o olvida ese primero.')
+        device['pinned_host'] = device.get('pinned_host') or otro.get('pinned_host')
+        device['pinned_port'] = device.get('pinned_port') or otro.get('pinned_port')
+        store.db.execute('DELETE FROM network_devices WHERE id=?', (otro['id'],))
+        absorbido = otro['id']
     identity = dict(name=label, kind=kind or None, source='user_statement', source_id=source['id'],
                     evidence=quote, recorded_at=now())
     previous = device.get('identity')
@@ -349,4 +364,8 @@ def dispatch(store, name, args, turn_id=None):
     device['identity'] = identity
     store.db.execute('UPDATE network_devices SET body=? WHERE id=?', (json.dumps(device), device['id']))
     store.db.commit()
-    return dict(saved=True, device=device, note='Identificación atribuida al usuario; no verifica acceso ni concede permisos sobre el dispositivo.')
+    return dict(saved=True, device=device, absorbed=absorbido,
+                note='Identificación atribuida al usuario; no verifica acceso ni concede permisos '
+                     'sobre el dispositivo.' +
+                     (' Se absorbió el registro remoto que tenía ese nombre: ahora es una sola '
+                      'ficha con su dirección fija y su sitio en la red.' if absorbido else ''))
