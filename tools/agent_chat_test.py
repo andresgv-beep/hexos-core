@@ -97,3 +97,67 @@ class TurnoSoloImagenTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class AfirmacionSinEscrituraTest(unittest.TestCase):
+    """Si canta una escritura que no hizo, HexOS le devuelve el turno para que la haga."""
+
+    class Guionizado:
+        """Runtime que responde una lista de salidas, en orden."""
+        def __init__(self, salidas):
+            self.salidas = list(salidas)
+            self.recibido = []
+
+        def call(self, request):
+            assert request == {'type': 'reset'}
+
+        def generate(self, messages):
+            self.recibido.append(messages)
+            return self.salidas.pop(0)
+
+    def correr(self, salidas):
+        tmp = tempfile.TemporaryDirectory(prefix='hexos-afirma-')
+        self.addCleanup(tmp.cleanup)
+        runtime = self.Guionizado(salidas)
+        agent = Agent(tmp.name, runtime)
+        return agent, runtime, agent.chat('apunta el estado del NAS')
+
+    def test_se_le_devuelve_el_turno_y_entonces_guarda(self):
+        agent, runtime, result = self.correr([
+            {'reply': 'He recopilado el estado y lo he guardado en una nota.', 'work': None},
+            {'tool': 'note.save', 'arguments': {'title': 'Estado del NAS', 'body': 'Todo correcto.'}},
+            {'reply': 'Hecho, la nota queda guardada.', 'work': None},
+        ])
+        self.assertEqual([t['tool'] for t in result['tools']], ['note.save'])
+        self.assertEqual(result['closure']['reason'], 'comprobado')
+        # Y el aviso que se le mandó dice de dónde viene, para que no lo lea como a la persona.
+        self.assertIn('AVISO DE HEXOS', runtime.recibido[1][0]['content'])
+        with agent.store() as store:
+            self.assertEqual(notes_count(store), 1)
+
+    def test_si_no_había_nada_que_guardar_se_queda_en_la_respuesta(self):
+        _, _, result = self.correr([
+            {'reply': 'Ya lo había guardado antes.', 'work': None},
+            {'reply': 'Te cuento el estado; no he guardado nada en este turno.', 'work': None},
+        ])
+        self.assertEqual(result['tools'], [])
+        self.assertEqual(result['reply'], 'Te cuento el estado; no he guardado nada en este turno.')
+
+    def test_solo_se_le_devuelve_una_vez(self):
+        _, runtime, result = self.correr([
+            {'reply': 'Lo he guardado.', 'work': None},
+            {'reply': 'Lo he guardado, de verdad.', 'work': None},
+        ])
+        # No se insiste en bucle: se cierra diciendo que no consta.
+        self.assertEqual(result['closure']['reason'], 'no_consta')
+        self.assertEqual(len(runtime.recibido), 2)
+
+    def test_una_respuesta_que_no_afirma_nada_no_gasta_turnos(self):
+        _, runtime, result = self.correr([
+            {'reply': 'El disco sda pierde el enlace.', 'work': None},
+        ])
+        self.assertEqual(len(runtime.recibido), 1)
+
+
+def notes_count(store):
+    return store.db.execute('SELECT COUNT(*) FROM notes').fetchone()[0]

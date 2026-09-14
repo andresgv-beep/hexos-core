@@ -907,6 +907,7 @@ class Agent:
                 trace = [recuerdo] if recuerdo else []
                 schema_retries = 0
                 recovery_requests = 0
+                claim_retries = 0
                 format_retries = 0
                 # Seis herramientas, más finalización y recuperaciones acotadas.
                 # Una séptima solicitud nunca se ejecuta.
@@ -1021,6 +1022,20 @@ class Agent:
                             'sin pedir permiso para reintentar. No cambies el encargo. '
                             'Si falta información imprescindible o el error no es recuperable, explica '
                             'el bloqueo brevemente. Queda un intento de recuperación.')]
+                        continue
+                    # Ha dicho que guardó algo y no consta. Se le devuelve el turno con las
+                    # herramientas todavía en la mano, igual que cuando una lectura falla:
+                    # pedírselo por prompt no cambia nada, pero un turno más sí lo deja hacer.
+                    if claim_retries == 0 and self.unsupported_claim(output['reply'], trace):
+                        claim_retries += 1
+                        messages = [dict(role='user', content=
+                            'AVISO DE HEXOS (no es la persona): en tu respuesta afirmas haber guardado '
+                            'o cambiado algo, pero en este turno no se ha ejecutado ninguna operación '
+                            'de escritura. Decirlo no lo guarda, y tu propia respuesta anterior no es '
+                            'prueba de que se hiciera. Si había que guardarlo, hazlo AHORA con la '
+                            'herramienta que corresponda: note_save para una nota, report_save para un '
+                            'informe. Si no había nada que guardar, responde de nuevo sin afirmar que '
+                            'lo hiciste. Queda un intento.')]
                         continue
                     proposed = output['work']
                     if clarification:
