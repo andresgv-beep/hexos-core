@@ -161,6 +161,49 @@ class ProfileMemoryTest(unittest.TestCase):
             self.assertEqual(perfil.keys(),
                              {'yo/coche nuevo': 'Bruno', 'yo/nombre': 'Andrés'})
 
+    def test_la_salida_bruta_de_hera_se_lee_sin_columnas(self):
+        # Tabuladores: no hay ancho que desbordar, así que no hay nada frágil.
+        import subprocess
+        from hexos.agent.continuity import HeraProfile
+        bruto = ('f19\tconfirmado\tyo/coche nuevo\tBruno\t\tu91\n'
+                 'f20\tcandidato\tyo/algo\tsin confirmar\t\tu92\n')
+        perfil = HeraProfile('/bin/true', '/tmp')
+        with patch('hexos.agent.continuity.subprocess.run',
+                   return_value=subprocess.CompletedProcess([], 0, stdout=bruto, stderr='')):
+            claves = perfil.keys()
+        self.assertEqual(claves, {'yo/coche nuevo': 'Bruno'}, 'solo confirmados')
+        self.assertEqual(perfil.unreadable, [])
+
+    def test_una_clave_desbordada_es_ilegible_no_inexistente(self):
+        # El aviso que importa: saltarla evita leerla mal, pero no puede significar
+        # «no existe» —eso haría guardar otra vez en vez de corregir.
+        import subprocess
+        from hexos.agent.continuity import HeraProfile
+        larga = 'yo/' + 'x' * 40
+        salida = ('f20   confirmado  ' + larga + ' Valor   [u92]\n'
+                  'f18   confirmado  yo/nombre                    Andrés   [u90]\n')
+        perfil = HeraProfile('/bin/true', '/tmp')
+        with patch('hexos.agent.continuity.subprocess.run',
+                   return_value=subprocess.CompletedProcess([], 0, stdout=salida, stderr='')):
+            claves = perfil.keys()
+        self.assertEqual(claves, {'yo/nombre': 'Andrés'})
+        self.assertEqual(perfil.unreadable, ['f20'], 'ilegible, y se dice cuál')
+
+    def test_con_hechos_ilegibles_no_se_guarda_a_ciegas(self):
+        class ConIlegibles(FakeProfile):
+            unreadable = ['f20']
+        perfil = ConIlegibles()
+        agente = Agent(self.tmp.name, FakeRuntime(), perfil)
+        uid = uuid4().hex
+        with agente.store() as store:
+            store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
+                             (uid, now(), 'user', 'me llamo Andrés', 'me llamo Andrés'))
+            store.db.commit()
+            with self.assertRaises(ValueError) as caught:
+                agente.remember_fact(store, dict(key='nombre', value='Andrés'), uid)
+        self.assertIn('no duplicarlo', str(caught.exception))
+        self.assertEqual(perfil.guardados, [])
+
     def test_una_clave_desbordada_se_salta_en_vez_de_leerse_mal(self):
         # Más de 28 caracteres: no hay forma de saber dónde acaba sin adivinar, y
         # leerla mal es peor que no leerla.

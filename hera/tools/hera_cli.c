@@ -78,9 +78,21 @@ int main(int argc, char **argv) {
 
     if (!strcmp(o, "lista")) {
         const bool todo = (argc > 2 && !strcmp(argv[2], "--todo"));
+        /* --bruto: campos separados por tabulador, para que lo lea un programa.
+         * El formato alineado usa %-28s, que fija un ancho MINIMO y no maximo: una
+         * clave larga desborda la columna y quien lea por posiciones ya no puede
+         * saber donde acaba. Aqui no hay columnas que desbordar. */
+        const bool bruto = (argc > 2 && !strcmp(argv[2], "--bruto"));
         hera_hecho_t hs[256];
         const size_t n = todo ? hera_store_todos(hs, 256)
                               : hera_store_confirmados(hs, 256);
+        if (bruto) {
+            for (size_t i = 0; i < n; i++)
+                printf("%s\t%s\t%s\t%s\t%s\t%s\n", hs[i].id,
+                       hera_estado_nombre(hs[i].estado), hs[i].clave, hs[i].valor,
+                       hs[i].sustituido_por, hs[i].evidencia);
+            return 0;
+        }
         for (size_t i = 0; i < n; i++) {
             printf("%-5s %-11s %-28s %s", hs[i].id,
                    hera_estado_nombre(hs[i].estado), hs[i].clave, hs[i].valor);

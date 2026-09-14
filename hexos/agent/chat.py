@@ -371,9 +371,16 @@ class Agent:
             if not self.profile or not result.get('key'):
                 return 'desconocida', 'sin perfil con el que comprobar'
             try:
-                guardado = self.profile.keys().get(result['key'])
+                claves = self.profile.keys()
             except Exception as exc:
                 return 'desconocida', 'no se pudo releer el perfil: ' + str(exc)
+            guardado = claves.get(result['key'])
+            # Si la lectura dejó hechos sin interpretar, «no está» no es una
+            # conclusión: puede ser justo uno de los que no se pudieron leer.
+            if guardado is None and getattr(self.profile, 'unreadable', None):
+                return 'desconocida', ('el perfil trae ' + str(len(self.profile.unreadable)) +
+                                       ' hecho(s) que no se pudieron interpretar; no se puede '
+                                       'afirmar que este falte')
             if guardado == result.get('value'):
                 return 'confirmada', 'releído del perfil: ' + result['key'] + ' = ' + guardado
             return 'no_cumplida', ('el perfil dice ' + repr(guardado) +
@@ -444,7 +451,14 @@ class Agent:
         # Corregir y guardar son la misma intención vista desde fuera; lo que
         # cambia es si ya había un hecho vigente. HERA reemplaza de forma atómica
         # y conserva la cadena en `hera historial <clave>`.
-        anterior = self.profile.keys().get(clave)
+        confirmados = self.profile.keys()
+        anterior = confirmados.get(clave)
+        if anterior is None and getattr(self.profile, 'unreadable', None):
+            # Tratar un hecho ilegible como ausente lo duplicaría en vez de
+            # corregirlo. Mejor no escribir que escribir dos veces lo mismo.
+            raise ValueError('El perfil tiene ' + str(len(self.profile.unreadable)) +
+                             ' hecho(s) que no se pueden leer, así que no se puede saber si ' +
+                             repr(clave) + ' ya estaba. No se guarda para no duplicarlo.')
         if anterior is None:
             self.profile.remember(clave, value, texto, quote[:1000])
         elif anterior == value:

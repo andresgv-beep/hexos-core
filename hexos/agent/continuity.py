@@ -9,6 +9,9 @@ class HeraProfile:
     def __init__(self, binary, home):
         self.binary = str(Path(binary).resolve())
         self.home = str(Path(home).resolve())
+        # Ids de hechos que la última lectura no pudo interpretar. Vacío no
+        # significa que no existan: significa que se leyeron todos.
+        self.unreadable = []
 
     def read(self):
         result = subprocess.run([self.binary, 'perfil-agente'],
@@ -30,37 +33,53 @@ class HeraProfile:
             raise ValueError('HERA no registró el mensaje como evidencia')
         return identifier
 
-    # `hera lista` imprime con anchos fijos: "%-5s %-11s %-28s %s".
+    # Respaldo para un HERA anterior a `lista --bruto`: sus columnas son
+    # "%-5s %-11s %-28s %s", y ese ancho es MÍNIMO, no máximo.
     CLAVE_DESDE, CLAVE_HASTA = 18, 46
 
     def keys(self):
-        """Claves ya confirmadas, leídas por POSICIÓN y no partiendo por espacios.
+        """Claves confirmadas. Devuelve solo las que se han podido leer.
 
-        Partir por espacios troceaba mal cualquier clave que llevara uno: 'yo/coche
-        nuevo' se leía como clave 'yo/coche' y valor 'nuevo  Bruno', y entonces el
-        dato guardado parecía no estar. Las columnas son de ancho fijo, así que la
-        posición sí es fiable... mientras la clave quepa. Si se desborda no hay
-        forma de saber dónde acaba, y ahí se salta la línea: leerla mal es peor que
-        no leerla.
+        `unreadable` lista las que no. La diferencia importa: una clave ilegible no
+        es una clave ausente, y confundirlas hace creer que un dato guardado no
+        está —y entonces se vuelve a guardar en vez de corregirlo.
         """
+        claves, ilegibles = self._listar()
+        self.unreadable = ilegibles
+        return claves
+
+    def _listar(self):
+        bruto = subprocess.run([self.binary, 'lista', '--bruto'],
+            env=dict(os.environ, HELIOS_HOME=self.home), capture_output=True,
+            text=True, timeout=10)
+        if not bruto.returncode and '\t' in (bruto.stdout or ''):
+            # Campos separados por tabulador: no hay columnas que desbordar.
+            claves = {}
+            for line in bruto.stdout.splitlines():
+                campos = line.split('\t')
+                if len(campos) >= 4 and campos[1] == 'confirmado':
+                    claves[campos[2]] = campos[3]
+            return claves, []
         result = subprocess.run([self.binary, 'lista'],
             env=dict(os.environ, HELIOS_HOME=self.home), capture_output=True,
             text=True, timeout=10)
         if result.returncode:
             raise ValueError('HERA no devolvió la lista de hechos')
-        claves = {}
+        claves, ilegibles = {}, []
         for line in (result.stdout or '').splitlines():
             campos = line.split(None, 2)
             if len(campos) < 3 or campos[1] != 'confirmado':
                 continue
             if len(line) <= self.CLAVE_HASTA or line[self.CLAVE_HASTA - 1] != ' ':
-                continue   # clave desbordada: no se puede separar sin adivinar
+                # Clave desbordada: no se puede separar sin adivinar. Se anota como
+                # ilegible, no como inexistente.
+                ilegibles.append(campos[0])
+                continue
             clave = line[self.CLAVE_DESDE:self.CLAVE_HASTA].strip()
-            # El valor va hasta la marca de sustitución o la cita, lo que llegue antes.
             valor = re.split(r'\s+->\s|\s{2,}\[', line[self.CLAVE_HASTA:])[0].strip()
             if clave:
                 claves[clave] = valor
-        return claves
+        return claves, ilegibles
 
     def correct(self, key, value, text, evidence):
         """Reemplaza un hecho vigente. HERA lo hace de forma atómica y conserva
