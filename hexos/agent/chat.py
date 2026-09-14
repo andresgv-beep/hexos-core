@@ -121,6 +121,12 @@ AFIRMACION = re.compile(
     r'|tr[aá]tame|h[aá]blame|no me (?:hables|trates|contestes|respondas)'
     r'|no seas|s[eé] m[aá]s|te pido que'
     r'|recuerda que|apunta que|no olvides que|que lo recuerdes'
+    # Pedírselo con todas las letras. «memoriza que tengo dos hijos» no pasaba:
+    # el portón solo conocía «recuerda» y «apunta».
+    r'|memoriza|memor[íi]zalo|guarda que|gu[áa]rdalo|que sepas que|ten en cuenta que'
+    # «tengo dos hijos», «tengo 3 gatos». Con número a propósito: «tengo un
+    # problema con el NAS» no es un dato suyo y no debe gastar una generación.
+    r'|tengo (?:dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|\d+)\s'
     r'|en realidad me llamo|no me llamo)\b', re.I)
 
 

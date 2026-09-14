@@ -287,14 +287,22 @@ class TratoTest(unittest.TestCase):
                       'prefiero que me hables de tú',
                       'trátame como un compañero',
                       'no me hables así',
-                      'no seas tan seco'):
+                      'no seas tan seco',
+                      # Pedírselo con todas las letras, y un dato con número.
+                      'memoriza que tengo dos hijos',
+                      'guarda que mi taller está en el garaje',
+                      'tengo dos hijos',
+                      'tengo 3 gatos'):
             with self.subTest(texto):
                 self.assertTrue(AFIRMACION.search(texto), texto)
 
     def test_la_conversación_de_trabajo_no_gasta_una_generación(self):
         from hexos.agent.chat import AFIRMACION
         for texto in ('revisa el nas', 'vale', 'qué contenedores hay', 'para el contenedor n8n',
-                      'saca el listado de vecinos', 'gracias socio'):
+                      'saca el listado de vecinos', 'gracias socio',
+                      # «tengo un problema» no es un dato sobre él: por eso el
+                      # patrón pide un número y no cualquier «tengo un…».
+                      'tengo un problema con el nas', 'tengo una duda'):
             with self.subTest(texto):
                 self.assertIsNone(AFIRMACION.search(texto), texto)
 
