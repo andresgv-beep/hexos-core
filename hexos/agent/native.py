@@ -186,6 +186,16 @@ class NativeRuntime:
         'ninguna herramienta nueva. Responde a la petición actual usando las citas de la persona '
         'y los resultados disponibles. Si necesitas consultar, emite una llamada con el protocolo '
         'nativo. No escribas funciones como texto ni repitas operaciones ya realizadas.')
+    TIPOS={'str':{'type':'string'},'int':{'type':'integer'},'bool':{'type':'boolean'},
+           'list':{'type':'array','items':{'type':'string'}}}
+
+    @classmethod
+    def JSON_TYPE(cls,tipo,herramienta,campo):
+        if tipo not in cls.TIPOS:
+            raise ValueError('tipo de argumento desconocido en el catálogo: '+herramienta+'.'+campo+
+                             ' es '+repr(tipo)+'; los declarables son '+', '.join(sorted(cls.TIPOS)))
+        return cls.TIPOS[tipo]
+
     def __init__(self,binary,model,ctx,workspace,template,thinking=False):
         from jinja2 import Environment
         env=Environment()
@@ -199,7 +209,7 @@ class NativeRuntime:
         for alias,name in self.names.items():
             s=catalog.TOOLS[name]
             self.tools.append({'type':'function','function':{'name':alias,'description':s['description'],
-                'parameters':{'type':'object','properties':{k:{'type':{'str':'string','int':'integer'}[v]}
+                'parameters':{'type':'object','properties':{k:self.JSON_TYPE(v,name,k)
                     for k,v in (s['required']|s['optional']).items()},'required':list(s['required'])}}})
         # La ventana del motor, en tokens. El agente la necesita para saber cuánta
         # conversación puede acumular antes de tener que cortar.

@@ -9,9 +9,11 @@ import { ChatHistory } from "./ChatHistory";
 import { SystemMonitor } from "./SystemMonitor";
 import { ToolSatellites } from "./ToolSatellites";
 import { FloatingMessage, type MessageWindow } from "./FloatingMessage";
+import { CoreShelf } from "./CoreShelf";
 import { phases } from "@/lib/helios/state";
 import { createHexosTransport, type ContextCut, type CredentialRequest, type HeliosTransport, type HistoryMessage } from "@/lib/helios/hexos";
 import { mergeToolActivities, type ToolActivity } from "@/lib/helios/tools";
+import { coreSectionForTools } from "@/lib/helios/core";
 
 const localTransport = createHexosTransport("/api/helios");
 
@@ -114,6 +116,12 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const [connection, setConnection] = useState<"checking" | "ready" | "offline">("checking");
   const [announcement, setAnnouncement] = useState("");
   const [turnTools, setTurnTools] = useState<ToolActivity[]>([]);
+  // El núcleo se abre cuando el turno HA TOCADO lo guardado, y por la sección que
+  // tocó. Se dispara con las herramientas que se ejecutaron de verdad: mirar las
+  // palabras del mensaje abriría el panel mientras Helios habla de otra cosa.
+  const [coreOpen, setCoreOpen] = useState(false);
+  const [coreSection, setCoreSection] = useState("");
+  const [coreReload, setCoreReload] = useState(0);
   const nextId = useRef(0);
   const request = useRef<AbortController | null>(null);
   const settingsRef = useRef<HTMLButtonElement>(null);
@@ -293,6 +301,13 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       if (!controller.signal.aborted) {
         setConnection("ready");
         setTurnTools(items => mergeToolActivities(items, result.tools));
+        const tocado = coreSectionForTools(result.tools);
+        if (tocado !== null) {
+          setCoreSection(tocado);
+          setCoreOpen(true);
+          // Lo guardado acaba de cambiar: el recuento se vuelve a leer.
+          setCoreReload(n => n + 1);
+        }
         if (result.contextCut) {
           // HexOS ha cortado el contexto por lleno. Las ventanas anteriores ya no
           // están en la memoria de trabajo del modelo, así que dejarlas en pantalla
@@ -349,6 +364,9 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         <button ref={orbButton} className="orb-history-trigger" aria-label="Abrir todo el chat" title="Abrir conversación" aria-haspopup="dialog" onClick={() => setHistoryOpen(true)} />
       </div>
     </section>
+    <CoreShelf open={coreOpen} section={coreSection} reload={coreReload}
+      onOpen={seccion => { setCoreSection(seccion); setCoreOpen(true); }}
+      onClose={() => setCoreOpen(false)} />
     <section className="floating-workspace" aria-label="Ventanas de conversación">
       {windows.filter(item => !item.minimized).map(message => <FloatingMessage key={message.id} message={message} orbTarget={orbButton} onAbsorbed={finishAbsorption} front={front === message.id} onFocus={setFront}
         onReplyComplete={id => setWindows(items => items.map(item => item.id === id ? { ...item, revealing: false } : item))}

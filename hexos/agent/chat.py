@@ -13,6 +13,7 @@ import re
 import subprocess
 import threading
 import time
+from urllib.parse import parse_qs, unquote, urlparse
 from uuid import uuid4
 
 from .work import KINDS, WorkStore, now, strict_json, string, strings
@@ -1176,6 +1177,30 @@ def main():
                                    'credential_request': agent.credential_request,
                                    'thinking': agent.thinking(),
                                    'mode':'native-experimental' if args.native_template else 'json'})
+            elif self.path == '/api/core':
+                # El panel se pinta sin gastar un turno del modelo, pero del MISMO
+                # recuento que responde el chat: no puede haber dos verdades.
+                with agent.store() as store:
+                    self.respond(200, core.overview(store, agent.profile))
+            elif self.path == '/api/notes' or self.path.startswith('/api/notes?'):
+                consulta = parse_qs(urlparse(self.path).query)
+                with agent.store() as store:
+                    try:
+                        self.respond(200, notes.listing(
+                            store, consulta.get('query', [''])[0],
+                            consulta.get('state', [None])[0],
+                            {'true': True, 'false': False}.get(consulta.get('favorite', [''])[0]),
+                            int(consulta.get('limit', ['50'])[0])))
+                    except ValueError as exc:
+                        self.respond(400, {'error': str(exc)})
+            elif self.path.startswith('/api/notes/'):
+                identificador = unquote(self.path[len('/api/notes/'):]).split('?')[0]
+                with agent.store() as store:
+                    try:
+                        self.respond(200, dict(notes.get(store, identificador),
+                                               revisions=notes.history(store, identificador)))
+                    except ValueError as exc:
+                        self.respond(404, {'error': str(exc)})
             elif self.path == '/api/telemetry':
                 self.respond(200, system_telemetry.snapshot())
             elif self.path == '/api/work':

@@ -208,3 +208,75 @@ input[type="range"] { width: 100%; accent-color: #8dc9f2; cursor: pointer; heigh
 @media (min-width: 1100px) {
   .floating-workspace { right: 284px; }
 }
+
+/* El núcleo: la tira de favoritos bajo la esfera y el panel de lo guardado. */
+.core-shelf {
+  display: flex; flex-wrap: wrap; gap: .5rem; align-items: center;
+  justify-content: center; padding: 0 1.25rem .35rem; min-height: 2rem;
+}
+.core-trigger, .core-favorite {
+  display: inline-flex; align-items: center; gap: .4rem;
+  padding: .35rem .7rem; border-radius: 999px; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--phase-color) 28%, transparent);
+  background: color-mix(in srgb, var(--phase-color) 7%, transparent);
+  color: inherit; font: inherit; font-size: .78rem; line-height: 1.2;
+}
+.core-trigger:hover, .core-favorite:hover,
+.core-trigger.selected { background: color-mix(in srgb, var(--phase-color) 16%, transparent); }
+.core-count {
+  font-variant-numeric: tabular-nums; opacity: .7;
+  padding-left: .4rem; border-left: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+}
+.core-favorite-title { max-width: 11rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.core-empty { font-size: .75rem; opacity: .55; }
+.core-backdrop {
+  position: fixed; inset: 0; z-index: 40; display: grid; place-items: center;
+  padding: 1.5rem; background: rgb(0 0 0 / .55); backdrop-filter: blur(6px);
+}
+.core-panel {
+  width: min(44rem, 100%); max-height: min(80vh, 44rem); overflow: auto;
+  padding: 1.25rem 1.4rem 1.4rem; border-radius: 1rem;
+  border: 1px solid color-mix(in srgb, var(--phase-color) 26%, transparent);
+  background: color-mix(in srgb, var(--phase-color) 6%, #080b12 94%);
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / .55);
+}
+.core-sections { display: grid; gap: .6rem; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); }
+.core-section {
+  display: grid; gap: .15rem; justify-items: start; text-align: left;
+  padding: .7rem .8rem; border-radius: .7rem; cursor: pointer; color: inherit; font: inherit;
+  border: 1px solid color-mix(in srgb, var(--phase-color) 20%, transparent);
+  background: color-mix(in srgb, var(--phase-color) 5%, transparent);
+}
+.core-section:hover, .core-section.selected { background: color-mix(in srgb, var(--phase-color) 14%, transparent); }
+.core-section-label { font-size: .78rem; opacity: .8; }
+.core-section-total { font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.core-section-note { font-size: .7rem; opacity: .6; }
+.core-list { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; gap: .4rem; }
+.core-list button {
+  width: 100%; display: grid; gap: .2rem; text-align: left; cursor: pointer;
+  padding: .6rem .75rem; border-radius: .6rem; color: inherit; font: inherit;
+  border: 1px solid transparent; background: color-mix(in srgb, var(--phase-color) 4%, transparent);
+}
+.core-list button:hover { border-color: color-mix(in srgb, var(--phase-color) 26%, transparent); }
+.core-list-title { font-size: .85rem; }
+.core-list-excerpt { font-size: .74rem; opacity: .6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.core-note-meta { font-size: .74rem; opacity: .6; margin: 0 0 .6rem; }
+.core-note-body { white-space: pre-wrap; line-height: 1.55; font-size: .9rem; }
+.core-note-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1.1rem; }
+.core-note-actions button {
+  display: inline-flex; align-items: center; gap: .4rem; cursor: pointer;
+  padding: .45rem .8rem; border-radius: .6rem; color: inherit; font: inherit; font-size: .78rem;
+  border: 1px solid color-mix(in srgb, var(--phase-color) 28%, transparent);
+  background: color-mix(in srgb, var(--phase-color) 8%, transparent);
+}
+.core-note-actions button:hover { background: color-mix(in srgb, var(--phase-color) 18%, transparent); }
+.core-note-disclaimer { font-size: .72rem; opacity: .55; margin: 1.1rem 0 0; }
+
+/* Imprimir: solo la nota abierta, en negro sobre blanco y sin los botones. */
+@media print {
+  body { background: #fff; color: #000; }
+  .helios-app > *:not(.core-backdrop), .core-note-actions, .panel-heading .icon-button { display: none !important; }
+  .core-backdrop { position: static; padding: 0; background: none; backdrop-filter: none; }
+  .core-panel { max-height: none; width: auto; border: 0; box-shadow: none; background: #fff; overflow: visible; }
+  .core-note-body { color: #000; }
+}
