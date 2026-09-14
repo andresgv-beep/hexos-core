@@ -155,5 +155,60 @@ class NucleoTest(unittest.TestCase):
         self.assertNotIn('fotos', [s['key'] for s in r['sections']])
 
 
+class AfirmacionSinTrazaTest(unittest.TestCase):
+    """Decir «lo he guardado» no guarda nada, y quien lee la respuesta no puede saberlo."""
+
+    def cerrar(self, reply, trace):
+        from hexos.agent.chat import Agent
+        return Agent.closure(trace, reply)
+
+    LECTURA = [dict(tool='nas.read', verification='no_requerida')]
+    ESCRITURA = [dict(tool='note.save', verification='confirmada')]
+
+    def test_canta_una_nota_que_no_guardó(self):
+        cierre = self.cerrar('He recopilado el estado y la he guardado en una nota.', self.LECTURA)
+        self.assertEqual(cierre['reason'], 'no_consta')
+        self.assertIn('no se ejecutó ninguna operación de escritura', cierre['note'])
+        # Y dice qué SÍ pasó, para que se vea de dónde sale la duda.
+        self.assertIn('nas.read', cierre['note'])
+
+    def test_si_de_verdad_escribió_no_se_le_reprocha(self):
+        self.assertEqual(self.cerrar('He guardado la nota.', self.ESCRITURA)['reason'], 'comprobado')
+
+    def test_una_escritura_distinta_tambien_sostiene_la_frase(self):
+        # HexOS no juzga si la escritura era LA correcta: solo si hubo alguna.
+        trace = [dict(tool='nas.container', verification='confirmada')]
+        self.assertEqual(self.cerrar('He reiniciado el contenedor.', trace)['reason'], 'comprobado')
+
+    def test_responder_sin_afirmar_nada_no_dispara_la_red(self):
+        for texto in ('Aquí tienes el estado del NAS.',
+                      'El disco sda pierde el enlace; conviene cambiar el cable.',
+                      '¿Quieres que lo guarde en una nota?'):
+            with self.subTest(texto):
+                self.assertEqual(self.cerrar(texto, self.LECTURA)['reason'], 'comprobado')
+
+    def test_un_turno_sin_herramientas_que_afirma_haber_guardado(self):
+        cierre = self.cerrar('Listo, lo he apuntado.', [])
+        self.assertEqual(cierre['reason'], 'no_consta')
+        self.assertIn('no se ejecutó ninguna herramienta', cierre['note'])
+
+    def test_la_frase_con_la_que_falló_de_verdad(self):
+        # Salida real de Helios, 14/09/2026: respondió de memoria, sin ejecutar nada,
+        # y dio por guardado lo que nunca guardó.
+        cierre = self.cerrar('Ya te había preparado y guardado esa información. '
+                             'Aquí tienes de nuevo el resumen completo.', [])
+        self.assertEqual(cierre['reason'], 'no_consta')
+        self.assertIn('compruébalo en el núcleo', cierre['note'])
+
+    def test_las_formas_con_las_que_este_modelo_canta_una_escritura(self):
+        for texto in ('La he guardado en una nota.', 'He anotado el problema.',
+                      'Te había preparado y guardado esa información.',
+                      'Ya la había creado.', 'Hemos actualizado la nota.',
+                      'He apuntado lo que me dices.', 'He creado la nota.',
+                      'He reiniciado el contenedor.', 'Quedó registrado.'):
+            with self.subTest(texto):
+                self.assertEqual(self.cerrar(texto, self.LECTURA)['reason'], 'no_consta')
+
+
 if __name__ == '__main__':
     unittest.main()

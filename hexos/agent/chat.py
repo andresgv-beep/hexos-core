@@ -349,8 +349,41 @@ class Agent:
                 desde = donde + 1
         return hallados[0] if len(hallados) == 1 else None
 
+    # Lo que el modelo dice haber hecho, en primera persona y en pasado. No es
+    # comprensión del texto: es la forma de la frase con la que este modelo canta
+    # una escritura. Si no hubo escritura en el turno, eso hay que decirlo.
+    HECHO = ('guardad|anotad|apuntad|cread|registrad|reiniciad|parad|arrancad|'
+             'encendid|apagad|detenid|borrad|eliminad|actualizad')
+    ESCRITURA_DICHA = re.compile(
+        # Auxiliar + participio, admitiendo un verbo intercalado: la frase con la que
+        # falló de verdad era «te había preparado y guardado esa información».
+        r'\b(?:he|ha|hemos|hab[íi]a|hab[íi]amos|hab[íi]as)\b(?:\s+\w+)?(?:\s+y)?\s+(?:' + HECHO + r')[oa]s?\b'
+        r'|\bqued[óo]\s+(?:' + HECHO + r')[oa]s?\b'
+        r'|\b(?:la |lo |las |los )\s*(?:' + HECHO + r')[oa]s?\s+en\s+una\s+nota\b', re.I)
+
+    @classmethod
+    def unsupported_claim(cls, reply, trace):
+        """¿La respuesta canta una escritura que no consta en la traza?
+
+        No corrige lo que escribió el modelo ni adivina su intención: compara una
+        afirmación con el registro de lo ejecutado. Decir «lo he guardado» no
+        guarda nada, y quien lea la respuesta no tiene forma de saberlo.
+        """
+        if not isinstance(reply, str) or not cls.ESCRITURA_DICHA.search(reply):
+            return None
+        escrituras = [paso['tool'] for paso in trace
+                      if catalog.TOOLS.get(paso.get('tool'), {}).get('effect') != 'read']
+        if escrituras:
+            return None
+        return ('La respuesta dice haber guardado o cambiado algo, pero en este turno no se '
+                'ejecutó ninguna operación de escritura: ' +
+                ('solo lecturas (' + ', '.join(dict.fromkeys(paso['tool'] for paso in trace)) + ').'
+                 if trace else 'no se ejecutó ninguna herramienta.') +
+                ' Si se guardó, fue antes de este turno; compruébalo en el núcleo antes de darlo '
+                'por hecho.')
+
     @staticmethod
-    def closure(trace):
+    def closure(trace, reply=None):
         """Cómo se cierra el turno, según lo COMPROBADO y no según lo que diga el modelo.
 
         Marcar «objetivo cumplido» porque el modelo decidió responder sería
@@ -362,6 +395,11 @@ class Agent:
                            evidence=paso.get('evidence'))
                       for paso in trace
                       if paso.get('verification') in ('no_cumplida', 'desconocida')]
+        # Una afirmación que la traza no sostiene manda sobre el resto: da igual que
+        # las lecturas salieran bien si la respuesta canta algo que no ocurrió.
+        sin_traza = Agent.unsupported_claim(reply, trace)
+        if sin_traza:
+            return dict(reason='no_consta', note=sin_traza, unverified=pendientes)
         if any(isinstance(paso.get('result'), dict) and paso['result'].get('access_required')
                for paso in trace):
             razon, nota = 'bloqueado', 'Falta el acceso a un equipo; lo pedido no se pudo comprobar.'
@@ -1017,7 +1055,7 @@ class Agent:
                     store.db.commit()
                     corte_avisado, self.context_cut = self.context_cut, None
                     return dict(reply=output['reply'], work=job, document=document, tools=trace, context_sources=context_sources, progress=self.progress,
-                        context_cut=corte_avisado, closure=self.closure(trace),
+                        context_cut=corte_avisado, closure=self.closure(trace, output['reply']),
                         diagnostics=dict(format_retries=format_retries, schema_retries=schema_retries,
                                          recovery_requests=recovery_requests))
                 raise RuntimeError('Se alcanzó el límite de consultas del turno; lo hecho hasta '
