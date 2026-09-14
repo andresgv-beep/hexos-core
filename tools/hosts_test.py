@@ -284,12 +284,15 @@ class EquipoNombradoTest(unittest.TestCase):
         self.tmp.cleanup()
 
     def nombrado(self, texto):
+        from uuid import uuid4
         from hexos.agent.work import now
+        # Un id por llamada: el mismo test puede probar varias frases.
+        uid = uuid4().hex
         with self.agent.store() as store:
             store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
-                             ('u', now(), 'user', texto, texto))
+                             (uid, now(), 'user', texto, texto))
             store.db.commit()
-            return self.agent.device_in_message(store, 'u')
+            return self.agent.device_in_message(store, uid)
 
     def test_lo_toma_de_sus_palabras(self):
         self.assertEqual(self.nombrado('revisa la salud de los contenedores del synology'), 'synology')
