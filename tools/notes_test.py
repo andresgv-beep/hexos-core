@@ -213,8 +213,17 @@ class AfirmacionSinTrazaTest(unittest.TestCase):
             with self.subTest(texto):
                 self.assertEqual(self.cerrar(texto, self.LECTURA)['reason'], 'comprobado')
 
+    def test_las_formas_reales_del_14_de_septiembre(self):
+        # Turnos suyos con CERO herramientas y estas dos respuestas. Ninguna saltaba.
+        for texto in ('He tomado nota de todo lo que hemos hablado, Andrés.',
+                      'Ya he ajustado mi modo de conversación para ser más cercano.'):
+            with self.subTest(texto):
+                self.assertEqual(self.cerrar(texto, [])['reason'], 'no_consta')
+
     def test_negar_haberlo_guardado_no_es_afirmarlo(self):
-        self.assertEqual(self.cerrar('No he guardado nada todavía.', self.LECTURA)['reason'], 'comprobado')
+        for texto in ('No he guardado nada todavía.', 'No he tomado nota de eso.'):
+            with self.subTest(texto):
+                self.assertEqual(self.cerrar(texto, self.LECTURA)['reason'], 'comprobado')
 
     def test_las_formas_con_las_que_este_modelo_canta_una_escritura(self):
         for texto in ('La he guardado en una nota.', 'He anotado el problema.',

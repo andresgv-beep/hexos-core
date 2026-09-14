@@ -353,7 +353,7 @@ class Agent:
     # comprensión del texto: es la forma de la frase con la que este modelo canta
     # una escritura. Si no hubo escritura en el turno, eso hay que decirlo.
     HECHO = ('guardad|anotad|apuntad|cread|registrad|reiniciad|parad|arrancad|'
-             'encendid|apagad|detenid|borrad|eliminad|actualizad')
+             'encendid|apagad|detenid|borrad|eliminad|actualizad|ajustad|memorizad')
     ESCRITURA_DICHA = re.compile(
         # PRIMERA persona y nada más. Con «ha» valía también «el sistema ha registrado
         # múltiples eventos», que describe lo que hizo el NAS y no lo que hizo Helios:
@@ -364,6 +364,9 @@ class Agent:
         r'(?<!no )\b(?:he|hemos|hab[íi]amos)\b(?:\s+\w+)?(?:\s+y)?\s+(?:' + HECHO + r')[oa]s?\b'
         r'|\b(?:me|te|le|lo|la|se)\s+hab[íi]a\b(?:\s+\w+)?(?:\s+y)?\s+(?:' + HECHO + r')[oa]s?\b'
         r'|\bqued[óo]\s+(?:guardad|anotad|apuntad)[oa]s?\b'
+        # «he tomado nota» no lleva participio de los de arriba y es de las formas
+        # más comunes con las que este modelo da por hecho lo que no hizo.
+        r'|(?<!no )\b(?:he|hemos)\s+tomado\s+nota\b'
         r'|\b(?:guardad|anotad|apuntad)[oa]s?\s+en\s+una\s+nota\b', re.I)
 
     @classmethod
