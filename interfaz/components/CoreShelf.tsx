@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Download, Printer, Star, X } from "lucide-react";
 import { createCoreClient, noteAsMarkdown, noteFilename,
          type CoreClient, type CoreOverview, type NoteDetail, type NoteSummary } from "@/lib/helios/core";
@@ -43,6 +44,12 @@ export function CoreShelf({ client = defaultClient, open, section, onOpen, onClo
     return () => document.removeEventListener("keydown", salir);
   }, [open, detail, onClose]);
 
+  async function abrirNota(id: string) {
+    // Sin esto un fallo se veía como «pulso y no pasa nada», que es peor que el error.
+    try { setDetail(await client.note(id)); setError(""); }
+    catch (e) { setError(e instanceof Error ? e.message : "No se pudo abrir la nota."); }
+  }
+
   function descargar(note: NoteDetail) {
     const blob = new Blob([noteAsMarkdown(note)], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -53,9 +60,14 @@ export function CoreShelf({ client = defaultClient, open, section, onOpen, onClo
     URL.revokeObjectURL(url);
   }
 
+  // El panel sale del árbol a propósito. La tira vive dentro del compositor, que
+  // lleva un transform, y un ancestro transformado convierte `position: fixed` en
+  // relativo a él: el panel quedaba anclado a la barra de escribir y se salía por
+  // abajo de la pantalla. Montado en el body, `fixed` vuelve a ser la ventana.
   const favoritos = overview?.favorites ?? [];
-  return <>
-    <div className="core-shelf" aria-label="Favoritos del núcleo">
+  const [montado, setMontado] = useState(false);
+  useEffect(() => setMontado(true), []);
+  const tira = <>
       <button type="button" className={`core-trigger ${open ? "selected" : ""}`}
         aria-expanded={open} onClick={() => (open ? onClose() : onOpen(""))}>
         Núcleo
@@ -63,15 +75,16 @@ export function CoreShelf({ client = defaultClient, open, section, onOpen, onClo
           .reduce((total, s) => total + (s.total ?? 0), 0)}</span>}
       </button>
       {favoritos.map(item => <button key={item.id} type="button" className="core-favorite"
-        onClick={() => { onOpen("notas"); void client.note(item.id).then(setDetail).catch(() => {}); }}>
+        onClick={() => { onOpen("notas"); void abrirNota(item.id); }}>
         <Star size={14} aria-hidden="true" />
         <span className="core-favorite-title">{item.title}</span>
       </button>)}
       {!favoritos.length && overview && <span className="core-empty">
         Sin favoritos. Pídele a Helios que ancle una nota.
       </span>}
-    </div>
-    {open && <div className="core-backdrop">
+  </>;
+
+  const panel = <div className="core-backdrop">
       <div className="core-panel" role="dialog" aria-modal="true" aria-labelledby="core-title">
         <div className="panel-heading">
           <h2 id="core-title">{detail ? detail.title : "Núcleo de Helios"}</h2>
@@ -109,7 +122,7 @@ export function CoreShelf({ client = defaultClient, open, section, onOpen, onClo
           </div>
           {section === "notas" && <ul className="core-list">
             {notes.map(note => <li key={note.id}>
-              <button type="button" onClick={() => void client.note(note.id).then(setDetail).catch(() => {})}>
+              <button type="button" onClick={() => void abrirNota(note.id)}>
                 <span className="core-list-title">{note.favorite ? "★ " : ""}{note.title}</span>
                 <span className="core-list-excerpt">{note.body}{note.truncated ? "…" : ""}</span>
               </button>
@@ -119,6 +132,12 @@ export function CoreShelf({ client = defaultClient, open, section, onOpen, onClo
           {overview && <p className="core-note-disclaimer">{overview.note}</p>}
         </>}
       </div>
-    </div>}
+    </div>;
+
+  return <>
+    <div className="core-shelf" aria-label="Favoritos del núcleo">
+      {tira}
+    </div>
+    {open && montado && createPortal(panel, document.body)}
   </>;
 }

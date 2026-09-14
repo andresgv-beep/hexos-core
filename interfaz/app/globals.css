@@ -1,5 +1,7 @@
 @import "tailwindcss";
-:root { color-scheme: dark; font-family: "Segoe UI", Inter, ui-sans-serif, system-ui, sans-serif; color: #dce6ef; background: #05090e; font-synthesis: none; }
+/* El panel del núcleo se monta en el body, fuera de .helios-app: sin esto sus
+   color-mix no resuelven y el panel sale transparente. */
+:root { --phase-color: #66c7ff; color-scheme: dark; font-family: "Segoe UI", Inter, ui-sans-serif, system-ui, sans-serif; color: #dce6ef; background: #05090e; font-synthesis: none; }
 * { box-sizing: border-box; }
 body { margin: 0; }
 button, input { font: inherit; }
@@ -210,9 +212,12 @@ input[type="range"] { width: 100%; accent-color: #8dc9f2; cursor: pointer; heigh
 }
 
 /* El núcleo: la tira de favoritos bajo la esfera y el panel de lo guardado. */
+/* Va bajo la esfera y sobre el compositor. El canvas de la esfera ocupa toda la
+   pantalla, así que sin capa propia se lleva los clics y la tira no responde. */
 .core-shelf {
+  position: relative; z-index: 1;
   display: flex; flex-wrap: wrap; gap: .5rem; align-items: center;
-  justify-content: center; padding: 0 1.25rem .35rem; min-height: 2rem;
+  justify-content: center; padding: 0 .25rem .55rem;
 }
 .core-trigger, .core-favorite {
   display: inline-flex; align-items: center; gap: .4rem;

@@ -364,9 +364,6 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         <button ref={orbButton} className="orb-history-trigger" aria-label="Abrir todo el chat" title="Abrir conversación" aria-haspopup="dialog" onClick={() => setHistoryOpen(true)} />
       </div>
     </section>
-    <CoreShelf open={coreOpen} section={coreSection} reload={coreReload}
-      onOpen={seccion => { setCoreSection(seccion); setCoreOpen(true); }}
-      onClose={() => setCoreOpen(false)} />
     <section className="floating-workspace" aria-label="Ventanas de conversación">
       {windows.filter(item => !item.minimized).map(message => <FloatingMessage key={message.id} message={message} orbTarget={orbButton} onAbsorbed={finishAbsorption} front={front === message.id} onFocus={setFront}
         onReplyComplete={id => setWindows(items => items.map(item => item.id === id ? { ...item, revealing: false } : item))}
@@ -375,6 +372,9 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         onClose={id => { setWindows(items => items.map(item => item.id === id ? { ...item, minimized: true, revealing: false } : item)); inputRef.current?.focus(); }} />)}
     </section>
     <section className="conversation" aria-label="Chat con Helios">
+    <CoreShelf open={coreOpen} section={coreSection} reload={coreReload}
+      onOpen={seccion => { setCoreSection(seccion); setCoreOpen(true); }}
+      onClose={() => setCoreOpen(false)} />
       {!!attachments.length && <ChatAttachments files={attachments} onRemove={removeAttachment} />}
       {attachmentError && <p className="attachment-error" role="alert">{attachmentError}</p>}
       <form className="composer" onSubmit={send} onDragOver={event => { if (event.dataTransfer.types.includes("Files")) event.preventDefault(); }} onDrop={event => { event.preventDefault(); if (!sending) void addAttachments(Array.from(event.dataTransfer.files)); }}>
