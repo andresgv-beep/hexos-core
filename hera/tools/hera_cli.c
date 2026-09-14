@@ -47,6 +47,28 @@ static int veredicto(hera_veredicto_t v, const char *id) {
     return 1;
 }
 
+/* Una cadena JSON valida: comillas, barras y control escapados. Los bytes UTF-8
+ * pasan tal cual, que ya son validos dentro de una cadena JSON. */
+static void json_cadena(const char *s) {
+    putchar('"');
+    for (const unsigned char *p = (const unsigned char *)(s ? s : ""); *p; p++) {
+        switch (*p) {
+            case '"':  fputs("\\\"", stdout); break;
+            case '\\': fputs("\\\\", stdout); break;
+            case '\n': fputs("\\n", stdout); break;
+            case '\r': fputs("\\r", stdout); break;
+            case '\t': fputs("\\t", stdout); break;
+            case '\b': fputs("\\b", stdout); break;
+            case '\f': fputs("\\f", stdout); break;
+            default:
+                if (*p < 0x20) printf("\\u%04x", *p);
+                else putchar(*p);
+        }
+    }
+    putchar('"');
+}
+
+
 int main(int argc, char **argv) {
     if (argc < 2) return uso();
     if (!hera_store_abrir()) {
@@ -78,19 +100,32 @@ int main(int argc, char **argv) {
 
     if (!strcmp(o, "lista")) {
         const bool todo = (argc > 2 && !strcmp(argv[2], "--todo"));
-        /* --bruto: campos separados por tabulador, para que lo lea un programa.
+        /* --json: un objeto con los hechos y si la lectura quedo incompleta.
          * El formato alineado usa %-28s, que fija un ancho MINIMO y no maximo: una
          * clave larga desborda la columna y quien lea por posiciones ya no puede
-         * saber donde acaba. Aqui no hay columnas que desbordar. */
-        const bool bruto = (argc > 2 && !strcmp(argv[2], "--bruto"));
-        hera_hecho_t hs[256];
-        const size_t n = todo ? hera_store_todos(hs, 256)
-                              : hera_store_confirmados(hs, 256);
-        if (bruto) {
-            for (size_t i = 0; i < n; i++)
-                printf("%s\t%s\t%s\t%s\t%s\t%s\n", hs[i].id,
-                       hera_estado_nombre(hs[i].estado), hs[i].clave, hs[i].valor,
-                       hs[i].sustituido_por, hs[i].evidencia);
+         * saber donde acaba. Con cadenas escapadas no hay nada que desbordar, y
+         * `truncated` evita que "no aparecio" se lea como "no existe". */
+        const bool como_json = (argc > 2 && !strcmp(argv[2], "--json"));
+        enum { CUPO = 256 };
+        hera_hecho_t hs[CUPO];
+        const size_t n = todo ? hera_store_todos(hs, CUPO)
+                              : hera_store_confirmados(hs, CUPO);
+        if (como_json) {
+            fputs("{\"facts\":[", stdout);
+            for (size_t i = 0; i < n; i++) {
+                if (i) putchar(',');
+                fputs("{\"id\":", stdout);      json_cadena(hs[i].id);
+                fputs(",\"state\":", stdout);   json_cadena(hera_estado_nombre(hs[i].estado));
+                fputs(",\"key\":", stdout);     json_cadena(hs[i].clave);
+                fputs(",\"value\":", stdout);   json_cadena(hs[i].valor);
+                fputs(",\"replaced_by\":", stdout); json_cadena(hs[i].sustituido_por);
+                fputs(",\"evidence\":", stdout); json_cadena(hs[i].evidencia);
+                putchar('}');
+            }
+            /* n == CUPO no demuestra que sobren, pero tampoco lo descarta: se
+             * declara incompleta para que nadie concluya una ausencia. */
+            printf("],\"count\":%zu,\"truncated\":%s}\n", n,
+                   n >= (size_t)CUPO ? "true" : "false");
             return 0;
         }
         for (size_t i = 0; i < n; i++) {

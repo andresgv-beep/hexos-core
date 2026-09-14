@@ -1,4 +1,5 @@
 """Recuperación explícita: historial literal y perfil confirmado por HERA."""
+import json
 import os
 from pathlib import Path
 import re
@@ -49,17 +50,30 @@ class HeraProfile:
         return claves
 
     def _listar(self):
-        bruto = subprocess.run([self.binary, 'lista', '--bruto'],
+        crudo = subprocess.run([self.binary, 'lista', '--json'],
             env=dict(os.environ, HELIOS_HOME=self.home), capture_output=True,
             text=True, timeout=10)
-        if not bruto.returncode and '\t' in (bruto.stdout or ''):
-            # Campos separados por tabulador: no hay columnas que desbordar.
-            claves = {}
-            for line in bruto.stdout.splitlines():
-                campos = line.split('\t')
-                if len(campos) >= 4 and campos[1] == 'confirmado':
-                    claves[campos[2]] = campos[3]
-            return claves, []
+        if not crudo.returncode and (crudo.stdout or '').lstrip().startswith('{'):
+            try:
+                datos = json.loads(crudo.stdout)
+            except ValueError:
+                return {}, ['(la lista no se pudo interpretar)']
+            claves, ilegibles = {}, []
+            for fila in datos.get('facts', []):
+                # Validar TODAS: descartar una en silencio la convierte en ausente,
+                # que es justo lo que esta lectura tiene que evitar.
+                if not isinstance(fila, dict) or not isinstance(fila.get('key'), str) \
+                        or not isinstance(fila.get('value'), str) or not fila['key']:
+                    ilegibles.append(str((fila or {}).get('id', '?')))
+                    continue
+                if fila.get('state') == 'confirmado':
+                    claves[fila['key']] = fila['value']
+            if datos.get('truncated'):
+                # Hay tantos hechos como cabían: puede haber más sin leer, y
+                # entonces «no aparece» no demuestra que no exista.
+                ilegibles.append('(lista incompleta: ' + str(datos.get('count', '?')) +
+                                 ' hechos y puede haber más)')
+            return claves, ilegibles
         result = subprocess.run([self.binary, 'lista'],
             env=dict(os.environ, HELIOS_HOME=self.home), capture_output=True,
             text=True, timeout=10)

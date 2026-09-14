@@ -222,6 +222,36 @@ class InformeVerificadoTest(unittest.TestCase):
         self.assertEqual(estado, 'no_cumplida')
         self.assertIn('no coincide', evidencia)
 
+    def test_dos_textos_ausentes_no_son_una_confirmacion(self):
+        # None == None daba «confirmada» sin haber contrastado nada.
+        agent, _ = self.guardar()
+        with agent.store() as store:
+            fila = store.db.execute('SELECT id, body FROM agent_reports').fetchone()
+            cuerpo = json.loads(fila[1]); origen = cuerpo['result_id']
+            cuerpo.pop('text')
+            store.db.execute('UPDATE agent_reports SET body=? WHERE id=?',
+                             (json.dumps(cuerpo), fila[0]))
+            fuente = store.db.execute('SELECT body FROM agent_results WHERE id=?', (origen,)).fetchone()
+            sin_texto = json.loads(fuente[0]); sin_texto.pop('text')
+            store.db.execute('UPDATE agent_results SET body=? WHERE id=?',
+                             (json.dumps(sin_texto), origen))
+            store.db.commit()
+            estado, evidencia = agent.verify(store, 'report.save', {},
+                                             dict(id=fila[0], result_id=origen))
+        self.assertEqual(estado, 'no_cumplida')
+        self.assertIn('no tiene texto', evidencia)
+
+    def test_un_informe_de_otro_origen_no_confirma_el_pedido(self):
+        agent, _ = self.guardar()
+        with agent.store() as store:
+            fila = store.db.execute('SELECT id, body FROM agent_reports').fetchone()
+            cuerpo = json.loads(fila[1])
+            estado, evidencia = agent.verify(store, 'report.save',
+                                             {'result_id': 'otro-resultado'},
+                                             dict(id=fila[0], result_id=cuerpo['result_id']))
+        self.assertEqual(estado, 'no_cumplida')
+        self.assertIn('se pidió guardar', evidencia)
+
     def test_sin_informe_en_el_almacen_es_no_cumplida(self):
         agent, _ = self.guardar()
         with agent.store() as store:

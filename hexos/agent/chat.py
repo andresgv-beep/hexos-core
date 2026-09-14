@@ -400,10 +400,22 @@ class Agent:
             if not fuente:
                 return 'desconocida', 'el resultado de origen ya no está con el que contrastar'
             copia, original = json.loads(guardado[0]), json.loads(fuente[0])
-            if copia.get('text') != original.get('text'):
+            # Dos campos ausentes son iguales entre sí, y eso daba «confirmada» sin
+            # haber comprobado nada. Primero tiene que haber texto que contrastar.
+            texto = copia.get('text')
+            if not isinstance(texto, str) or not texto.strip():
+                return 'no_cumplida', 'el informe guardado no tiene texto'
+            if not isinstance(original.get('text'), str) or not original['text'].strip():
+                return 'desconocida', 'el origen no tiene texto con el que contrastar'
+            # Y tiene que ser el origen que se pidió, no otro informe cualquiera.
+            pedido = args.get('result_id')
+            if pedido and copia.get('result_id') != pedido:
+                return 'no_cumplida', ('el informe dice venir de ' + repr(copia.get('result_id')) +
+                                       ' y se pidió guardar ' + repr(pedido))
+            if texto != original['text']:
                 return 'no_cumplida', 'lo guardado no coincide con su instantánea de origen'
             return 'confirmada', ('releído del almacén y contrastado con su origen: ' +
-                                  str(len(copia.get('text') or '')) + ' caracteres iguales')
+                                  str(len(texto)) + ' caracteres iguales')
         return 'desconocida', 'sin comprobación implementada para ' + name
 
     def pending_effect(self, store, device, target):

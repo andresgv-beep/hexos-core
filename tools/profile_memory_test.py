@@ -161,18 +161,48 @@ class ProfileMemoryTest(unittest.TestCase):
             self.assertEqual(perfil.keys(),
                              {'yo/coche nuevo': 'Bruno', 'yo/nombre': 'Andrés'})
 
-    def test_la_salida_bruta_de_hera_se_lee_sin_columnas(self):
-        # Tabuladores: no hay ancho que desbordar, así que no hay nada frágil.
-        import subprocess
+    def test_la_salida_json_de_hera_se_lee_sin_columnas(self):
+        # Cadenas escapadas: no hay ancho que desbordar ni separador que colisione.
+        import json as _json, subprocess
         from hexos.agent.continuity import HeraProfile
-        bruto = ('f19\tconfirmado\tyo/coche nuevo\tBruno\t\tu91\n'
-                 'f20\tcandidato\tyo/algo\tsin confirmar\t\tu92\n')
+        salida = _json.dumps(dict(count=2, truncated=False, facts=[
+            dict(id='f19', state='confirmado', key='yo/coche nuevo', value='Bruno',
+                 replaced_by='', evidence='u91'),
+            dict(id='f20', state='candidato', key='yo/algo', value='sin confirmar',
+                 replaced_by='', evidence='u92')]))
         perfil = HeraProfile('/bin/true', '/tmp')
         with patch('hexos.agent.continuity.subprocess.run',
-                   return_value=subprocess.CompletedProcess([], 0, stdout=bruto, stderr='')):
+                   return_value=subprocess.CompletedProcess([], 0, stdout=salida, stderr='')):
             claves = perfil.keys()
         self.assertEqual(claves, {'yo/coche nuevo': 'Bruno'}, 'solo confirmados')
         self.assertEqual(perfil.unreadable, [])
+
+    def test_una_fila_malformada_entre_buenas_no_se_traga_en_silencio(self):
+        import json as _json, subprocess
+        from hexos.agent.continuity import HeraProfile
+        salida = _json.dumps(dict(count=3, truncated=False, facts=[
+            dict(id='f1', state='confirmado', key='yo/nombre', value='Andrés'),
+            dict(id='f2', state='confirmado', key=None, value='huérfano'),
+            dict(id='f3', state='confirmado', key='yo/gato', value='Turbo')]))
+        perfil = HeraProfile('/bin/true', '/tmp')
+        with patch('hexos.agent.continuity.subprocess.run',
+                   return_value=subprocess.CompletedProcess([], 0, stdout=salida, stderr='')):
+            claves = perfil.keys()
+        self.assertEqual(claves, {'yo/nombre': 'Andrés', 'yo/gato': 'Turbo'})
+        self.assertEqual(perfil.unreadable, ['f2'], 'la mala se declara, no se descarta')
+
+    def test_una_lista_incompleta_se_declara_incompleta(self):
+        # Con el cupo lleno no se puede concluir que algo no exista.
+        import json as _json, subprocess
+        from hexos.agent.continuity import HeraProfile
+        salida = _json.dumps(dict(count=256, truncated=True, facts=[
+            dict(id='f1', state='confirmado', key='yo/nombre', value='Andrés')]))
+        perfil = HeraProfile('/bin/true', '/tmp')
+        with patch('hexos.agent.continuity.subprocess.run',
+                   return_value=subprocess.CompletedProcess([], 0, stdout=salida, stderr='')):
+            perfil.keys()
+        self.assertTrue(perfil.unreadable)
+        self.assertIn('incompleta', perfil.unreadable[0])
 
     def test_una_clave_desbordada_es_ilegible_no_inexistente(self):
         # El aviso que importa: saltarla evita leerla mal, pero no puede significar
