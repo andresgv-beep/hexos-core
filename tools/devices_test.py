@@ -217,6 +217,48 @@ class DevicesTest(unittest.TestCase):
                 self.assertEqual(fila['pinned_port'], 30)
                 self.assertEqual(fila['latest_addresses'], [])
 
+    def test_un_equipo_con_solo_acceso_sale_en_la_lista(self):
+        # Poder conectarse a algo que no aparece al preguntar qué hay es lo que
+        # confunde al modelo: la lista tiene que ser TODO lo alcanzable.
+        with tempfile.TemporaryDirectory() as tmp:
+            from hexos.agent.hosts import save
+            agent = Agent(tmp, None)
+            save(tmp, 'synology 2', 'helios', 'x', 22, host='casa.ddns.net')
+            with agent.store() as s:
+                r = agent.tool(s, 'device.list', {})
+                fila = next(d for d in r['identified_devices'] if d['identity']['name'] == 'synology 2')
+                self.assertTrue(fila['only_access'])
+                self.assertTrue(fila['has_access'])
+                self.assertEqual(fila['pinned_host'], 'casa.ddns.net')
+
+    def test_lo_que_sale_en_la_lista_se_puede_quitar(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            from hexos.agent.hosts import save, load
+            agent = Agent(tmp, None)
+            save(tmp, 'synology 2', 'helios', 'x', 22, host='casa.ddns.net')
+            with agent.store() as s:
+                borra = 'olvida synology 2'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u','now','user',borra,borra))
+                s.db.commit()
+                r = agent.tool(s, 'device.forget', dict(target='synology 2'), turn_id='u')
+                self.assertEqual(r['forgotten_access'], 'synology 2')
+                self.assertEqual(agent.tool(s, 'device.list', {})['identified_devices'], [])
+            self.assertEqual(load(tmp), {})
+
+    def test_un_identificado_sin_acceso_lo_dice(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(tmp, None)
+            with agent.store() as s:
+                with patch('hexos.agent.devices.snapshot', return_value=observation()):
+                    agent.tool(s, 'device.refresh', {})
+                dicho = 'el 192.168.1.10 es la impresora'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u','now','user',dicho,dicho))
+                s.db.commit()
+                agent.tool(s, 'device.identify', dict(target='192.168.1.10', name='impresora'), turn_id='u')
+                fila = agent.tool(s, 'device.list', {})['identified_devices'][0]
+                self.assertFalse(fila['has_access'], 'identificado no es lo mismo que alcanzable')
+                self.assertFalse(fila['only_access'])
+
     def test_dos_nombres_para_un_equipo_se_señalan_sin_tocarlos(self):
         # Dar acceso a uno y pedir lecturas por el otro parece falta de credenciales.
         with tempfile.TemporaryDirectory() as tmp:

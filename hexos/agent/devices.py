@@ -136,6 +136,20 @@ def dispatch(store, name, args, turn_id=None):
     if name == 'device.list':
         query = args.get('query', '').casefold()
         terms = [v.strip() for v in re.split(r'\s+or\s+', query) if v.strip()]
+        # Un equipo con acceso guardado y sin ficha en el inventario se podía alcanzar
+        # pero no salía al preguntar cuáles hay. Eso confunde a cualquiera: aparece
+        # aquí, con su origen dicho, para que la lista sea TODO lo que se puede tocar.
+        accesos = hosts.load(store.root)
+        nombrados = {(d.get('identity') or {}).get('name', '').casefold() for d in rows.values()}
+        for nombre, entrada in accesos.items():
+            if nombre in nombrados:
+                continue
+            rows['acceso/' + nombre] = dict(
+                id='acceso/' + nombre, mac=None, interface=None,
+                pinned_host=entrada.get('host'), pinned_port=entrada.get('port'),
+                addresses=[], latest_addresses=[], in_latest_snapshot=False,
+                last_observed_at=None, only_access=True,
+                identity=dict(name=nombre, kind=None, source='saved_access'))
         found = [d for d in rows.values() if not terms or any(q in json.dumps(d, ensure_ascii=False).casefold() for q in terms)]
         found.sort(key=lambda d: (d['identity'] is None, d['id']))
         # `pinned_host` va dentro: sin él, un equipo de otra red salía en la lista
@@ -145,14 +159,21 @@ def dispatch(store, name, args, turn_id=None):
         compact = [{k:d.get(k) for k in ('id','mac','interface','last_observed_at',
                                          'in_latest_snapshot','latest_addresses',
                                          'pinned_host','pinned_port')} |
-                   {'identity':{k:d['identity'][k] for k in ('name','kind','source')} if d['identity'] else None} for d in found[:64]]
-        repetidos = duplicados(rows, hosts.load(store.root))
+                   {'identity':{k:d['identity'][k] for k in ('name','kind','source')} if d['identity'] else None,
+                    # Saber si se puede entrar es media respuesta a «qué equipos tienes»:
+                    # uno identificado sin acceso no sirve para leerlo.
+                    'has_access': (d.get('identity') or {}).get('name', '').casefold() in accesos,
+                    'only_access': bool(d.get('only_access'))} for d in found[:64]]
+        repetidos = duplicados(rows, accesos)
         return dict(identified_devices=[d for d in compact if d['identity']], devices=compact,
                     duplicates=repetidos, total=len(found), truncated=len(found)>64,
                     note='Inventario histórico. Consulta network.local para el estado actual. '
                          'pinned_host es la dirección fija de un equipo de otra red; los de esta '
                          'red no la tienen y se ven por latest_addresses. '
                          'identity=null significa sin identificar. Un filtro sin coincidencias no significa que el inventario esté vacío: consulta sin query. '
+                         'has_access dice si hay credencial guardada para ese nombre; sin ella no se '
+                         'puede leer aunque esté identificado. only_access son los que solo existen por '
+                         'su acceso guardado, sin ficha en la red. '
                          'MAC e interfaz agrupan observaciones, no garantizan identidad física.')
     if name == 'device.forget':
         objetivo = string(args['target'], 'target', 100).strip()
@@ -167,6 +188,15 @@ def dispatch(store, name, args, turn_id=None):
             raise ValueError('Ese equipo no aparece en el mensaje de la persona. Borra solo lo que '
                              'te hayan nombrado, tal cual lo escribieron.')
         buscado = objetivo.casefold()
+        # Un equipo que solo existe por su acceso guardado también se puede quitar:
+        # si sale en la lista y no se puede borrar, la lista miente.
+        accesos = hosts.load(store.root)
+        nombrados = {(d.get('identity') or {}).get('name', '').casefold() for d in rows.values()}
+        if buscado in accesos and buscado not in nombrados:
+            hosts.forget(store.root, buscado)
+            return dict(forgotten=buscado, removed_record=True, forgotten_access=buscado,
+                        note='Solo existía por su acceso guardado, sin ficha en la red: se ha '
+                             'revocado y ya no queda nada suyo.')
         elegidos = [d for d in rows.values()
                     if buscado in (d['id'].casefold(), (d.get('mac') or '').casefold())
                     or (d.get('identity') or {}).get('name', '').casefold() == buscado
