@@ -2,9 +2,15 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-/** Visual reveal for the current complete-response HTTP contract, not token streaming. */
+/** Revelado visual del contrato HTTP actual —la respuesta llega entera—, no
+ *  streaming de tokens.
+ *
+ *  Por palabras y con desvanecido, no letra a letra: carácter a carácter parecía
+ *  una máquina de escribir, y lo que se quiere es que el texto aparezca. Cada
+ *  palabra entra con su propia animación al montarse. */
 export function ProgressiveReply({ text, onComplete }: { text: string; onComplete?: () => void }) {
-  const characters = useMemo(() => Array.from(text), [text]);
+  // Se parte conservando los espacios, para no rehacer el texto al juntarlo.
+  const words = useMemo(() => text.split(/(\s+)/), [text]);
   const [visible, setVisible] = useState(0);
   const paragraph = useRef<HTMLParagraphElement>(null);
   const follow = useRef(true);
@@ -16,7 +22,7 @@ export function ProgressiveReply({ text, onComplete }: { text: string; onComplet
     const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
     function showAll() {
       clearTimeout(timer);
-      cursor = characters.length;
+      cursor = words.length;
       setVisible(cursor);
     }
     finish.current = showAll;
@@ -25,19 +31,20 @@ export function ProgressiveReply({ text, onComplete }: { text: string; onComplet
       if (preference.matches) { showAll(); return; }
       const container = paragraph.current?.closest(".window-content, .stream-body");
       if (container) follow.current = container.scrollHeight - container.scrollTop - container.clientHeight < 60;
-      cursor = Math.min(cursor + 3, characters.length);
+      // De dos en dos: una palabra y el espacio que la sigue.
+      cursor = Math.min(cursor + 2, words.length);
       setVisible(cursor);
-      if (cursor < characters.length) {
-        const pause = /[.!?\n]/.test(characters[cursor - 1]) ? 140 : 45;
-        timer = setTimeout(step, pause);
+      if (cursor < words.length) {
+        const anterior = words[cursor - 2] ?? "";
+        timer = setTimeout(step, /[.!?\n]$/.test(anterior) ? 190 : 52);
       }
     }
     function resume() {
       clearTimeout(timer);
-      if (!document.hidden && cursor < characters.length) timer = setTimeout(step, 45);
+      if (!document.hidden && cursor < words.length) timer = setTimeout(step, 52);
     }
     function reduce() { if (preference.matches) showAll(); }
-    timer = setTimeout(step, 45);
+    timer = setTimeout(step, 52);
     document.addEventListener("visibilitychange", resume);
     preference.addEventListener("change", reduce);
     return () => {
@@ -45,12 +52,12 @@ export function ProgressiveReply({ text, onComplete }: { text: string; onComplet
       document.removeEventListener("visibilitychange", resume);
       preference.removeEventListener("change", reduce);
     };
-  }, [characters]);
+  }, [words]);
   useLayoutEffect(() => {
     const container = paragraph.current?.closest(".window-content, .stream-body");
     if (container && follow.current) container.scrollTop = container.scrollHeight;
   }, [visible]);
-  const complete = visible >= characters.length;
+  const complete = visible >= words.length;
   useEffect(() => {
     if (complete && !completionReported.current) {
       completionReported.current = true;
@@ -58,7 +65,13 @@ export function ProgressiveReply({ text, onComplete }: { text: string; onComplet
     }
   }, [complete, onComplete]);
   return <>
-    <p ref={paragraph} className="helios-answer"><span className="sr-only">{text}</span><span aria-hidden="true">{characters.slice(0, visible).join("")}{!complete && <span className="reply-cursor" />}</span></p>
+    <p ref={paragraph} className="helios-answer">
+      <span className="sr-only">{text}</span>
+      <span aria-hidden="true">{words.slice(0, visible).map((palabra, i) =>
+        /^\s+$/.test(palabra)
+          ? palabra
+          : <span key={i} className="reveal-word">{palabra}</span>)}</span>
+    </p>
     {!complete && <button className="reveal-all" onClick={() => finish.current()}>Mostrar todo</button>}
   </>;
 }

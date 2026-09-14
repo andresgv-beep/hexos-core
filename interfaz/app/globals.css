@@ -162,7 +162,14 @@ input[type="range"] { width: 100%; accent-color: #8dc9f2; cursor: pointer; heigh
   .history-footer span { display: none; }.history-footer { justify-content: flex-end; }
 }
 
-.reply-cursor { display: inline-block; width: 2px; height: 1em; margin-left: 3px; vertical-align: -.12em; background: #a1e2ff; box-shadow: 0 0 7px #6bd4ff60; }
+/* Cada palabra entra desvanecida: el cursor parpadeante hacía que pareciera
+   que Helios teclea, y lo que llega es texto ya escrito. */
+/* Sin display ni transform: en inline-block cada palabra sumaba 2 px de alto a la
+   línea y aparecía una barra de scroll en medio del texto. Opacidad y desenfoque
+   no tocan el flujo. */
+.reveal-word { animation: word-in .34s ease-out both; }
+@keyframes word-in { from { opacity: 0; filter: blur(2.5px); } to { opacity: 1; filter: none; } }
+@media (prefers-reduced-motion: reduce) { .reveal-word { animation: none; } }
 .reveal-all { border: 0; background: transparent; color: #86bad7; font-size: 11px; margin-top: 10px; padding: 5px 0; }
 .reveal-all:hover { color: #dbf4ff; }
 
@@ -297,7 +304,7 @@ input[type="range"] { width: 100%; accent-color: #8dc9f2; cursor: pointer; heigh
 /* La conversación: bajo el logo, sin marco, un turno a la vez. */
 .conversation-stream {
   position: absolute; z-index: 4; left: max(24px, 3vw); top: 92px;
-  width: min(430px, 38vw); max-height: calc(100svh - 230px);
+  width: min(520px, 42vw); max-height: calc(100svh - 230px);
   display: flex; flex-direction: column; gap: .55rem; pointer-events: none;
 }
 .stream-turn {
@@ -309,15 +316,16 @@ input[type="range"] { width: 100%; accent-color: #8dc9f2; cursor: pointer; heigh
 @keyframes stream-enter { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 @keyframes stream-leave { from { opacity: .5; } to { opacity: 0; transform: translateY(-16px); } }
 .stream-question {
-  margin: 0; font-size: 13px; line-height: 1.5; color: #9fc4dc;
+  margin: 0; font-size: 14.5px; line-height: 1.55; color: #9fc4dc;
   display: flex; flex-direction: column; gap: .2rem;
 }
 /* Sin esto un informe largo empuja la respuesta fuera de la pantalla. */
 .stream-body {
   min-height: 0; overflow-y: auto; overscroll-behavior: contain;
   pointer-events: auto; padding-right: .4rem;
+  scrollbar-width: thin; scrollbar-color: #7acfff3d transparent;
 }
-.stream-body .helios-answer { font-size: 15px; line-height: 1.62; }
+.stream-body .helios-answer { font-size: 16.5px; line-height: 1.72; letter-spacing: .002em; }
 .conversation-stream .reply-progress, .conversation-stream .reply-status { pointer-events: auto; }
 @media (prefers-reduced-motion: reduce) {
   .stream-turn, .stream-turn.leaving { animation: none; }
