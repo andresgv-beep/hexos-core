@@ -346,3 +346,26 @@ input[type="range"] { width: 100%; accent-color: #8dc9f2; cursor: pointer; heigh
   border: 1px solid #7acfff44; background: #65bdf31f;
 }
 .note-actions button:hover { background: #7ccafd33; }
+
+/* La respuesta ya no es un párrafo suelto: es Markdown pintado. */
+.helios-answer p { margin: 0 0 .7em; }
+.helios-answer p:last-child, .helios-answer ul:last-child, .helios-answer ol:last-child { margin-bottom: 0; }
+.helios-answer ul, .helios-answer ol { margin: .2em 0 .8em; padding-left: 1.35em; display: grid; gap: .32em; }
+.helios-answer li { padding-left: .15em; }
+.helios-answer ul li::marker { color: #6fc7f5; }
+.helios-answer ol li::marker { color: #6fc7f5; font-variant-numeric: tabular-nums; }
+.helios-answer strong { color: #eaf7ff; font-weight: 600; }
+.helios-answer code {
+  font-family: ui-monospace, "Cascadia Code", Menlo, monospace; font-size: .92em;
+  padding: .06em .34em; border-radius: .3em; background: #7acfff1c; color: #cfeeff;
+}
+/* Copiar la respuesta la copiaba dos veces: la visible y la del lector de pantalla. */
+.helios-answer .sr-only { user-select: none; }
+
+/* Lo que anuncia antes de actuar: se leía diminuto y aparecía de golpe. */
+.conversation-stream .reply-progress { border-left-color: #71caff55; padding-left: 13px; }
+.conversation-stream .reply-progress li {
+  font-size: 13.5px; line-height: 1.5; color: #a8cde3; margin-bottom: 6px;
+  animation: word-in .45s ease-out both;
+}
+.conversation-stream .reply-status { font-size: 13.5px; animation: word-in .45s ease-out both; }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { parseReply, regroup, tokenize, type Token } from "@/lib/helios/markdown";
 
 /** Revelado visual del contrato HTTP actual —la respuesta llega entera—, no
  *  streaming de tokens.
@@ -9,8 +10,9 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
  *  una máquina de escribir, y lo que se quiere es que el texto aparezca. Cada
  *  palabra entra con su propia animación al montarse. */
 export function ProgressiveReply({ text, onComplete }: { text: string; onComplete?: () => void }) {
-  // Se parte conservando los espacios, para no rehacer el texto al juntarlo.
-  const words = useMemo(() => text.split(/(\s+)/), [text]);
+  // Helios escribe en Markdown: se interpreta antes de revelar, para que una lista
+  // sea una lista y no un párrafo con asteriscos dentro.
+  const words = useMemo(() => tokenize(parseReply(text)), [text]);
   const [visible, setVisible] = useState(0);
   const paragraph = useRef<HTMLParagraphElement>(null);
   const follow = useRef(true);
@@ -35,8 +37,8 @@ export function ProgressiveReply({ text, onComplete }: { text: string; onComplet
       cursor = Math.min(cursor + 2, words.length);
       setVisible(cursor);
       if (cursor < words.length) {
-        const anterior = words[cursor - 2] ?? "";
-        timer = setTimeout(step, /[.!?\n]$/.test(anterior) ? 190 : 52);
+        const anterior = words[cursor - 2]?.text ?? "";
+        timer = setTimeout(step, /[.!?]$/.test(anterior) ? 190 : 52);
       }
     }
     function resume() {
@@ -65,13 +67,27 @@ export function ProgressiveReply({ text, onComplete }: { text: string; onComplet
     }
   }, [complete, onComplete]);
   return <>
-    <p ref={paragraph} className="helios-answer">
+    <div ref={paragraph} className="helios-answer">
+      {/* El texto entero para quien usa lector de pantalla. No se puede seleccionar:
+          si no, copiar la respuesta la copiaba dos veces. */}
       <span className="sr-only">{text}</span>
-      <span aria-hidden="true">{words.slice(0, visible).map((palabra, i) =>
-        /^\s+$/.test(palabra)
-          ? palabra
-          : <span key={i} className="reveal-word">{palabra}</span>)}</span>
-    </p>
+      <div aria-hidden="true">{regroup(words.slice(0, visible)).map(bloque => {
+        const lineas = bloque.lines.map(linea =>
+          <Fragment key={linea.index}>{linea.parts.map((parte, i) =>
+            <Palabra key={i} token={parte} />)}</Fragment>);
+        if (bloque.kind === "p") return <p key={bloque.index}>{lineas}</p>;
+        const Lista = bloque.kind === "ol" ? "ol" : "ul";
+        return <Lista key={bloque.index}>{bloque.lines.map(linea =>
+          <li key={linea.index}>{linea.parts.map((parte, i) => <Palabra key={i} token={parte} />)}</li>)}</Lista>;
+      })}</div>
+    </div>
     {!complete && <button className="reveal-all" onClick={() => finish.current()}>Mostrar todo</button>}
   </>;
+}
+
+function Palabra({ token }: { token: Token }) {
+  if (/^\s+$/.test(token.text)) return token.text;
+  const contenido = token.code ? <code>{token.text}</code>
+    : token.bold ? <strong>{token.text}</strong> : token.text;
+  return <span className="reveal-word">{contenido}</span>;
 }
