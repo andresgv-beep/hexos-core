@@ -201,22 +201,26 @@ def forget(workspace, name):
 
 
 def resolve(workspace, name):
-    """Dirección del equipo guardado con ese nombre, en este orden:
+    """Por dónde llegar al equipo guardado con ese nombre, en orden de intento.
 
-    1. la dirección de su credencial, si se guardó una (`--host`): es la que se
-       usa para entrar, y por eso pesa más que ninguna;
-    2. la dirección fija de su registro, puesta con device.remote desde la
-       conversación;
-    3. lo observado entre los vecinos de la red, que solo vale en la misma LAN.
+    Devuelve la primera dirección en `host` y el resto en `alternatives`, porque un
+    equipo puede tener dos caminos —su IP en la red y una dirección fija de fuera—
+    y cuál sirve depende de dónde estés. Antes se devolvía una sola y, si esa no
+    llegaba, no había segunda oportunidad.
 
-    Las dos primeras son las únicas que siguen sirviendo desde otro sitio.
+    Prioridad: la IP local si el equipo se está viendo AHORA en la red; si no, la
+    dirección fija. Y en cualquier caso, la otra queda de alternativa.
+
+    Por encima de todo eso manda la dirección de su credencial, si se guardó una:
+
+    es la que se usa para entrar, y por eso pesa más que ninguna.
     """
     if not NAME.fullmatch(name or ''):
         raise ValueError('Nombre de equipo no válido')
     fijada = (credentials(workspace, name) or {}).get('host')
     if fijada:
         return dict(name=name.casefold(), host=fijada, mac=None,
-                    observed_at=None, reachable=None, pinned=True)
+                    observed_at=None, reachable=None, pinned=True, alternatives=[])
     database = Path(workspace) / 'work.sqlite'
     if not database.exists():
         raise ValueError('No hay inventario todavía; pide guardar los dispositivos de la red')
@@ -238,31 +242,44 @@ def resolve(workspace, name):
         raise ValueError('Hay ' + str(len(matches)) + ' equipos guardados como ' + repr(name) +
                          '; el nombre no distingue cuál')
     device = matches[0]
-    # Registrado con dirección fija (device.remote): no está en esta red y no va a
-    # aparecer entre los vecinos, así que no hay nada que observar.
-    if device.get('pinned_host'):
-        return dict(name=wanted, host=device['pinned_host'], mac=device.get('mac'),
-                    port=device.get('pinned_port'),
-                    observed_at=None, reachable=None, pinned=True)
-    # Direcciones de la última observación pasiva; REACHABLE antes que STALE.
+    # Direcciones observadas en la red, la más reciente y REACHABLE por delante.
     addresses = device.get('latest_addresses') or device.get('addresses') or []
-    candidates = []
+    locales = []
     for entry in addresses:
         try:
             direccion = ipaddress.ip_address(entry['ip'])
         except (ValueError, KeyError, TypeError):
             continue
         if direccion.version == 4:
-            candidates.append((('REACHABLE' not in (entry.get('state') or [])), entry['observed_at'], str(direccion)))
-    if not candidates:
-        raise ValueError(repr(name) + ' está en el inventario pero sin dirección IPv4 observada; '
-                         'pide una lectura de la red y reintenta')
-    # Orden estable en dos pasos: primero la más reciente, luego REACHABLE por delante.
-    candidates.sort(key=lambda item: item[1], reverse=True)
-    candidates.sort(key=lambda item: item[0])
-    unreachable, observed_at, host = candidates[0]
-    return dict(name=wanted, host=host, mac=device.get('mac'),
-                observed_at=observed_at, reachable=not unreachable, pinned=False)
+            locales.append((('REACHABLE' not in (entry.get('state') or [])),
+                            entry['observed_at'], str(direccion)))
+    locales.sort(key=lambda item: item[1], reverse=True)
+    locales.sort(key=lambda item: item[0])
+    fija = device.get('pinned_host')
+    # Un equipo que se está viendo AHORA en la red se prueba primero por su IP
+    # local: es más rápida y no depende de que el router de fuera esté bien. Si no
+    # se le ve —otra casa, otra red—, manda la dirección fija. Y la que no se
+    # eligió queda como alternativa, que es lo que faltaba: al no llegar por la
+    # LAN, probar la de fuera en vez de rendirse.
+    aqui = bool(device.get('in_latest_snapshot')) and bool(locales) and not locales[0][0]
+    orden = []
+    if locales and (aqui or not fija):
+        alcanzable, visto, host = locales[0]
+        orden.append(dict(host=host, port=None, pinned=False,
+                          observed_at=visto, reachable=not alcanzable))
+    if fija:
+        orden.append(dict(host=fija, port=device.get('pinned_port'), pinned=True,
+                          observed_at=None, reachable=None))
+    if locales and orden and orden[0]['host'] != locales[0][2]:
+        alcanzable, visto, host = locales[0]
+        orden.append(dict(host=host, port=None, pinned=False,
+                          observed_at=visto, reachable=not alcanzable))
+    if not orden:
+        raise ValueError(repr(name) + ' está en el inventario pero sin dirección IPv4 observada '
+                         'ni dirección fija; pide una lectura de la red y reintenta, o dale una '
+                         'dirección fija con device_remote')
+    return dict(name=wanted, mac=device.get('mac'), **orden[0],
+                alternatives=orden[1:])
 
 
 def main():

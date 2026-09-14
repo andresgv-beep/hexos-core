@@ -217,5 +217,55 @@ class DireccionFijaTest(unittest.TestCase):
         self.assertIn('inventario', str(caught.exception))
 
 
+class RutasAlternativasTest(unittest.TestCase):
+    """Un equipo puede tener dos caminos; hay que devolver los dos y en orden."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix='hexos-rutas-')
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def inventario(self, **campos):
+        import sqlite3
+        base = dict(id='eth0/aa:bb', mac='aa:bb', interface='eth0', identity=dict(name='synology'),
+                    latest_addresses=[], addresses=[], in_latest_snapshot=False)
+        base.update(campos)
+        db = sqlite3.connect(Path(self.tmp.name) / 'work.sqlite')
+        db.execute('CREATE TABLE IF NOT EXISTS network_devices (id TEXT PRIMARY KEY, body TEXT NOT NULL)')
+        db.execute('INSERT OR REPLACE INTO network_devices VALUES (?,?)', (base['id'], json.dumps(base)))
+        db.commit(); db.close()
+
+    def test_si_se_le_ve_en_la_red_manda_su_ip_y_la_fija_queda_de_reserva(self):
+        self.inventario(in_latest_snapshot=True, pinned_host='casa.ddns.net', pinned_port=30,
+                        latest_addresses=[dict(ip='192.168.1.243', state=['REACHABLE'], observed_at='2026-09-14')])
+        r = resolve(self.tmp.name, 'synology')
+        self.assertEqual(r['host'], '192.168.1.243')
+        self.assertEqual([a['host'] for a in r['alternatives']], ['casa.ddns.net'])
+        self.assertEqual(r['alternatives'][0]['port'], 30)
+
+    def test_si_no_se_le_ve_manda_la_fija_y_la_ip_queda_de_reserva(self):
+        # Otra casa: la IP local de la última vez ya no vale, pero se intenta después.
+        self.inventario(in_latest_snapshot=False, pinned_host='casa.ddns.net', pinned_port=30,
+                        latest_addresses=[dict(ip='192.168.1.243', state=['STALE'], observed_at='2026-09-13')])
+        r = resolve(self.tmp.name, 'synology')
+        self.assertEqual((r['host'], r['port']), ('casa.ddns.net', 30))
+        self.assertEqual([a['host'] for a in r['alternatives']], ['192.168.1.243'])
+
+    def test_sin_direccion_fija_solo_hay_un_camino(self):
+        self.inventario(in_latest_snapshot=True,
+                        latest_addresses=[dict(ip='192.168.1.243', state=['REACHABLE'], observed_at='2026-09-14')])
+        r = resolve(self.tmp.name, 'synology')
+        self.assertEqual(r['host'], '192.168.1.243')
+        self.assertEqual(r['alternatives'], [])
+
+    def test_sin_ninguna_direccion_lo_dice_en_vez_de_inventarse_una(self):
+        self.inventario(latest_addresses=[dict(ip='fe80::1', state=['STALE'], observed_at='2026-09-14')])
+        with self.assertRaises(ValueError) as caught:
+            resolve(self.tmp.name, 'synology')
+        self.assertIn('IPv4', str(caught.exception))
+        self.assertIn('device_remote', str(caught.exception))
+
+
 if __name__ == '__main__':
     unittest.main()

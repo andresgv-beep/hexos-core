@@ -232,6 +232,70 @@ class ConectarTest(unittest.TestCase):
         self.assertEqual(leer.call_args.kwargs['device'], 'servidor 1')
 
 
+class SegundaDireccionTest(unittest.TestCase):
+    """Si por la red local no llega, probar la de fuera en vez de rendirse."""
+
+    def correr(self, salidas, rutas):
+        import pexpect
+        from unittest.mock import patch
+        from hexos.agent import nas_session
+
+        class SshFalso:
+            exitstatus = 0
+            def __init__(self, salida): self.before = salida
+            def expect(self, patrones, timeout=None): return 2   # EOF
+            def waitnoecho(self, timeout=None): return True
+            def sendline(self, texto): pass
+            def close(self, force=False): pass
+
+        vistos = []
+        def spawn(binario, argv, **kw):
+            vistos.append(argv[argv.index('-p') + 2])   # usuario@host
+            return SshFalso(salidas[len(vistos) - 1])
+
+        acceso = dict(user='helios', password='x', port=22)
+        with patch.object(nas_session.hosts, 'resolve', return_value=rutas), \
+             patch.object(nas_session.hosts, 'credentials', return_value=acceso), \
+             patch.object(pexpect, 'spawn', side_effect=spawn):
+            return nas_session.execute('/tmp', 'synology', 'system'), vistos
+
+    def test_cae_a_la_direccion_de_fuera_cuando_la_local_no_llega(self):
+        rutas = dict(name='synology', host='192.168.1.243', port=None, mac=None, pinned=False,
+                     observed_at=None, reachable=None,
+                     alternatives=[dict(host='casa.ddns.net', port=30, pinned=True,
+                                        observed_at=None, reachable=None)])
+        salidas = ['ssh: connect to host 192.168.1.243 port 22: No route to host',
+                   'DSM 7.2.2 arriba']
+        resultado, vistos = self.correr(salidas, rutas)
+        self.assertEqual(vistos, ['helios@192.168.1.243', 'helios@casa.ddns.net'])
+        self.assertIn('DSM 7.2.2', resultado['output'])
+        self.assertEqual(resultado['host'], 'casa.ddns.net')
+        self.assertEqual(resultado['port'], 30, 'la alternativa lleva su propio puerto')
+        self.assertIn('valió casa.ddns.net', resultado['note'])
+        self.assertEqual([r['unreachable'] for r in resultado['routes_tried']], [True, False])
+
+    def test_un_error_del_equipo_no_hace_llamar_a_otra_puerta(self):
+        # Contestó: eso es una respuesta suya, no una razón para probar otra dirección.
+        rutas = dict(name='synology', host='192.168.1.243', port=None, mac=None, pinned=False,
+                     observed_at=None, reachable=None,
+                     alternatives=[dict(host='casa.ddns.net', port=30, pinned=True,
+                                        observed_at=None, reachable=None)])
+        resultado, vistos = self.correr(['sudo: comando no encontrado', 'no debería llegar'], rutas)
+        self.assertEqual(vistos, ['helios@192.168.1.243'])
+        self.assertNotIn('valió', resultado['note'])
+
+    def test_si_ninguna_llega_devuelve_la_ultima_con_su_error(self):
+        rutas = dict(name='synology', host='192.168.1.243', port=None, mac=None, pinned=False,
+                     observed_at=None, reachable=None,
+                     alternatives=[dict(host='casa.ddns.net', port=30, pinned=True,
+                                        observed_at=None, reachable=None)])
+        salidas = ['No route to host', 'Connection timed out']
+        resultado, vistos = self.correr(salidas, rutas)
+        self.assertEqual(len(vistos), 2)
+        self.assertIn('Connection timed out', resultado['output'])
+        self.assertTrue(all(r['unreachable'] for r in resultado['routes_tried']))
+
+
 class DescartarPeticionTest(unittest.TestCase):
     """«Ahora no» tiene que valer también en el servidor."""
 

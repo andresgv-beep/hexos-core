@@ -377,7 +377,6 @@ def present_result(result, section, requested_section=None):
 
 def execute(workspace, device, section, disk=None, container=None, action=None):
     """Conecta al equipo guardado con ese nombre usando su credencial local."""
-    import pexpect
     remote = command(section, disk, container, action)
     if section == 'diagnosis':
         storage = execute(workspace, device, 'storage')
@@ -406,11 +405,35 @@ def execute(workspace, device, section, disk=None, container=None, action=None):
     # La clave de host queda fijada en el primer acceso y se verifica en los siguientes.
     known = str(Path(workspace).resolve() / (device.casefold().replace(' ', '_') + '_known_hosts'))
     quoted = "'" + remote.replace("'", "'\\''") + "'"
-    argv = ['-tt', '-o', 'StrictHostKeyChecking=accept-new', '-o', 'UserKnownHostsFile=' + known,
-            '-o', 'ConnectTimeout=5', '-o', 'NumberOfPasswordPrompts=1',
-            '-o', 'PubkeyAuthentication=no', '-o', 'ForwardAgent=no', '-o', 'ClearAllForwardings=yes',
-            '-p', str(account['port']), account['user'] + '@' + located['host'],
-            "sudo -p '__HEXOS_SUDO__:' /bin/sh -c " + quoted]
+    # Un equipo puede tener dos caminos: su IP en la red y una dirección de fuera.
+    # Si el primero no llega, se prueba el siguiente en vez de rendirse — antes
+    # había que decirle a mano «prueba por la https», y eso no es iniciativa suya.
+    rutas = [located] + list(located.get('alternatives') or [])
+    intentos = []
+    for indice, ruta in enumerate(rutas):
+        puerto = ruta.get('port') or account['port']
+        argv = ['-tt', '-o', 'StrictHostKeyChecking=accept-new', '-o', 'UserKnownHostsFile=' + known,
+                '-o', 'ConnectTimeout=5', '-o', 'NumberOfPasswordPrompts=1',
+                '-o', 'PubkeyAuthentication=no', '-o', 'ForwardAgent=no', '-o', 'ClearAllForwardings=yes',
+                '-p', str(puerto), account['user'] + '@' + ruta['host'],
+                "sudo -p '__HEXOS_SUDO__:' /bin/sh -c " + quoted]
+        resultado = _ssh(argv, password, device, ruta, puerto, section, disk, container, action)
+        intentos.append(dict(host=ruta['host'], port=puerto, pinned=ruta.get('pinned', False),
+                             unreachable=resultado.pop('_unreachable')))
+        # Solo se pasa a la siguiente si NO se llegó al equipo. Un error de dentro
+        # es una respuesta suya, no una razón para llamar a otra puerta.
+        if not intentos[-1]['unreachable'] or indice == len(rutas) - 1:
+            resultado['routes_tried'] = intentos
+            if len(intentos) > 1:
+                resultado['note'] += (' Se intentó por ' + str(len(intentos)) + ' direcciones; '
+                                      'valió ' + intentos[-1]['host'] + '.')
+            return resultado
+    raise ValueError('No se pudo alcanzar ' + repr(device) + ' por ninguna de sus direcciones')
+
+
+def _ssh(argv, password, device, located, port, section, disk, container, action):
+    """Una conexión y su lectura. `_unreachable` dice si ni siquiera se llegó."""
+    import pexpect
     proc = pexpect.spawn('/usr/bin/ssh', argv, encoding='utf-8', codec_errors='replace', timeout=40)
     output = []; prompts = 0; timeout = False; deadline = time.monotonic() + 45
     try:
@@ -431,14 +454,19 @@ def execute(workspace, device, section, disk=None, container=None, action=None):
     finally:
         proc.close(force=True)
     text = ''.join(output).replace(password, '[credencial omitida]')
+    # Ni se llegó al equipo: eso sí justifica probar otra dirección suya.
+    inalcanzable = bool(re.search(
+        r'No route to host|Connection refused|Connection timed out|Network is unreachable|'
+        r'Name or service not known|Temporary failure in name resolution|'
+        r'Could not resolve hostname|Operation timed out', text, re.I))
     # Credencial rechazada: no es una lectura fallida, es que falta el acceso. Se
     # pide otra vez por la ventana en vez de devolver el error como si fuera un
     # dato del equipo, que dejaba a la persona sin forma de corregir usuario,
     # contraseña o puerto.
     if re.search(r'Permission denied|Authentication failed|Too many authentication failures', text, re.I):
         raise hosts.AccessNeeded(device, located, reason='rejected')
-    return dict(target=device, host=located['host'], observed_at=now(), section=section,
-                disk=disk, container=container, action=action,
+    return dict(target=device, host=located['host'], port=port, observed_at=now(), section=section,
+                disk=disk, container=container, action=action, _unreachable=inalcanzable,
                 exit_code=proc.exitstatus, timed_out=timeout,
                 output=text[-18000:], truncated=len(text) > 18000,
                 note='Lectura real SSH con la credencial guardada. '
