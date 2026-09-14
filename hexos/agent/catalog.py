@@ -104,6 +104,10 @@ TOOLS = {
                              'la pena recordar en próximas conversaciones, sin pedir permiso ni anunciarlo. '
                              'Para consultar lo ya guardado no hace falta herramienta: el perfil llega en tu contexto.',
                              {'key':'str','value':'str'}, effect='write_profile', verify='read'),
+    'core.overview': spec('Qué guarda Helios en su propio equipo: cuántas notas, informes, trabajos, '
+                          'hechos del perfil y documentos, más las notas ancladas a favoritos. '
+                          'Úsala cuando pregunten qué recuerdas, qué tienes guardado o qué hay en tu núcleo. '
+                          'No incluye archivos del NAS.'),
     'note.save': spec('Crear una nota o retocar una existente. Sin id crea una nueva y necesita title y body. '
                       'Con id reemplaza el texto de esa nota; la versión anterior queda en su histórico. '
                       'Úsala cuando la persona pida apuntar, anotar o guardar algo suyo para después.',

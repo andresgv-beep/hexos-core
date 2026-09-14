@@ -99,5 +99,61 @@ class NotasTest(unittest.TestCase):
         self.assertEqual(notes.dispatch(self.store, 'note.list', {}, 't')['total'], 0)
 
 
+class NucleoTest(unittest.TestCase):
+    """El recuento del núcleo: uno solo, el mismo que responde y el que pinta."""
+
+    def setUp(self):
+        from hexos.agent import core, procedures, workflow
+        self.core = core
+        self.tmp = tempfile.TemporaryDirectory(prefix='hexos-nucleo-')
+        self.addCleanup(self.tmp.cleanup)
+        self.store = WorkStore(self.tmp.name)
+        self.addCleanup(self.store.close)
+        self.store.db.executescript(
+            'CREATE TABLE IF NOT EXISTS documents (id TEXT PRIMARY KEY, ts TEXT, content TEXT, sha256 TEXT);')
+        notes.initialize(self.store)
+        procedures.initialize(self.store)
+        workflow.initialize(self.store)
+
+    def test_cuenta_lo_que_hay_y_deja_fuera_lo_descartado(self):
+        a = notes.dispatch(self.store, 'note.save', dict(title='una', body='x'), 't')
+        notes.dispatch(self.store, 'note.save', dict(title='dos', body='y'), 't')
+        notes.dispatch(self.store, 'note.mark', dict(id=a['id'], state='descartada'), 't')
+        seccion = next(s for s in self.core.overview(self.store)['sections'] if s['key'] == 'notas')
+        self.assertEqual((seccion['total'], seccion['pending']), (1, 1))
+
+    def test_los_favoritos_salen_con_lo_justo_para_pintar_la_tira(self):
+        n = notes.dispatch(self.store, 'note.save', dict(title='Cable de sda', body='x'), 't')
+        notes.dispatch(self.store, 'note.mark', dict(id=n['id'], favorite=True), 't')
+        r = self.core.overview(self.store)
+        self.assertEqual(r['total_favorites'], 1)
+        self.assertEqual(r['favorites'][0]['title'], 'Cable de sda')
+        self.assertEqual(r['favorites'][0]['kind'], 'nota')
+
+    def test_sin_perfil_dice_que_no_sabe_en_vez_de_contar_cero(self):
+        perfil = next(s for s in self.core.overview(self.store)['sections'] if s['key'] == 'perfil')
+        self.assertIsNone(perfil['total'])
+        self.assertIn('no hay perfil', perfil['unknown'])
+
+    def test_un_perfil_que_no_se_deja_leer_no_se_cuenta_como_vacio(self):
+        class Roto:
+            def keys(self): raise RuntimeError('hera no responde')
+        perfil = next(s for s in self.core.overview(self.store, Roto())['sections'] if s['key'] == 'perfil')
+        self.assertIsNone(perfil['total'])
+        self.assertIn('hera no responde', perfil['unknown'])
+
+    def test_los_hechos_ilegibles_se_declaran_aparte(self):
+        class Parcial:
+            unreadable = ['fila rota']
+            def keys(self): return {'yo/nombre': 'Andrés'}
+        perfil = next(s for s in self.core.overview(self.store, Parcial())['sections'] if s['key'] == 'perfil')
+        self.assertEqual((perfil['total'], perfil['unreadable']), (1, 1))
+
+    def test_no_promete_archivos_del_nas(self):
+        r = self.core.overview(self.store)
+        self.assertIn('No incluye archivos del NAS', r['note'])
+        self.assertNotIn('fotos', [s['key'] for s in r['sections']])
+
+
 if __name__ == '__main__':
     unittest.main()

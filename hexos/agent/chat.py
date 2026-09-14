@@ -16,7 +16,7 @@ import time
 from uuid import uuid4
 
 from .work import KINDS, WorkStore, now, strict_json, string, strings
-from . import procedures, catalog, workflow, devices, hosts, notes
+from . import procedures, catalog, workflow, devices, hosts, notes, core
 from .continuity import HeraProfile, history_tool
 from .decisions import InvalidDecision, validate_reply
 from .context import native_messages
@@ -687,6 +687,8 @@ class Agent:
             # figurar como recién vistos o un sufijo casa con el equipo equivocado.
             observacion, _ = devices.observe(store)
             return devices.annotate(store, observacion)
+        if name == 'core.overview':
+            return core.dispatch(store, name, args, self.profile)
         if name.startswith('note.'):
             return notes.dispatch(store, name, args, turn_id)
         if name.startswith('history.'):
