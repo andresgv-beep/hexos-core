@@ -64,6 +64,10 @@ def read(workspace, section, disk=None, device=None, container=None, action=None
         section = 'diagnosis'
     command(section, disk, container, action)
     device = device or hosts.only_device(workspace)
+    # «srv1» por 'servidorsrv1': se traduce antes de concluir que falta el acceso.
+    reconocido = hosts.match(workspace, device)
+    entendido = reconocido if reconocido and reconocido != device.casefold() else None
+    device = reconocido or device
     if not hosts.credentials(workspace, device):
         # Resolver aquí permite enseñar en la ventana a qué máquina se da el acceso.
         try:
@@ -72,7 +76,12 @@ def read(workspace, section, disk=None, device=None, container=None, action=None
             located = None
         raise hosts.AccessNeeded(device, located)
     result = execute(workspace, device, section, disk, container, action)
-    return present_result(result, section, requested_section)
+    presentado = present_result(result, section, requested_section)
+    if entendido:
+        presentado['understood_as'] = entendido
+        presentado['note'] = ('Se pidió por un nombre parcial y se leyó ' + repr(entendido) +
+                              '. ' + presentado.get('note', ''))
+    return presentado
 
 
 # Velocidad a la que el kernel ha limitado el enlace, según el nibble SPD de SControl.

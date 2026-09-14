@@ -189,3 +189,48 @@ class NasSessionTest(unittest.TestCase):
         self.assertIn('smartctl -i -H -A -l error -l selftest /dev/sda',command('smart','sda'))
         for section,disk in [('reboot',None),('smart','sda; reboot'),('smart','/dev/sda'),('kernel','sda'),('smart',None)]:
             with self.assertRaises(ValueError): command(section,disk)
+
+
+class NombreParcialTest(unittest.TestCase):
+    """«el servidor srv1» tiene que encontrar a 'servidorsrv1', no pedir su contraseña."""
+
+    def setUp(self):
+        from hexos.agent import hosts
+        self.hosts = hosts
+        self.tmp = tempfile.TemporaryDirectory(prefix='hexos-nombre-')
+        self.addCleanup(self.tmp.cleanup)
+        hosts.save(self.tmp.name, 'servidorsrv1', 'helios', 'x', port=30, host='uno.ddns.net')
+        hosts.save(self.tmp.name, 'synology 2', 'helios', 'x', port=22, host='dos.ddns.net')
+
+    def test_un_fragmento_encuentra_el_equipo(self):
+        for dicho in ('srv1', 'servidor srv1', 'SERVIDORSRV1', 'Servidorsrv1 '):
+            with self.subTest(dicho):
+                self.assertEqual(self.hosts.match(self.tmp.name, dicho), 'servidorsrv1')
+
+    def test_con_varios_candidatos_se_pregunta_en_vez_de_elegir(self):
+        self.hosts.save(self.tmp.name, 'servidorsrv1 viejo', 'helios', 'x')
+        with self.assertRaises(ValueError) as e:
+            self.hosts.match(self.tmp.name, 'srv1')
+        self.assertIn('encaja con varios', str(e.exception))
+
+    def test_un_fragmento_demasiado_corto_no_encaja_con_nada(self):
+        self.assertIsNone(self.hosts.match(self.tmp.name, 's'))
+        self.assertIsNone(self.hosts.match(self.tmp.name, ''))
+
+    def test_un_nombre_que_no_es_de_nadie_sigue_sin_serlo(self):
+        self.assertIsNone(self.hosts.match(self.tmp.name, 'nimos'))
+
+    def test_no_se_usa_para_borrar(self):
+        # Olvidar por un fragmento borraría el equipo equivocado sin remedio.
+        with self.assertRaises(ValueError):
+            self.hosts.forget(self.tmp.name, 'srv1')
+        self.assertIn('servidorsrv1', self.hosts.load(self.tmp.name))
+
+    def test_la_lectura_dice_por_qué_nombre_acabó_leyendo(self):
+        from unittest.mock import patch
+        from hexos.agent import nas_session
+        salida = dict(output='', exit_code=0, timed_out=False, target='servidorsrv1')
+        with patch.object(nas_session, 'execute', return_value=salida):
+            r = nas_session.read(self.tmp.name, section='space', device='srv1')
+        self.assertEqual(r['understood_as'], 'servidorsrv1')
+        self.assertIn("se leyó 'servidorsrv1'", r['note'])

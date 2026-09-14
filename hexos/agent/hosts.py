@@ -3,6 +3,7 @@ import argparse
 import getpass
 import ipaddress
 import json
+import unicodedata
 import os
 from pathlib import Path
 import re
@@ -200,6 +201,43 @@ def forget(workspace, name):
     elif store_path(workspace).exists():
         store_path(workspace).unlink()
     return dict(forgotten=clave, user=retirada.get('user'), remaining=sorted(fichas))
+
+
+def _llano(texto):
+    sin_tildes = unicodedata.normalize('NFD', texto or '')
+    return ''.join(c for c in sin_tildes.casefold()
+                   if unicodedata.category(c) != 'Mn' and c.isalnum())
+
+
+def match(workspace, name):
+    """El nombre dicho, contra los guardados. Solo para LEER.
+
+    La persona dice «el servidor srv1» y el modelo pasa 'srv1'; guardado está como
+    'servidorsrv1'. Sin esto, no encontrar la credencial se confundía con no
+    tenerla, y se pedía por la ventana un acceso que ya estaba guardado.
+
+    Exacto primero. Si no, el que lo contenga, y solo si es uno: con varios se
+    pregunta, porque acertar por mayoría es como se acaba leyendo el equipo
+    equivocado. Nunca se usa para borrar ni para guardar: ahí el nombre manda.
+    """
+    guardados = sorted(load(workspace))
+    pedido = _llano(name)
+    if not pedido:
+        return None
+    for guardado in guardados:
+        if _llano(guardado) == pedido:
+            return guardado
+    # Un fragmento de una o dos letras encaja con demasiadas cosas.
+    if len(pedido) < 3:
+        return None
+    candidatos = [g for g in guardados if pedido in _llano(g) or _llano(g) in pedido]
+    if len(candidatos) == 1:
+        return candidatos[0]
+    if candidatos:
+        raise ValueError('«' + name + '» encaja con varios equipos guardados: ' +
+                         ', '.join(repr(c) for c in candidatos) +
+                         '. Repite la lectura con el nombre completo.')
+    return None
 
 
 def only_device(workspace):
