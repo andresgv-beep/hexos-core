@@ -10,7 +10,7 @@ button { cursor: pointer; color: inherit; transition: background .2s, color .2s,
 button:focus-visible, a:focus-visible, input:focus-visible, [tabindex="0"]:focus-visible { outline: 2px solid #88d9ff; outline-offset: 4px; }
 .helios-app { --phase-color: #66c7ff; height: 100svh; min-height: 420px; position: relative; overflow: hidden; isolation: isolate; background: radial-gradient(ellipse at 50% 44%, #0b1521 0%, #060b12 42%, #05090e 75%); }
 .ambient-light { position: absolute; width: min(650px, 100vw); aspect-ratio: 1; left: 50%; top: 10%; transform: translateX(-50%); background: radial-gradient(circle, color-mix(in srgb, var(--phase-color) 6%, transparent), transparent 68%); pointer-events: none; transition: background 2s; }
-.topbar { height: 88px; margin: 0 38px; display: flex; justify-content: space-between; align-items: center; position: relative; z-index: 7; }
+.topbar { height: 88px; margin: 0 38px; display: flex; justify-content: flex-end; align-items: center; position: relative; z-index: 7; }
 .brand { text-decoration: none; display: flex; align-items: center; gap: 14px; color: #e0ebf3; font-size: 19px; letter-spacing: .32em; }
 .brand-symbol { font-size: 38px; font-weight: 200; color: #99dfff; line-height: 1; text-shadow: 0 0 20px #68c8ff60; letter-spacing: 0; }
 .icon-button { background: transparent; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid transparent; border-radius: 9px; width: 34px; height: 34px; color: #8aacbf; }

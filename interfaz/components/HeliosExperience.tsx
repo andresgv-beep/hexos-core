@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { ArrowUp, MessageSquare, SlidersHorizontal, X } from "lucide-react";
-import Link from "next/link";
 import { HeliosOrb } from "./orb/HeliosOrb";
 import { AttachmentButton, ChatAttachments, type Attachment } from "./ChatAttachments";
 import { ChatHistory } from "./ChatHistory";
@@ -370,7 +369,6 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   return <main className={`helios-app phase-${phase}`} style={{ "--phase-color": active.color } as CSSProperties}>
     <div className="ambient-light" aria-hidden="true" />
     <header className="topbar">
-      <Link className="brand" href="/" aria-label="Helios, inicio"><span className="brand-symbol" aria-hidden="true">✳</span><span>HELIOS</span></Link>
       <button ref={settingsRef} className={`icon-button ${settings ? "selected" : ""}`} aria-label="Ajustar luminosidad" aria-expanded={settings} onClick={() => setSettings(true)}><SlidersHorizontal size={19} /></button>
     </header>
     <SystemMonitor autoEnabled={thinking} autoBusy={thinkingBusy} onToggleAuto={() => void toggleThinking()} />
