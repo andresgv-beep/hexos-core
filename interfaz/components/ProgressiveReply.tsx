@@ -23,7 +23,7 @@ export function ProgressiveReply({ text, onComplete }: { text: string; onComplet
     function step() {
       if (document.hidden) return;
       if (preference.matches) { showAll(); return; }
-      const container = paragraph.current?.closest(".window-content");
+      const container = paragraph.current?.closest(".window-content, .stream-body");
       if (container) follow.current = container.scrollHeight - container.scrollTop - container.clientHeight < 60;
       cursor = Math.min(cursor + 3, characters.length);
       setVisible(cursor);
@@ -47,7 +47,7 @@ export function ProgressiveReply({ text, onComplete }: { text: string; onComplet
     };
   }, [characters]);
   useLayoutEffect(() => {
-    const container = paragraph.current?.closest(".window-content");
+    const container = paragraph.current?.closest(".window-content, .stream-body");
     if (container && follow.current) container.scrollTop = container.scrollHeight;
   }, [visible]);
   const complete = visible >= characters.length;

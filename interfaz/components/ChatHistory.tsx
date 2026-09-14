@@ -3,11 +3,11 @@
 import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import type { HistoryMessage } from "@/lib/helios/hexos";
-import type { MessageWindow } from "./FloatingMessage";
+import type { Turn } from "./ConversationStream";
 
 export function ChatHistory({ previous, messages, historyError, onClose }: {
   previous: HistoryMessage[];
-  messages: MessageWindow[];
+  messages: Turn[];
   historyError: string;
   onClose: () => void;
 }) {
@@ -28,6 +28,6 @@ export function ChatHistory({ previous, messages, historyError, onClose }: {
         <div className="history-entry assistant"><span className="message-author">HELIOS</span><p>{message.pending ? "Helios está pensando…" : message.reply || message.error || "Sin respuesta recibida."}</p></div>
       </div>)}
     </div>
-    <footer className="history-footer"><span>Los mensajes absorbidos siguen aquí.</span><button onClick={onClose}>Seguir conversando</button></footer>
+    <footer className="history-footer"><span>Los turnos anteriores siguen aquí.</span><button onClick={onClose}>Seguir conversando</button></footer>
   </dialog>;
 }

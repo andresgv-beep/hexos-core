@@ -8,12 +8,13 @@ import { AttachmentButton, ChatAttachments, type Attachment } from "./ChatAttach
 import { ChatHistory } from "./ChatHistory";
 import { SystemMonitor } from "./SystemMonitor";
 import { ToolSatellites } from "./ToolSatellites";
-import { FloatingMessage, type MessageWindow } from "./FloatingMessage";
+import { ConversationStream, type Turn } from "./ConversationStream";
+import { NoteWindow, type NoteWindowState } from "./NoteWindow";
 import { CoreShelf } from "./CoreShelf";
 import { phases } from "@/lib/helios/state";
 import { createHexosTransport, type ContextCut, type CredentialRequest, type HeliosTransport, type HistoryMessage } from "@/lib/helios/hexos";
 import { mergeToolActivities, type ToolActivity } from "@/lib/helios/tools";
-import { coreSectionForTools } from "@/lib/helios/core";
+import { coreSectionForTools, type NoteDetail } from "@/lib/helios/core";
 
 const localTransport = createHexosTransport("/api/helios");
 
@@ -98,7 +99,10 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       } finally { attachmentJobs.current.delete(id); }
     }
   }
-  const [windows, setWindows] = useState<MessageWindow[]>([]);
+  // Los turnos ya no son ventanas: viven en la columna, uno a la vez, y el resto
+  // queda en el historial. Las ventanas pasan a ser notas e informes.
+  const [turns, setTurns] = useState<Turn[]>([]);
+  const [windows, setWindows] = useState<NoteWindowState[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [previous, setPrevious] = useState<HistoryMessage[]>([]);
   const [historyError, setHistoryError] = useState("");
@@ -108,10 +112,22 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const syncOrbExpansion = useCallback((scale: number) => {
     orbStage.current?.style.setProperty("--orb-expansion", String(scale / .96));
   }, []);
-  const finishAbsorption = useCallback((id: number) => {
-    setWindows(items => items.map(item => item.id === id ? { ...item, absorbing: false, minimized: true } : item));
+  const finishAbsorption = useCallback((id: string) => {
+    setWindows(items => items.filter(item => item.id !== id));
   }, []);
-  const [front, setFront] = useState(0);
+  const [front, setFront] = useState("");
+  const abrirNota = useCallback((note: NoteDetail) => {
+    setWindows(items => {
+      // La misma nota no se abre dos veces: se trae al frente la que ya está.
+      if (items.some(item => item.id === note.id)) return items;
+      // A la derecha: la columna de la izquierda es de la conversación, y abrir una
+      // nota encima de lo que Helios está diciendo tapa justo lo que hay que leer.
+      const abiertas = items.length;
+      return [...items, { id: note.id, note, slot: abiertas % 2 ? 3 : 1,
+                          x: 0, y: Math.floor(abiertas / 2) * 26, minimized: false }];
+    });
+    setFront(note.id);
+  }, []);
   const [sending, setSending] = useState(false);
   const [connection, setConnection] = useState<"checking" | "ready" | "offline">("checking");
   const [announcement, setAnnouncement] = useState("");
@@ -128,7 +144,8 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const closeRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const phase = turnTools.some(tool => tool.status === "running") ? "tool" : sending ? "thinking" : windows.some(item => item.revealing) ? "responding" : "idle";
+  const [revealing, setRevealing] = useState(false);
+  const phase = turnTools.some(tool => tool.status === "running") ? "tool" : sending ? "thinking" : revealing ? "responding" : "idle";
   const active = phases[phase];
   useEffect(() => () => request.current?.abort(), []);
   useEffect(() => {
@@ -175,7 +192,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       const destino = ventanaEnCurso.current;
       if (nuevos.length && destino !== null) {
         nuevos.forEach(m => anunciosVistos.current.add(m.id));
-        setWindows(items => items.map(item => item.id === destino
+        setTurns(items => items.map(item => item.id === destino
           ? { ...item, progress: [...(item.progress ?? []), ...nuevos.map(m => m.text)] }
           : item));
       }
@@ -284,14 +301,14 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     if (new TextEncoder().encode(payload).length > 6 * 1024 * 1024) { setAttachmentError("Los documentos juntos contienen demasiado texto. Envíalos por separado."); return; }
     const id = ++nextId.current;
     setTurnTools(items => items.map(tool => tool.status === "running" ? { ...tool, status: "done" } : tool));
-    setWindows(items => [
-      ...items.map(item => !item.minimized ? { ...item, absorbing: true } : item),
-      { id, text, slot: (id - 1) % 2, x: 0, y: 0, minimized: false, pending: true },
-    ]);
+    // El turno anterior se va de la columna solo; las ventanas abiertas se quedan,
+    // que para eso son notas y no conversación.
+    setTurns(items => [...items, { id, text, pending: true }]);
+    setRevealing(false);
     attachments.forEach(file => removeAttachment(file.id));
     setAttachmentError("");
     ventanaEnCurso.current = id;
-    setFront(id); setDraft(""); setAnnouncement(`Esperando a Helios en la ventana ${id}`);
+    setDraft(""); setAnnouncement("Esperando a Helios");
     inputRef.current?.focus();
     setSending(true);
     const controller = new AbortController();
@@ -314,7 +331,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
           // haría creer que sigue viéndolas. Se recogen; el archivo no se toca y
           // Helios puede recuperarlo buscando.
           // Menos la del turno actual: es la que va a mostrar esta respuesta.
-          setWindows(items => items.filter(item => item.id === id));
+          setTurns(items => items.filter(item => item.id === id));
           setPrevious([]);
           setContextCut(result.contextCut);
         }
@@ -324,13 +341,14 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         const reparo = cierre && !["comprobado", "sin_operaciones"].includes(cierre.reason)
           ? { note: cierre.note, tools: cierre.unverified.map(u => u.tool) }
           : undefined;
-        setWindows(items => items.map(item => item.id === id ? { ...item, pending: false, revealing: Boolean(result.reply), reply: result.reply, caveat: reparo } : item));
+        setRevealing(Boolean(result.reply));
+        setTurns(items => items.map(item => item.id === id ? { ...item, pending: false, reply: result.reply, caveat: reparo } : item));
         setAnnouncement(`Helios ha respondido en la conversación ${id}`);
       }
     } catch (error) {
       if (!controller.signal.aborted) {
         const detail = error instanceof Error ? error.message : "No se pudo recibir la respuesta.";
-        setWindows(items => items.map(item => item.id === id ? { ...item, pending: false, error: detail } : item));
+        setTurns(items => items.map(item => item.id === id ? { ...item, pending: false, error: detail } : item));
         setAnnouncement(`No se pudo completar la conversación ${id}: ${detail}`);
       }
     } finally {
@@ -356,6 +374,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       <button ref={settingsRef} className={`icon-button ${settings ? "selected" : ""}`} aria-label="Ajustar luminosidad" aria-expanded={settings} onClick={() => setSettings(true)}><SlidersHorizontal size={19} /></button>
     </header>
     <SystemMonitor autoEnabled={thinking} autoBusy={thinkingBusy} onToggleAuto={() => void toggleThinking()} />
+    <ConversationStream turn={turns[turns.length - 1] ?? null} onReplyComplete={() => setRevealing(false)} />
     <section className="presence" aria-label="Presencia de Helios">
       <div ref={orbStage} className="orb-stage">
         <div className="orb-halo" aria-hidden="true" />
@@ -364,15 +383,15 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         <button ref={orbButton} className="orb-history-trigger" aria-label="Abrir todo el chat" title="Abrir conversación" aria-haspopup="dialog" onClick={() => setHistoryOpen(true)} />
       </div>
     </section>
-    <section className="floating-workspace" aria-label="Ventanas de conversación">
-      {windows.filter(item => !item.minimized).map(message => <FloatingMessage key={message.id} message={message} orbTarget={orbButton} onAbsorbed={finishAbsorption} front={front === message.id} onFocus={setFront}
-        onReplyComplete={id => setWindows(items => items.map(item => item.id === id ? { ...item, revealing: false } : item))}
-        onMove={(id, x, y) => setWindows(items => items.map(item => item.id === id ? { ...item, x, y } : item))}
-        onMinimize={id => { setWindows(items => items.map(item => item.id === id ? { ...item, minimized: true, revealing: false } : item)); inputRef.current?.focus(); }}
-        onClose={id => { setWindows(items => items.map(item => item.id === id ? { ...item, minimized: true, revealing: false } : item)); inputRef.current?.focus(); }} />)}
+    <section className="floating-workspace" aria-label="Notas e informes abiertos">
+      {windows.filter(item => !item.minimized).map(item => <NoteWindow key={item.id} state={item}
+        orbTarget={orbButton} onAbsorbed={finishAbsorption} front={front === item.id} onFocus={setFront}
+        onMove={(id, x, y) => setWindows(items => items.map(w => w.id === id ? { ...w, x, y } : w))}
+        onMinimize={id => { setWindows(items => items.map(w => w.id === id ? { ...w, absorbing: true } : w)); inputRef.current?.focus(); }}
+        onClose={id => { setWindows(items => items.filter(w => w.id !== id)); inputRef.current?.focus(); }} />)}
     </section>
     <section className="conversation" aria-label="Chat con Helios">
-    <CoreShelf open={coreOpen} section={coreSection} reload={coreReload}
+    <CoreShelf open={coreOpen} section={coreSection} reload={coreReload} onOpenNote={abrirNota}
       onOpen={seccion => { setCoreSection(seccion); setCoreOpen(true); }}
       onClose={() => setCoreOpen(false)} />
       {!!attachments.length && <ChatAttachments files={attachments} onRemove={removeAttachment} />}
@@ -391,7 +410,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       {connection !== "ready" && <p id="connection-note" className="connection-note" role="status">{connection === "checking" ? "Conectando con Helios…" : "Sin conexión con Helios. Puedes volver a intentar el envío."}</p>}
     </section>
     <span className="sr-only" role="status">{announcement}</span>
-    {historyOpen && <ChatHistory previous={previous} messages={windows} historyError={historyError} onClose={closeHistory} />}
+    {historyOpen && <ChatHistory previous={previous} messages={turns} historyError={historyError} onClose={closeHistory} />}
     {access && <div className="access-backdrop">
       <div className="access-panel" role="dialog" aria-modal="true" aria-labelledby="access-title">
         <h2 id="access-title" className="panel-title">
