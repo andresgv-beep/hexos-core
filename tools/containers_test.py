@@ -1,5 +1,6 @@
 import unittest
 
+import tempfile
 from hexos.agent.nas_session import command, container_rows, present_result
 
 BANNER = ('** WARNING: connection is not using a post-quantum key exchange algorithm.\r\n'
@@ -80,6 +81,94 @@ class ContainersTest(unittest.TestCase):
         self.assertIn('$D restart -- plex', remote)
         self.assertIn('__HEXOS_STATE__', remote)
         self.assertIn('ps -a --filter name=plex', remote)
+
+
+class EfectoDesconocidoTest(unittest.TestCase):
+    """Un timeout en una escritura no es fallo ni éxito: es no saber."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix='hexos-efecto-')
+        class Runtime:
+            def call(self, request): pass
+            def generate(self, messages): return {'reply': '', 'work': None}
+        from hexos.agent.chat import Agent
+        self.agent = Agent(self.tmp.name, Runtime())
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def actuar(self, salida, **extra):
+        from unittest.mock import patch
+        with self.agent.store() as store:
+            with patch('hexos.agent.chat.nas_read', return_value=salida):
+                return self.agent.tool(store, 'nas.container',
+                                       dict(container='handbrake', action='restart', **extra),
+                                       turn_id='u1')
+
+    def test_el_timeout_queda_anotado_mas_alla_del_turno(self):
+        self.actuar(dict(outcome='desconocido', container='handbrake', action='restart'))
+        with self.agent.store() as store:
+            fila = self.agent.pending_effect(store, 'synology', 'handbrake')
+        self.assertIsNotNone(fila, 'el riesgo no caduca al responder')
+        self.assertEqual(fila['action'], 'restart')
+
+    def test_no_se_repite_a_ciegas_y_dice_qué_lectura_lo_aclara(self):
+        self.actuar(dict(outcome='desconocido', container='handbrake', action='restart'))
+        with self.assertRaises(ValueError) as caught:
+            self.actuar(dict(outcome='hecho', container='handbrake', action='restart'))
+        mensaje = str(caught.exception)
+        self.assertIn('no consta si llegó a ejecutarse', mensaje)
+        self.assertIn('section=containers', mensaje)
+
+    def test_una_lectura_posterior_lo_cierra(self):
+        from unittest.mock import patch
+        self.actuar(dict(outcome='desconocido', container='handbrake', action='restart'))
+        with self.agent.store() as store:
+            with patch('hexos.agent.chat.nas_read', return_value=dict(
+                    container='handbrake',
+                    container_state=dict(name='handbrake', state='running', status='Up 2 seconds'))):
+                self.agent.tool(store, 'nas.read',
+                                dict(section='containers', container='handbrake'), turn_id='u2')
+            self.assertIsNone(self.agent.pending_effect(store, 'synology', 'handbrake'))
+        # Y una vez aclarado, la escritura vuelve a estar permitida.
+        self.actuar(dict(outcome='hecho', container='handbrake', action='restart'))
+
+    def test_un_resultado_normal_no_deja_nada_colgando(self):
+        self.actuar(dict(outcome='hecho', container='handbrake', action='restart',
+                         container_state=dict(name='handbrake', state='running', status='Up 2 seconds')))
+        with self.agent.store() as store:
+            self.assertIsNone(self.agent.pending_effect(store, 'synology', 'handbrake'))
+
+
+class ReinicioComprobadoTest(unittest.TestCase):
+    """Ver «running» no demuestra un reinicio; el tiempo de vida sí."""
+
+    def resultado(self, status, action='restart', exit_code=0):
+        from hexos.agent.nas_session import present_result
+        # `docker restart` solo imprime el nombre; la tabla viene tras el marcador.
+        salida = 'handbrake\n__HEXOS_STATE__\nhandbrake\trunning\t' + status + '\n'
+        return present_result(dict(output=salida, container='handbrake', action=action,
+                                   exit_code=exit_code, timed_out=False), 'container')
+
+    def test_un_reinicio_de_verdad_se_confirma(self):
+        self.assertEqual(self.resultado('Up 2 seconds')['outcome'], 'hecho')
+
+    def test_uno_que_ya_llevaba_semanas_arriba_no_cuenta_como_reiniciado(self):
+        # El caso que se colaba: seguía running, así que se daba por hecho.
+        self.assertEqual(self.resultado('Up 2 weeks')['outcome'], 'sin_confirmar')
+
+    def test_parar_no_exige_tiempo_de_vida_nuevo(self):
+        from hexos.agent.nas_session import present_result
+        salida = 'handbrake\n__HEXOS_STATE__\nhandbrake\texited\tExited (0) 1 second ago\n'
+        r = present_result(dict(output=salida, container='handbrake', action='stop',
+                                exit_code=0, timed_out=False), 'container')
+        self.assertEqual(r['outcome'], 'hecho')
+
+    def test_un_timeout_no_se_lee_como_exito_ni_como_fallo(self):
+        from hexos.agent.nas_session import present_result
+        r = present_result(dict(output='', container='handbrake', action='restart',
+                                exit_code=None, timed_out=True), 'container')
+        self.assertEqual(r['outcome'], 'desconocido')
 
 
 if __name__ == '__main__':

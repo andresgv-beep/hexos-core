@@ -194,6 +194,21 @@ BANNER = re.compile(r'^(?:\*\*|\S+@\S+\'s|Could not chdir|Connection to |\s*$|.*
                     r'|.*store now, decrypt later.*|.*openssh\.com/pq.*)', re.I)
 
 
+# El estado se lee un segundo después de actuar, así que un arranque real sale en
+# segundos. En minutos ya no: ese contenedor llevaba arriba de antes.
+RECIEN = re.compile(r'^Up\s+(?:Less than a second|\d+\s+seconds?)\b', re.I)
+
+
+def arranco_ahora(status):
+    """¿El Status de docker demuestra que este contenedor acaba de arrancar?
+
+    Sin esto, un `restart` sobre algo que ya llevaba dos semanas arriba se daba por
+    hecho solo porque seguía `running`. La evidencia tiene que ser de la acción, no
+    del estado que ya había.
+    """
+    return bool(status) and bool(RECIEN.match(status.strip()))
+
+
 def container_rows(output):
     """Filas de docker ps, separando el ruido del banner SSH de la salida útil."""
     rows = []
@@ -346,14 +361,24 @@ def present_result(result, section, requested_section=None):
             wanted = result.get('container')
             state = next((row for row in rows if row['name'] == wanted), None)
             done = result.get('exit_code') == 0 and wanted in tail
+            accion = result.get('action')
             # La intención se cumple por el estado resultante, no porque el comando devuelva 0.
-            expected = 'running' if result.get('action') in ('start', 'restart') else 'exited'
-            if not state or not done:
+            expected = 'running' if accion in ('start', 'restart') else 'exited'
+            if result.get('timed_out') or not done and result.get('exit_code') is None:
+                # Se agotó el tiempo: no se sabe si la acción llegó a ejecutarse. Eso no
+                # es un fallo ni un éxito, y sobre todo no autoriza a repetirla.
+                outcome = 'desconocido'
+            elif not state or not done:
                 outcome = 'sin_confirmar'
-            elif state['state'] == expected or (expected == 'exited' and state['state'] != 'running'):
-                outcome = 'hecho'
-            else:
+            elif state['state'] != expected and not (expected == 'exited' and state['state'] != 'running'):
                 outcome = 'no_se_sostuvo'
+            elif accion in ('start', 'restart') and not arranco_ahora(state.get('status')):
+                # Ver «running» no demuestra que se haya arrancado ni reiniciado: uno que
+                # ya llevaba dos semanas arriba se ve igual. La evidencia tiene que
+                # corresponder a la acción, y aquí eso es un tiempo de vida recién puesto a cero.
+                outcome = 'sin_confirmar'
+            else:
+                outcome = 'hecho'
             result = dict(
                 outcome=outcome,
                 container_state=state,

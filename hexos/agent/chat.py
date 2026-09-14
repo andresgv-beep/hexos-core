@@ -232,6 +232,13 @@ class Agent:
                     model_text TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS documents (
                     id TEXT PRIMARY KEY, ts TEXT NOT NULL, content TEXT NOT NULL, sha256 TEXT NOT NULL);
+                -- Escrituras cuyo efecto no se sabe: el tiempo se agotó y no consta si
+                -- llegaron a ejecutarse. Sobreviven al turno a propósito. Se cierran con
+                -- una LECTURA que aclare el estado, nunca repitiendo la escritura.
+                CREATE TABLE IF NOT EXISTS pending_effects (
+                    id TEXT PRIMARY KEY, ts TEXT NOT NULL, device TEXT NOT NULL,
+                    target TEXT NOT NULL, action TEXT NOT NULL, turn_id TEXT NOT NULL,
+                    resolved_at TEXT, resolved_state TEXT);
                 CREATE TABLE IF NOT EXISTS tool_events (
                     seq INTEGER PRIMARY KEY, turn_id TEXT NOT NULL, ts TEXT NOT NULL,
                     body TEXT NOT NULL);
@@ -306,6 +313,20 @@ class Agent:
                          'No se ha escrito en la conversación ni se ha mostrado al modelo. '
                          'resume es lo que se estaba pidiendo cuando faltó el acceso: la interfaz '
                          'lo reenvía para no hacer repetir la petición.')
+
+    def pending_effect(self, store, device, target):
+        """Escritura sin resolver sobre ese destino, si la hay."""
+        return store.db.execute(
+            'SELECT * FROM pending_effects WHERE device=? AND target=? AND resolved_at IS NULL '
+            'ORDER BY rowid DESC LIMIT 1', (device.casefold(), target)).fetchone()
+
+    def resolve_effect(self, store, device, target, state):
+        """Cierra lo que quedó en el aire, con lo que una lectura acaba de ver."""
+        store.db.execute(
+            'UPDATE pending_effects SET resolved_at=?, resolved_state=? '
+            'WHERE device=? AND target=? AND resolved_at IS NULL',
+            (now(), state, device.casefold(), target))
+        store.db.commit()
 
     def remember_fact(self, store, args, turn_id):
         """Guarda en el perfil un dato que la persona acaba de decir de sí misma.
@@ -447,6 +468,20 @@ class Agent:
         if name == 'profile.remember':
             return self.remember_fact(store, args, turn_id)
         if name in ('nas.read', 'nas.container', 'device.connect'):
+            equipo = args.get('device') or 'synology'
+            objetivo = args.get('container')
+            if name == 'nas.container' and objetivo:
+                # Una escritura anterior sobre este mismo destino se quedó sin saber
+                # cómo acabó. Repetirla a ciegas puede duplicar el efecto: pudo
+                # ejecutarse y solo perderse la respuesta. Se exige mirar antes.
+                colgada = self.pending_effect(store, equipo, objetivo)
+                if colgada is not None:
+                    raise ValueError(
+                        'Hay una acción anterior sobre ' + repr(objetivo) + ' en ' + repr(equipo) +
+                        ' (' + colgada['action'] + ', ' + colgada['ts'][:16] + ') cuyo efecto se '
+                        'desconoce: se agotó el tiempo y no consta si llegó a ejecutarse. No se '
+                        'repite a ciegas. Mira antes su estado con nas_read section=containers '
+                        'container=' + objetivo + '; eso lo aclara sin tocar nada.')
             # Conectar es la lectura más barata que existe: si entra, hay acceso, y
             # si no, salta la misma petición de credencial. Sin esta puerta, un
             # «conéctate a servidor 1» no encontraba herramienta que le encajara y
@@ -454,7 +489,19 @@ class Agent:
             extra = ({'section':'container'} if name == 'nas.container' else
                      {'section':'system'} if name == 'device.connect' else {})
             try:
-                return nas_read(self.workspace, **extra, **args)
+                salida = nas_read(self.workspace, **extra, **args)
+                if objetivo:
+                    estado = (salida.get('container_state') or {}).get('status')
+                    if name == 'nas.container' and salida.get('outcome') == 'desconocido':
+                        # Queda anotado más allá del turno: el riesgo no caduca al responder.
+                        store.db.execute('INSERT INTO pending_effects VALUES (?,?,?,?,?,?,?,?)',
+                            (uuid4().hex, now(), equipo.casefold(), objetivo,
+                             args.get('action') or '?', turn_id or '', None, None))
+                        store.db.commit()
+                    elif estado:
+                        # Una lectura que sí ve el estado cierra lo que quedó en el aire.
+                        self.resolve_effect(store, equipo, objetivo, estado)
+                return salida
             except hosts.AccessNeeded as needed:
                 # La ventana de la interfaz recoge la credencial; no vuelve por el chat.
                 # El puerto guardado viaja con la petición: sin verlo, quien corrige un
