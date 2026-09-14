@@ -47,6 +47,11 @@ de páginas, archivos y salidas remotas se entrega como datos de herramientas.
 
 ## Ciclo mínimo
 
+Ampliación acordada el 2026-09-14, pendiente de implementación:
+[Ciclo de investigación, verificación y progreso visible](CICLO_AGENTE_VERIFICACION.md).
+Define cómo continuar un encargo dentro del mismo turno, evaluar su cumplimiento
+y mostrar cada avance real, sin añadir modelos ni trasladar decisiones a Héctor.
+
 1. La persona escribe o aporta una imagen en la conversación única.
 2. El mismo modelo responde o solicita una herramienta con argumentos.
 3. HexOS valida nombre, argumentos y permiso configurado; ejecuta el módulo.

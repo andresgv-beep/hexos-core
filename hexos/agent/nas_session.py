@@ -39,6 +39,9 @@ def command(section, disk=None, container=None, action=None):
                   "|COMRESET failed|slow to respond|limiting SATA link speed' | grep -oE 'ata[0-9]+' | sort | uniq -c;"
                   " echo LINK_EVENT_TALLY_END;"
                   " dmesg | grep -Ei 'ata[0-9]|sata|reset|I/O error|failed command|link (up|down)|sd[a-z]|nvme' | tail -n 65",
+        # -P: formato POSIX, una fila por sistema de archivos y sin partir líneas
+        # largas. En bloques de 1K, que es lo que se puede convertir sin ambigüedad.
+        'space': 'df -P',
         'messages': "tail -n 2000 /var/log/messages | grep -Ei 'ata[0-9]|reset|I/O error|disconnect|reconnect' | tail -n 65",
         'containers': DOCKER + '$D ps -a --format "{{.Names}}\t{{.State}}\t{{.Status}}\t{{.Image}}"',
     }
@@ -47,7 +50,7 @@ def command(section, disk=None, container=None, action=None):
             raise ValueError('Para SMART indica disk como sda, sdb o nvme0n1, obtenido de storage. No es el número de bahía.')
         return 'smartctl -i -H -A -l error -l selftest /dev/' + disk
     if section not in commands or disk is not None or container is not None or action is not None:
-        raise ValueError('section: system, storage, kernel, messages, containers, smart o container. '
+        raise ValueError('section: system, storage, space, kernel, messages, containers, smart o container. '
                          'disk solo con smart; action solo con section=container. '
                          'container vale en section=containers (mirar sin tocar) y en section=container (actuar).')
     return commands[section]
@@ -250,6 +253,46 @@ def arranco_ahora(status):
     return bool(status) and bool(RECIEN.match(status.strip()))
 
 
+# `df -P`: dispositivo, bloques de 1K, usados, libres, capacidad y punto de montaje.
+DF = re.compile(r'^(\S+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)%\s+(/\S*)\s*$')
+# Convención, no medida: por encima de aquí se abre pregunta. Se dice que es un
+# umbral elegido para que nadie lo lea como un diagnóstico del equipo.
+LLENO = 85
+
+
+def legible(bloques):
+    """Bloques de 1K a algo que se pueda leer, sin perder de vista el número."""
+    valor = float(bloques)
+    for unidad in ('KiB', 'MiB', 'GiB', 'TiB'):
+        if valor < 1024 or unidad == 'TiB':
+            return ('%.1f' % valor).rstrip('0').rstrip('.') + ' ' + unidad
+        valor /= 1024
+
+
+def space_rows(output):
+    """Filas de `df -P`, quedándose con los volúmenes y no con el ruido del sistema.
+
+    Un NAS monta decenas de cosas —tmpfs, /dev, cachés del propio DSM— y meterlas
+    todas convierte la respuesta en un volcado. Se conservan los volúmenes de datos
+    y la raíz, que son de los que alguien pregunta.
+    """
+    filas = []
+    for line in (output or '').splitlines():
+        m = DF.match(line.replace('\r', '').strip())
+        if not m:
+            continue
+        dispositivo, total, usado, libre, pct, punto = m.groups()
+        if not (punto.startswith('/volume') or punto == '/' or dispositivo.startswith('/dev/md')):
+            continue
+        if dispositivo.startswith(('tmpfs', 'devtmpfs', 'none')):
+            continue
+        filas.append(dict(mount=punto, device=dispositivo, percent=int(pct),
+                          total_kib=int(total), used_kib=int(usado), free_kib=int(libre),
+                          total=legible(total), used=legible(usado), free=legible(libre)))
+    filas.sort(key=lambda f: f['percent'], reverse=True)
+    return filas
+
+
 def container_rows(output):
     """Filas de docker ps, separando el ruido del banner SSH de la salida útil."""
     rows = []
@@ -391,6 +434,29 @@ def present_result(result, section, requested_section=None):
             head = dict(headline='Sin eventos de enlace en la ventana de kernel leída. Esto no demuestra que no ocurran: '
                                  'el buffer puede haber rotado; section=messages amplía el histórico.', **head)
         result = dict(**head, **result)
+    elif section == 'space':
+        filas = space_rows(result.get('output', ''))
+        preguntas = [dict(
+            about=f['mount'],
+            unknown=('Al ' + str(f['percent']) + '%, quedan ' + f['free'] + ' de ' + f['total'] +
+                     '. El porcentaje no dice QUÉ lo ocupa ni si está creciendo: una sola lectura '
+                     'no distingue un volumen que lleva años así de uno que se llena esta semana.'),
+            ask='Repetir esta lectura en otro momento enseña si sube. Qué carpeta lo ocupa no se '
+                'puede averiguar desde aquí: no hay lectura de árbol de archivos.')
+            for f in filas if f['percent'] >= LLENO]
+        result = dict(volumes=filas, total=len(filas), open_questions=preguntas,
+                      headline=(', '.join(f['mount'] + ' al ' + str(f['percent']) + '%' for f in filas)
+                                if filas else 'No se reconoció ningún volumen en la salida de df'),
+                      threshold_pct=LLENO,
+                      note_space='Porcentaje de USO por volumen, de df. El umbral del ' + str(LLENO) +
+                                 '% para abrir pregunta es una convención elegida aquí, no una medida '
+                                 'ni un límite del equipo. En btrfs el espacio libre que informa df '
+                                 'puede quedarse corto: las instantáneas y los metadatos ocupan y no '
+                                 'se ven en esta cuenta. Esto no dice nada del estado de los discos.',
+                      **result)
+        # Si no se reconoció nada, la salida cruda es la única evidencia de por qué.
+        if filas:
+            result.pop('output', None)
     elif section in ('container', 'containers'):
         rows, tail = container_rows(result.get('output', ''))
         if section == 'containers':

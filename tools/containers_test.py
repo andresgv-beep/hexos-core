@@ -246,5 +246,63 @@ class PreguntasAbiertasTest(unittest.TestCase):
         self.assertEqual(r['open_questions'], [])
 
 
+class EspacioTest(unittest.TestCase):
+    """Uso por volumen: el porcentaje de cada uno, y lo que un porcentaje no dice."""
+
+    SALIDA = ('Filesystem         1024-blocks      Used Available Capacity Mounted on\n'
+              '/dev/md0               2385528   1109692   1157044      49% /\n'
+              'devtmpfs               1928316         0   1928316       0% /dev\n'
+              'tmpfs                  1938460         4   1938456       1% /dev/shm\n'
+              '/dev/mapper/cachedev_0 3844673148 3500128220 344544928  92% /volume1\n'
+              '/dev/mapper/cachedev_1 1922336574  230680388 1691656186  13% /volume2\n')
+
+    def leer(self, salida=None):
+        from hexos.agent.nas_session import present_result
+        return present_result(dict(output=salida if salida is not None else self.SALIDA,
+                                   exit_code=0, timed_out=False), 'space')
+
+    def test_da_el_porcentaje_de_cada_volumen_y_los_ordena(self):
+        r = self.leer()
+        self.assertEqual([(v['mount'], v['percent']) for v in r['volumes']],
+                         [('/volume1', 92), ('/', 49), ('/volume2', 13)])
+        self.assertIn('/volume1 al 92%', r['headline'])
+
+    def test_deja_fuera_el_ruido_del_sistema(self):
+        # Un NAS monta decenas de tmpfs; meterlos convierte la respuesta en volcado.
+        puntos = [v['mount'] for v in self.leer()['volumes']]
+        self.assertNotIn('/dev', puntos)
+        self.assertNotIn('/dev/shm', puntos)
+
+    def test_los_tamaños_se_dan_legibles_sin_perder_el_número(self):
+        v = next(v for v in self.leer()['volumes'] if v['mount'] == '/volume2')
+        self.assertEqual(v['total_kib'], 1922336574)
+        self.assertTrue(v['total'].endswith('TiB'))
+
+    def test_solo_abre_pregunta_el_que_va_justo(self):
+        r = self.leer()
+        self.assertEqual([q['about'] for q in r['open_questions']], ['/volume1'])
+        pregunta = r['open_questions'][0]
+        # Una lectura no distingue «lleva años así» de «se llena esta semana».
+        self.assertIn('ni si está creciendo', pregunta['unknown'])
+        self.assertIn('no hay lectura de árbol de archivos', pregunta['ask'])
+
+    def test_el_umbral_se_declara_como_convención(self):
+        r = self.leer()
+        self.assertEqual(r['threshold_pct'], 85)
+        self.assertIn('convención elegida aquí, no una medida', r['note_space'])
+        # Y btrfs puede informar de menos espacio del que parece.
+        self.assertIn('instantáneas y los metadatos', r['note_space'])
+
+    def test_una_salida_que_no_se_reconoce_no_se_inventa(self):
+        r = self.leer('df: command not found\n')
+        self.assertEqual(r['volumes'], [])
+        self.assertIn('No se reconoció ningún volumen', r['headline'])
+        # Y la salida cruda sobrevive: es la única pista de por qué no se reconoció.
+        self.assertIn('command not found', r['output'])
+
+    def test_cuando_se_entiende_la_salida_no_se_arrastra_el_volcado(self):
+        self.assertNotIn('output', self.leer())
+
+
 if __name__ == '__main__':
     unittest.main()

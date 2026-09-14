@@ -26,7 +26,7 @@ TOOLS = {
     'nas.read': spec('Leer por SSH un equipo guardado en el inventario. device es su nombre guardado, e indícalo SIEMPRE si hay más de uno; '
                      'la dirección se resuelve del inventario y la credencial ya está guardada en local: no pidas IP, usuario ni contraseña. '
                      'Para comprobar estado, advertencias o cortes usa SIEMPRE primero section=diagnosis: recoge RAID, enlaces, kernel y SMART de los discos automáticamente. '
-                     'Otras secciones: system, storage (RAID y correspondencia disco/enlace), kernel, messages, '
+                     'Otras secciones: system, storage (RAID y correspondencia disco/enlace), ''space (uso por volumen, en porcentaje; responde a cuánto espacio queda), kernel, messages, '
                      'containers (estado de los contenedores) o smart. diagnosis ya incluye kernel y SMART: no repitas esas lecturas salvo dato faltante. storage solo muestra distribución, no salud. Para smart añade disk conocido; sin disk se recoge diagnosis automáticamente. '
                      'diagnosis devuelve headline y primary_suspect: si existen, ese disco es el hallazgo y debe abrir tu respuesta, con su modelo y número de serie. '
                      'El recuento de miembros de un array no identifica un disco averiado; md0/md1 son particiones de sistema DSM con 12 ranuras fijas y no son la avería. '
