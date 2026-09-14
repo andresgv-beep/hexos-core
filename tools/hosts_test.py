@@ -267,5 +267,47 @@ class RutasAlternativasTest(unittest.TestCase):
         self.assertIn('device_remote', str(caught.exception))
 
 
+class EquipoNombradoTest(unittest.TestCase):
+    """Si la persona nombró el equipo, no hay que preguntárselo otra vez."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix='hexos-nombrado-')
+        class Runtime:
+            def call(self, request): pass
+            def generate(self, messages): return {'reply': '', 'work': None}
+        from hexos.agent.chat import Agent
+        self.agent = Agent(self.tmp.name, Runtime())
+        for nombre in ('synology', 'synology 2', 'servidorsrv1'):
+            save(self.tmp.name, nombre, 'helios', 'x', 22)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def nombrado(self, texto):
+        from hexos.agent.work import now
+        with self.agent.store() as store:
+            store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
+                             ('u', now(), 'user', texto, texto))
+            store.db.commit()
+            return self.agent.device_in_message(store, 'u')
+
+    def test_lo_toma_de_sus_palabras(self):
+        self.assertEqual(self.nombrado('revisa la salud de los contenedores del synology'), 'synology')
+
+    def test_el_nombre_mas_largo_gana_sobre_el_que_lo_contiene(self):
+        # 'synology' está dentro de 'synology 2'; elegir el corto sería otro equipo.
+        self.assertEqual(self.nombrado('mira el synology 2'), 'synology 2')
+
+    def test_con_dos_nombrados_no_elige(self):
+        self.assertIsNone(self.nombrado('compara synology y servidorsrv1'))
+
+    def test_sin_ninguno_no_inventa(self):
+        self.assertIsNone(self.nombrado('mira los contenedores'))
+
+    def test_sin_turno_no_hay_de_dónde_leerlo(self):
+        with self.agent.store() as store:
+            self.assertIsNone(self.agent.device_in_message(store, None))
+
+
 if __name__ == '__main__':
     unittest.main()

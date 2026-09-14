@@ -199,6 +199,29 @@ BANNER = re.compile(r'^(?:\*\*|\S+@\S+\'s|Could not chdir|Connection to |\s*$|.*
 RECIEN = re.compile(r'^Up\s+(?:Less than a second|\d+\s+seconds?)\b', re.I)
 
 
+SALIDA = re.compile(r'^Exited\s+\((\d+)\)', re.I)
+# Los que dicen algo por sí solos. Lo que no está aquí se deja sin interpretar.
+CODIGOS = {0: 'terminó por su cuenta sin error, o lo pararon',
+           1: 'terminó con error',
+           137: 'lo mataron (SIGKILL): parada forzada, falta de memoria o un límite',
+           143: 'lo pararon (SIGTERM), que es la parada normal de docker'}
+
+
+def porque_termino(status):
+    """Lo que el Status de docker dice, y lo que no, de un contenedor parado.
+
+    El código de salida está ahí escrito y hasta ahora se dejaba como texto suelto.
+    No explica la causa —para eso harían falta sus registros, que HexOS no lee—,
+    pero distingue una parada limpia de una muerte forzada, y eso ya es bastante.
+    """
+    encontrado = SALIDA.match((status or '').strip())
+    if not encontrado:
+        return None
+    codigo = int(encontrado.group(1))
+    return dict(exit_code=codigo, reading=CODIGOS.get(codigo),
+                known=bool(CODIGOS.get(codigo)))
+
+
 def arranco_ahora(status):
     """¿El Status de docker demuestra que este contenedor acaba de arrancar?
 
@@ -353,9 +376,35 @@ def present_result(result, section, requested_section=None):
     elif section in ('container', 'containers'):
         rows, tail = container_rows(result.get('output', ''))
         if section == 'containers':
+            preguntas = []
+            for fila in rows:
+                # Solo donde dice algo: una fila de más en cada contenedor es prompt
+                # que se paga en todos los turnos siguientes.
+                terminacion = porque_termino(fila.get('status'))
+                if terminacion:
+                    fila['ended'] = terminacion
+                if fila['state'] == 'created':
+                    preguntas.append(dict(
+                        about=fila['name'],
+                        unknown='Nunca llegó a arrancar; no hay estado del que deducir por qué.',
+                        ask=None))
+                elif fila['state'] == 'exited':
+                    lectura = (terminacion or {}).get('reading')
+                    preguntas.append(dict(
+                        about=fila['name'],
+                        unknown=('Terminó: ' + lectura + '.' if lectura else
+                                 'Terminó con un código que no interpreto.') +
+                                ' El estado no dice si fue a propósito ni qué pasó dentro.',
+                        ask='nas_read section=containers container=' + fila['name'] +
+                            ' añade su imagen; los registros del contenedor no se pueden leer desde aquí.'))
             result = dict(containers=rows, total=len(rows),
+                          open_questions=preguntas,
                           note_state='State running/exited/created; Status es el texto de docker. '
-                                     'Un contenedor created nunca llegó a arrancar.', **result)
+                                     'Un contenedor created nunca llegó a arrancar. `ended` interpreta '
+                                     'el código de salida de los parados. open_questions dice lo que '
+                                     'esta lectura NO responde y con qué se puede seguir: si algo de '
+                                     'eso hace falta para lo que te han pedido, sigue leyendo; si no, '
+                                     'no lo persigas.', **result)
             result.pop('output', None)
         else:
             wanted = result.get('container')

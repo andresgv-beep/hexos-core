@@ -314,6 +314,28 @@ class Agent:
                          'resume es lo que se estaba pidiendo cuando faltó el acceso: la interfaz '
                          'lo reenvía para no hacer repetir la petición.')
 
+    def device_in_message(self, store, turn_id):
+        """El equipo guardado que la persona nombró en este turno, si es solo uno.
+
+        Devolver el nombre no es elegir por ella: está escrito en su mensaje. Con
+        dos nombrados o ninguno se devuelve None y el flujo normal pregunta.
+        """
+        if not turn_id:
+            return None
+        fila = store.db.execute("SELECT text FROM conversation WHERE id=? AND role='user'",
+                                (turn_id,)).fetchone()
+        if not fila:
+            return None
+        texto = fila['text'].casefold()
+        # El más largo primero: 'synology 2' antes que 'synology', que está dentro.
+        guardados = sorted(hosts.load(self.workspace), key=len, reverse=True)
+        hallados, cubierto = [], ''
+        for nombre in guardados:
+            if nombre in texto and nombre not in cubierto:
+                hallados.append(nombre)
+                cubierto += nombre + '|'
+        return hallados[0] if len(hallados) == 1 else None
+
     def pending_effect(self, store, device, target):
         """Escritura sin resolver sobre ese destino, si la hay."""
         return store.db.execute(
@@ -468,6 +490,13 @@ class Agent:
         if name == 'profile.remember':
             return self.remember_fact(store, args, turn_id)
         if name in ('nas.read', 'nas.container', 'device.connect'):
+            if not args.get('device'):
+                # El modelo omite a veces el equipo aunque la persona lo haya nombrado.
+                # No se adivina: se lee su mensaje y solo vale si UNO de los guardados
+                # aparece ahí. Con ninguno o con varios, que pregunte.
+                nombrado = self.device_in_message(store, turn_id)
+                if nombrado:
+                    args = dict(args, device=nombrado)
             equipo = args.get('device') or 'synology'
             objetivo = args.get('container')
             if name == 'nas.container' and objetivo:

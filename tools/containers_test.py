@@ -171,5 +171,52 @@ class ReinicioComprobadoTest(unittest.TestCase):
         self.assertEqual(r['outcome'], 'desconocido')
 
 
+class PreguntasAbiertasTest(unittest.TestCase):
+    """Un listado debe decir lo que NO responde, o no hay por dónde investigar."""
+
+    def listar(self, filas):
+        from hexos.agent.nas_session import present_result
+        salida = '\n'.join('\t'.join(f) for f in filas) + '\n'
+        return present_result(dict(output=salida, exit_code=0, timed_out=False), 'containers')
+
+    def test_un_parado_abre_una_pregunta_y_dice_con_qué_seguir(self):
+        r = self.listar([('HandBrake', 'exited', 'Exited (0) 40 hours ago', 'img'),
+                         ('n8n', 'running', 'Up 2 weeks', 'img')])
+        preguntas = {q['about']: q for q in r['open_questions']}
+        self.assertEqual(list(preguntas), ['HandBrake'], 'lo que corre no abre preguntas')
+        self.assertIn('no dice si fue a propósito', preguntas['HandBrake']['unknown'])
+        self.assertIn('container=HandBrake', preguntas['HandBrake']['ask'])
+        # Y se dice lo que NO se puede leer, en vez de dejarlo suponer.
+        self.assertIn('registros del contenedor no se pueden leer', preguntas['HandBrake']['ask'])
+
+    def test_el_codigo_de_salida_distingue_una_parada_limpia_de_una_muerte(self):
+        r = self.listar([('a', 'exited', 'Exited (0) 1 hour ago', 'img'),
+                         ('b', 'exited', 'Exited (137) 1 hour ago', 'img')])
+        porNombre = {c['name']: c.get('ended') for c in r['containers']}
+        self.assertEqual(porNombre['a']['exit_code'], 0)
+        self.assertIn('sin error', porNombre['a']['reading'])
+        self.assertEqual(porNombre['b']['exit_code'], 137)
+        self.assertIn('mataron', porNombre['b']['reading'])
+
+    def test_un_codigo_que_no_conozco_no_se_interpreta(self):
+        r = self.listar([('a', 'exited', 'Exited (99) 1 hour ago', 'img')])
+        ended = r['containers'][0]['ended']
+        self.assertNotIn('ended', self.listar([('n8n','running','Up 2 weeks','img')])['containers'][0])
+        self.assertEqual(ended['exit_code'], 99)
+        self.assertFalse(ended['known'])
+        self.assertIsNone(ended['reading'], 'inventar una causa sería peor que callar')
+        self.assertIn('no interpreto', r['open_questions'][0]['unknown'])
+
+    def test_uno_que_nunca_arrancó_no_promete_una_lectura_que_no_existe(self):
+        r = self.listar([('portainer', 'created', 'Created', 'img')])
+        pregunta = r['open_questions'][0]
+        self.assertIn('Nunca llegó a arrancar', pregunta['unknown'])
+        self.assertIsNone(pregunta['ask'])
+
+    def test_sin_nada_parado_no_hay_preguntas_que_perseguir(self):
+        r = self.listar([('n8n', 'running', 'Up 2 weeks', 'img')])
+        self.assertEqual(r['open_questions'], [])
+
+
 if __name__ == '__main__':
     unittest.main()
