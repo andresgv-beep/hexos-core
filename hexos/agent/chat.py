@@ -328,12 +328,23 @@ class Agent:
             return None
         texto = fila['text'].casefold()
         # El más largo primero: 'synology 2' antes que 'synology', que está dentro.
+        # Y se compara POR POSICIÓN, no por nombre: descartar 'synology' solo por
+        # aparecer dentro de 'synology 2' hacía que «compara synology y synology 2»
+        # eligiera uno callado, cuando ahí nombró los dos y hay que preguntar.
         guardados = sorted(hosts.load(self.workspace), key=len, reverse=True)
-        hallados, cubierto = [], ''
+        hallados, ocupado = [], []
         for nombre in guardados:
-            if nombre in texto and nombre not in cubierto:
-                hallados.append(nombre)
-                cubierto += nombre + '|'
+            desde = 0
+            while True:
+                donde = texto.find(nombre, desde)
+                if donde < 0:
+                    break
+                fin = donde + len(nombre)
+                if not any(donde < b and a < fin for a, b in ocupado):
+                    ocupado.append((donde, fin))
+                    hallados.append(nombre)
+                    break
+                desde = donde + 1
         return hallados[0] if len(hallados) == 1 else None
 
     def pending_effect(self, store, device, target):

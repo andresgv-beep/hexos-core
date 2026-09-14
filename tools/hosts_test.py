@@ -301,6 +301,15 @@ class EquipoNombradoTest(unittest.TestCase):
     def test_con_dos_nombrados_no_elige(self):
         self.assertIsNone(self.nombrado('compara synology y servidorsrv1'))
 
+    def test_nombrar_los_dos_synology_no_elige_uno_callado(self):
+        # El caso peligroso: 'synology' está dentro de 'synology 2', y descartarlo
+        # por el nombre en vez de por la posición hacía que eligiera uno solo.
+        self.assertIsNone(self.nombrado('compara synology y synology 2'))
+        self.assertIsNone(self.nombrado('el synology 2 y luego el synology'))
+
+    def test_el_mismo_nombre_repetido_sigue_siendo_uno(self):
+        self.assertEqual(self.nombrado('synology, sí, el synology'), 'synology')
+
     def test_sin_ninguno_no_inventa(self):
         self.assertIsNone(self.nombrado('mira los contenedores'))
 
