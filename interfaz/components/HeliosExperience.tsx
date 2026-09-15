@@ -106,6 +106,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const [previous, setPrevious] = useState<HistoryMessage[]>([]);
   const [historyError, setHistoryError] = useState("");
   const [historyLoading, setHistoryLoading] = useState(true);
+  const orbHovered = useRef(false);
   const orbButton = useRef<HTMLButtonElement>(null);
   const orbStage = useRef<HTMLDivElement>(null);
   const syncOrbExpansion = useCallback((scale: number) => {
@@ -385,9 +386,10 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     <section className="presence" aria-label="Presencia de Helios">
       <div ref={orbStage} className="orb-stage">
         <div className="orb-halo" aria-hidden="true" />
-        <HeliosOrb signal={{ phase, energy: active.energy }} brightness={brightness} motion onExpansion={syncOrbExpansion} />
+        <HeliosOrb signal={{ phase, energy: active.energy }} brightness={brightness} motion onExpansion={syncOrbExpansion} hovered={orbHovered} />
         <ToolSatellites tools={turnTools} />
-        <button ref={orbButton} className="orb-history-trigger" aria-label="Abrir todo el chat" title="Abrir conversación" aria-haspopup="dialog" onClick={() => setHistoryOpen(true)} />
+        <button ref={orbButton} className="orb-history-trigger" aria-label="Abrir todo el chat" title="Abrir conversación" aria-haspopup="dialog" onClick={() => setHistoryOpen(true)}
+          onPointerEnter={() => { orbHovered.current = true; }} onPointerLeave={() => { orbHovered.current = false; }} onFocus={() => { orbHovered.current = true; }} onBlur={() => { orbHovered.current = false; }} />
       </div>
     </section>
     <section className="floating-workspace" aria-label="Notas e informes abiertos">

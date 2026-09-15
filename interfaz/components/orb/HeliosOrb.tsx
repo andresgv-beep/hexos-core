@@ -12,12 +12,22 @@ import { meshGlowVertex, meshGlowFragment } from "./shaders";
 
 export const MAX_FPS = 30;
 
+/** How much the sphere lifts while the pointer is over it. Deliberately small:
+ *  an acknowledgement, not a reaction. */
+export const HOVER_LIFT = 1.04;
+
 export interface HeliosOrbProps {
   signal: OrbSignal;
   brightness?: number;
   motion?: boolean;
   sampleAmplitude?: (timeSeconds: number) => number;
   onExpansion?: (scale: number) => void;
+  /** Pointer is over the orb. A ref, not state, on purpose: the lift is read
+   *  inside useFrame, so it must never re-render the tree — toggling React state
+   *  here re-applied props to every material each time the pointer crossed the
+   *  orb's edge. Driven by `.orb-history-trigger`, the circular button already
+   *  layered over the sphere, so no raycasting is needed either. */
+  hovered?: { current: boolean };
 }
 
 function FrameTicker({ active }: { active: boolean }) {
@@ -41,7 +51,7 @@ function FrameTicker({ active }: { active: boolean }) {
   return null;
 }
 
-function OrbScene({ signal, brightness = 1, motion = true, sampleAmplitude, onExpansion }: HeliosOrbProps) {
+function OrbScene({ signal, brightness = 1, motion = true, sampleAmplitude, onExpansion, hovered }: HeliosOrbProps) {
   const root = useRef<Group>(null);
   // three gives every ShaderMaterial its own copy of the `uniforms` object it is
   // constructed with, so driving them through one material's ref left the points,
@@ -63,6 +73,7 @@ function OrbScene({ signal, brightness = 1, motion = true, sampleAmplitude, onEx
     uViewportAspect: { value: 1 },
     uRestLight: { value: 1 },
   }), []);
+  const hoverLift = useRef(1);
   const elapsed = useRef(0);
   const expansion = useRef(.96);
   const reportedExpansion = useRef(.96);
@@ -93,13 +104,19 @@ function OrbScene({ signal, brightness = 1, motion = true, sampleAmplitude, onEx
     if (root.current) {
       const nextScale = orbTargetScale(signal.phase, signal.energy, values.uAmplitude.value, signalTime.current, motion);
       expansion.current = MathUtils.lerp(expansion.current, nextScale, motion ? 1 - Math.exp(-dt * 9) : 1);
-      if (onExpansion && Math.abs(expansion.current - reportedExpansion.current) > .0008) {
-        reportedExpansion.current = expansion.current;
-        onExpansion(expansion.current);
+      // The sphere answers the pointer by lifting slightly while it is over it,
+      // and never by following it: tracking the cursor made the whole interface
+      // feel like it was leaning at you. The satellites read the same value, so
+      // they stay locked to the rim through the lift.
+      hoverLift.current = MathUtils.lerp(hoverLift.current, hovered?.current ? HOVER_LIFT : 1, 1 - Math.exp(-dt * 7));
+      const shown = expansion.current * hoverLift.current;
+      if (onExpansion && Math.abs(shown - reportedExpansion.current) > .0008) {
+        reportedExpansion.current = shown;
+        onExpansion(shown);
       }
-      root.current.scale.setScalar(Math.min(viewport.width / 6.2, viewport.height / 5.6) * expansion.current);
-      root.current.rotation.y = elapsed.current * .065 + (motion ? state.pointer.x * .035 : 0);
-      root.current.rotation.x = .12 + (motion ? Math.sin(elapsed.current * .14) * .08 + state.pointer.y * .025 : 0);
+      root.current.scale.setScalar(Math.min(viewport.width / 6.2, viewport.height / 5.6) * shown);
+      root.current.rotation.y = elapsed.current * .065;
+      root.current.rotation.x = .12 + (motion ? Math.sin(elapsed.current * .14) * .08 : 0);
     }
     for (const instance of materials.current) {
       for (const [name, uniform] of Object.entries(values)) instance.uniforms[name].value = uniform.value;
