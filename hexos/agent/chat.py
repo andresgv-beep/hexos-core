@@ -944,6 +944,7 @@ class Agent:
                 schema_retries = 0
                 recovery_requests = 0
                 claim_retries = 0
+                context_retries = 0
                 format_retries = 0
                 # Seis herramientas, más finalización y recuperaciones acotadas.
                 # Una séptima solicitud nunca se ejecuta.
@@ -959,6 +960,33 @@ class Agent:
                                 store.db.execute('INSERT INTO generation_events(turn_id,ts,body) VALUES (?,?,?)',
                                     (uid, now(), json.dumps(generation, ensure_ascii=False)))
                                 store.db.commit()
+                    except RuntimeError as exc:
+                        # El motor dice que no cabe. Antes moría aquí y el turno se
+                        # quedaba colgado: la ventana mide la conversación, pero el
+                        # resultado de una herramienta entra a mitad de turno y no
+                        # cuenta para ese presupuesto. Se corta de verdad —KV incluido—
+                        # y se reintenta una vez desde limpio.
+                        if 'context_full' not in str(exc) or context_retries:
+                            raise
+                        context_retries += 1
+                        self.runtime.call({'type': 'reset'})
+                        nuevo_corte = store.db.execute(
+                            'SELECT COALESCE(MAX(rowid),0) FROM conversation WHERE id<>?', (uid,)).fetchone()[0]
+                        store.db.execute("INSERT INTO agent_state VALUES ('context_boundary',?) "
+                                         'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+                                         (str(nuevo_corte),))
+                        store.db.commit()
+                        self.context_cut = dict(at=now(), messages=len(history),
+                                                characters=sum(len(f['text']) for f in history),
+                                                reason='context_full')
+                        history = []
+                        if nativo:
+                            messages = native_messages([], metadata, prompt_text, {},
+                                                       memory_evidence, budget=corte)
+                        else:
+                            messages = [dict(role='system', content=PROMPT),
+                                        dict(role='user', content='PETICIÓN ACTUAL:\n' + prompt_text)]
+                        continue
                     except InvalidDecision as exc:
                         if format_retries:
                             raise InvalidDecision('No se pudo obtener una respuesta válida tras un reintento. ' + str(exc)) from exc

@@ -354,6 +354,12 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         setAnnouncement(`No se pudo completar la conversación ${id}: ${detail}`);
       }
     } finally {
+      // La consulta de estado solo corre mientras se envía, así que una herramienta
+      // que estuviera en marcha al acabar el turno se quedaba «Ejecutando…» para
+      // siempre —se vio con un turno que murió por contexto lleno—. Al cerrar el
+      // turno deja de estar en marcha: o terminó, o murió con él.
+      setTurnTools(items => items.map(tool =>
+        tool.status === "running" ? { ...tool, status: "failed" } : tool));
       if (!controller.signal.aborted) setSending(false);
       if (request.current === controller) request.current = null;
       if (ventanaEnCurso.current === id) ventanaEnCurso.current = null;

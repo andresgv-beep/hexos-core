@@ -156,21 +156,43 @@ def dispatch(store, name, args, turn_id=None):
         # sin dirección ninguna —`latest_addresses` está vacío porque no se le ve
         # en la red— y la única forma de decir dónde está era recordarla de la
         # conversación, que es como empiezan las direcciones inventadas.
-        compact = [{k:d.get(k) for k in ('id','mac','interface','last_observed_at',
-                                         'in_latest_snapshot','latest_addresses',
-                                         'pinned_host','pinned_port')} |
-                   {'identity':{k:d['identity'][k] for k in ('name','kind','source')} if d['identity'] else None,
-                    # Saber si se puede entrar es media respuesta a «qué equipos tienes»:
-                    # uno identificado sin acceso no sirve para leerlo.
-                    'has_access': (d.get('identity') or {}).get('name', '').casefold() in accesos,
-                    'only_access': bool(d.get('only_access'))} for d in found[:64]]
+        # Una fila por equipo, sin claves vacías. Con 29 vecinos la versión larga
+        # ocupaba 14.500 caracteres —unos 4.000 tokens— y dos consultas seguidas
+        # llenaban el contexto y tumbaban el turno. Nada de lo que se sabe se
+        # pierde: se quitan los nulos, la interfaz (ya va dentro de id), y las
+        # direcciones se dan como IP, que es como se nombran.
+        def fila(d):
+            identidad = d.get('identity') or {}
+            salida = dict(id=d['id'])
+            for clave, valor in (('name', identidad.get('name')), ('kind', identidad.get('kind')),
+                                 ('source', identidad.get('source')), ('mac', d.get('mac')),
+                                 ('host', d.get('pinned_host')), ('port', d.get('pinned_port'))):
+                if valor:
+                    salida[clave] = valor
+            ips = [a['ip'] for a in d.get('latest_addresses') or [] if a.get('ip')]
+            if ips:
+                salida['ips'] = ips
+            if d.get('last_observed_at'):
+                salida['seen'] = d['last_observed_at'][:19]
+            if d.get('in_latest_snapshot'):
+                salida['seen_now'] = True
+            if identidad.get('name', '').casefold() in accesos:
+                salida['has_access'] = True
+            if d.get('only_access'):
+                salida['only_access'] = True
+            if not identidad:
+                salida['unidentified'] = True
+            return salida
+
+        compact = [fila(d) for d in found[:48]]
         repetidos = duplicados(rows, accesos)
-        return dict(identified_devices=[d for d in compact if d['identity']], devices=compact,
-                    duplicates=repetidos, total=len(found), truncated=len(found)>64,
+        return dict(identified_devices=[d for d in compact if d.get('name')], devices=compact,
+                    duplicates=repetidos, total=len(found), truncated=len(found)>48,
                     note='Inventario histórico. Consulta network.local para el estado actual. '
-                         'pinned_host es la dirección fija de un equipo de otra red; los de esta '
-                         'red no la tienen y se ven por latest_addresses. '
-                         'identity=null significa sin identificar. Un filtro sin coincidencias no significa que el inventario esté vacío: consulta sin query. '
+                         'host es la dirección fija de un equipo de otra red; los de esta '
+                         'red no la tienen y se ven por ips. seen_now es que se le vio en la '
+                         'última lectura de red. Las claves vacías se omiten: '
+                         'unidentified significa sin identificar. Un filtro sin coincidencias no significa que el inventario esté vacío: consulta sin query. '
                          'has_access dice si hay credencial guardada para ese nombre; sin ella no se '
                          'puede leer aunque esté identificado. only_access son los que solo existen por '
                          'su acceso guardado, sin ficha en la red. '

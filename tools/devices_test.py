@@ -32,7 +32,7 @@ class DevicesTest(unittest.TestCase):
                 s.db.commit()
                 with self.assertRaises(ValueError):
                     agent.tool(s,'device.identify',dict(target='10',name='NAS'),turn_id='u')
-                self.assertTrue(all(d['identity'] is None for d in agent.tool(s,'device.list',{})['devices']))
+                self.assertTrue(all(d.get('unidentified') for d in agent.tool(s,'device.list',{})['devices']))
 
     def test_two_suffixes_use_current_message_and_reject_wrong_target(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -128,8 +128,8 @@ class DevicesTest(unittest.TestCase):
                 self.assertEqual(located['host'], 'servidorsrv1.ddns.net')
                 self.assertTrue(located['pinned'])
                 # Y aparece en el inventario como cualquier otro equipo con nombre.
-                nombres = [d['identity']['name'] for d in agent.tool(s, 'device.list', {})['devices']
-                           if d['identity']]
+                nombres = [d['name'] for d in agent.tool(s, 'device.list', {})['devices']
+                           if d.get('name')]
                 self.assertIn('synology 1', nombres)
 
     def test_acepta_la_url_tal_cual_se_pega_y_se_queda_el_puerto(self):
@@ -193,10 +193,10 @@ class DevicesTest(unittest.TestCase):
                 lista = agent.tool(s, 'device.list', {})
                 self.assertEqual(lista['total'], 1, 'una máquina, una ficha')
                 ficha = lista['identified_devices'][0]
-                self.assertEqual((ficha['pinned_host'], ficha['pinned_port']), ('casa.ddns.net', 30))
+                self.assertEqual((ficha['host'], ficha['port']), ('casa.ddns.net', 30))
                 # Y sigue siendo el equipo que se ve en la red: no se pierde su MAC.
                 self.assertEqual(ficha['mac'], 'aa:bb:cc:dd:ee:ff')
-                self.assertTrue(ficha['in_latest_snapshot'])
+                self.assertTrue(ficha['seen_now'])
                 # La dirección fija manda al resolver, que es la que sirve desde fuera.
                 from hexos.agent.hosts import resolve
                 self.assertEqual(resolve(tmp, 'synology 2')['host'], 'casa.ddns.net')
@@ -213,9 +213,9 @@ class DevicesTest(unittest.TestCase):
                 agent.tool(s, 'device.remote',
                            dict(name='servidor 1', host='https://casa.ddns.net:30'), turn_id='u')
                 fila = agent.tool(s, 'device.list', {})['identified_devices'][0]
-                self.assertEqual(fila['pinned_host'], 'casa.ddns.net')
-                self.assertEqual(fila['pinned_port'], 30)
-                self.assertEqual(fila['latest_addresses'], [])
+                self.assertEqual(fila['host'], 'casa.ddns.net')
+                self.assertEqual(fila['port'], 30)
+                self.assertNotIn('ips', fila, 'un equipo de otra red no tiene IP en esta')
 
     def test_identificar_en_casa_absorbe_el_registro_remoto_del_mismo_nombre(self):
         # Al volver a su red, «el 192.168.1.10 es servidorsrv1» creaba una SEGUNDA
@@ -241,7 +241,7 @@ class DevicesTest(unittest.TestCase):
                 self.assertEqual(lista['duplicates'], [], 'una máquina, una ficha')
                 ficha = lista['identified_devices'][0]
                 self.assertEqual(ficha['mac'], 'aa:bb:cc:dd:ee:ff')
-                self.assertEqual((ficha['pinned_host'], ficha['pinned_port']), ('casa.ddns.net', 30))
+                self.assertEqual((ficha['host'], ficha['port']), ('casa.ddns.net', 30))
                 # Y con los dos caminos: la IP local primero por estar a la vista.
                 from hexos.agent.hosts import resolve
                 ruta = resolve(tmp, 'servidorsrv1')
@@ -274,10 +274,10 @@ class DevicesTest(unittest.TestCase):
             save(tmp, 'synology 2', 'helios', 'x', 22, host='casa.ddns.net')
             with agent.store() as s:
                 r = agent.tool(s, 'device.list', {})
-                fila = next(d for d in r['identified_devices'] if d['identity']['name'] == 'synology 2')
+                fila = next(d for d in r['identified_devices'] if d['name'] == 'synology 2')
                 self.assertTrue(fila['only_access'])
                 self.assertTrue(fila['has_access'])
-                self.assertEqual(fila['pinned_host'], 'casa.ddns.net')
+                self.assertEqual(fila['host'], 'casa.ddns.net')
 
     def test_lo_que_sale_en_la_lista_se_puede_quitar(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -304,8 +304,8 @@ class DevicesTest(unittest.TestCase):
                 s.db.commit()
                 agent.tool(s, 'device.identify', dict(target='192.168.1.10', name='impresora'), turn_id='u')
                 fila = agent.tool(s, 'device.list', {})['identified_devices'][0]
-                self.assertFalse(fila['has_access'], 'identificado no es lo mismo que alcanzable')
-                self.assertFalse(fila['only_access'])
+                self.assertNotIn('has_access', fila, 'identificado no es lo mismo que alcanzable')
+                self.assertNotIn('only_access', fila)
 
     def test_dos_nombres_para_un_equipo_se_señalan_sin_tocarlos(self):
         # Dar acceso a uno y pedir lecturas por el otro parece falta de credenciales.
@@ -395,7 +395,7 @@ class DevicesTest(unittest.TestCase):
                 self.assertIn('sigue en la red', r['note'])
                 registros = agent.tool(s, 'device.list', {})['devices']
                 self.assertEqual(len(registros), 1)
-                self.assertIsNone(registros[0]['identity'])
+                self.assertTrue(registros[0]['unidentified'])
 
     def test_con_fichas_duplicadas_dice_cuales_y_deja_borrar_por_id(self):
         # «Ambiguo» a secas dejaba sin salida: hay que poder quitar la que sobra.
@@ -479,9 +479,9 @@ class DevicesTest(unittest.TestCase):
                 # que un sufijo no puede casar con el fantasma.
                 for d in agent.tool(s, 'device.list', {})['devices']:
                     if d['mac'] == 'f8:98:ef:93:cc:11':
-                        self.assertFalse(d['in_latest_snapshot'])
-                nombres = {d['identity']['name'] for d in agent.tool(s, 'device.list', {})['devices']
-                           if d['identity']}
+                        self.assertNotIn('seen_now', d)
+                nombres = {d['name'] for d in agent.tool(s, 'device.list', {})['devices']
+                           if d.get('name')}
                 self.assertEqual(nombres, {'iphone'})
 
     def test_se_puede_nombrar_por_los_dos_ultimos_octetos(self):
@@ -502,8 +502,8 @@ class DevicesTest(unittest.TestCase):
                 s.db.commit()
                 agent.tool(s, 'device.identify', dict(target='1.1', name='router'), turn_id='u')
                 agent.tool(s, 'device.identify', dict(target='1.129', name='iphone 16 pro'), turn_id='u')
-                nombres = {d['identity']['name'] for d in agent.tool(s, 'device.list', {})['devices']
-                           if d['identity']}
+                nombres = {d['name'] for d in agent.tool(s, 'device.list', {})['devices']
+                           if d.get('name')}
                 self.assertEqual(nombres, {'router', 'iphone 16 pro'})
 
     def test_unos_octetos_ambiguos_no_nombran_nada(self):
@@ -536,12 +536,12 @@ class DevicesTest(unittest.TestCase):
                 dispatch(s, 'device.identify', args)
                 with patch('hexos.agent.devices.snapshot', return_value=observation(ip='192.168.1.11')):
                     dispatch(s, 'device.refresh', {})
-                self.assertEqual(dispatch(s,'device.list',{})['devices'][0]['identity']['name'], 'NAS Faro')
+                self.assertEqual(dispatch(s,'device.list',{})['devices'][0]['name'], 'NAS Faro')
                 with patch('hexos.agent.devices.snapshot', return_value=observation(mac='11:22:33:44:55:66')):
                     dispatch(s, 'device.refresh', {})
                 devices = dispatch(s, 'device.list', {})['devices']
                 self.assertEqual(len(devices), 2)
-                self.assertIsNone(next(d for d in devices if d['in_latest_snapshot'])['identity'])
+                self.assertTrue(next(d for d in devices if d.get('seen_now'))['unidentified'])
             with Agent(tmp, None).store() as s:
                 self.assertEqual(dispatch(s, 'device.list', {'query':'NAS Faro'})['total'], 1)
 
