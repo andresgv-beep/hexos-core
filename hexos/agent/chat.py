@@ -1256,7 +1256,11 @@ def main():
     # 8192 se quedaba corto en cuanto había dos lecturas de red en la ventana:
     # el prompt llegaba a ~7.100 tokens y no quedaba sitio para responder.
     # Con 16384 y visión el pico medido es 5.381 MiB de 8.151.
-    parser.add_argument('--ctx', type=int, default=16384)
+    # 32k medido en la RTX 5070: el KV de este Gemma cuesta 48 KiB por token
+    # —24 de sus 42 capas guardan el suyo, 2 cabezas KV de 256 en FP16— así que
+    # son 1,5 GiB reservados al arrancar, y quedan 1,4 GiB libres. Con 16k se
+    # llegaba a 16.380 de 16.384 y la respuesta se cortaba a media palabra.
+    parser.add_argument('--ctx', type=int, default=32768)
     parser.add_argument('--hera', help='CLI HERA para recuperar el perfil confirmado')
     parser.add_argument('--memory-home', help='Perfil HERA existente; requiere --hera')
     parser.add_argument('--native-template', help='Opt-in Gemma nativo: plantilla oficial; --runtime debe ser helios_formatted')
