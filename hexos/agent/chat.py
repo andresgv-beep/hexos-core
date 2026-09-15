@@ -137,7 +137,10 @@ AFIRMACION = re.compile(
 # Pedir que se abra, se enseñe o se cierre. Separado de SENALA porque señalar no
 # es pedir: «la 3 es la del disco» nombra, no manda abrir nada.
 PEDIR_VER = re.compile(
-    r'\b(?:[áa]bre|abrir|mu[ée]stra|mostrar|ens[ée][ñn]a|ense[ñn]ar|saca|sacar|ver|veo|'
+    # Con sus erratas: escribe «mustrame» y «mustrala», sin la e. Lo que pide está
+    # igual de claro, y un patrón que solo acepta la ortografía correcta convierte
+    # un desliz de teclado en «no te entiendo».
+    r'\b(?:[áa]bre|abrir|mu[eé]?stra|mostrar|ens[eé]?[ñn]a|ense[ñn]ar|saca|sacar|ver|veo|'
     r'cierra|cerrar|oculta|ocultar|quita|quitar|recoge)\w*\b', re.I)
 
 
@@ -465,7 +468,7 @@ class Agent:
     # Pero HexOS sí sabe de qué se está hablando: lo tiene en la traza del turno
     # anterior. Se le da resuelto COMO DATO; decidir sigue siendo suyo.
     SENALA = re.compile(
-        r'\b(?:[áa]brela|ci[ée]rrala|mu[ée]stramela|ens[ée][ñn]amela|d[ée]jamela|qu[íi]tala|'
+        r'\b(?:[áa]brela|ci[ée]rrala|mu[eé]?stramela|ens[eé]?[ñn]amela|d[ée]jamela|qu[íi]tala|'
         r'[áa]brela|esa\s+nota|esta\s+nota|la\s+nota\s+esa|la\s+[úu]ltima|la\s+primera|'
         r'la\s+anterior|la\s+de\s+antes)\b'
         r'|\bla\s+(\d{1,2})\b'
@@ -1347,7 +1350,11 @@ class Agent:
                                           effect='read', changes_state=False, ts=now(), seconds=0.0,
                                           failed=False, verification='no_requerida',
                                           result=dict(abierta, requested_by='hexos')))
-                        output['reply'] = (output['reply'].rstrip() + '\n\n· He abierto «' +
+                        store.db.execute('INSERT INTO tool_events(turn_id,ts,body) VALUES (?,?,?)',
+                                         (uid, now(), json.dumps(trace[-1], ensure_ascii=False)))
+                        store.db.commit()
+                        output['reply'] = (output['reply'].rstrip() +
+                                           '\n\n· No hacía falta preguntar: he abierto «' +
                                            senalada.get('title', '') + '» en tu pantalla.')
                     recordado = self.harvest_facts(store, text, uid, trace)
                     if recordado:

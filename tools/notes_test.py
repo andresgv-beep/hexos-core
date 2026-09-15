@@ -387,7 +387,8 @@ class HexosAbreLoSenaladoTest(unittest.TestCase):
         self.assertEqual(paso['arguments']['id'], nota['id'])
         self.assertEqual(paso['result']['requested_by'], 'hexos')
         # Y se dice, para que la ventana que aparece tenga explicación.
-        self.assertIn('He abierto «Problema de disco»', r['reply'])
+        self.assertIn('he abierto «Problema de disco»', r['reply'])
+        # Y queda en el registro, no solo en la respuesta del turno.
 
     def test_si_la_abrió_el_modelo_hexos_no_la_abre_otra_vez(self):
         from hexos.agent.chat import Agent
@@ -410,6 +411,12 @@ class HexosAbreLoSenaladoTest(unittest.TestCase):
         r = agent.chat('abrela')
         self.assertEqual(len([t for t in r['tools'] if t['tool'] == 'note.show']), 1)
         self.assertNotIn('He abierto', r['reply'])
+
+    def test_tolera_sus_erratas(self):
+        from hexos.agent.chat import PEDIR_VER
+        for texto in ('mustrame la 3', 'mustrala', 'ensename esa', 'muéstramela'):
+            with self.subTest(texto):
+                self.assertTrue(PEDIR_VER.search(texto), texto)
 
     def test_mencionarla_sin_pedir_verla_no_abre_nada(self):
         _, _, r = self.montar('La nota 3 es la del disco.', 'cual es la 3')
