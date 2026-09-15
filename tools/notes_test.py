@@ -235,5 +235,46 @@ class AfirmacionSinTrazaTest(unittest.TestCase):
                 self.assertEqual(self.cerrar(texto, self.LECTURA)['reason'], 'no_consta')
 
 
+class PromesaIncumplidaTest(unittest.TestCase):
+    """Anunciar el segundo paso y cerrar el turno deja a la persona esperando."""
+
+    def mirar(self, reply, trace=None):
+        from hexos.agent.chat import Agent
+        return Agent.unfulfilled_promise(reply, trace if trace is not None else [dict(tool='nas.read')])
+
+    def test_la_frase_real_con_la_que_dejó_a_medias(self):
+        # Turno del 15/09/2026: una lectura, y esto. No volvió.
+        self.assertTrue(self.mirar('Ya tengo el diagnóstico de servidorsrv1. Ahora voy a revisar '
+                                   'el estado de sus contenedores.\n\nDame un momento, Andrés.'))
+
+    def test_las_formas_de_prometer_una_acción(self):
+        for texto in ('Voy a consultar el NAS.', 'Paso a revisar los contenedores.',
+                      'Ahora mismo compruebo el disco.', 'Procedo a reiniciar el contenedor.',
+                      'Enseguida te digo.'):
+            with self.subTest(texto):
+                self.assertTrue(self.mirar(texto), texto)
+
+    def test_preguntar_no_es_prometer(self):
+        for texto in ('¿Quieres que revise los contenedores?',
+                      '¿Voy a revisar el NAS o prefieres esperar?'):
+            with self.subTest(texto):
+                self.assertIsNone(self.mirar(texto))
+
+    def test_un_verbo_sin_herramienta_detrás_no_cuenta(self):
+        for texto in ('Voy a explicarte lo que pasa.', 'Vamos a necesitar la contraseña.',
+                      'Voy a ser más breve a partir de ahora.'):
+            with self.subTest(texto):
+                self.assertIsNone(self.mirar(texto))
+
+    def test_una_promesa_vieja_en_medio_de_una_respuesta_larga_no_cuenta(self):
+        # Solo la cola: si prometió y DESPUÉS hizo y contó, el turno está bien.
+        largo = 'Voy a revisar el NAS. ' + 'Encontré tres contenedores parados y los detallo. ' * 8
+        self.assertIsNone(self.mirar(largo))
+
+    def test_sin_margen_de_herramientas_no_hay_turno_que_devolver(self):
+        self.assertIsNone(self.mirar('Ahora voy a revisar los contenedores.',
+                                     [dict(tool='nas.read')] * 6))
+
+
 if __name__ == '__main__':
     unittest.main()

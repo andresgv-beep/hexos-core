@@ -381,6 +381,37 @@ class Agent:
         r'|(?<!no )\b(?:he|hemos)\s+tomado\s+nota\b'
         r'|\b(?:guardad|anotad|apuntad)[oa]s?\s+en\s+una\s+nota\b', re.I)
 
+    # Lo que dice que va a hacer AHORA y deja sin hacer. Solo verbos que tienen
+    # herramienta detrás: «voy a explicarte» no es una promesa incumplida.
+    PROMESA = re.compile(
+        r'\b(?:voy\s+a|paso\s+a|procedo\s+a|vamos\s+a)\s+(?:\w+\s+){0,2}?'
+        r'(?:revisar|consultar|mirar|comprobar|leer|ejecutar|reiniciar|parar|arrancar|'
+        r'guardar|anotar|apuntar|buscar|analizar|diagnosticar|listar)\b'
+        r'|\bahora\s+(?:mismo\s+)?(?:reviso|consulto|miro|compruebo|leo|ejecuto|busco|analizo)\b'
+        r'|\bdame\s+un\s+momento\b|\benseguida\s+te\s+(?:digo|cuento)\b', re.I)
+
+    @classmethod
+    def unfulfilled_promise(cls, reply, trace, limit=6):
+        """¿Promete una acción inmediata y el turno se acaba sin hacerla?
+
+        No es lo mismo que cantar una escritura: aquí no afirma haber hecho nada,
+        dice que lo va a hacer «ahora» y luego cierra. Con margen de herramientas,
+        la respuesta es devolverle el turno; sin margen, no hay nada que devolver.
+        Una pregunta no es una promesa: «¿quieres que lo revise?» se queda fuera.
+        """
+        if not isinstance(reply, str) or len(trace) >= limit:
+            return None
+        cola = reply.strip()[-260:]
+        encontrada = cls.PROMESA.search(cola)
+        if not encontrada:
+            return None
+        # La frase donde aparece: si acaba en interrogación, está pidiendo permiso.
+        resto = cola[encontrada.end():]
+        corte = min((resto.find(c) for c in '.!?\n' if resto.find(c) >= 0), default=len(resto))
+        if resto[:corte + 1].endswith('?') or '¿' in cola[:encontrada.start()][-80:]:
+            return None
+        return encontrada.group(0)
+
     @classmethod
     def unsupported_claim(cls, reply, trace):
         """¿La respuesta canta una escritura que no consta en la traza?
@@ -944,6 +975,7 @@ class Agent:
                 schema_retries = 0
                 recovery_requests = 0
                 claim_retries = 0
+                promise_retries = 0
                 context_retries = 0
                 format_retries = 0
                 # Seis herramientas, más finalización y recuperaciones acotadas.
@@ -1100,6 +1132,19 @@ class Agent:
                             'herramienta que corresponda: note_save para una nota, report_save para un '
                             'informe. Si no había nada que guardar, responde de nuevo sin afirmar que '
                             'lo hiciste. Queda un intento.')]
+                        continue
+                    # Ha dicho que iba a hacerlo «ahora» y el turno se acababa sin
+                    # hacerlo. Le quedaban herramientas y contexto: no se quedó sin
+                    # sitio, decidió parar. Se le devuelve el turno una vez.
+                    promesa = self.unfulfilled_promise(output['reply'], trace)
+                    if promesa and not promise_retries:
+                        promise_retries += 1
+                        messages = [dict(role='user', content=
+                            'AVISO DE HEXOS (no es la persona): tu respuesta dice ' + repr(promesa) +
+                            ' y el turno iba a terminar ahí, sin haberlo hecho. Anunciarlo no lo hace, '
+                            'y la persona se queda esperando algo que no va a llegar. Ejecútalo AHORA '
+                            'con la herramienta que corresponda. Si no puedes o no hace falta, responde '
+                            'de nuevo sin prometerlo. Queda un intento.')]
                         continue
                     proposed = output['work']
                     if clarification:
