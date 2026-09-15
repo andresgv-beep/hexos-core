@@ -390,20 +390,39 @@ class Agent:
                 desde = donde + 1
         return hallados
 
-    @staticmethod
-    def uncovered_devices(pedidos, trace, limit=6):
-        """Equipos que la persona nombró y el turno no llegó a leer.
+    # Lo que la persona pide de cada equipo, por la palabra con la que lo pide.
+    # No es clasificar por ella: está escrito en su mensaje.
+    SECCIONES = ((re.compile(r'\bcontenedor|\bdocker\b', re.I), 'containers'),
+                 (re.compile(r'\bespacio\b|\bcu[áa]nto\s+(?:queda|cabe)\b|\bllen[oa]s?\b', re.I), 'space'))
 
-        Pidió dos y leyó uno: no se quedó sin sitio ni sin herramientas, es que no
-        lleva la cuenta de lo que se le pidió. Con un solo equipo nombrado no hay
-        cobertura que comprobar, y sin margen de herramientas no hay turno que
-        devolver.
+    @classmethod
+    def uncovered(cls, pedidos, trace, texto='', limit=6):
+        """Lo que la persona pidió y el turno no llegó a leer, equipo por equipo.
+
+        Dos dimensiones: qué equipos nombró, y qué quiso de ellos. Pidió dos y leyó
+        uno, o pidió contenedores y solo trajo el diagnóstico: no se quedó sin sitio
+        ni sin herramientas, es que no lleva la cuenta. Devuelve pares (equipo,
+        sección) que faltan, con sección None cuando no se leyó nada de ese equipo.
         """
-        if len(pedidos) < 2 or len(trace) >= limit:
+        if not pedidos or len(trace) >= limit:
             return []
-        leidos = {(paso.get('arguments') or {}).get('device', '').casefold()
-                  for paso in trace if paso.get('tool', '').startswith('nas.')}
-        return [nombre for nombre in pedidos if nombre.casefold() not in leidos]
+        secciones = [nombre for patron, nombre in cls.SECCIONES if patron.search(texto or '')]
+        if len(pedidos) < 2 and not secciones:
+            return []
+        leido = {((paso.get('arguments') or {}).get('device', '').casefold(),
+                  (paso.get('arguments') or {}).get('section'))
+                 for paso in trace if paso.get('tool', '').startswith('nas.')}
+        equipos_leidos = {d for d, _ in leido}
+        faltan = []
+        for nombre in pedidos:
+            clave = nombre.casefold()
+            if clave not in equipos_leidos:
+                faltan.append((nombre, None))
+                continue
+            for seccion in secciones:
+                if (clave, seccion) not in leido:
+                    faltan.append((nombre, seccion))
+        return faltan
 
     # Lo que el modelo dice haber hecho, en primera persona y en pasado. No es
     # comprensión del texto: es la forma de la frase con la que este modelo canta
@@ -1183,14 +1202,14 @@ class Agent:
                     # sitio, decidió parar. Se le devuelve el turno una vez.
                     # Nombró dos equipos y solo se leyó uno. No es falta de sitio:
                     # es no llevar la cuenta de lo que se le pidió.
-                    faltan = self.uncovered_devices(self.devices_named(store, uid), trace)
+                    faltan = self.uncovered(self.devices_named(store, uid), trace, text)
                     if faltan and not coverage_retries:
                         coverage_retries += 1
+                        pendiente = ', '.join(n + (' (' + s + ')' if s else ' (no se ha leído nada)')
+                                              for n, s in faltan)
                         messages = [dict(role='user', content=
-                            'AVISO DE HEXOS (no es la persona): la petición nombra ' +
-                            ', '.join(repr(n) for n in self.devices_named(store, uid)) +
-                            ' y en este turno no se ha leído ' + ', '.join(repr(n) for n in faltan) +
-                            '. Un resumen que los dé por revisados sería falso. Lee ahora lo que falta '
+                            'AVISO DE HEXOS (no es la persona): en este turno falta por leer ' +
+                            pendiente + '. Un resumen que lo dé por revisado sería falso. Léelo ahora '
                             'con nas_read. Si no puedes con alguno, dilo nombrándolo y di por qué. '
                             'Queda un intento.')]
                         continue
