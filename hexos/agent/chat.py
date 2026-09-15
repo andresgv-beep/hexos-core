@@ -136,12 +136,15 @@ AFIRMACION = re.compile(
 # historial» sin haberlo revisado. Así que lo busca HexOS, no el modelo.
 # Pedir que se abra, se enseñe o se cierre. Separado de SENALA porque señalar no
 # es pedir: «la 3 es la del disco» nombra, no manda abrir nada.
+# Con sus erratas: escribe «mustrame» y «mustrala», sin la e. Lo que pide está
+# igual de claro, y un patrón que solo acepta la ortografía correcta convierte un
+# desliz de teclado en «no te entiendo».
 PEDIR_VER = re.compile(
-    # Con sus erratas: escribe «mustrame» y «mustrala», sin la e. Lo que pide está
-    # igual de claro, y un patrón que solo acepta la ortografía correcta convierte
-    # un desliz de teclado en «no te entiendo».
-    r'\b(?:[áa]bre|abrir|mu[eé]?stra|mostrar|ens[eé]?[ñn]a|ense[ñn]ar|saca|sacar|ver|veo|'
-    r'cierra|cerrar|oculta|ocultar|quita|quitar|recoge)\w*\b', re.I)
+    r'\b(?:[áa]bre|abrir|mu[eé]?stra|mostrar|ens[eé]?[ñn]a|ense[ñn]ar|saca|sacar|ver|veo)\w*\b', re.I)
+# Aparte, porque el atajo tiene que llamar a la herramienta que toca: con las dos
+# juntas «ciérrala» abría la nota, que es peor que no hacer nada.
+PEDIR_CERRAR = re.compile(
+    r'\b(?:cierra|cerrar|ci[ée]rra|oculta|ocultar|quita|quitar|recoge|recoger)\w*\b', re.I)
 
 
 RECUERDO = re.compile(
@@ -1340,21 +1343,27 @@ class Agent:
                     # abrirla —preguntando a cuál se refería, con el id delante—. No hay
                     # nada que insistirle: no afirmó nada. Así que la abre HexOS y lo
                     # dice, igual que busca en el archivo cuando la pregunta mira atrás.
-                    if (senalada and PEDIR_VER.search(text or '')
+                    cerrar = bool(PEDIR_CERRAR.search(text or ''))
+                    if (senalada and (cerrar or PEDIR_VER.search(text or ''))
                             and not any(paso.get('tool') in ('note.show', 'note.hide')
                                         for paso in trace)):
-                        abierta = dict(notes.get(store, senalada['id']), shown=True,
-                                       note='La abrió HexOS al ver que la persona señalaba una nota '
-                                            'concreta y el turno iba a cerrarse sin abrirla.')
-                        trace.append(dict(tool='note.show', arguments=dict(id=senalada['id']),
+                        hecho = ('cerró' if cerrar else 'abrió')
+                        resultado = (dict(hidden=senalada['id']) if cerrar else
+                                     dict(notes.get(store, senalada['id']), shown=True))
+                        trace.append(dict(tool='note.hide' if cerrar else 'note.show',
+                                          arguments=dict(id=senalada['id']),
                                           effect='read', changes_state=False, ts=now(), seconds=0.0,
                                           failed=False, verification='no_requerida',
-                                          result=dict(abierta, requested_by='hexos')))
+                                          result=dict(resultado, requested_by='hexos',
+                                                      note='La ' + hecho + ' HexOS al ver que la persona '
+                                                           'señalaba una nota concreta y el turno iba a '
+                                                           'cerrarse sin hacerlo.')))
                         store.db.execute('INSERT INTO tool_events(turn_id,ts,body) VALUES (?,?,?)',
                                          (uid, now(), json.dumps(trace[-1], ensure_ascii=False)))
                         store.db.commit()
                         output['reply'] = (output['reply'].rstrip() +
-                                           '\n\n· No hacía falta preguntar: he abierto «' +
+                                           '\n\n· No hacía falta preguntar: he ' +
+                                           ('cerrado' if cerrar else 'abierto') + ' «' +
                                            senalada.get('title', '') + '» en tu pantalla.')
                     recordado = self.harvest_facts(store, text, uid, trace)
                     if recordado:

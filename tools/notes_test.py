@@ -412,11 +412,22 @@ class HexosAbreLoSenaladoTest(unittest.TestCase):
         self.assertEqual(len([t for t in r['tools'] if t['tool'] == 'note.show']), 1)
         self.assertNotIn('He abierto', r['reply'])
 
+    def test_cerrar_cierra_y_no_abre(self):
+        # Con un solo patrón para las dos cosas, «ciérrala» abría la nota.
+        _, nota, r = self.montar('¿Cuál cierro?', 'cierrala')
+        paso = next(t for t in r['tools'] if t['result'].get('requested_by') == 'hexos')
+        self.assertEqual(paso['tool'], 'note.hide')
+        self.assertIn('he cerrado', r['reply'])
+
     def test_tolera_sus_erratas(self):
-        from hexos.agent.chat import PEDIR_VER
+        from hexos.agent.chat import PEDIR_VER, PEDIR_CERRAR
         for texto in ('mustrame la 3', 'mustrala', 'ensename esa', 'muéstramela'):
             with self.subTest(texto):
                 self.assertTrue(PEDIR_VER.search(texto), texto)
+        for texto in ('cierrala', 'ciérrala', 'quitala de ahi'):
+            with self.subTest(texto):
+                self.assertTrue(PEDIR_CERRAR.search(texto), texto)
+                self.assertIsNone(PEDIR_VER.search(texto), texto)
 
     def test_mencionarla_sin_pedir_verla_no_abre_nada(self):
         _, _, r = self.montar('La nota 3 es la del disco.', 'cual es la 3')
