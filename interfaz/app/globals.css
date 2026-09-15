@@ -369,3 +369,81 @@ input[type="range"] { width: 100%; accent-color: #8dc9f2; cursor: pointer; heigh
   animation: word-in .45s ease-out both;
 }
 .conversation-stream .reply-status { font-size: 13.5px; animation: word-in .45s ease-out both; }
+
+/* ── Laboratorio de diseño (ruta /lab, fuera de la app) ─────────────────── */
+.lab { display: grid; grid-template-rows: auto 1fr; grid-template-columns: 1fr 280px; min-height: 100vh; background: #05080d; color: #cfe0ef; }
+.lab-bar { grid-column: 1 / -1; display: flex; gap: 16px; align-items: baseline; padding: 14px 20px; border-bottom: 1px solid #16202c; font-size: 12px; }
+.lab-bar span { color: #6f8496; }
+.lab-stage { position: relative; display: grid; place-items: center; overflow: hidden; }
+.lab-stage .orb-canvas { position: absolute; inset: 0; }
+.lab-marker { position: absolute; z-index: 2; left: 0; top: 0; pointer-events: none; display: grid; place-items: center; }
+/* Same 54px as the anchored fresh note below the core: a saved note and a
+   just-written one are the same object at different moments. */
+/* The artwork is blue (hue 207); the tone slider swings it from there to gold
+   with a single rotation, so one asset covers every tone we try. */
+.lab-bubble { width: var(--bubble, 62px); height: var(--bubble, 62px);
+  background: url("/nota.png") center / contain no-repeat;
+  filter: hue-rotate(calc((var(--hue, 207) - 207) * 1deg));
+  opacity: var(--open, 0); transform: scale(calc(.35 + .65 * var(--open, 0))); }
+.lab-title { position: absolute; top: calc(var(--bubble, 62px) * .72); white-space: nowrap; padding: 5px 10px; border-radius: 999px;
+  font-size: 11px; letter-spacing: .01em; color: #f4e6c9; background: #0b1119d8;
+  border: 1px solid #d8b06a44; backdrop-filter: blur(3px);
+  opacity: calc(var(--near, 0) * var(--open, 0)); transition: opacity .18s ease; }
+/* Left unfiltered on purpose: a note just written is not a saved one yet. */
+.lab-fresh { position: absolute; left: 50%; bottom: 8%; transform: translateX(-50%); width: 62px; height: 62px;
+  background: url("/nota.png") center / contain no-repeat; }
+.lab-controls { padding: 18px 16px; border-left: 1px solid #16202c; display: flex; flex-direction: column; gap: 14px; }
+.lab-controls label { display: flex; flex-direction: column; gap: 6px; font-size: 11px; color: #8fa5b8; }
+.lab-controls label span { display: flex; justify-content: space-between; gap: 8px; }
+.lab-controls output { color: #f0d9a8; font-variant-numeric: tabular-nums; }
+.lab-controls input[type="range"] { width: 100%; accent-color: #d8b06a; }
+.lab-controls button { margin-top: 6px; padding: 8px; border-radius: 8px; border: 1px solid #23313f; background: #0d151e; color: #cfe0ef; font-size: 11px; cursor: pointer; }
+
+/* ── Visor del núcleo (laboratorio /lab/visor) ──────────────────────────── */
+.viewer-dock { position: fixed; z-index: 7; top: 10px; bottom: 10px; right: 10px; display: flex; }
+.viewer-glass { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.viewer-title { flex: 1; font-size: 10px; letter-spacing: .13em; color: #9fc6dd; }
+.viewer-search { display: flex; align-items: center; gap: 8px; padding: 9px 14px; border-bottom: 1px solid #7fceff1f; color: #6f92a8; }
+.viewer-search input { flex: 1; background: transparent; border: 0; color: #dceaf5; font-size: 12px; outline: none; }
+.viewer-list { flex: 1; min-height: 0; overflow-y: auto; margin: 0; padding: 6px; list-style: none;
+  scrollbar-width: thin; scrollbar-color: #347597 transparent; }
+.viewer-list li { display: flex; align-items: center; gap: 2px; border-radius: 9px; }
+.viewer-list li:hover { background: #7fceff10; }
+.viewer-row { flex: 1; min-width: 0; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px;
+  padding: 8px 6px 8px 10px; background: transparent; border: 0; color: inherit; text-align: left; cursor: pointer; }
+.viewer-icon { color: #6fb6e0; flex: none; }
+.viewer-name { font-size: 13px; color: #dceaf5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.viewer-date { font-size: 11px; color: #6f8b9e; white-space: nowrap; }
+.viewer-star { flex: none; padding: 8px; background: transparent; border: 0; color: #46606f; cursor: pointer; border-radius: 8px; }
+.viewer-star.on { color: #e9c06a; }
+.viewer-empty { padding: 18px; font-size: 12px; color: #6f8b9e; }
+/* The mark: warm, singular and temporary — Helios pointing, not a stored state. */
+.viewer-list li.marked { background: #e9c06a1f; box-shadow: inset 0 0 0 1px #e9c06a5c; }
+.viewer-list li.marked .viewer-name { color: #ffe6b5; }
+/* Narrow dock: the columns stop aligning, so the row stacks instead of squeezing. */
+@media (max-width: 1100px) {
+  .viewer-row { grid-template-columns: auto 1fr; row-gap: 2px; }
+  .viewer-date { grid-column: 2; }
+}
+.lab-reading { position: fixed; z-index: 8; left: 6%; top: 18%; width: min(460px, 38vw); }
+.lab-console { position: fixed; z-index: 9; left: 12px; bottom: 12px; display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px; border-radius: 12px; background: #0b1119e0; border: 1px solid #23313f; font-size: 11px; color: #9fb6c7; }
+.lab-console button { padding: 6px 10px; border-radius: 8px; border: 1px solid #23313f; background: #0d151e; color: #cfe0ef; font-size: 11px; cursor: pointer; }
+.lab-console label { display: flex; align-items: center; gap: 6px; }
+.lab-console output { color: #e9c06a; font-variant-numeric: tabular-nums; }
+.lab-visor .orb-stage { width: min(1014px, 100vw); height: min(858px, 100%); position: relative; }
+
+/* La nota que Helios te acaba de dar: esperando bajo el orbe, todavía en la mano. */
+/* z-index y pointer-events como `.orb-history-trigger`: el canvas del orbe va a
+   z-index 1 y `.presence` desactiva el puntero, así que hay que salir de ambos. */
+.hand-note { position: absolute; z-index: 2; pointer-events: auto; left: 50%; bottom: 4%; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  background: transparent; border: 0; padding: 4px; cursor: pointer;
+  animation: hand-arrive .5s cubic-bezier(.16, 1, .3, 1) both; }
+.hand-bubble { width: 62px; height: 62px; background: url("/nota.png") center / contain no-repeat;
+  transition: transform .2s ease; }
+.hand-note:hover .hand-bubble { transform: scale(1.08); }
+.hand-label { max-width: 220px; font-size: 11px; color: #bcd6e6; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; }
+@keyframes hand-arrive { from { opacity: 0; transform: translate(-50%, -28px) scale(.5); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); } }

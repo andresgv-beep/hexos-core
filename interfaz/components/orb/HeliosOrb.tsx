@@ -28,6 +28,9 @@ export interface HeliosOrbProps {
    *  orb's edge. Driven by `.orb-history-trigger`, the circular button already
    *  layered over the sphere, so no raycasting is needed either. */
   hovered?: { current: boolean };
+  /** Extra scene content rendered inside the orb's own Canvas, so it shares the
+   *  camera, the composer and the bloom. Unused by the app; the lab uses it. */
+  children?: ReactNode;
 }
 
 function FrameTicker({ active }: { active: boolean }) {
@@ -172,7 +175,7 @@ function subscribeMotion(notify: () => void) {
   return () => media.removeEventListener("change", notify);
 }
 
-export function HeliosOrb(props: HeliosOrbProps) {
+export function HeliosOrb({ children, ...props }: HeliosOrbProps) {
   const container = useRef<HTMLDivElement>(null);
   const [inView, setInView] = useState(true);
   const ready = useSyncExternalStore(emptySubscribe, clientReady, serverReady);
@@ -195,6 +198,7 @@ export function HeliosOrb(props: HeliosOrbProps) {
     >
       <FrameTicker active={animate} />
       <OrbScene {...props} motion={animate} />
+      {children}
       <Bloom />
     </Canvas></OrbBoundary>}
   </div>;

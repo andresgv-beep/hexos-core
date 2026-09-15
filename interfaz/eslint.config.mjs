@@ -23,7 +23,7 @@ const eslintConfig = defineConfig([
   jsxA11y.flatConfigs.recommended,
   next.configs["core-web-vitals"],
   {
-    files: ["components/orb/**/*.tsx"],
+    files: ["components/orb/**/*.tsx", "components/lab/**/*.tsx"],
     // These JSX elements are Three.js objects. GPU uniforms and scene objects
     // are intentionally mutable between demand-rendered frames.
     rules: {
