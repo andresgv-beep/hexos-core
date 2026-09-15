@@ -1,6 +1,7 @@
 """Notas del núcleo: guardar, retocar sin destruir, y que lo guardado se relea."""
 from pathlib import Path
 import sys
+import json
 import tempfile
 import unittest
 
@@ -355,6 +356,64 @@ class NotaSenaladaTest(unittest.TestCase):
 
     def test_sin_traza_previa_no_hay_a_qué_señalar(self):
         self.assertIsNone(self.con_traza([], 'abrela'))
+
+
+class HexosAbreLoSenaladoTest(unittest.TestCase):
+    """Si HexOS resolvió la nota y el modelo cierra el turno sin abrirla, la abre él."""
+
+    class Runtime:
+        def __init__(self, reply): self.reply = reply
+        def call(self, request): pass
+        def generate(self, messages): return {'reply': self.reply, 'work': None}
+
+    def montar(self, reply, mensaje):
+        from hexos.agent.chat import Agent
+        from hexos.agent import notes
+        tmp = tempfile.TemporaryDirectory(prefix='hexos-abre-')
+        self.addCleanup(tmp.cleanup)
+        agent = Agent(tmp.name, self.Runtime(reply))
+        with agent.store() as s:
+            nota = notes.save(s, 'previo', title='Problema de disco', body='Cable suelto.')
+            s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('previo','t','user','x','x'))
+            s.db.execute('INSERT INTO tool_events(turn_id,ts,body) VALUES (?,?,?)',
+                         ('previo','t', json.dumps(dict(tool='note.show', result=dict(id=nota['id'], title=nota['title'])))))
+            s.db.commit()
+        return agent, nota, agent.chat(mensaje)
+
+    def test_pregunta_a_cual_me_refiero_y_aun_asi_se_abre(self):
+        # Su turno real: el id iba en el prompt y respondió preguntando.
+        _, nota, r = self.montar('¿A qué nota te refieres?', 'abrela')
+        paso = next(t for t in r['tools'] if t['tool'] == 'note.show')
+        self.assertEqual(paso['arguments']['id'], nota['id'])
+        self.assertEqual(paso['result']['requested_by'], 'hexos')
+        # Y se dice, para que la ventana que aparece tenga explicación.
+        self.assertIn('He abierto «Problema de disco»', r['reply'])
+
+    def test_si_la_abrió_el_modelo_hexos_no_la_abre_otra_vez(self):
+        from hexos.agent.chat import Agent
+        tmp = tempfile.TemporaryDirectory(prefix='hexos-abre2-')
+        self.addCleanup(tmp.cleanup)
+        from hexos.agent import notes as N
+        class DosPasos:
+            def __init__(self, nid): self.salidas=[{'tool':'note.show','arguments':{'id':nid}},
+                                                   {'reply':'Abierta.','work':None}]
+            def call(self, request): pass
+            def generate(self, m): return self.salidas.pop(0)
+        agent = Agent(tmp.name, None)
+        with agent.store() as s:
+            nota = N.save(s, 'previo', title='Una', body='x')
+            s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('previo','t','user','x','x'))
+            s.db.execute('INSERT INTO tool_events(turn_id,ts,body) VALUES (?,?,?)',
+                         ('previo','t', json.dumps(dict(tool='note.show', result=dict(id=nota['id'], title='Una')))))
+            s.db.commit()
+        agent.runtime = DosPasos(nota['id'])
+        r = agent.chat('abrela')
+        self.assertEqual(len([t for t in r['tools'] if t['tool'] == 'note.show']), 1)
+        self.assertNotIn('He abierto', r['reply'])
+
+    def test_mencionarla_sin_pedir_verla_no_abre_nada(self):
+        _, _, r = self.montar('La nota 3 es la del disco.', 'cual es la 3')
+        self.assertEqual([t['tool'] for t in r['tools']], [])
 
 
 if __name__ == '__main__':

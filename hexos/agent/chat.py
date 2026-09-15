@@ -134,6 +134,13 @@ AFIRMACION = re.compile(
 # que no, y aun así responde «no tengo registro» sin llamar a nada —medido: de
 # tres preguntas sobre el pasado buscó en una, y en otra escribió «revisando el
 # historial» sin haberlo revisado. Así que lo busca HexOS, no el modelo.
+# Pedir que se abra, se enseñe o se cierre. Separado de SENALA porque señalar no
+# es pedir: «la 3 es la del disco» nombra, no manda abrir nada.
+PEDIR_VER = re.compile(
+    r'\b(?:[áa]bre|abrir|mu[ée]stra|mostrar|ens[ée][ñn]a|ense[ñn]ar|saca|sacar|ver|veo|'
+    r'cierra|cerrar|oculta|ocultar|quita|quitar|recoge)\w*\b', re.I)
+
+
 RECUERDO = re.compile(
     r'\b(te acuerdas|recuerdas|acordarte|te acordabas|me acuerdo'
     r'|qu[eé] te (?:dije|ped[ií]|cont[eé]|coment[eé]|pregunt[eé])'
@@ -1326,6 +1333,22 @@ class Agent:
                             request=prompt_text, source_ref='turn:' + uid), actor='user')
                         job = store.dispatch(dict(op='classify', id=job['id'], revision=job['revision'],
                             **{k:v for k,v in proposed.items() if k != 'title'}), actor='model')
+                    # Señaló una nota, HexOS la resolvió, y el modelo respondió sin
+                    # abrirla —preguntando a cuál se refería, con el id delante—. No hay
+                    # nada que insistirle: no afirmó nada. Así que la abre HexOS y lo
+                    # dice, igual que busca en el archivo cuando la pregunta mira atrás.
+                    if (senalada and PEDIR_VER.search(text or '')
+                            and not any(paso.get('tool') in ('note.show', 'note.hide')
+                                        for paso in trace)):
+                        abierta = dict(notes.get(store, senalada['id']), shown=True,
+                                       note='La abrió HexOS al ver que la persona señalaba una nota '
+                                            'concreta y el turno iba a cerrarse sin abrirla.')
+                        trace.append(dict(tool='note.show', arguments=dict(id=senalada['id']),
+                                          effect='read', changes_state=False, ts=now(), seconds=0.0,
+                                          failed=False, verification='no_requerida',
+                                          result=dict(abierta, requested_by='hexos')))
+                        output['reply'] = (output['reply'].rstrip() + '\n\n· He abierto «' +
+                                           senalada.get('title', '') + '» en tu pantalla.')
                     recordado = self.harvest_facts(store, text, uid, trace)
                     if recordado:
                         output['reply'] = output['reply'].rstrip() + '\n\n' + recordado
