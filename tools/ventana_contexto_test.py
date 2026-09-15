@@ -105,3 +105,54 @@ class VentanaTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class CorteporKVTest(unittest.TestCase):
+    """El corte se decide con el número del motor, no solo con una estimación.
+
+    La conversación cabía de sobra en caracteres y aun así el turno murió: lo que
+    llenaba el KV era el resultado de una herramienta, que entra a mitad de turno
+    y no cuenta para ese presupuesto.
+    """
+
+    class Runtime:
+        native = True
+        ctx = 16384
+        def __init__(self, kv): self.kv_position = kv
+        def call(self, request): pass
+        def generate(self, messages): return {'reply': 'ok', 'work': None}
+
+    def montar(self, kv):
+        tmp = tempfile.TemporaryDirectory(prefix='hexos-kv-')
+        self.addCleanup(tmp.cleanup)
+        agent = Agent(tmp.name, self.Runtime(kv))
+        with agent.store() as store:
+            for i in range(4):
+                store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
+                                 ('m%d' % i, '2026-09-15', 'user', 'hola', 'hola'))
+            store.db.commit()
+            return agent, store, agent.window(store, 'ahora', True, agent.history_budget())
+
+    def test_con_el_kv_holgado_no_corta_nada(self):
+        _, _, (_, filas) = self.montar(3000)
+        self.assertEqual(len(filas), 4)
+
+    def test_con_el_kv_casi_lleno_corta_aunque_el_texto_sea_corto(self):
+        agent, _, (_, filas) = self.montar(12500)
+        self.assertEqual(filas, [], 'cuatro «hola» caben de sobra en caracteres')
+        self.assertEqual(agent.context_cut['reason'], 'kv')
+        self.assertEqual(agent.context_cut['kv_position'], 12500)
+
+    def test_un_motor_sin_ese_número_se_comporta_como_antes(self):
+        class Viejo(self.Runtime):
+            def __init__(self): pass
+            native = True
+            ctx = 16384
+        tmp = tempfile.TemporaryDirectory(prefix='hexos-kv-viejo-')
+        self.addCleanup(tmp.cleanup)
+        agent = Agent(tmp.name, Viejo())
+        with agent.store() as store:
+            store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('m','t','user','hola','hola'))
+            store.db.commit()
+            _, filas = agent.window(store, 'ahora', True, agent.history_budget())
+        self.assertEqual(len(filas), 1)

@@ -215,6 +215,7 @@ class NativeRuntime:
         # conversación puede acumular antes de tener que cortar.
         self.ctx = ctx
         self.messages=[];self.pending=deque();self.current=None
+        self.kv_position=0
         self.repair_call = False
         # Imagen de un solo uso: se consume en la generación siguiente.
         self.pending_image = None
@@ -337,6 +338,12 @@ class NativeRuntime:
             prefill_tokens=int(header[5]) if len(header)>6 else None,
             prefill_reused=int(header[6]) if len(header)>6 else None,
             prompt=prompt, prompt_sha256=hashlib.sha256(data).hexdigest())
+        # Cuánto ocupa el KV después de esta generación. Es el número del motor, no
+        # una estimación: lo que decide si el turno siguiente cabe. Sin esto el
+        # corte automático miraba caracteres de conversación, que no incluyen el
+        # resultado de una herramienta, y se llegó a 16.380 de 16.384.
+        if len(header) > 6:
+            self.kv_position = int(header[6]) + int(header[5]) + int(header[2])
         if header[4]=='error':raise RuntimeError(raw)
         raw, reasoning = split_thinking(raw, prompt.endswith('<|channel>thought\n'))
         self.last_generation['visible_output'] = raw

@@ -1172,7 +1172,14 @@ class Agent:
             return corte, filas[::-1]
         filas = store.db.execute('SELECT rowid,id,ts,role,model_text AS text FROM conversation '
             'WHERE id<>? AND rowid>? ORDER BY rowid', (turn_id, corte)).fetchall()
-        if sum(len(f['text']) for f in filas) <= budget:
+        # Dos medidas, y manda la peor. Los caracteres estiman lo que va a ocupar la
+        # conversación; la posición del KV es lo que el motor tiene ocupado DE VERDAD,
+        # e incluye lo que los caracteres no ven: el resultado de una herramienta, que
+        # entra a mitad de turno. Mirando solo caracteres se llegó a 16.380 de 16.384
+        # y el turno murió. El tope deja sitio para una lectura gorda y su respuesta.
+        ctx = getattr(self.runtime, 'ctx', 0) or 0
+        ocupado = getattr(self.runtime, 'kv_position', 0) or 0
+        if sum(len(f['text']) for f in filas) <= budget and (not ctx or ocupado <= ctx * 0.7):
             return corte, filas
         # Ya no cabe: se corta por entero y se empieza limpio. Ir soltando el
         # mensaje más viejo dejaría el prompt cambiando por delante en cada turno,
@@ -1184,7 +1191,9 @@ class Agent:
                          'ON CONFLICT(key) DO UPDATE SET value=excluded.value', (str(nuevo),))
         store.db.commit()
         self.context_cut = dict(at=now(), messages=len(filas),
-                                characters=sum(len(f['text']) for f in filas))
+                                characters=sum(len(f['text']) for f in filas),
+                                reason='kv' if ctx and ocupado > ctx * 0.7 else 'caracteres',
+                                kv_position=ocupado, ctx=ctx)
         return nuevo, []
 
     def thinking(self):
