@@ -1,12 +1,12 @@
 import { phaseFromHexos, type HeliosPhase } from "./state";
-import { parseToolActivities, type ToolActivity } from "./tools";
+import { notesDismissed, notesTouched, parseToolActivities, type ToolActivity } from "./tools";
 
 /** Llega el turno en que HexOS corta el contexto por lleno: lo anterior deja de
  *  estar en la ventana del modelo, aunque siga entero en el archivo. */
 export interface ContextCut { at: string; messages: number; characters: number }
 /** Cómo se cierra el turno según lo COMPROBADO, no según lo que diga la respuesta. */
 export interface Closure { reason: string; note: string; unverified: { tool: string; verification?: string; evidence?: string }[] }
-export interface ChatReply { reply: string; tools: ToolActivity[]; document?: unknown; contextCut?: ContextCut; closure?: Closure }
+export interface ChatReply { reply: string; tools: ToolActivity[]; notes: string[]; closeNotes: string[] | "todas" | null; document?: unknown; contextCut?: ContextCut; closure?: Closure }
 export interface HistoryMessage { role: "user" | "assistant"; text: string }
 /** Lo que Helios dice que va a hacer, antes de hacerlo. Lo escribe el modelo, no
  *  HexOS, y llega a mitad de turno: por eso viaja aparte de la respuesta. */
@@ -142,6 +142,7 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
                            evidence: typeof u.evidence === "string" ? u.evidence : undefined })) }
         : undefined;
       return { reply: data.reply, tools: parseToolActivities(data.tools, "done"),
+               notes: notesTouched(data.tools), closeNotes: notesDismissed(data.tools),
                document: data.document, contextCut, closure };
     },
   };

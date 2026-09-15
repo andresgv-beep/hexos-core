@@ -48,13 +48,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, [tabindex="0"]:focus
 .orb-fallback>span { font-size: 10px; color: #8aa7b9; }
 /* Deja libre el panel de sistema (272px) a la derecha y la columna de la
    conversación a la izquierda: una nota no debe taparlos. */
-.floating-workspace { position: absolute; inset: 94px 296px 150px max(24px, 3vw); z-index: 3; pointer-events: none; }
+.floating-workspace { position: absolute; inset: 94px 296px 150px max(24px, 3vw); z-index: 5; pointer-events: none; }
 @media (max-width: 900px) { .floating-workspace { inset: 94px 24px 150px; } }
 .message-window { position: absolute; width: clamp(360px, 39vw, 620px); max-width: 100%; pointer-events: auto; }
-.slot-0 { left: 3%; top: 8%; }
-.slot-1 { right: 3%; top: 14%; }
-.slot-2 { left: 3%; bottom: 3%; }
-.slot-3 { right: 3%; bottom: 0; }
+/* A media altura y pegada a la derecha del espacio de trabajo, que al cerrarse
+   el visor queda libre. `translate` es propiedad aparte de `transform` a posta:
+   el arrastre vive en `transform` y centrar ahí lo habría roto. */
+.slot-0, .slot-1, .slot-2, .slot-3 { left: auto; right: 0; top: 50%; bottom: auto; translate: 0 -50%; }
 .window-glass { border: 1px solid #6dcaff80; border-radius: 17px; background: linear-gradient(135deg, #102c40b0, #08131dbd 65%); box-shadow: 0 0 18px #38baff24, inset 0 0 18px #52bfff0b, 0 14px 40px #0005; backdrop-filter: blur(9px); animation: window-appear .65s cubic-bezier(.16, 1, .3, 1) both; overflow: hidden; }
 .window-heading { display: flex; align-items: center; gap: 2px; padding: 7px 8px 7px 14px; border-bottom: 1px solid #7fceff22; }
 .window-drag { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; padding: 8px 0; border: 0; background: transparent; color: #9cd8fa; cursor: grab; touch-action: none; text-align: left; user-select: none; }
@@ -120,7 +120,7 @@ input[type="range"] { width: 100%; accent-color: #8dc9f2; cursor: pointer; heigh
   .presence { inset: 70px 0 105px; align-items: flex-start; }
   .orb-stage { height: min(806px, 123.5vw); max-height: 100%; }
   .floating-workspace { inset: 30% 16px 152px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; padding: 14px 4px; scrollbar-width: thin; }
-  .message-window { position: relative; inset: auto; width: 100%; flex-shrink: 0; transform: none !important; }
+  .message-window { position: relative; inset: auto; width: 100%; flex-shrink: 0; transform: none !important; translate: none !important; }
   .window-content { max-height: 180px; padding: 15px 18px; }
   .window-drag { cursor: default; touch-action: pan-y; }.window-drag>svg { display: none; }
   .conversation { width: calc(100% - 32px); bottom: max(14px, env(safe-area-inset-bottom)); }
@@ -292,7 +292,7 @@ input[type="range"] { width: 100%; accent-color: #8dc9f2; cursor: pointer; heigh
   body { background: #fff; color: #000; }
   .helios-app > *:not(.floating-workspace), .note-actions, .window-heading { display: none !important; }
   .floating-workspace { position: static !important; inset: auto !important; }
-  .message-window { position: static !important; transform: none !important; width: auto !important; }
+  .message-window { position: static !important; transform: none !important; translate: none !important; width: auto !important; }
   .window-glass { border: 0; box-shadow: none; background: #fff; backdrop-filter: none; }
   .note-body, .note-meta { color: #000; }
   .window-content { overflow: visible !important; max-height: none !important; }
@@ -369,3 +369,42 @@ input[type="range"] { width: 100%; accent-color: #8dc9f2; cursor: pointer; heigh
   animation: word-in .45s ease-out both;
 }
 .conversation-stream .reply-status { font-size: 13.5px; animation: word-in .45s ease-out both; }
+
+/* ── El núcleo abierto: el archivo como ventana sobre la derecha ─────────── */
+/* Por encima del monitor (z-index 6): al abrirse lo tapa, que es la idea. */
+.viewer-dock { position: fixed; z-index: 7; top: 10px; bottom: 10px; right: 10px;
+  max-width: calc(100vw - 20px); display: flex; }
+.viewer-glass { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.viewer-title { flex: 1; font-size: 9px; letter-spacing: .17em; color: #9edcff; }
+.viewer-search { display: flex; align-items: center; gap: 9px; padding: 10px 16px;
+  border-bottom: 1px solid #7fceff1f; color: #6f92a8; }
+.viewer-search input { flex: 1; min-width: 0; background: transparent; border: 0;
+  color: #dceaf5; font-size: 12.5px; outline: none; }
+.viewer-list { flex: 1; min-height: 0; overflow-y: auto; margin: 0; padding: 6px;
+  list-style: none; scrollbar-width: thin; scrollbar-color: #347597 transparent; }
+.viewer-list li { display: flex; align-items: center; border-radius: 10px; }
+.viewer-list li:hover { background: #7fceff10; }
+/* Nombre y fecha en columnas: el ancho lo manda el nombre, la fecha nunca se parte. */
+.viewer-row { flex: 1; min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center; gap: 11px; padding: 9px 6px 9px 11px; background: transparent;
+  border: 0; color: inherit; text-align: left; cursor: pointer; font: inherit; }
+.viewer-icon { flex: none; color: #6fb6e0; }
+.viewer-name { font-size: 13px; color: #dceaf5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.viewer-date { font-size: 10.5px; color: #6f8b9e; white-space: nowrap; }
+.viewer-star { flex: none; width: 30px; display: grid; place-items: center; color: #46606f; }
+.viewer-star.on { color: #e9c06a; }
+.viewer-empty { padding: 20px 14px; font-size: 12px; color: #6f8b9e; }
+/* La marca: cálida, única y pasajera. Helios señalando, no un estado guardado. */
+.viewer-list li.marked { background: #e9c06a1f; box-shadow: inset 0 0 0 1px #e9c06a5c; }
+.viewer-list li.marked .viewer-name { color: #ffe6b5; }
+/* Si el visor se estrecha, las columnas dejan de alinear: la fila se apila. */
+@media (max-width: 1180px) {
+  .viewer-row { grid-template-columns: auto minmax(0, 1fr); row-gap: 2px; }
+  .viewer-date { grid-column: 2; }
+}
+.viewer-filter { flex: none; padding: 5px; border: 0; border-radius: 7px; background: transparent;
+  color: #46606f; cursor: pointer; display: grid; place-items: center; }
+.viewer-filter:hover { color: #9fc6dd; background: #7fceff12; }
+.viewer-filter.on { color: #e9c06a; background: #e9c06a1a; }
+.viewer-star { color: #35505f; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

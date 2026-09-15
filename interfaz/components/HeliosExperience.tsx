@@ -10,14 +10,17 @@ import { ToolSatellites } from "./ToolSatellites";
 import { ConversationStream, type Turn } from "./ConversationStream";
 import { NoteWindow, type NoteWindowState } from "./NoteWindow";
 import { CoreShelf } from "./CoreShelf";
+import { CoreViewer } from "./CoreViewer";
 import { phases } from "@/lib/helios/state";
 import { createHexosTransport, type ContextCut, type CredentialRequest, type HeliosTransport, type HistoryMessage } from "@/lib/helios/hexos";
 import { mergeToolActivities, type ToolActivity } from "@/lib/helios/tools";
-import { coreSectionForTools, type NoteDetail } from "@/lib/helios/core";
+import { coreSectionForTools, createCoreClient, type NoteDetail } from "@/lib/helios/core";
 
 const localTransport = createHexosTransport("/api/helios");
 
 /** The host can supply the existing HexOS transport without coupling windows to the model. */
+const coreClient = createCoreClient("/api/helios");
+
 export function HeliosExperience({ transport = localTransport }: { transport?: HeliosTransport }) {
   const [brightness, setBrightness] = useState(1.8);
   const [settings, setSettings] = useState(false);
@@ -117,14 +120,18 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   }, []);
   const [front, setFront] = useState("");
   const abrirNota = useCallback((note: NoteDetail) => {
+    // Buscar abre el menú y señala; leer lo cierra. Tener los dos a la vez
+    // obligaba a la nota a pelear por el centro y tapaba el orbe entero.
+    setCoreOpen(false);
     setWindows(items => {
       // La misma nota no se abre dos veces: se trae al frente la que ya está.
       if (items.some(item => item.id === note.id)) return items;
-      // A la derecha: la columna de la izquierda es de la conversación, y abrir una
-      // nota encima de lo que Helios está diciendo tapa justo lo que hay que leer.
+      // A la derecha y a media altura: el visor se cierra al abrir una nota, así
+      // que ese lado queda libre y la nota se lee sin taparle la cara al orbe ni
+      // la columna de la conversación. Varias abiertas se escalonan hacia dentro.
       const abiertas = items.length;
-      return [...items, { id: note.id, note, slot: abiertas % 2 ? 3 : 1,
-                          x: 0, y: Math.floor(abiertas / 2) * 26, minimized: false }];
+      return [...items, { id: note.id, note, slot: 0,
+                          x: abiertas * -26, y: abiertas * 26, minimized: false }];
     });
     setFront(note.id);
   }, []);
@@ -136,7 +143,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   // tocó. Se dispara con las herramientas que se ejecutaron de verdad: mirar las
   // palabras del mensaje abriría el panel mientras Helios habla de otra cosa.
   const [coreOpen, setCoreOpen] = useState(false);
-  const [coreSection, setCoreSection] = useState("");
+  const [coreTotal, setCoreTotal] = useState<number | null>(null);
   const [coreReload, setCoreReload] = useState(0);
   const nextId = useRef(0);
   const request = useRef<AbortController | null>(null);
@@ -321,10 +328,28 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       if (!controller.signal.aborted) {
         setConnection("ready");
         setTurnTools(items => mergeToolActivities(items, result.tools));
+        // «Muéstrame la nota» tiene que abrir la nota, no describirla y dejarte
+        // el menú abierto. El id viaja en la traza; solo hacía falta leerlo.
+        // Una sola: si el turno leyó varias es que estaba documentándose, y
+        // llenar la mesa de ventanas no es mostrar nada.
+        // «Cierra las notas»: Helios puede recoger la mesa igual que la pone.
+        if (result.closeNotes === "todas") setWindows([]);
+        else if (result.closeNotes) {
+          const cerrar = result.closeNotes;
+          setWindows(items => items.filter(item => !cerrar.includes(item.id)));
+        }
+        if (result.notes.length === 1) {
+          coreClient.note(result.notes[0])
+            .then(abrirNota)
+            // Silencioso a propósito: la respuesta del chat ya trae el contenido,
+            // así que un fallo aquí pierde la comodidad, no la información.
+            .catch(() => {});
+        }
         const tocado = coreSectionForTools(result.tools);
         if (tocado !== null) {
-          setCoreSection(tocado);
-          setCoreOpen(true);
+          // El visor enseña notas. Abrirlo porque Helios tocó un informe o una
+          // ficha mostraría algo distinto de lo que acaba de ocurrir.
+          if (tocado === "notas" || tocado === "") setCoreOpen(true);
           // Lo guardado acaba de cambiar: el recuento se vuelve a leer.
           setCoreReload(n => n + 1);
         }
@@ -381,7 +406,9 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     <header className="topbar">
       <button ref={settingsRef} className={`icon-button ${settings ? "selected" : ""}`} aria-label="Ajustar luminosidad" aria-expanded={settings} onClick={() => setSettings(true)}><SlidersHorizontal size={19} /></button>
     </header>
-    <SystemMonitor autoEnabled={thinking} autoBusy={thinkingBusy} onToggleAuto={() => void toggleThinking()} />
+    <SystemMonitor autoEnabled={thinking} autoBusy={thinkingBusy} onToggleAuto={() => void toggleThinking()}
+      coreTotal={coreTotal} coreOpen={coreOpen} onToggleCore={() => setCoreOpen(open => !open)} />
+    <CoreViewer open={coreOpen} reload={coreReload} onClose={() => setCoreOpen(false)} onOpenNote={abrirNota} />
     <ConversationStream turn={turns[turns.length - 1] ?? null} onReplyComplete={() => setRevealing(false)} />
     <section className="presence" aria-label="Presencia de Helios">
       <div ref={orbStage} className="orb-stage">
@@ -400,9 +427,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         onClose={id => { setWindows(items => items.filter(w => w.id !== id)); inputRef.current?.focus(); }} />)}
     </section>
     <section className="conversation" aria-label="Chat con Helios">
-    <CoreShelf open={coreOpen} section={coreSection} reload={coreReload} onOpenNote={abrirNota}
-      onOpen={seccion => { setCoreSection(seccion); setCoreOpen(true); }}
-      onClose={() => setCoreOpen(false)} />
+    <CoreShelf reload={coreReload} onOpenNote={abrirNota} onTotal={setCoreTotal} />
       {!!attachments.length && <ChatAttachments files={attachments} onRemove={removeAttachment} />}
       {attachmentError && <p className="attachment-error" role="alert">{attachmentError}</p>}
       <form className="composer" onSubmit={send} onDragOver={event => { if (event.dataTransfer.types.includes("Files")) event.preventDefault(); }} onDrop={event => { event.preventDefault(); if (!sending) void addAttachments(Array.from(event.dataTransfer.files)); }}>

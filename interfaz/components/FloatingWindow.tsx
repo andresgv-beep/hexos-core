@@ -50,6 +50,9 @@ export function FloatingWindow({ placement, label, title, front, orbTarget, onAb
     const savedStyle = element.style.cssText;
     element.style.position = "fixed";
     element.style.setProperty("transform", "none", "important");
+    // El vuelo fija left/top ya medidos, así que cualquier desplazamiento previo
+    // sobra. Sin esto el centrado desviaba la ventana media anchura al arrancar.
+    element.style.setProperty("translate", "none", "important");
     element.style.margin = "0";
     element.style.right = "auto";
     element.style.bottom = "auto";

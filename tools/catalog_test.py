@@ -27,5 +27,32 @@ class DeclarablesTest(unittest.TestCase):
         self.assertIn('bool', str(e.exception))
 
 
+class VerbosDeclaradosTest(unittest.TestCase):
+    """Una herramienta que cambia algo y no declara con qué palabras se canta se
+    queda fuera de las redes en silencio. Pasó con note.show y note.hide."""
+
+    def test_toda_escritura_declara_sus_formas(self):
+        sin = [n for n, s in catalog.TOOLS.items()
+               if s['effect'].startswith('write') and not s['announces']]
+        self.assertEqual(sin, [], 'declara announces=(infinitivo, participio, presente) en spec')
+
+    def test_note_show_y_note_hide_cuentan_como_acción(self):
+        # Son 'read' para el almacén, pero cambian lo que la persona ve: si no
+        # estuvieran aquí, «te muestro la nota» no lo comprobaría nadie.
+        for herramienta in ('note.show', 'note.hide'):
+            with self.subTest(herramienta):
+                self.assertTrue(catalog.TOOLS[herramienta]['announces'])
+
+    def test_las_formas_vienen_en_los_tres_tiempos(self):
+        for nombre, spec in catalog.TOOLS.items():
+            for forma in spec['announces']:
+                with self.subTest(nombre):
+                    self.assertEqual(len(forma), 3)
+
+    def test_una_forma_mal_declarada_se_rechaza_al_definirla(self):
+        with self.assertRaises(ValueError):
+            catalog.spec('x', effect='write', announces=(('abrir', 'abiert'),))
+
+
 if __name__ == '__main__':
     unittest.main()

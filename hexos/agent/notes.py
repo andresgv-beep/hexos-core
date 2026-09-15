@@ -158,6 +158,18 @@ def dispatch(store, name, args, turn_id):
     if name == 'note.save':
         return save(store, turn_id, id=args.get('id'), title=args.get('title'),
                     body=args.get('body'), tags=args.get('tags'), revision=args.get('revision'))
+    if name == 'note.show':
+        # Devuelve la nota entera a propósito: el id viaja en la traza y la
+        # interfaz la abre, y de paso el modelo ve lo que acaba de enseñar.
+        return dict(get(store, args['id']), shown=True,
+                    note='Ya está abierta en su pantalla; no hace falta repetir el contenido.')
+    if name == 'note.hide':
+        # No toca el almacén: su único efecto es la pantalla. Sin id, todas.
+        note_id = args.get('id')
+        if note_id:
+            get(store, note_id)
+        return dict(hidden=note_id or 'todas',
+                    note='Cerrada en su pantalla.' if note_id else 'Cerradas todas en su pantalla.')
     if name == 'note.mark':
         return mark(store, args['id'], state=args.get('state'), favorite=args.get('favorite'))
     raise ValueError('operación de notas no soportada')

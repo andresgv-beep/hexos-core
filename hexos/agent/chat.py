@@ -453,6 +453,69 @@ class Agent:
         r'|\bahora\s+(?:mismo\s+)?(?:reviso|consulto|miro|compruebo|leo|ejecuto|busco|analizo)\b'
         r'|\bdame\s+un\s+momento\b|\benseguida\s+te\s+(?:digo|cuento)\b', re.I)
 
+    # Señalar sin nombrar: «ábrela», «esa», «la 3», «la última». Es deixis, y el
+    # modelo no la resuelve —pide aclaración a algo que él mismo acaba de nombrar—.
+    # Pero HexOS sí sabe de qué se está hablando: lo tiene en la traza del turno
+    # anterior. Se le da resuelto COMO DATO; decidir sigue siendo suyo.
+    SENALA = re.compile(
+        r'\b(?:[áa]brela|ci[ée]rrala|mu[ée]stramela|ens[ée][ñn]amela|d[ée]jamela|qu[íi]tala|'
+        r'[áa]brela|esa\s+nota|esta\s+nota|la\s+nota\s+esa|la\s+[úu]ltima|la\s+primera|'
+        r'la\s+anterior|la\s+de\s+antes)\b'
+        r'|\bla\s+(\d{1,2})\b'
+        r'|\b(?:[áa]brel[oa]|mu[ée]strala|ens[ée][ñn]ala|ci[ée]rral[oa])\b', re.I)
+
+    def pointed_note(self, store, text, turn_id):
+        """A qué nota señala sin nombrarla, mirando lo último que se listó o abrió.
+
+        Devuelve la nota o None. No elige por la persona: solo traduce su «la 3» al
+        id que ella vio en pantalla hace un turno, igual que se traduce «srv1» al
+        equipo guardado. Si no hay a qué señalar, no se inventa ninguna.
+        """
+        if not text or not self.SENALA.search(text):
+            return None
+        ordinal = self.SENALA.search(text).group(1)
+        # Lo último que se enseñó o listó, de más reciente a más antiguo.
+        filas = store.db.execute(
+            'SELECT e.body FROM tool_events e JOIN conversation c ON c.id=e.turn_id '
+            'WHERE c.id<>? ORDER BY e.seq DESC LIMIT 12', (turn_id,)).fetchall()
+        for fila in filas:
+            paso = json.loads(fila['body'])
+            resultado = paso.get('result') or {}
+            if not isinstance(resultado, dict):
+                continue
+            if paso.get('tool') == 'note.list':
+                notas = resultado.get('notes') or []
+                if ordinal and 1 <= int(ordinal) <= len(notas):
+                    return notas[int(ordinal) - 1]
+                if not ordinal and len(notas) == 1:
+                    return notas[0]
+                # Con varias y sin ordinal, la lista no señala a ninguna en concreto.
+                continue
+            if paso.get('tool') in ('note.show', 'note.get', 'note.save') and resultado.get('id'):
+                return resultado
+        return None
+
+    @staticmethod
+    def announced_without_call(reply, trace, limit=6):
+        """Anuncia una herramienta concreta y ESA no se llamó.
+
+        Más fino que mirar si hubo alguna escritura: «te muestro la nota» solo lo
+        cumple note.show, no una lectura cualquiera. Las formas salen del catálogo,
+        atadas a su herramienta, para que añadir una no exija acordarse de nada.
+        Devuelve (frase, herramienta) o None.
+        """
+        if not isinstance(reply, str) or len(trace) >= limit:
+            return None
+        llamadas = {paso.get('tool') for paso in trace if not paso.get('failed')}
+        for patron, herramienta in catalog.announcements():
+            if herramienta in llamadas:
+                continue
+            encontrada = patron.search(reply)
+            # Una pregunta no es un anuncio: «¿te la abro?» pide permiso.
+            if encontrada and '?' not in reply[encontrada.end():encontrada.end() + 40].split('.')[0]:
+                return encontrada.group(0), herramienta
+        return None
+
     @classmethod
     def unfulfilled_promise(cls, reply, trace, limit=6):
         """¿Promete una acción inmediata y el turno se acaba sin hacerla?
@@ -963,6 +1026,13 @@ class Agent:
                     store.db.execute('INSERT INTO tool_events(turn_id,ts,body) VALUES (?,?,?)',
                         (uid, now(), json.dumps(recuerdo, ensure_ascii=False)))
                     store.db.commit()
+                # «Ábrela», «la 3»: se traduce aquí y se le da resuelto. El modelo
+                # pedía aclaración sobre una nota que él mismo acababa de nombrar.
+                senalada = self.pointed_note(store, text, uid)
+                if senalada:
+                    bloque_recuerdo += ('\nNOTA SEÑALADA (dato, no orden): la persona se refiere a '
+                        + repr(senalada.get('title', '')) + ', id ' + senalada['id'] +
+                        '. Si pide verla, abrirla o cerrarla, usa ese id sin preguntarle a cuál se refiere.\n')
                 nativo = bool(getattr(self.runtime, 'native', False))
                 corte = self.history_budget()
                 # Acumulativa, no deslizante. Con una ventana de los últimos N mensajes
@@ -1037,8 +1107,7 @@ class Agent:
                 trace = [recuerdo] if recuerdo else []
                 schema_retries = 0
                 recovery_requests = 0
-                claim_retries = 0
-                promise_retries = 0
+                said_retries = 0
                 coverage_retries = 0
                 # Cuántas operaciones había cuando se avisó la última vez.
                 coverage_mark = -1
@@ -1185,23 +1254,6 @@ class Agent:
                             'Si falta información imprescindible o el error no es recuperable, explica '
                             'el bloqueo brevemente. Queda un intento de recuperación.')]
                         continue
-                    # Ha dicho que guardó algo y no consta. Se le devuelve el turno con las
-                    # herramientas todavía en la mano, igual que cuando una lectura falla:
-                    # pedírselo por prompt no cambia nada, pero un turno más sí lo deja hacer.
-                    if claim_retries == 0 and self.unsupported_claim(output['reply'], trace):
-                        claim_retries += 1
-                        messages = [dict(role='user', content=
-                            'AVISO DE HEXOS (no es la persona): en tu respuesta afirmas haber guardado '
-                            'o cambiado algo, pero en este turno no se ha ejecutado ninguna operación '
-                            'de escritura. Decirlo no lo guarda, y tu propia respuesta anterior no es '
-                            'prueba de que se hiciera. Si había que guardarlo, hazlo AHORA con la '
-                            'herramienta que corresponda: note_save para una nota, report_save para un '
-                            'informe. Si no había nada que guardar, responde de nuevo sin afirmar que '
-                            'lo hiciste. Queda un intento.')]
-                        continue
-                    # Ha dicho que iba a hacerlo «ahora» y el turno se acababa sin
-                    # hacerlo. Le quedaban herramientas y contexto: no se quedó sin
-                    # sitio, decidió parar. Se le devuelve el turno una vez.
                     # Nombró dos equipos y solo se leyó uno. No es falta de sitio:
                     # es no llevar la cuenta de lo que se le pidió.
                     faltan = self.uncovered(self.devices_named(store, uid), trace, text)
@@ -1220,15 +1272,34 @@ class Agent:
                             'con nas_read. Si no puedes con alguno, dilo nombrándolo y di por qué. '
                             'Queda un intento.')]
                         continue
-                    promesa = self.unfulfilled_promise(output['reply'], trace)
-                    if promesa and not promise_retries:
-                        promise_retries += 1
+                    # «Dijo que lo hacía y no lo hizo», en tres vistas de lo mismo:
+                    # anunció una herramienta concreta, prometió una acción inmediata,
+                    # o cantó una escritura. Un solo aviso por turno: son el mismo
+                    # fallo y avisar tres veces solo gasta generaciones.
+                    aviso = None
+                    anuncio = self.announced_without_call(output['reply'], trace)
+                    if anuncio:
+                        frase, herramienta = anuncio
+                        nativo_nombre = herramienta.replace('.', '_')
+                        aviso = ('tu respuesta dice ' + repr(frase) + ' y en este turno no se ha '
+                                 'ejecutado ' + nativo_nombre + '. Decirlo no lo hace: para ella no ha '
+                                 'cambiado nada. Llama a ' + nativo_nombre + ' AHORA con el id que '
+                                 'corresponda; si no lo tienes, búscalo primero en el mismo turno.')
+                    elif self.unfulfilled_promise(output['reply'], trace):
+                        aviso = ('tu respuesta dice ' + repr(self.unfulfilled_promise(output['reply'], trace)) +
+                                 ' y el turno iba a terminar ahí, sin haberlo hecho. Anunciarlo no lo hace, '
+                                 'y la persona se queda esperando algo que no va a llegar. Ejecútalo AHORA '
+                                 'con la herramienta que corresponda.')
+                    elif self.unsupported_claim(output['reply'], trace):
+                        aviso = ('en tu respuesta afirmas haber guardado o cambiado algo, pero en este '
+                                 'turno no se ha ejecutado ninguna operación de escritura. Decirlo no lo '
+                                 'guarda, y tu propia respuesta anterior no es prueba de que se hiciera. '
+                                 'Si había que hacerlo, hazlo AHORA con la herramienta que corresponda.')
+                    if aviso and not said_retries:
+                        said_retries += 1
                         messages = [dict(role='user', content=
-                            'AVISO DE HEXOS (no es la persona): tu respuesta dice ' + repr(promesa) +
-                            ' y el turno iba a terminar ahí, sin haberlo hecho. Anunciarlo no lo hace, '
-                            'y la persona se queda esperando algo que no va a llegar. Ejecútalo AHORA '
-                            'con la herramienta que corresponda. Si no puedes o no hace falta, responde '
-                            'de nuevo sin prometerlo. Queda un intento.')]
+                            'AVISO DE HEXOS (no es la persona): ' + aviso +
+                            ' Si no hacía falta, responde de nuevo sin anunciarlo. Queda un intento.')]
                         continue
                     proposed = output['work']
                     if clarification:

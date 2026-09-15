@@ -276,5 +276,86 @@ class PromesaIncumplidaTest(unittest.TestCase):
                                      [dict(tool='nas.read')] * 6))
 
 
+class AnuncioSinLlamadaTest(unittest.TestCase):
+    """Dijo que abría la nota y no la abrió: la pantalla no cambió."""
+
+    def mirar(self, reply, trace=None):
+        from hexos.agent.chat import Agent
+        return Agent.announced_without_call(reply, trace or [])
+
+    def test_sus_cuatro_frases_reales(self):
+        # Turnos del 15/09/2026, todos con CERO herramientas en la traza.
+        for texto, esperada in (
+                ('Te voy a abrir la nota "Actualización de Estado de srv1".', 'note.show'),
+                ('Te muestro la nota "Problema de disco Synology".', 'note.show'),
+                ('Te la enseño ahora mismo.', 'note.show'),
+                ('He cerrado la nota.', 'note.hide')):
+            with self.subTest(texto):
+                resultado = self.mirar(texto)
+                self.assertIsNotNone(resultado, texto)
+                self.assertEqual(resultado[1], esperada)
+
+    def test_si_la_llamó_no_se_le_reprocha(self):
+        self.assertIsNone(self.mirar('Te muestro la nota.', [dict(tool='note.show')]))
+
+    def test_pedir_permiso_no_es_anunciar(self):
+        for texto in ('¿Te la abro?', '¿Quieres que te muestre la nota?'):
+            with self.subTest(texto):
+                self.assertIsNone(self.mirar(texto))
+
+    def test_una_llamada_fallida_no_cuenta_como_hecha(self):
+        self.assertIsNotNone(self.mirar('Te muestro la nota.',
+                                        [dict(tool='note.show', failed=True)]))
+
+    def test_exige_LA_herramienta_anunciada_no_una_cualquiera(self):
+        # Guardar una nota no cumple «te la abro».
+        self.assertEqual(self.mirar('Te la abro.', [dict(tool='note.save')])[1], 'note.show')
+
+
+class NotaSenaladaTest(unittest.TestCase):
+    """«Ábrela» señala a algo que está en la traza; traducirlo no es elegir."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix='hexos-senala-')
+        self.addCleanup(self.tmp.cleanup)
+        from hexos.agent.chat import Agent
+        self.agent = Agent(self.tmp.name, None)
+
+    def con_traza(self, pasos, texto):
+        import json as _json
+        with self.agent.store() as s:
+            s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('previo','t','user','x','x'))
+            for paso in pasos:
+                s.db.execute('INSERT INTO tool_events(turn_id,ts,body) VALUES (?,?,?)',
+                             ('previo', 't', _json.dumps(paso)))
+            s.db.commit()
+            return self.agent.pointed_note(s, texto, 'ahora')
+
+    LISTA = dict(tool='note.list', result=dict(notes=[
+        dict(id='aaa', title='Actualización de srv1'),
+        dict(id='bbb', title='Informe completo'),
+        dict(id='ccc', title='Problema de disco Synology')]))
+
+    def test_la_3_es_la_tercera_que_vio(self):
+        self.assertEqual(self.con_traza([self.LISTA], 'mustrame la 3')['id'], 'ccc')
+
+    def test_abrela_señala_a_la_que_se_acaba_de_abrir(self):
+        pasos = [dict(tool='note.show', result=dict(id='bbb', title='Informe completo'))]
+        self.assertEqual(self.con_traza(pasos, 'abrela')['id'], 'bbb')
+
+    def test_con_varias_listadas_y_sin_ordinal_no_se_elige_ninguna(self):
+        # Señalar «esa» sobre una lista de tres no señala a ninguna: se pregunta.
+        self.assertIsNone(self.con_traza([self.LISTA], 'abre esa nota'))
+
+    def test_un_ordinal_fuera_de_la_lista_no_inventa(self):
+        self.assertIsNone(self.con_traza([self.LISTA], 'mustrame la 9'))
+
+    def test_sin_pronombre_no_se_toca_nada(self):
+        self.assertIsNone(self.con_traza([self.LISTA], 'muestrame la nota del disco'))
+
+    def test_sin_traza_previa_no_hay_a_qué_señalar(self):
+        self.assertIsNone(self.con_traza([], 'abrela'))
+
+
 if __name__ == '__main__':
     unittest.main()

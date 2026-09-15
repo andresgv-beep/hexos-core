@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Activity, Brain, Cpu, MemoryStick, Microchip } from "lucide-react";
+import { Activity, Boxes, Brain, Cpu, MemoryStick, Microchip } from "lucide-react";
 import { parseTelemetry, type SystemTelemetry } from "@/lib/helios/telemetry";
 
 function percent(used: number, total: number) {
@@ -22,10 +22,15 @@ function Metric({ icon, label, value, detail, amount }: {
   </div>;
 }
 
-export function SystemMonitor({ autoEnabled, autoBusy = false, onToggleAuto }: {
+export function SystemMonitor({ autoEnabled, autoBusy = false, onToggleAuto, coreTotal, coreOpen = false, onToggleCore }: {
   autoEnabled: boolean | null;
   autoBusy?: boolean;
   onToggleAuto: () => void;
+  /** Cuántas notas guarda el núcleo. `null` cuando aún no se sabe: no es cero. */
+  coreTotal?: number | null;
+  coreOpen?: boolean;
+  /** Sin esto la entrada no se pinta, así que el panel sigue sirviendo a solas. */
+  onToggleCore?: () => void;
 }) {
   const [telemetry, setTelemetry] = useState<SystemTelemetry | null>(null);
   const [online, setOnline] = useState(true);
@@ -74,6 +79,15 @@ export function SystemMonitor({ autoEnabled, autoBusy = false, onToggleAuto }: {
       </>}
       {!online && <p className="monitor-offline">Datos temporalmente no disponibles</p>}
     </div>
+    {onToggleCore && <div className="monitor-core">
+      <button className={`auto-thinking${coreOpen ? " active" : ""}`} type="button" aria-pressed={coreOpen}
+        onClick={onToggleCore} aria-expanded={coreOpen}
+        aria-label={coreOpen ? "Cerrar el núcleo" : "Abrir el núcleo"}>
+        <Boxes size={29} strokeWidth={1.45} aria-hidden="true" />
+        <span><strong>NÚCLEO</strong><small>{coreTotal === null || coreTotal === undefined ? "—" : `${coreTotal} notas`}</small></span>
+        <i aria-hidden="true" />
+      </button>
+    </div>}
     {autoEnabled !== null && <div className="monitor-auto">
       <button className={`auto-thinking${autoEnabled ? " active" : ""}`} type="button" aria-pressed={autoEnabled}
         disabled={autoBusy} onClick={onToggleAuto}

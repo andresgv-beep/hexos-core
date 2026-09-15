@@ -179,3 +179,55 @@ test('keeps a six-tool constellation and updates repeated tools in place', () =>
     ['ssh', 'nas.read', 'done'], ['net', 'network.local', 'running'], ['doc', 'document.read', 'done'],
   ]);
 });
+
+// Pedir «muéstrame la nota» abría el menú y describía la nota en el chat, pero no
+// la abría: el id viajaba en la traza de herramientas y se descartaba al parsear.
+test('surfaces which notes the turn read or wrote, ignoring the ones that failed', async () => {
+  const fetcher = (async () => Response.json({
+    reply: 'Aquí la tienes',
+    tools: [
+      { tool: 'note.list', result: { notes: [{ id: 'no-es-esta' }] } },
+      { tool: 'note.get', result: { id: 'abc123', title: 'Disco sda' } },
+      { tool: 'note.get', result: { id: 'abc123' } },
+      { tool: 'note.get', result: { id: 'rota' }, failed: true },
+      { tool: 'note.save', result: { id: 'nueva' } },
+      { tool: 'note.get', result: 'sin forma de nota' },
+    ],
+  })) as typeof fetch;
+  const reply = await createHexosTransport('/bridge/api/', fetcher).send('muéstrame la nota');
+  // Solo note.get y note.save, sin repetir, sin las fallidas y sin note.list.
+  assert.deepEqual(reply.notes, ['abc123', 'nueva']);
+});
+
+test('a turn that touched no note reports none instead of guessing', async () => {
+  const fetcher = (async () => Response.json({ reply: 'Hecho', tools: [{ tool: 'nas.read' }] })) as typeof fetch;
+  const reply = await createHexosTransport('/bridge/api/', fetcher).send('mira el NAS');
+  assert.deepEqual(reply.notes, []);
+});
+
+// note.show existe porque el catálogo no tenía ninguna herramienta cuyo efecto
+// fuese la pantalla: al pedir «ábrela», Helios solo sabía volcar el texto al chat.
+test('note.show opens the note and note.hide closes what it names', async () => {
+  const fetcher = (async () => Response.json({
+    reply: 'Abierta',
+    tools: [{ tool: 'note.show', result: { id: 'abc', title: 'Disco sda', shown: true } }],
+  })) as typeof fetch;
+  const reply = await createHexosTransport('/bridge/api/', fetcher).send('ábrela');
+  assert.deepEqual(reply.notes, ['abc']);
+  assert.equal(reply.closeNotes, null);
+});
+
+test('closing every note is said once, not by listing them all', async () => {
+  const todas = (async () => Response.json({
+    reply: 'Recogido', tools: [{ tool: 'note.hide', result: { hidden: 'todas' } }],
+  })) as typeof fetch;
+  assert.equal((await createHexosTransport('/bridge/api/', todas).send('cierra las notas')).closeNotes, 'todas');
+
+  const una = (async () => Response.json({
+    reply: 'Cerrada',
+    tools: [{ tool: 'note.hide', result: { hidden: 'abc' } },
+            { tool: 'note.hide', result: { hidden: 'rota' }, failed: true }],
+  })) as typeof fetch;
+  // La fallida no cuenta: cerrar una ventana que sigue ahí confunde más que el error.
+  assert.deepEqual((await createHexosTransport('/bridge/api/', una).send('cierra esa')).closeNotes, ['abc']);
+});
