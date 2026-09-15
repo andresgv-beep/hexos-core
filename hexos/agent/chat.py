@@ -1040,6 +1040,8 @@ class Agent:
                 claim_retries = 0
                 promise_retries = 0
                 coverage_retries = 0
+                # Cuántas operaciones había cuando se avisó la última vez.
+                coverage_mark = -1
                 context_retries = 0
                 format_retries = 0
                 # Seis herramientas, más finalización y recuperaciones acotadas.
@@ -1203,8 +1205,13 @@ class Agent:
                     # Nombró dos equipos y solo se leyó uno. No es falta de sitio:
                     # es no llevar la cuenta de lo que se le pidió.
                     faltan = self.uncovered(self.devices_named(store, uid), trace, text)
-                    if faltan and not coverage_retries:
+                    # Se insiste MIENTRAS AVANCE. Con un solo aviso pasó de cero
+                    # lecturas a dos y se quedó ahí: la cuenta seguía incompleta y ya
+                    # no había con qué recordárselo. Si un aviso no trae una lectura
+                    # nueva, no se repite: eso ya sería porfiar sin razón nueva.
+                    if faltan and coverage_retries < 3 and len(trace) > coverage_mark:
                         coverage_retries += 1
+                        coverage_mark = len(trace)
                         pendiente = ', '.join(n + (' (' + s + ')' if s else ' (no se ha leído nada)')
                                               for n, s in faltan)
                         messages = [dict(role='user', content=

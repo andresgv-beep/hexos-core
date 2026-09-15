@@ -201,3 +201,50 @@ class PromesaEnElBucleTest(unittest.TestCase):
     def test_una_respuesta_que_no_promete_nada_no_gasta_turnos(self):
         runtime, _ = self.correr([{'reply': 'Hay tres contenedores en marcha.', 'work': None}])
         self.assertEqual(len(runtime.recibido), 1)
+
+
+class CoberturaEnElBucleTest(unittest.TestCase):
+    """Se insiste mientras avance, y se para cuando deja de avanzar."""
+
+    class Guionizado:
+        def __init__(self, salidas):
+            self.salidas = list(salidas); self.recibido = []
+        def call(self, request): pass
+        def generate(self, messages):
+            self.recibido.append(messages)
+            return self.salidas.pop(0) if self.salidas else {'reply': 'Ya está.', 'work': None}
+
+    def correr(self, salidas, texto):
+        from hexos.agent import hosts
+        tmp = tempfile.TemporaryDirectory(prefix='hexos-cob-bucle-')
+        self.addCleanup(tmp.cleanup)
+        hosts.save(tmp.name, 'uno', 'helios', 'x')
+        hosts.save(tmp.name, 'dos', 'helios', 'x')
+        runtime = self.Guionizado(salidas)
+        agent = Agent(tmp.name, runtime)
+        lee = lambda **args: {'tool': 'nas.read', 'arguments': args}
+        return runtime, agent.chat(texto), lee
+
+    def test_insiste_hasta_cubrir_lo_pedido(self):
+        from unittest.mock import patch
+        salidas = [
+            {'reply': 'Aquí tienes el resumen de los dos.', 'work': None},
+            {'tool': 'nas.read', 'arguments': dict(device='uno', section='containers')},
+            {'reply': 'Listo con uno.', 'work': None},
+            {'tool': 'nas.read', 'arguments': dict(device='dos', section='containers')},
+            {'reply': 'Ahora sí, los dos revisados.', 'work': None},
+        ]
+        with patch('hexos.agent.chat.nas_read', return_value=dict(output='', exit_code=0)):
+            runtime, result, _ = self.correr(salidas, 'revisa uno y dos y sus contenedores')
+        self.assertEqual(len({(t['arguments']['device']) for t in result['tools']}), 2)
+        self.assertEqual(result['reply'], 'Ahora sí, los dos revisados.')
+
+    def test_si_un_aviso_no_trae_lectura_nueva_no_se_repite(self):
+        salidas = [
+            {'reply': 'Resumen de los dos.', 'work': None},
+            {'reply': 'Te lo repito igual.', 'work': None},
+        ]
+        runtime, result, _ = self.correr(salidas, 'revisa uno y dos y sus contenedores')
+        # Un aviso, y al no avanzar se cierra en vez de porfiar.
+        self.assertEqual(result['reply'], 'Te lo repito igual.')
+        self.assertEqual(len(runtime.recibido), 2)
