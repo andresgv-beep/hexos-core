@@ -561,3 +561,46 @@ class DevicesTest(unittest.TestCase):
                 dispatch(s,'device.identify',dict(target='192.168.1.10',name='Raspberry',source_id='v',evidence='192.168.1.10 es Raspberry'))
                 args['name']='NAS'
                 with self.assertRaises(ValueError): dispatch(s,'device.identify',args)
+
+
+class CoberturaTest(unittest.TestCase):
+    """Pidió dos equipos y se leyó uno: eso se sabe sin preguntarle al modelo."""
+
+    def montar(self):
+        from hexos.agent.hosts import save
+        tmp = tempfile.TemporaryDirectory(prefix='hexos-cobertura-')
+        self.addCleanup(tmp.cleanup)
+        save(tmp.name, 'servidorsrv1', 'helios', 'x', port=30, host='uno.ddns.net')
+        save(tmp.name, 'synology 2', 'helios', 'x', port=22, host='dos.ddns.net')
+        agent = Agent(tmp.name, None)
+        return agent
+
+    def nombrados(self, agent, texto):
+        with agent.store() as s:
+            s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u','t','user',texto,texto))
+            s.db.commit()
+            return agent.devices_named(s, 'u')
+
+    def test_reconoce_los_dos_nombrados(self):
+        agent = self.montar()
+        self.assertEqual(sorted(self.nombrados(agent, 'revisa synology 2 y servidorsrv1 y sus contenedores')),
+                         ['servidorsrv1', 'synology 2'])
+
+    def test_lo_que_falta_por_leer(self):
+        from hexos.agent.chat import Agent as A
+        trace = [dict(tool='nas.read', arguments=dict(device='synology 2', section='diagnosis'))]
+        self.assertEqual(A.uncovered_devices(['synology 2', 'servidorsrv1'], trace), ['servidorsrv1'])
+
+    def test_con_los_dos_leidos_no_se_insiste(self):
+        from hexos.agent.chat import Agent as A
+        trace = [dict(tool='nas.read', arguments=dict(device='synology 2')),
+                 dict(tool='nas.read', arguments=dict(device='servidorsrv1'))]
+        self.assertEqual(A.uncovered_devices(['synology 2', 'servidorsrv1'], trace), [])
+
+    def test_con_un_solo_equipo_nombrado_no_hay_cobertura_que_mirar(self):
+        from hexos.agent.chat import Agent as A
+        self.assertEqual(A.uncovered_devices(['synology 2'], []), [])
+
+    def test_sin_margen_de_herramientas_no_hay_turno_que_devolver(self):
+        from hexos.agent.chat import Agent as A
+        self.assertEqual(A.uncovered_devices(['a', 'b'], [dict(tool='nas.read')] * 6), [])

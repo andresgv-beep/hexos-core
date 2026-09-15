@@ -361,6 +361,50 @@ class Agent:
                 desde = donde + 1
         return hallados[0] if len(hallados) == 1 else None
 
+    def devices_named(self, store, turn_id):
+        """Todos los equipos guardados que la persona nombró, no solo el único.
+
+        Misma cuenta posicional que device_in_message —el nombre más largo primero,
+        y sin solapar— pero devolviendo la lista entera: para saber si un turno
+        cubrió lo que se le pidió hay que saber cuántos se pidieron.
+        """
+        if not turn_id:
+            return []
+        fila = store.db.execute("SELECT text FROM conversation WHERE id=? AND role='user'",
+                                (turn_id,)).fetchone()
+        if not fila:
+            return []
+        texto = fila['text'].casefold()
+        hallados, ocupado = [], []
+        for nombre in sorted(hosts.load(self.workspace), key=len, reverse=True):
+            desde = 0
+            while True:
+                donde = texto.find(nombre, desde)
+                if donde < 0:
+                    break
+                fin = donde + len(nombre)
+                if not any(donde < b and a < fin for a, b in ocupado):
+                    ocupado.append((donde, fin))
+                    hallados.append(nombre)
+                    break
+                desde = donde + 1
+        return hallados
+
+    @staticmethod
+    def uncovered_devices(pedidos, trace, limit=6):
+        """Equipos que la persona nombró y el turno no llegó a leer.
+
+        Pidió dos y leyó uno: no se quedó sin sitio ni sin herramientas, es que no
+        lleva la cuenta de lo que se le pidió. Con un solo equipo nombrado no hay
+        cobertura que comprobar, y sin margen de herramientas no hay turno que
+        devolver.
+        """
+        if len(pedidos) < 2 or len(trace) >= limit:
+            return []
+        leidos = {(paso.get('arguments') or {}).get('device', '').casefold()
+                  for paso in trace if paso.get('tool', '').startswith('nas.')}
+        return [nombre for nombre in pedidos if nombre.casefold() not in leidos]
+
     # Lo que el modelo dice haber hecho, en primera persona y en pasado. No es
     # comprensión del texto: es la forma de la frase con la que este modelo canta
     # una escritura. Si no hubo escritura en el turno, eso hay que decirlo.
@@ -976,6 +1020,7 @@ class Agent:
                 recovery_requests = 0
                 claim_retries = 0
                 promise_retries = 0
+                coverage_retries = 0
                 context_retries = 0
                 format_retries = 0
                 # Seis herramientas, más finalización y recuperaciones acotadas.
@@ -1136,6 +1181,19 @@ class Agent:
                     # Ha dicho que iba a hacerlo «ahora» y el turno se acababa sin
                     # hacerlo. Le quedaban herramientas y contexto: no se quedó sin
                     # sitio, decidió parar. Se le devuelve el turno una vez.
+                    # Nombró dos equipos y solo se leyó uno. No es falta de sitio:
+                    # es no llevar la cuenta de lo que se le pidió.
+                    faltan = self.uncovered_devices(self.devices_named(store, uid), trace)
+                    if faltan and not coverage_retries:
+                        coverage_retries += 1
+                        messages = [dict(role='user', content=
+                            'AVISO DE HEXOS (no es la persona): la petición nombra ' +
+                            ', '.join(repr(n) for n in self.devices_named(store, uid)) +
+                            ' y en este turno no se ha leído ' + ', '.join(repr(n) for n in faltan) +
+                            '. Un resumen que los dé por revisados sería falso. Lee ahora lo que falta '
+                            'con nas_read. Si no puedes con alguno, dilo nombrándolo y di por qué. '
+                            'Queda un intento.')]
+                        continue
                     promesa = self.unfulfilled_promise(output['reply'], trace)
                     if promesa and not promise_retries:
                         promise_retries += 1
