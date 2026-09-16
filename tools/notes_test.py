@@ -452,5 +452,46 @@ class HexosAbreLoSenaladoTest(unittest.TestCase):
         self.assertEqual([t['tool'] for t in r['tools']], [])
 
 
+class CerrarSinSenalarTest(unittest.TestCase):
+    """«Cierra la nota» no señala a ninguna, y no le hace falta."""
+
+    class Runtime:
+        def __init__(self, reply): self.reply = reply
+        def call(self, request): pass
+        def generate(self, messages): return {'reply': self.reply, 'work': None}
+
+    def correr(self, mensaje, reply='¿A qué nota te refieres?'):
+        from hexos.agent.chat import Agent
+        tmp = tempfile.TemporaryDirectory(prefix='hexos-cerrar-')
+        self.addCleanup(tmp.cleanup)
+        agent = Agent(tmp.name, self.Runtime(reply))
+        return agent.chat(mensaje)
+
+    def test_cierra_lo_abierto_sin_preguntar_cual(self):
+        for mensaje in ('cierra la nota', 'cierra las notas', 'cierra todo'):
+            with self.subTest(mensaje):
+                r = self.correr(mensaje)
+                paso = next(t for t in r['tools'] if t['tool'] == 'note.hide')
+                self.assertEqual(paso['result']['requested_by'], 'hexos')
+                self.assertEqual(paso['arguments'], {})
+                self.assertIn('he cerrado lo que estaba abierto', r['reply'])
+
+    def test_abrir_sin_decir_cual_no_abre_nada_al_azar(self):
+        # Cerrar de más es recoger; abrir de más es sacarle una ventana que no pidió.
+        self.assertEqual(self.correr('abre la nota')['tools'], [])
+
+    def test_si_el_modelo_ya_cerró_no_se_cierra_otra_vez(self):
+        from hexos.agent.chat import Agent
+        tmp = tempfile.TemporaryDirectory(prefix='hexos-cerrar2-')
+        self.addCleanup(tmp.cleanup)
+        class DosPasos:
+            def __init__(self): self.salidas = [{'tool': 'note.hide', 'arguments': {}},
+                                                {'reply': 'Cerradas.', 'work': None}]
+            def call(self, request): pass
+            def generate(self, m): return self.salidas.pop(0)
+        r = Agent(tmp.name, DosPasos()).chat('cierra las notas')
+        self.assertEqual(len([t for t in r['tools'] if t['tool'] == 'note.hide']), 1)
+
+
 if __name__ == '__main__':
     unittest.main()

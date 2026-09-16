@@ -143,6 +143,10 @@ PEDIR_VER = re.compile(
     r'\b(?:[áa]bre|abrir|mu[eé]?stra|mostrar|ens[eé]?[ñn]a|ense[ñn]ar|saca|sacar|ver|veo)\w*\b', re.I)
 # Aparte, porque el atajo tiene que llamar a la herramienta que toca: con las dos
 # juntas «ciérrala» abría la nota, que es peor que no hacer nada.
+# Habla de notas, aunque no señale a ninguna: «cierra la nota», «cierra todo».
+NOTA_MENCIONADA = re.compile(r'\b(?:notas?|todo|todas)\b', re.I)
+
+
 PEDIR_CERRAR = re.compile(
     r'\b(?:cierra|cerrar|ci[ée]rra|oculta|ocultar|quita|quitar|recoge|recoger)\w*\b', re.I)
 
@@ -1357,9 +1361,25 @@ class Agent:
                     # nada que insistirle: no afirmó nada. Así que la abre HexOS y lo
                     # dice, igual que busca en el archivo cuando la pregunta mira atrás.
                     cerrar = bool(PEDIR_CERRAR.search(text or ''))
+                    ya_actuado = any(paso.get('tool') in ('note.show', 'note.hide') for paso in trace)
+                    # «Cierra la nota» no señala a ninguna en concreto, y no hace
+                    # falta: cerrar sin id cierra las abiertas, que es lo que pide.
+                    # Abrir sí necesita saber cuál, así que ahí no hay atajo.
+                    if cerrar and not senalada and not ya_actuado and NOTA_MENCIONADA.search(text or ''):
+                        trace.append(dict(tool='note.hide', arguments={}, effect='read',
+                                          changes_state=False, ts=now(), seconds=0.0, failed=False,
+                                          verification='no_requerida',
+                                          result=dict(hidden='todas', requested_by='hexos',
+                                                      note='Las cerró HexOS: pidió cerrar y el turno '
+                                                           'iba a terminar preguntando cuál.')))
+                        store.db.execute('INSERT INTO tool_events(turn_id,ts,body) VALUES (?,?,?)',
+                                         (uid, now(), json.dumps(trace[-1], ensure_ascii=False)))
+                        store.db.commit()
+                        output['reply'] = (output['reply'].rstrip() +
+                                           '\n\n· No hacía falta preguntar: he cerrado lo que estaba abierto.')
+                        ya_actuado = True
                     if (senalada and (cerrar or PEDIR_VER.search(text or ''))
-                            and not any(paso.get('tool') in ('note.show', 'note.hide')
-                                        for paso in trace)):
+                            and not ya_actuado):
                         hecho = ('cerró' if cerrar else 'abrió')
                         resultado = (dict(hidden=senalada['id']) if cerrar else
                                      dict(notes.get(store, senalada['id']), shown=True))
