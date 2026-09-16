@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -7,8 +8,14 @@ from hexos.agent.devices import annotate
 
 
 def observation(mac='aa:bb:cc:dd:ee:ff', ip='192.168.1.10'):
-    """Doble de snapshot(): mismas claves, o annotate no vería lo que ve en real."""
-    return dict(observed_at='2026-09-12T12:00:00Z', truncated=False, note='passive',
+    """Doble de snapshot(): mismas claves, o annotate no vería lo que ve en real.
+
+    La fecha es de AHORA a propósito: una lectura de red, por definición, se acaba
+    de tomar. Con una fija de hace días los anónimos caducaban nada más escribirse
+    y las pruebas medían la caducidad en vez de lo suyo.
+    """
+    from datetime import datetime, timezone
+    return dict(observed_at=datetime.now(timezone.utc).isoformat(), truncated=False, note='passive',
                 unresolved_entries=0,
                 interfaces=[dict(name='lo', state='UNKNOWN',
                                  addresses=[dict(ip='127.0.0.1', prefixlen=8, family='inet')]),
@@ -679,3 +686,64 @@ class SinSolaparTest(unittest.TestCase):
         self.assertTrue(all(d.get('unidentified') for d in r['devices']))
         # Y el total sigue cuadrando con la suma de las dos.
         self.assertEqual(r['total'], len(con_nombre) + len(sin_nombre))
+
+
+class AnonimosCaducanTest(unittest.TestCase):
+    """Un vecino sin nombre es de esta lectura, no del inventario."""
+
+    def montar(self, edad_segundos, identidad=None, fija=None):
+        from datetime import datetime, timedelta, timezone
+        from hexos.agent import devices as D
+        tmp = tempfile.TemporaryDirectory(prefix='hexos-ttl-')
+        self.addCleanup(tmp.cleanup)
+        agent = Agent(tmp.name, None)
+        visto = (datetime.now(timezone.utc) - timedelta(seconds=edad_segundos)).isoformat()
+        fila = dict(id='wlp0/aa:bb', mac='aa:bb', interface='wlp0',
+                    addresses=[], latest_addresses=[dict(ip='192.168.1.9')],
+                    in_latest_snapshot=True, last_observed_at=visto,
+                    identity=identidad, pinned_host=fija)
+        with agent.store() as s:
+            s.db.execute('INSERT INTO network_devices VALUES (?,?)',
+                         ('wlp0/aa:bb', json.dumps(fila)))
+            s.db.commit()
+        return agent, D
+
+    def quedan(self, agent):
+        with agent.store() as s:
+            return s.db.execute('SELECT COUNT(*) FROM network_devices').fetchone()[0]
+
+    def test_un_anonimo_de_hace_dos_minutos_se_va(self):
+        agent, D = self.montar(120)
+        with agent.store() as s:
+            self.assertEqual(D.limpiar_anonimos(s), 1)
+        self.assertEqual(self.quedan(agent), 0)
+
+    def test_uno_recien_visto_se_queda(self):
+        agent, D = self.montar(5)
+        with agent.store() as s:
+            self.assertEqual(D.limpiar_anonimos(s), 0)
+        self.assertEqual(self.quedan(agent), 1)
+
+    def test_lo_que_la_persona_nombró_no_caduca_jamás(self):
+        agent, D = self.montar(99999, identidad=dict(name='impresora', kind=None, source='user_statement'))
+        with agent.store() as s:
+            D.limpiar_anonimos(s, ttl=0)
+        self.assertEqual(self.quedan(agent), 1)
+
+    def test_una_dirección_fija_tampoco_caduca(self):
+        # Sin nombre pero con dirección puesta a mano: también es suyo.
+        agent, D = self.montar(99999, fija='casa.ddns.net')
+        with agent.store() as s:
+            D.limpiar_anonimos(s, ttl=0)
+        self.assertEqual(self.quedan(agent), 1)
+
+    def test_al_arrancar_se_va_todo_lo_anonimo(self):
+        agent, D = self.montar(5)
+        Agent(agent.workspace, None)      # otra sesión sobre el mismo almacén
+        self.assertEqual(self.quedan(agent), 0)
+
+    def test_listar_limpia_antes_de_responder(self):
+        agent, _ = self.montar(120)
+        with agent.store() as s:
+            r = agent.tool(s, 'device.list', {})
+        self.assertEqual(r['total'], 0)

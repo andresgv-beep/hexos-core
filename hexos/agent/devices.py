@@ -7,8 +7,39 @@ from .network import snapshot
 from .work import now, string
 
 
+# Cuánto vive un vecino sin nombre. Son cacharros de paso —un móvil, la tele, un
+# invitado— y guardarlos convertía el inventario en un vertedero: 23 el día 12 y
+# 31 el 16, con dos IPs reclamadas por dos fichas porque el DHCP las reasignó.
+# Lo que la persona ha nombrado no caduca nunca; lo demás es de esta lectura.
+TTL_ANONIMO = 60
+
+
 def initialize(store):
     store.db.execute('CREATE TABLE IF NOT EXISTS network_devices (id TEXT PRIMARY KEY, body TEXT NOT NULL)')
+    # Al arrancar se limpian todos los anónimos: lo que hubiera es de otra sesión.
+    limpiar_anonimos(store, ttl=0)
+
+
+def limpiar_anonimos(store, ttl=TTL_ANONIMO):
+    """Quita del inventario los vecinos sin nombre que ya no son de ahora.
+
+    Devuelve cuántos se fueron. Nunca toca un equipo identificado, ni uno con
+    dirección fija o acceso guardado: eso lo puso la persona y es suyo.
+    """
+    from datetime import datetime, timedelta, timezone
+    limite = (datetime.now(timezone.utc) - timedelta(seconds=ttl)).isoformat()
+    fuera = []
+    for fila in store.db.execute('SELECT id, body FROM network_devices'):
+        d = json.loads(fila['body'])
+        if (d.get('identity') or {}).get('name') or d.get('pinned_host'):
+            continue
+        visto = d.get('last_observed_at') or ''
+        if visto < limite:
+            fuera.append(fila['id'])
+    if fuera:
+        store.db.executemany('DELETE FROM network_devices WHERE id=?', [(i,) for i in fuera])
+        store.db.commit()
+    return len(fuera)
 
 
 def duplicados(rows, credenciales):
@@ -127,6 +158,10 @@ def observe(store, rows=None):
 
 
 def dispatch(store, name, args, turn_id=None):
+    # Antes de mirar o de listar: lo anónimo y viejo no es inventario, es ruido de
+    # hace un rato. Identificar también limpia, para que nadie nombre un fantasma.
+    if name in ('device.list', 'device.refresh', 'device.identify'):
+        limpiar_anonimos(store)
     rows = {r['id']: json.loads(r['body']) for r in store.db.execute('SELECT * FROM network_devices')}
     if name == 'device.refresh':
         observation, rows = observe(store, rows)
