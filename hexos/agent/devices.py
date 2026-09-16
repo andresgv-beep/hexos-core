@@ -186,9 +186,15 @@ def dispatch(store, name, args, turn_id=None):
 
         compact = [fila(d) for d in found[:48]]
         repetidos = duplicados(rows, accesos)
-        return dict(identified_devices=[d for d in compact if d.get('name')], devices=compact,
+        # Sin solaparse: los nombrados en una lista y los anónimos en la otra. Antes
+        # `devices` los llevaba TODOS y `identified_devices` repetía los nombrados,
+        # así que el modelo los veía dos veces y al enumerarlos repetía las IPs.
+        return dict(identified_devices=[d for d in compact if d.get('name')],
+                    devices=[d for d in compact if not d.get('name')],
                     duplicates=repetidos, total=len(found), truncated=len(found)>48,
-                    note='Inventario histórico. Consulta network.local para el estado actual. '
+                    note='Inventario histórico. identified_devices son los que tienen nombre y '
+                         'devices los que no: no se solapan, la lista completa es la suma. '
+                         'Consulta network.local para el estado actual. '
                          'host es la dirección fija de un equipo de otra red; los de esta '
                          'red no la tienen y se ven por ips. seen_now es que se le vio en la '
                          'última lectura de red. Las claves vacías se omiten: '

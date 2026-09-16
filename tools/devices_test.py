@@ -128,8 +128,7 @@ class DevicesTest(unittest.TestCase):
                 self.assertEqual(located['host'], 'servidorsrv1.ddns.net')
                 self.assertTrue(located['pinned'])
                 # Y aparece en el inventario como cualquier otro equipo con nombre.
-                nombres = [d['name'] for d in agent.tool(s, 'device.list', {})['devices']
-                           if d.get('name')]
+                nombres = [d['name'] for d in agent.tool(s, 'device.list', {})['identified_devices']]
                 self.assertIn('synology 1', nombres)
 
     def test_acepta_la_url_tal_cual_se_pega_y_se_queda_el_puerto(self):
@@ -477,11 +476,11 @@ class DevicesTest(unittest.TestCase):
                 agent.tool(s, 'device.identify', dict(target='129', name='iphone'), turn_id='u')
                 # Y el router de la otra red deja de figurar como recién visto, así
                 # que un sufijo no puede casar con el fantasma.
-                for d in agent.tool(s, 'device.list', {})['devices']:
+                lista = agent.tool(s, 'device.list', {})
+                for d in lista['identified_devices'] + lista['devices']:
                     if d['mac'] == 'f8:98:ef:93:cc:11':
                         self.assertNotIn('seen_now', d)
-                nombres = {d['name'] for d in agent.tool(s, 'device.list', {})['devices']
-                           if d.get('name')}
+                nombres = {d['name'] for d in agent.tool(s, 'device.list', {})['identified_devices']}
                 self.assertEqual(nombres, {'iphone'})
 
     def test_se_puede_nombrar_por_los_dos_ultimos_octetos(self):
@@ -502,8 +501,7 @@ class DevicesTest(unittest.TestCase):
                 s.db.commit()
                 agent.tool(s, 'device.identify', dict(target='1.1', name='router'), turn_id='u')
                 agent.tool(s, 'device.identify', dict(target='1.129', name='iphone 16 pro'), turn_id='u')
-                nombres = {d['name'] for d in agent.tool(s, 'device.list', {})['devices']
-                           if d.get('name')}
+                nombres = {d['name'] for d in agent.tool(s, 'device.list', {})['identified_devices']}
                 self.assertEqual(nombres, {'router', 'iphone 16 pro'})
 
     def test_unos_octetos_ambiguos_no_nombran_nada(self):
@@ -536,10 +534,11 @@ class DevicesTest(unittest.TestCase):
                 dispatch(s, 'device.identify', args)
                 with patch('hexos.agent.devices.snapshot', return_value=observation(ip='192.168.1.11')):
                     dispatch(s, 'device.refresh', {})
-                self.assertEqual(dispatch(s,'device.list',{})['devices'][0]['name'], 'NAS Faro')
+                self.assertEqual(dispatch(s,'device.list',{})['identified_devices'][0]['name'], 'NAS Faro')
                 with patch('hexos.agent.devices.snapshot', return_value=observation(mac='11:22:33:44:55:66')):
                     dispatch(s, 'device.refresh', {})
-                devices = dispatch(s, 'device.list', {})['devices']
+                lista = dispatch(s, 'device.list', {})
+                devices = lista['identified_devices'] + lista['devices']
                 self.assertEqual(len(devices), 2)
                 self.assertTrue(next(d for d in devices if d.get('seen_now'))['unidentified'])
             with Agent(tmp, None).store() as s:
@@ -656,3 +655,27 @@ class ExitoNegadoTest(unittest.TestCase):
 
     def test_sin_negacion_no_se_añade_nada(self):
         self.assertEqual(self.mirar('Listo, registrado.', [self.BUENA]), [])
+
+
+class SinSolaparTest(unittest.TestCase):
+    """Las dos listas no pueden llevar el mismo equipo: el modelo lo enumera dos veces."""
+
+    def test_los_nombrados_salen_una_sola_vez(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(tmp, None)
+            with agent.store() as s:
+                with patch('hexos.agent.devices.snapshot', return_value=observation()):
+                    agent.tool(s, 'device.refresh', {})
+                dicho = 'el 192.168.1.10 es la impresora'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u','now','user',dicho,dicho))
+                s.db.commit()
+                agent.tool(s, 'device.identify', dict(target='192.168.1.10', name='impresora'), turn_id='u')
+                r = agent.tool(s, 'device.list', {})
+        con_nombre = {d['id'] for d in r['identified_devices']}
+        sin_nombre = {d['id'] for d in r['devices']}
+        self.assertTrue(con_nombre, 'la impresora tiene que estar entre los nombrados')
+        self.assertEqual(con_nombre & sin_nombre, set(), 'un equipo no puede salir en las dos listas')
+        self.assertTrue(all(d.get('unidentified') for d in r['devices']))
+        # Y el total sigue cuadrando con la suma de las dos.
+        self.assertEqual(r['total'], len(con_nombre) + len(sin_nombre))
