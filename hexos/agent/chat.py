@@ -497,11 +497,24 @@ class Agent:
             if not isinstance(resultado, dict):
                 continue
             if paso.get('tool') == 'note.list':
+                # Las filas de la lista ya no llevan id —no se le enseñan al modelo
+                # para que no los vuelque—, así que la posición se resuelve contra el
+                # almacén, que es de donde salió la lista.
                 notas = resultado.get('notes') or []
+                elegida = None
                 if ordinal and 1 <= int(ordinal) <= len(notas):
-                    return notas[int(ordinal) - 1]
-                if not ordinal and len(notas) == 1:
-                    return notas[0]
+                    elegida = notas[int(ordinal) - 1]
+                elif not ordinal and len(notas) == 1:
+                    elegida = notas[0]
+                if elegida is None:
+                    continue
+                if elegida.get('id'):
+                    return elegida
+                posicion = elegida.get('n')
+                filas = notes.listing(store, limit=200)
+                if isinstance(posicion, int) and 1 <= posicion <= len(filas):
+                    return filas[posicion - 1]
+                continue
                 # Con varias y sin ordinal, la lista no señala a ninguna en concreto.
                 continue
             if paso.get('tool') in ('note.show', 'note.get', 'note.save') and resultado.get('id'):

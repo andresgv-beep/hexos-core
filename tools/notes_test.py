@@ -58,7 +58,7 @@ class NotasTest(unittest.TestCase):
         self.assertEqual(notes.dispatch(self.store, 'note.list', {}, 't')['notes'], [])
         # Sigue ahí, y se puede pedir a propósito.
         pedidas = notes.dispatch(self.store, 'note.list', dict(state='descartada'), 't')['notes']
-        self.assertEqual([x['id'] for x in pedidas], [n['id']])
+        self.assertEqual([x['title'] for x in pedidas], [n['title']])
         self.assertEqual(notes.get(self.store, n['id'])['body'], 'El disco pierde el enlace.')
 
     def test_anclar_a_favoritos_se_comprueba_releyendo(self):
@@ -67,13 +67,31 @@ class NotasTest(unittest.TestCase):
         self.assertTrue(r['favorite'])
         self.assertEqual(r['outcome'], 'hecho')
         anclada = notes.dispatch(self.store, 'note.list', dict(favorite=True), 't')['notes']
-        self.assertEqual([x['id'] for x in anclada], [n['id']])
+        self.assertEqual([x['title'] for x in anclada], [n['title']])
 
-    def test_la_lista_recorta_el_cuerpo_y_lo_dice(self):
+    def test_la_lista_no_le_enseña_ids_ni_fechas(self):
+        # Se le pidió por texto que no los volcara y los volcó igual, con la fecha
+        # ISO entera. Lo que no ve no lo puede pegar; para abrir basta el número.
         self.crear(body='x' * 500)
         fila = notes.dispatch(self.store, 'note.list', {}, 't')['notes'][0]
-        self.assertEqual(len(fila['body']), 300)
-        self.assertTrue(fila['truncated'])
+        self.assertEqual(set(fila) - {'favorite'}, {'n', 'title', 'state'})
+        self.assertEqual(fila['n'], 1)
+
+    def test_se_abre_por_su_número(self):
+        a = self.crear(title='Primera')
+        self.crear(title='Segunda')
+        # La lista va de la más reciente a la más antigua, que es como la ve ella:
+        # el número tiene que señalar a lo mismo en pantalla y en el almacén.
+        self.assertEqual([f['title'] for f in notes.dispatch(self.store, 'note.list', {}, 't')['notes']],
+                         ['Segunda', 'Primera'])
+        abierta = notes.dispatch(self.store, 'note.show', dict(n=2), 't')
+        self.assertEqual(abierta['title'], 'Primera')
+        self.assertTrue(abierta['shown'])
+        # Y un número que no existe se dice, no se redondea al más cercano.
+        with self.assertRaises(ValueError) as e:
+            notes.dispatch(self.store, 'note.show', dict(n=9), 't')
+        self.assertIn('hay 2', str(e.exception))
+        self.assertEqual(notes.dispatch(self.store, 'note.show', dict(id=a['id']), 't')['title'], 'Primera')
 
     def test_buscar_mira_titulo_cuerpo_y_etiquetas(self):
         self.crear()

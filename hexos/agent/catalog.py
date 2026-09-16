@@ -137,8 +137,8 @@ TOOLS = {
     'note.list': spec('Consultar las notas guardadas. Sin argumentos trae las vigentes, de la más reciente. '
                       'state filtra por pendiente, hecha o descartada; favorite trae solo las ancladas. '
                       'Úsala cuando pregunten qué tienes guardado, qué notas hay o qué queda pendiente. '
-                      'La lista aparece en su pantalla: di cuántas hay y sus títulos, sin repetir ids, '
-                      'fechas ni el cuerpo. Para enseñarle una, note.show.',
+                      'La lista aparece en su pantalla: di cuántas hay y sus títulos. '
+                      'Para enseñarle una, note.show con su número n.',
                       optional={'query':'str','state':'str','favorite':'bool','limit':'int'}),
     'note.get': spec('Leer una nota entera por su id, cuando note.list la recortó. '
                      'Es para leerla tú: para enseñársela a la persona usa note.show.', {'id':'str'}),
@@ -149,14 +149,14 @@ TOOLS = {
                       'con note.list en el mismo turno, sin preguntar a cuál se refiere. '
                       'Decir que la has abierto no la abre: sin llamar a esta herramienta su pantalla no '
                       'cambia. Una vez abierta no repitas el contenido en la respuesta: basta con decir '
-                      'cuál has abierto.', {'id':'str'},
+                      'cuál has abierto. Con n abres la nota número n de la última lista.', optional={'id':'str','n':'int'},
                       announces=(('abrir','abiert','abro'), ('mostrar','mostrad','muestro'),
                                  ('enseñar','enseñad','enseño'), ('sacar','sacad','saco'))),
     'note.hide': spec('Cerrar una nota abierta en la pantalla de la persona. Con id cierra esa; sin id '
                       'cierra todas las abiertas. Úsala cuando pidan cerrar, cerrarla, ocultar, quitar o '
                       'recoger, la nombren o la señalen de antes: «ciérrala», «quita esa», «cierra todo». '
                       'Decir que la has cerrado no la cierra: sin llamar a esta herramienta la ventana '
-                      'sigue abierta delante de ella.', optional={'id':'str'},
+                      'sigue abierta delante de ella.', optional={'id':'str','n':'int'},
                       announces=(('cerrar','cerrad','cierro'), ('ocultar','ocultad','oculto'),
                                  ('quitar','quitad','quito'), ('recoger','recogid','recojo'))),
     'note.mark': spec('Cambiar el estado de una nota o anclarla a favoritos. state es pendiente, hecha o '

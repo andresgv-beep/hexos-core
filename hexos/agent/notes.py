@@ -146,12 +146,37 @@ def mark(store, note_id, *, state=None, favorite=None):
                         (', en favoritos' if releida['favorite'] else ', fuera de favoritos'))
 
 
+def resolve_ref(store, args):
+    """El id de la nota, venga por id o por el número que la persona tiene delante.
+
+    `n` es la posición en la última lista, que es lo único que ella ve: pedirle al
+    modelo que maneje un id de 32 caracteres que no puede ver es pedirle que lo
+    invente o que lo vuelque en pantalla, y hacía las dos cosas.
+    """
+    if args.get('id'):
+        return args['id']
+    posicion = args.get('n')
+    if not isinstance(posicion, int):
+        raise ValueError('di qué nota: id, o n con el número de la lista')
+    filas = listing(store, limit=200)
+    if not 1 <= posicion <= len(filas):
+        raise ValueError('no hay una nota número ' + str(posicion) + '; hay ' + str(len(filas)))
+    return filas[posicion - 1]['id']
+
+
 def dispatch(store, name, args, turn_id):
     if name == 'note.list':
         filas = listing(store, args.get('query', ''), args.get('state'),
                         args.get('favorite'), args.get('limit', 50))
-        return dict(notes=filas, total=len(filas),
-                    note='Cuerpos recortados a 300 caracteres; note.get trae la nota entera.')
+        # Sin ids ni fechas: se le pidió por texto que no los volcara y los volcó
+        # igual, con «Creada: 2026-09-14T19:51:58.563781+00:00» incluido. Lo que no
+        # ve no lo puede pegar. Para abrir una basta el número que ella tiene delante.
+        return dict(notes=[dict(n=i, title=f['title'], state=f['state'],
+                                **({'favorite': True} if f['favorite'] else {}))
+                           for i, f in enumerate(filas, 1)],
+                    total=len(filas),
+                    note='La lista está en su pantalla. Di cuántas hay y sus títulos. '
+                         'Para abrirle una usa note_show con n, el número de esta lista.')
     if name == 'note.get':
         return dict(get(store, args['id']),
                     note='Las versiones anteriores están en el histórico de la nota.')
@@ -161,11 +186,11 @@ def dispatch(store, name, args, turn_id):
     if name == 'note.show':
         # Devuelve la nota entera a propósito: el id viaja en la traza y la
         # interfaz la abre, y de paso el modelo ve lo que acaba de enseñar.
-        return dict(get(store, args['id']), shown=True,
+        return dict(get(store, resolve_ref(store, args)), shown=True,
                     note='Ya está abierta en su pantalla; no hace falta repetir el contenido.')
     if name == 'note.hide':
         # No toca el almacén: su único efecto es la pantalla. Sin id, todas.
-        note_id = args.get('id')
+        note_id = resolve_ref(store, args) if (args.get('id') or args.get('n')) else None
         if note_id:
             get(store, note_id)
         return dict(hidden=note_id or 'todas',
