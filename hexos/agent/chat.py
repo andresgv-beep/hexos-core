@@ -139,6 +139,10 @@ AFIRMACION = re.compile(
 # Con sus erratas: escribe «mustrame» y «mustrala», sin la e. Lo que pide está
 # igual de claro, y un patrón que solo acepta la ortografía correcta convierte un
 # desliz de teclado en «no te entiendo».
+# La respuesta habla del aviso interno en vez de a la persona.
+FUGA_AVISO = re.compile(r'\baviso\s+de\s+hexos\b|\beste\s+aviso\b|\bhexos\b', re.I)
+
+
 PEDIR_VER = re.compile(
     r'\b(?:[áa]bre|abrir|mu[eé]?stra|mostrar|ens[eé]?[ñn]a|ense[ñn]ar|saca|sacar|ver|veo)\w*\b', re.I)
 # Aparte, porque el atajo tiene que llamar a la herramienta que toca: con las dos
@@ -1162,6 +1166,7 @@ class Agent:
                 schema_retries = 0
                 recovery_requests = 0
                 said_retries = 0
+                respuesta_previa = None
                 coverage_retries = 0
                 # Cuántas operaciones había cuando se avisó la última vez.
                 coverage_mark = -1
@@ -1351,9 +1356,12 @@ class Agent:
                                  'Si había que hacerlo, hazlo AHORA con la herramienta que corresponda.')
                     if aviso and not said_retries:
                         said_retries += 1
+                        respuesta_previa = output['reply']
                         messages = [dict(role='user', content=
                             'AVISO DE HEXOS (no es la persona): ' + aviso +
-                            ' Si no hacía falta, responde de nuevo sin anunciarlo. Queda un intento.')]
+                            ' Si no hacía falta, responde de nuevo sin anunciarlo. Queda un intento. '
+                            'Este aviso es de la máquina: no lo menciones ni lo comentes. '
+                            'Responde a la persona como si no existiera.')]
                         continue
                     proposed = output['work']
                     if clarification:
@@ -1422,6 +1430,13 @@ class Agent:
                                            '\n\n· No hacía falta preguntar: he ' +
                                            ('cerrado' if cerrar else 'abierto') + ' «' +
                                            senalada.get('title', '') + '» en tu pantalla.')
+                    # El aviso es maquinaria interna y la persona no tiene por qué leerlo.
+                    # Pasó: tras un aviso contestó «Tomo nota de este aviso de HexOS»
+                    # en vez de responderle a ella. Si la respuesta habla del aviso,
+                    # se descarta y se conserva la de antes, que al menos iba dirigida
+                    # a la persona; el reparo del cierre ya dirá lo que no se sostiene.
+                    if respuesta_previa is not None and FUGA_AVISO.search(output['reply']):
+                        output['reply'] = respuesta_previa
                     # Salió bien y lo cuenta como que no pudo: se dice lo que consta.
                     hechas = self.denied_success(output['reply'], trace)
                     if hechas:

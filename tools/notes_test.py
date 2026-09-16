@@ -493,5 +493,38 @@ class CerrarSinSenalarTest(unittest.TestCase):
         self.assertEqual(len([t for t in r['tools'] if t['tool'] == 'note.hide']), 1)
 
 
+class FugaDelAvisoTest(unittest.TestCase):
+    """El aviso es maquinaria interna: la persona no tiene por qué leerlo."""
+
+    class Guionizado:
+        def __init__(self, salidas): self.salidas = list(salidas)
+        def call(self, request): pass
+        def generate(self, m): return self.salidas.pop(0)
+
+    def correr(self, salidas):
+        from hexos.agent.chat import Agent
+        tmp = tempfile.TemporaryDirectory(prefix='hexos-fuga-')
+        self.addCleanup(tmp.cleanup)
+        return Agent(tmp.name, self.Guionizado(salidas)).chat('recuerdalo')
+
+    def test_si_contesta_sobre_el_aviso_se_conserva_la_respuesta_anterior(self):
+        # Su turno real: tras el aviso respondió «Tomo nota de este aviso de HexOS».
+        r = self.correr([
+            {'reply': 'Lo he guardado para el futuro.', 'work': None},
+            {'reply': 'Entendido. Tomo nota de este aviso de HexOS. En el futuro, si afirmo '
+                      'haber guardado algo, me aseguraré de ejecutarlo.', 'work': None},
+        ])
+        self.assertEqual(r['reply'], 'Lo he guardado para el futuro.')
+        # Y el cierre sigue diciendo que eso no se sostiene.
+        self.assertEqual(r['closure']['reason'], 'no_consta')
+
+    def test_una_respuesta_normal_tras_el_aviso_se_queda(self):
+        r = self.correr([
+            {'reply': 'Lo he guardado.', 'work': None},
+            {'reply': 'No hacía falta guardar nada; te lo cuento y ya está.', 'work': None},
+        ])
+        self.assertEqual(r['reply'], 'No hacía falta guardar nada; te lo cuento y ya está.')
+
+
 if __name__ == '__main__':
     unittest.main()
