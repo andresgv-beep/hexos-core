@@ -525,6 +525,30 @@ class Agent:
                 return resultado
         return None
 
+    # Decir que no se pudo cuando sí se pudo. Es el espejo de ESCRITURA_DICHA: esa
+    # evita creerse lo que no pasó, y esta evita descreer lo que sí pasó, que hace
+    # el mismo daño. Ocurre cuando una llamada buena va seguida de otra inventada:
+    # la guarda rechaza la segunda y el modelo cuenta ESE fallo como el del turno.
+    NEGACION = re.compile(
+        r'\bno\s+(?:he\s+podido|pude|puedo|se\s+ha\s+podido|fue\s+posible|he\s+conseguido|'
+        r'consegu[íi]|he\s+logrado)\b'
+        r'|\bno\s+(?:se\s+)?(?:ha\s+)?(?:qued[óo]|registr[óo]|guard[óo]|complet[óo])\b'
+        r'|\bha\s+fallado\b|\bno\s+lo\s+he\s+hecho\b', re.I)
+
+    @classmethod
+    def denied_success(cls, reply, trace):
+        """¿Dice que no pudo y en la traza hay una escritura que sí salió?
+
+        Devuelve las operaciones que de verdad se hicieron, para poder decirlo. No
+        se le reescribe la respuesta: se añade lo que el registro sostiene.
+        """
+        if not isinstance(reply, str) or not cls.NEGACION.search(reply):
+            return []
+        return [paso for paso in trace
+                if not paso.get('failed')
+                and catalog.TOOLS.get(paso.get('tool'), {}).get('effect', 'read').startswith('write')
+                and not (isinstance(paso.get('result'), dict) and 'error' in paso['result'])]
+
     @staticmethod
     def announced_without_call(reply, trace, limit=6):
         """Anuncia una herramienta concreta y ESA no se llamó.
@@ -1398,6 +1422,17 @@ class Agent:
                                            '\n\n· No hacía falta preguntar: he ' +
                                            ('cerrado' if cerrar else 'abierto') + ' «' +
                                            senalada.get('title', '') + '» en tu pantalla.')
+                    # Salió bien y lo cuenta como que no pudo: se dice lo que consta.
+                    hechas = self.denied_success(output['reply'], trace)
+                    if hechas:
+                        detalle = ', '.join(dict.fromkeys(
+                            paso['tool'] + (' (' + str((paso.get('result') or {}).get('saved')
+                                                       or (paso.get('result') or {}).get('name')
+                                                       or (paso.get('result') or {}).get('identified') or '') + ')'
+                                            if isinstance(paso.get('result'), dict) else '')
+                            for paso in hechas))
+                        output['reply'] = (output['reply'].rstrip() +
+                                           '\n\n· Aun así, esto sí quedó hecho: ' + detalle + '.')
                     recordado = self.harvest_facts(store, text, uid, trace)
                     if recordado:
                         output['reply'] = output['reply'].rstrip() + '\n\n' + recordado

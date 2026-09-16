@@ -620,3 +620,39 @@ class CoberturaTest(unittest.TestCase):
     def test_sin_margen_de_herramientas_no_hay_turno_que_devolver(self):
         from hexos.agent.chat import Agent as A
         self.assertEqual(A.uncovered(['a', 'b'], [dict(tool='nas.read')] * 6), [])
+
+
+class ExitoNegadoTest(unittest.TestCase):
+    """Decir que no se pudo cuando sí se pudo hace tanto daño como lo contrario."""
+
+    def mirar(self, reply, trace):
+        from hexos.agent.chat import Agent
+        return [p['tool'] for p in Agent.denied_success(reply, trace)]
+
+    BUENA = dict(tool='device.identify', arguments={}, result=dict(identified='synology home'))
+    FALLIDA = dict(tool='device.remote', arguments={}, failed=True,
+                   result=dict(error='esa dirección no aparece en el mensaje'))
+
+    def test_el_turno_real_del_16_de_septiembre(self):
+        # identify salió bien, remote se inventó un DDNS y falló, y contó el fallo.
+        self.assertEqual(
+            self.mirar('No he podido registrar la dirección remota para "synology home".',
+                       [self.BUENA, self.FALLIDA]),
+            ['device.identify'])
+
+    def test_las_formas_de_decir_que_no_pudo(self):
+        for texto in ('No pude completar el registro.', 'No fue posible guardarlo.',
+                      'No se ha podido registrar.', 'Ha fallado el registro.',
+                      'No se registró el equipo.'):
+            with self.subTest(texto):
+                self.assertEqual(self.mirar(texto, [self.BUENA]), ['device.identify'])
+
+    def test_si_de_verdad_no_se_hizo_nada_no_se_inventa_un_exito(self):
+        self.assertEqual(self.mirar('No he podido registrarlo.', [self.FALLIDA]), [])
+
+    def test_una_lectura_no_es_un_exito_que_contradiga_la_negacion(self):
+        # «No pude leer el NAS» con un device.list detrás no es una contradicción.
+        self.assertEqual(self.mirar('No pude leer el NAS.', [dict(tool='device.list', result={})]), [])
+
+    def test_sin_negacion_no_se_añade_nada(self):
+        self.assertEqual(self.mirar('Listo, registrado.', [self.BUENA]), [])
