@@ -128,6 +128,15 @@ void serve_broadcast(const char *event, const char *json_payload)
  * Respuestas
  * ------------------------------------------------------------------------ */
 
+/* Para cuerpos que son literales: los bytes los cuenta el compilador.
+ *
+ * Contarlos a mano falla con cualquier acento —«no está» son 8 bytes y no 7,
+ * «ruta inválida» 14 y no 13— y el resultado es una respuesta truncada a mitad
+ * de carácter que el navegador ni siquiera puede interpretar. Con sizeof no hay
+ * número que escribir, así que no hay número que equivocar. */
+#define RESPOND_LIT(fd, status, ctype, literal) \
+    respond((fd), (status), (ctype), (literal), sizeof(literal) - 1)
+
 static void respond(int fd, const char *status, const char *ctype,
                     const char *body, size_t len)
 {
@@ -164,7 +173,8 @@ static void serve_static(int fd, const char *path)
     /* Un ".." en la ruta no es un ataque aquí, es un bug del cliente; se
      * rechaza igual para que un error de camino no sirva medio disco. */
     if (strstr(path, "..")) {
-        respond(fd, "400 Bad Request", "text/plain", "ruta inválida", 13);
+        RESPOND_LIT(fd, "400 Bad Request", "text/plain",
+"ruta inválida");
         return;
     }
     char full[1024];
@@ -173,7 +183,8 @@ static void serve_static(int fd, const char *path)
 
     FILE *f = fopen(full, "rb");
     if (!f) {
-        respond(fd, "404 Not Found", "text/plain", "no está", 7);
+        RESPOND_LIT(fd, "404 Not Found", "text/plain",
+"no está");
         return;
     }
     struct stat st;
@@ -308,15 +319,16 @@ static void *conn_thread(void *arg)
 
     char method[8] = {0}, path[512] = {0};
     if (sscanf(req, "%7s %511s", method, path) != 2) {
-        respond(fd, "400 Bad Request", "text/plain", "", 0);
+        RESPOND_LIT(fd, "400 Bad Request", "text/plain",
+"");
         close(fd);
         return NULL;
     }
 
     char *body_start = strstr(req, "\r\n\r\n");
     if (!body_start) {
-        respond(fd, "400 Bad Request", "application/json",
-                "{\"ok\":false}", 12);
+        RESPOND_LIT(fd, "400 Bad Request", "application/json",
+"{\"ok\":false}");
         close(fd);
         return NULL;
     }
@@ -340,8 +352,8 @@ static void *conn_thread(void *arg)
     (void)has_content_length;
     if (content_length > body_cap ||
         content_length > SIZE_MAX - 1) {
-        respond(fd, "413 Payload Too Large", "application/json",
-                "{\"ok\":false}", 12);
+        RESPOND_LIT(fd, "413 Payload Too Large", "application/json",
+"{\"ok\":false}");
         close(fd);
         return NULL;
     }
@@ -351,8 +363,8 @@ static void *conn_thread(void *arg)
     if (body_len) {
         body = malloc(body_len + 1);
         if (!body) {
-            respond(fd, "503 Service Unavailable", "application/json",
-                    "{\"ok\":false}", 12);
+            RESPOND_LIT(fd, "503 Service Unavailable", "application/json",
+"{\"ok\":false}");
             close(fd);
             return NULL;
         }
@@ -449,7 +461,8 @@ static void *conn_thread(void *arg)
         respond(fd, "200 OK", "application/json; charset=utf-8", json, n);
     } else if (!strcmp(method, "GET") && !strcmp(path, "/api/memoria")) {
         if (!ruta_activa_tipada()) {
-            respond(fd, "404 Not Found", "text/plain", "solo ruta tipada", 16);
+            RESPOND_LIT(fd, "404 Not Found", "text/plain",
+"solo ruta tipada");
         } else {
             char json[2048];
             const size_t n = rt_memoria_json(json, sizeof(json));
@@ -458,7 +471,8 @@ static void *conn_thread(void *arg)
     } else if (!strcmp(method, "POST") && !strcmp(path, "/api/memoria/ensayo")) {
         /* Ensayo, nunca aplicación: devuelve qué diría el almacén. */
         if (!ruta_activa_tipada() || !body || !body_len) {
-            respond(fd, "409 Conflict", "application/json", "{\"ok\":false}", 12);
+            RESPOND_LIT(fd, "409 Conflict", "application/json",
+"{\"ok\":false}");
         } else {
             char *json = malloc(64 * 1024);
             if (json) {
@@ -505,7 +519,8 @@ static void *conn_thread(void *arg)
     } else if (!strcmp(method, "GET")) {
         serve_static(fd, path);
     } else {
-        respond(fd, "405 Method Not Allowed", "text/plain", "", 0);
+        RESPOND_LIT(fd, "405 Method Not Allowed", "text/plain",
+"");
     }
 
     free(body);
