@@ -74,6 +74,10 @@ class TurnState:
     memory_evidence: list = field(default_factory=list)
     context_sources: list = field(default_factory=list)
     trace: list = field(default_factory=list)
+    # Número de pasos que ya estaban terminados cuando hubo que reconstruir el
+    # contexto a mitad del turno. Es la frontera que impide ejecutarlos otra vez.
+    checkpointed_steps: int = 0
+    checkpoint_reuses: int = 0
     previous_reply: str | None = None
     # Traspaso persistente creado al cortar el contexto. No es una memoria del
     # modelo ni una deducción: son citas recientes y el estado operativo que ya

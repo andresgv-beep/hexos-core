@@ -7,7 +7,7 @@ from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from hexos.agent.chat import Agent
-from hexos.agent.chat_backend.state import TurnState
+from hexos.agent.chat_backend.state import AgentDependencies, TurnState
 from hexos.agent.work import now
 
 
@@ -227,3 +227,92 @@ class ContinuidadTrasCorteTest(unittest.TestCase):
             self.agent.context.prepare(store, turn)
         self.assertEqual(self.runtime.calls, [])
         self.assertEqual(turn.messages, [dict(role='user', content='siguiente paso')])
+
+
+class CheckpointDentroDelTurnoTest(unittest.TestCase):
+    """Un context_full conserva causalidad y no repite efectos ya ejecutados."""
+
+    class Runtime:
+        native = True
+        ctx = 8192
+        kv_position = 0
+        thinking = False
+
+        def __init__(self):
+            self.messages = []
+            self.decisions = [
+                {'tool': 'device.remote', 'arguments': {
+                    'name': 'synology home', 'host': 'https://casa.example'}},
+                {'tool': 'nas.read', 'arguments': {
+                    'device': 'synology home', 'section': 'diagnosis'}},
+                RuntimeError('ERROR: context_full el turno no cabe'),
+                # Simula exactamente el fallo observado: el modelo intenta
+                # registrar otra vez al reconstruir el contexto.
+                {'tool': 'device.remote', 'arguments': {
+                    'name': 'synology home', 'host': 'https://casa.example'}},
+                {'reply': 'Registrado una vez y diagnóstico recuperado.', 'work': None},
+            ]
+            self.tool_results = []
+            self.last_generation = None
+
+        def call(self, request):
+            self.messages = []
+            return {'ok': True}
+
+        def generate(self, messages):
+            self.messages.extend(messages)
+            decision = self.decisions.pop(0)
+            if isinstance(decision, Exception):
+                raise decision
+            return decision
+
+        def tool_result(self, result):
+            self.tool_results.append(result)
+
+        def extract_facts(self, text):
+            return []
+
+        def close(self):
+            pass
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix='hexos-turn-checkpoint-')
+        self.runtime = self.Runtime()
+        self.reads = 0
+
+        def nas_read(workspace, **kwargs):
+            self.reads += 1
+            return {'target': kwargs['device'], 'section': kwargs['section'],
+                    'headline': 'Diagnóstico obtenido', 'facts': ['sin alertas']}
+
+        self.agent = Agent(self.tmp.name, self.runtime,
+                           dependencies=AgentDependencies(nas_read=nas_read))
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_reconstruye_el_checkpoint_y_no_repite_la_escritura(self):
+        result = self.agent.chat(
+            'registra synology home con https://casa.example y mira su estado')
+        self.assertEqual([step['tool'] for step in result['tools']],
+                         ['device.remote', 'nas.read'])
+        self.assertEqual(self.reads, 1)
+        self.assertEqual(result['diagnostics']['context_retries'], 1)
+        self.assertEqual(result['diagnostics']['checkpoint_reuses'], 1)
+        # La cuarta generación recibió el checkpoint como llamadas nativas,
+        # incluyendo el resultado del diagnóstico, no un resumen ambiguo.
+        rendered = repr(self.runtime.messages)
+        self.assertIn('device_remote', rendered)
+        self.assertIn('nas_read', rendered)
+        self.assertIn('Diagnóstico obtenido', rendered)
+
+    def test_una_lectura_anterior_a_una_escritura_no_se_reutiliza(self):
+        turn = TurnState(text='comprueba de nuevo', checkpointed_steps=2, trace=[
+            dict(tool='nas.read', arguments={'device':'nas','section':'containers'},
+                 changes_state=False, failed=False, result={'state':'antes'}),
+            dict(tool='nas.container', arguments={'device':'nas','container':'web','action':'restart'},
+                 changes_state=True, failed=False, result={'state':'running'}),
+        ])
+        from hexos.agent.chat_backend.ledger import completed_call
+        self.assertIsNone(completed_call(
+            turn, 'nas.read', {'device':'nas','section':'containers'}))

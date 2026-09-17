@@ -121,4 +121,6 @@ class TurnFinalizer:
         return dict(reply=output['reply'], work=job, document=turn.document, tools=turn.trace, context_sources=turn.context_sources, progress=self.agent.progress,
             context_cut=corte_avisado, closure=self.agent.closure(turn.trace, output['reply']),
             diagnostics=dict(format_retries=turn.retries.format_retries, schema_retries=turn.retries.schema_retries,
-                             recovery_requests=turn.retries.recovery_requests))
+                             recovery_requests=turn.retries.recovery_requests,
+                             context_retries=turn.retries.context_retries,
+                             checkpoint_reuses=turn.checkpoint_reuses))

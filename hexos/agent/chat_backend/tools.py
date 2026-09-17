@@ -11,6 +11,7 @@ from ..progress import announcement
 from ..work import now
 from .state import Environment, SessionState, TurnState
 from .settings import MAX_TRACE_EVENTS
+from .ledger import completed_call
 
 if TYPE_CHECKING:
     from .agent import Agent
@@ -156,10 +157,35 @@ class ToolExecutor:
         """Validar → anunciar → ejecutar → verificar → registrar → devolver al modelo."""
         if set(output) != {'tool', 'arguments'}:
             raise ValueError('Llamada de herramienta inválida')
-        if len(turn.trace) >= MAX_TRACE_EVENTS:
-            raise RuntimeError('Se alcanzó el límite de seis herramientas; no se ejecutó la siguiente solicitud')
         self.agent.state = 'tool'
         effect = catalog.TOOLS.get(output['tool'], {}).get('effect', 'read')
+        try:
+            catalog.validate(output['tool'], output['arguments'])
+        except (ValueError, TypeError):
+            # El circuito normal de abajo registra el error y se lo devuelve al
+            # modelo. Aquí solo interesa saber si una llamada VÁLIDA ya se hizo.
+            completed = None
+        else:
+            completed = completed_call(turn, output['tool'], output['arguments'])
+        if completed is not None:
+            # El modelo puede intentar repetir una llamada después de perder el KV.
+            # Se le devuelve el resultado registrado, pero no se toca el mundo ni
+            # se añade una segunda operación ficticia a la traza.
+            turn.checkpoint_reuses += 1
+            self.agent.active_tools = [*self.agent.active_tools, dict(
+                tool=output['tool'], status='done', effect=effect, seconds=0.0,
+                verification=completed.get('verification'), reused_checkpoint=True)]
+            if hasattr(self.agent.runtime, 'tool_result'):
+                self.agent.runtime.tool_result(completed.get('result'))
+                turn.messages = []
+            else:
+                turn.messages = [dict(role='user', content=
+                    'RESULTADO YA OBTENIDO EN ESTE TURNO (no se ejecutó otra vez):\n' +
+                    json.dumps(completed.get('result'), ensure_ascii=False))]
+            self.agent.state = 'thinking'
+            return
+        if len(turn.trace) >= MAX_TRACE_EVENTS:
+            raise RuntimeError('Se alcanzó el límite de seis herramientas; no se ejecutó la siguiente solicitud')
         activity = dict(tool=output['tool'], status='running', effect=effect, seconds=None)
         self.agent.active_tools = [*self.agent.active_tools, activity]
         started = time.monotonic()

@@ -9,6 +9,7 @@ from ..decisions import InvalidDecision, validate_reply
 from ..work import now
 from .settings import PROMPT
 from .state import TurnState
+from .ledger import checkpoint_messages
 
 if TYPE_CHECKING:
     from .agent import Agent
@@ -43,6 +44,7 @@ class RecoveryController:
             if 'context_full' not in str(exc) or turn.retries.context_retries:
                 raise
             turn.retries.context_retries += 1
+            turn.checkpointed_steps = len(turn.trace)
             self.agent.runtime.call({'type': 'reset'})
             nuevo_corte = store.db.execute(
                 'SELECT COALESCE(MAX(rowid),0) FROM conversation WHERE id<>?', (turn.uid,)).fetchone()[0]
@@ -59,6 +61,16 @@ class RecoveryController:
                 turn.metadata += self.agent.context.handoff_text(turn.handoff)
                 turn.messages = native_messages([], turn.metadata, turn.prompt_text, {},
                                            turn.memory_evidence, budget=turn.budget)
+                # Lo ya ejecutado vuelve como llamadas y respuestas nativas. Un
+                # resumen en prosa no conserva causalidad y permitió que el modelo
+                # registrara y diagnosticara el mismo equipo dos veces.
+                turn.messages.extend(checkpoint_messages(
+                    turn.trace[:turn.checkpointed_steps]))
+                turn.messages.append({'role': 'user', 'content':
+                    'AVISO DE HEXOS (no es la persona): continúa el mismo turno desde '
+                    'el checkpoint anterior. Las operaciones exitosas que aparecen '
+                    'arriba ya se ejecutaron: usa sus resultados y no las repitas. '
+                    'Corrige únicamente las que consten como fallidas y termina el encargo.'})
             else:
                 turn.messages = [dict(role='system', content=PROMPT),
                             dict(role='user', content='PETICIÓN ACTUAL:\n' + turn.prompt_text)]
