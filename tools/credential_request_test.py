@@ -86,12 +86,19 @@ class CredentialRequestTest(unittest.TestCase):
             self.assertNotIn('secreta', note[0]['text'])
 
     def test_interface_and_origin_rules_are_declared_in_the_server(self):
-        source = Path('hexos/agent/chat.py').read_text()
+        # La entrada pública dejó de ser dueña del HTTP al extraer el backend.
+        # La barrera sigue siendo estructural, pero se inspecciona el adaptador
+        # que recibe realmente las peticiones, no un archivo contenedor.
+        source = Path('hexos/agent/chat_backend/server.py').read_text()
+        bootstrap = Path('hexos/agent/chat_backend/bootstrap.py').read_text()
         # Sin comprobación de origen, una página abierta en otra pestaña podría
         # provocar la ventana que pide la credencial.
         self.assertIn("origin not in allowed_origins", source)
         self.assertIn("'/api/credentials'", source)
-        self.assertIn('allowed_origins = ', source)
+        # La política de orígenes se construye al arrancar y se inyecta en el
+        # adaptador; comprobar ambos lados evita que uno de los dos quede mudo.
+        self.assertIn('allowed_origins = ', bootstrap)
+        self.assertIn('make_handler(agent, system_telemetry, allowed_origins', bootstrap)
         page = Path('hexos/agent/chat.html').read_text()
         self.assertIn('/api/credentials', page)
         self.assertIn('accesstarget', page)

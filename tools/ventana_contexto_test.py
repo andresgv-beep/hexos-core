@@ -7,6 +7,7 @@ from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from hexos.agent.chat import Agent
+from hexos.agent.chat_backend.state import TurnState
 from hexos.agent.work import now
 
 
@@ -156,3 +157,73 @@ class CorteporKVTest(unittest.TestCase):
             store.db.commit()
             _, filas = agent.window(store, 'ahora', True, agent.history_budget())
         self.assertEqual(len(filas), 1)
+
+
+class ContinuidadTrasCorteTest(unittest.TestCase):
+    """Un corte abandona KV, nunca el encargo que ya estaba en curso."""
+
+    class Runtime:
+        native = True
+        ctx = 8192
+        kv_position = 0
+        def __init__(self, messages=None):
+            self.messages = [] if messages is None else messages
+            self.calls = []
+        def call(self, request):
+            self.calls.append(request)
+            self.messages = []
+        def generate(self, messages):
+            self.messages.extend(messages)
+            return {'reply': 'Sigo con el encargo.', 'work': None}
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix='hexos-handoff-')
+        self.runtime = self.Runtime()
+        self.agent = Agent(self.tmp.name, self.runtime)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def poblar(self):
+        with self.agent.store() as store:
+            for role, text in [
+                ('user', 'Necesito revisar el servicio Atlas y dejar anotado el resultado.'),
+                ('assistant', 'Voy a revisar Atlas y conservaré el resultado.'),
+                ('user', 'No pierdas ese trabajo aunque se llene el contexto.'),
+                ('assistant', 'El objetivo activo es Atlas.'),
+            ]:
+                store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
+                                 (uuid4().hex, now(), role, text, text))
+            store.db.commit()
+
+    def test_el_corte_guarda_un_traspaso_literal(self):
+        self.poblar()
+        with self.agent.store() as store:
+            _, rows = self.agent.window(store, 'nuevo', True, 40)
+            handoff = self.agent.context.load_handoff(store)
+        self.assertEqual(rows, [])
+        self.assertIsNotNone(handoff)
+        text = '\n'.join(row['text'] for row in handoff['dialogue'])
+        self.assertIn('Atlas', text)
+        self.assertIn('no pierdas', text.casefold())
+
+    def test_el_primer_turno_nuevo_recibe_el_traspaso_y_luego_lo_confirma(self):
+        self.poblar()
+        with self.agent.store() as store:
+            self.agent.window(store, 'nuevo', True, 40)
+            turn = TurnState(text='continúa con ello')
+            self.agent.context.prepare(store, turn)
+            rendered = str(turn.messages)
+            self.assertIn('TRASPASO DE CONTINUIDAD', rendered)
+            self.assertIn('Atlas', rendered)
+        self.agent.chat('continúa con ello')
+        with self.agent.store() as store:
+            self.assertIsNone(self.agent.context.load_handoff(store))
+
+    def test_un_turno_normal_reutiliza_el_contexto_nativo(self):
+        self.runtime.messages = [dict(role='system', content='prefijo ya procesado')]
+        with self.agent.store() as store:
+            turn = TurnState(text='siguiente paso')
+            self.agent.context.prepare(store, turn)
+        self.assertEqual(self.runtime.calls, [])
+        self.assertEqual(turn.messages, [dict(role='user', content='siguiente paso')])

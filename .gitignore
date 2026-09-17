@@ -22,6 +22,8 @@ runtime/workspace/
 # Python
 __pycache__/
 *.pyc
+# Copia local creada antes del refactor del chat; sirve para rollback, no para el repo.
+hexos/agent/chat.py.pre-refactor-*.bak
 
 # Interfaz web (Next.js): dependencias y artefactos generados, nunca al repo
 interfaz/node_modules/
