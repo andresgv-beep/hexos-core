@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 import time
+from .. import web
 from ..work import now, string
 from ..continuity import history_tool
 from .state import Environment
@@ -33,6 +34,23 @@ AFIRMACION = re.compile(
     # problema con el NAS» no es un dato suyo y no debe gastar una generación.
     r'|tengo (?:dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|\d+)\s'
     r'|en realidad me llamo|no me llamo)\b', re.I)
+
+# La pregunta pide un dato de AHORA, que el modelo no puede tener: su
+# entrenamiento se quedó en una fecha. Se busca por él, igual que se busca en el
+# archivo cuando mira al pasado. La puerta de recovery.py cubre «buscó y no abrió
+# fuente»; esta cubre lo anterior: no buscar. Contestó de memoria que no sabía
+# qué Ubuntu es la actual, teniendo la web delante.
+ACTUALIDAD = re.compile(
+    r'\b[úu]ltim[ao]\s+versi[óo]n\b|\bversi[óo]n\s+m[áa]s\s+(?:reciente|actual|nueva)\b'
+    r'|\bqu[ée]\s+versi[óo]n\b.{0,24}\b(?:actual|hoy|ahora)\b'
+    r'|\bcu[áa]nto\s+(?:cuesta|vale)\b|\bprecio\s+(?:de|del|actual)\b'
+    r'|\bnovedades\b|\bqu[ée]\s+hay\s+de\s+nuevo\b|\bya\s+(?:sali[óo]|est[áa]\s+disponible)\b'
+    r'|\b[úu]ltimas?\s+noticias\b', re.I)
+# …salvo cuando habla de lo suyo: sus equipos y sus notas no están en internet.
+ES_LOCAL = re.compile(
+    r'\bnotas?\b|\bcontenedor|\bdocker\b|\bnas\b|\bsynology\b|\bservidorsrv|\bnimos\b'
+    r'|\bdisco\b|\bsd[a-z]\b|\bhelios\b|\bhexos\b|\braid\b', re.I)
+
 
 RECUERDO = re.compile(
     r'\b(te acuerdas|recuerdas|acordarte|te acordabas|me acuerdo'
@@ -143,6 +161,32 @@ class MemoryService:
                     key=clave, value=value, source='user_statement',
                     note='Confirmado en el perfil HERA; estará disponible en los próximos turnos '
                          'aunque se limpie el contexto. Guardar no lo hace cierto: lo respalda su mensaje.')
+
+    def recall_web(self, text):
+        """Buscar en la web pública cuando la pregunta pide un dato de ahora.
+
+        Misma figura que recall_history: lo consulta HexOS, entra como dato, y un
+        fallo aquí —sin red, sin salida— no puede tumbar el turno. No lee las
+        fuentes: solo deja los resultados delante para que el modelo abra la que
+        le sirva con web_read, que es la puerta que ya existe.
+        """
+        if not ACTUALIDAD.search(text or '') or ES_LOCAL.search(text or ''):
+            return None
+        empezado = time.monotonic()
+        try:
+            encontrados = web.search(text.strip()[:200])
+        except Exception as exc:
+            return dict(tool='web.search', arguments=dict(query=text.strip()[:200]),
+                        effect='read', changes_state=False, ts=now(),
+                        seconds=round(time.monotonic() - empezado, 3), failed=True,
+                        result=dict(error=str(exc)[:200], requested_by='hexos'))
+        return dict(tool='web.search', arguments=dict(query=text.strip()[:200]),
+                    effect='read', changes_state=False, ts=now(),
+                    seconds=round(time.monotonic() - empezado, 3), failed=False,
+                    result=dict(results=encontrados, requested_by='hexos',
+                                note='Lo buscó HexOS al ver que la pregunta pide un dato de ahora; '
+                                     'el modelo no lo pidió. Son titulares y fragmentos: para '
+                                     'afirmar algo hay que abrir la fuente con web_read.'))
 
     def recall_history(self, store, text, turn_id):
         """Buscar en el archivo cuando la pregunta apunta al pasado, sin esperar a
