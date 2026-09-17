@@ -187,6 +187,8 @@ def dispatch(store, name, args, turn_id=None):
             rows['acceso/' + nombre] = dict(
                 id='acceso/' + nombre, mac=None, interface=None,
                 pinned_host=entrada.get('host'), pinned_port=entrada.get('port'),
+                pinned_original=entrada.get('original_address'),
+                pinned_scheme=entrada.get('scheme'),
                 addresses=[], latest_addresses=[], in_latest_snapshot=False,
                 last_observed_at=None, only_access=True,
                 identity=dict(name=nombre, kind=None, source='saved_access'))
@@ -208,7 +210,10 @@ def dispatch(store, name, args, turn_id=None):
             salida = dict(id=d['id'])
             for clave, valor in (('name', identidad.get('name')), ('kind', identidad.get('kind')),
                                  ('source', identidad.get('source')), ('mac', d.get('mac')),
-                                 ('host', d.get('pinned_host')), ('port', d.get('pinned_port'))):
+                                 ('original_address', d.get('pinned_original')),
+                                 ('scheme', d.get('pinned_scheme')),
+                                 ('ssh_host', d.get('pinned_host')),
+                                 ('ssh_port', d.get('pinned_port'))):
                 if valor:
                     salida[clave] = valor
             ips = [a['ip'] for a in d.get('latest_addresses') or [] if a.get('ip')]
@@ -235,7 +240,7 @@ def dispatch(store, name, args, turn_id=None):
             if scope == 'access':
                 return bool(d.get('has_access'))
             if scope == 'remote':
-                return bool(d.get('host'))
+                return bool(d.get('original_address') or d.get('ssh_host'))
             if scope == 'local':
                 return bool(d.get('mac') or d.get('ips'))
             return not d.get('name')  # unidentified
@@ -244,7 +249,7 @@ def dispatch(store, name, args, turn_id=None):
         counts = dict(
             registered=sum(bool(d.get('name')) for d in compact_all),
             with_access=sum(bool(d.get('has_access')) for d in compact_all),
-            remote=sum(bool(d.get('host')) for d in compact_all),
+            remote=sum(bool(d.get('original_address') or d.get('ssh_host')) for d in compact_all),
             local_observed=sum(bool(d.get('mac') or d.get('ips')) for d in compact_all),
             visible_in_last_observation=sum(bool(d.get('seen_now')) for d in compact_all),
             unidentified=sum(not d.get('name') for d in compact_all),
@@ -259,8 +264,10 @@ def dispatch(store, name, args, turn_id=None):
                          'credencial SSH; remote=con dirección fija; local=observados alguna vez '
                          'en una red local; unidentified=sin nombre. Consulta network.local para '
                          'IPs y vecinos visibles ahora. '
-                         'host es la dirección fija de un equipo de otra red; los de esta '
-                         'red no la tienen y se ven por ips. seen_now es que se le vio en la '
+                         'original_address es exactamente lo que escribió la persona; scheme '
+                         'dice su protocolo. ssh_host y ssh_port son la ruta normalizada que usa '
+                         'la conexión y no sustituyen a la dirección original. Los equipos sin '
+                         'ruta remota se ven por ips. seen_now es que se le vio en la '
                          'última lectura de red. Las claves vacías se omiten: '
                          'unidentified significa sin identificar. Un filtro sin coincidencias no significa que el inventario esté vacío: consulta sin query. '
                          'has_access dice si hay credencial guardada para ese nombre; sin ella no se '
@@ -293,6 +300,7 @@ def dispatch(store, name, args, turn_id=None):
                     if buscado in (d['id'].casefold(), (d.get('mac') or '').casefold())
                     or (d.get('identity') or {}).get('name', '').casefold() == buscado
                     or (d.get('pinned_host') or '').casefold() == buscado
+                    or (d.get('pinned_original') or '').casefold() == buscado
                     or any(a['ip'] == buscado for a in d.get('latest_addresses', []))]
         if len(elegidos) > 1:
             # Decir «ambiguo» y callar deja a la persona sin salida. Se nombran las
@@ -336,7 +344,10 @@ def dispatch(store, name, args, turn_id=None):
         # registra el nombre CON su dirección, y se resuelve por ella.
         etiqueta = string(args['name'], 'name', 100)
         # Acepta la URL tal cual se pega, con su puerto si lo trae.
-        destino, puerto = hosts.endpoint(args['host'])
+        original = string(args['host'], 'host', 300).strip()
+        destino, puerto = hosts.endpoint(original)
+        esquema = re.match(r'^([a-z][a-z0-9+.-]*)://', original, re.I)
+        esquema = esquema.group(1).casefold() if esquema else None
         fila = store.db.execute("SELECT id,text FROM conversation WHERE id=? AND role='user'",
                                 (turn_id,)).fetchone() if turn_id else None
         if not fila:
@@ -345,7 +356,7 @@ def dispatch(store, name, args, turn_id=None):
         # Misma regla que identificar y que guardar un hecho: la dirección tiene que
         # estar en las palabras de la persona. Así no se registra un equipo deducido,
         # y menos uno al que luego se le mandaría una contraseña.
-        if destino not in cita.casefold():
+        if original.casefold() not in cita.casefold():
             raise ValueError('Esa dirección no aparece en el mensaje de la persona. Registra solo '
                              'la que te haya dado, tal cual la escribió.')
         # Si ya hay un equipo con ese nombre —visto en la red o registrado antes—,
@@ -364,6 +375,7 @@ def dispatch(store, name, args, turn_id=None):
         observado = bool(anterior.get('mac'))
         registro = dict(anterior, id=clave, pinned_host=destino,
                         pinned_port=puerto or anterior.get('pinned_port'),
+                        pinned_original=original, pinned_scheme=esquema,
                         mac=anterior.get('mac') if observado else None,
                         interface=anterior.get('interface') if observado else None,
                         addresses=anterior.get('addresses', []),
@@ -376,8 +388,9 @@ def dispatch(store, name, args, turn_id=None):
         store.db.execute('INSERT OR REPLACE INTO network_devices VALUES (?,?)',
                          (clave, json.dumps(registro)))
         store.db.commit()
-        return dict(saved=True, device=etiqueta, host=destino,
-                    port=registro['pinned_port'], pinned=True,
+        return dict(saved=True, device=etiqueta, original_address=original,
+                    scheme=esquema, ssh_host=destino,
+                    ssh_port=registro['pinned_port'], pinned=True,
                     attached_to_known=bool(mismos),
                     note='Registrado con dirección fija: no se busca en los vecinos de la red y '
                          'sigue valiendo desde cualquier sitio. Esto no comprueba que se llegue a '
@@ -443,6 +456,9 @@ def dispatch(store, name, args, turn_id=None):
                              ' (' + otro['id'] + '). Dale otro nombre, o olvida ese primero.')
         device['pinned_host'] = device.get('pinned_host') or otro.get('pinned_host')
         device['pinned_port'] = device.get('pinned_port') or otro.get('pinned_port')
+        device['pinned_original'] = (device.get('pinned_original')
+                                     or otro.get('pinned_original'))
+        device['pinned_scheme'] = device.get('pinned_scheme') or otro.get('pinned_scheme')
         store.db.execute('DELETE FROM network_devices WHERE id=?', (otro['id'],))
         absorbido = otro['id']
     identity = dict(name=label, kind=kind or None, source='user_statement', source_id=source['id'],

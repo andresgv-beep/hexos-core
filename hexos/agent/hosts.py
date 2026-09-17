@@ -123,11 +123,14 @@ def load(workspace):
     """
     fichas, claves = cards(workspace), secrets(workspace)
     return {nombre: dict(user=f['user'], password=claves.get(f['id'], ''), port=f['port'],
-                         **({'host': f['host']} if f.get('host') else {}))
+                         **({'host': f['host']} if f.get('host') else {}),
+                         **({'original_address': f['original_address']}
+                            if f.get('original_address') else {}),
+                         **({'scheme': f['scheme']} if f.get('scheme') else {}))
             for nombre, f in fichas.items() if f.get('user')}
 
 
-def save(workspace, name, user, password, port=22, host=None):
+def save(workspace, name, user, password, port=22, host=None, original_address=None):
     """Guarda el acceso de un equipo: la ficha con todo y el secreto aparte.
 
     `host` fija la dirección. Sin ella se resuelve por los vecinos de la red, que
@@ -140,19 +143,37 @@ def save(workspace, name, user, password, port=22, host=None):
         raise ValueError('Puerto no válido')
     if host is not None:
         host = address(host)
+    scheme = None
+    if original_address is not None:
+        if not isinstance(original_address, str) or not original_address.strip():
+            raise ValueError('Dirección original vacía')
+        original_address = original_address.strip()
+        original_host, _ = endpoint(original_address)
+        if host and original_host != host:
+            raise ValueError('La dirección original no corresponde al host de conexión')
+        scheme_match = re.match(r'^([a-z][a-z0-9+.-]*)://', original_address, re.I)
+        scheme = scheme_match.group(1).casefold() if scheme_match else None
     clave = name.casefold()
     fichas = cards(workspace)
     anterior = fichas.get(clave, {})
     # El id no cambia al renombrar ni al reescribir: es lo que ata el secreto a su
     # equipo. Guardarlo por nombre dejaba la contraseña huérfana al renombrarlo.
     identificador = anterior.get('id') or ('equipo/' + uuid4().hex[:12])
-    fichas[clave] = dict(anterior, id=identificador, name=clave, user=user, port=port,
-                         host=host or anterior.get('host'))
+    conserva_original = not host or host == anterior.get('host')
+    fichas[clave] = dict(
+        anterior, id=identificador, name=clave, user=user, port=port,
+        host=host or anterior.get('host'),
+        original_address=(original_address if original_address is not None else
+                          anterior.get('original_address') if conserva_original else None),
+        scheme=(scheme if original_address is not None else
+                anterior.get('scheme') if conserva_original else None))
     claves = secrets(workspace)
     claves[identificador] = password
     _write_private(devices_path(workspace), fichas)
     _write_private(store_path(workspace), claves)
-    return dict(saved=clave, user=user, port=port, host=fichas[clave].get('host'))
+    return dict(saved=clave, user=user, port=port, host=fichas[clave].get('host'),
+                original_address=fichas[clave].get('original_address'),
+                scheme=fichas[clave].get('scheme'))
 
 
 def update(workspace, name, port=None, host=None):
@@ -174,7 +195,16 @@ def update(workspace, name, port=None, host=None):
             raise ValueError('Puerto no válido')
         ficha['port'] = port
     if host is not None:
-        ficha['host'] = address(host)
+        if not isinstance(host, str):
+            raise ValueError('Dirección no válida: usa una IP, URL o nombre de equipo')
+        original = host.strip()
+        normalizado, puerto_embebido = endpoint(original)
+        ficha['host'] = normalizado
+        ficha['original_address'] = original
+        encontrado = re.match(r'^([a-z][a-z0-9+.-]*)://', original, re.I)
+        ficha['scheme'] = encontrado.group(1).casefold() if encontrado else None
+        if puerto_embebido is not None and port is None:
+            ficha['port'] = puerto_embebido
     fichas[clave] = ficha
     _write_private(devices_path(workspace), fichas)
     return dict(updated=clave, user=ficha.get('user'), host=ficha.get('host'),
@@ -358,10 +388,13 @@ def resolve(workspace, name):
     """
     if not NAME.fullmatch(name or ''):
         raise ValueError('Nombre de equipo no válido')
-    fijada = (credentials(workspace, name) or {}).get('host')
+    acceso = credentials(workspace, name) or {}
+    fijada = acceso.get('host')
     if fijada:
         return dict(name=name.casefold(), host=fijada, mac=None,
-                    observed_at=None, reachable=None, pinned=True, alternatives=[])
+                    observed_at=None, reachable=None, pinned=True,
+                    original_address=acceso.get('original_address'),
+                    scheme=acceso.get('scheme'), alternatives=[])
     database = Path(workspace) / 'work.sqlite'
     if not database.exists():
         raise ValueError('No hay inventario todavía; pide guardar los dispositivos de la red')
@@ -420,7 +453,8 @@ def resolve(workspace, name):
                          'ni dirección fija; pide una lectura de la red y reintenta, o dale una '
                          'dirección fija con device_remote')
     return dict(name=wanted, mac=device.get('mac'), **orden[0],
-                alternatives=orden[1:])
+                original_address=device.get('pinned_original'),
+                scheme=device.get('pinned_scheme'), alternatives=orden[1:])
 
 
 def main():

@@ -91,8 +91,9 @@ TOOLS = {
                           'device_identify. Lleva la dirección que la persona '
                           'acaba de dar, TAL CUAL la escribió: vale una IP, un nombre como '
                           'servidor.ddns.net, una URL completa como https://servidor.ddns.net:30 o '
-                          'nombre:puerto. No la recortes ni le quites el https ni el puerto: HexOS lo '
-                          'normaliza y se queda con el puerto si viene. Úsala cuando pidan '
+                          'nombre:puerto. No la recortes ni le quites el https ni el puerto: HexOS '
+                          'conserva esa dirección literal para poder mostrarla después y deriva por '
+                          'separado el host/puerto de conexión. Úsala cuando pidan '
                           'añadir o conectar un equipo de otro sitio, o cuando device_identify diga que no '
                           'está en el inventario. La dirección debe aparecer literal en su mensaje; no la '
                           'inventes ni la completes. No comprueba que se llegue al equipo.',

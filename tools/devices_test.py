@@ -150,7 +150,10 @@ class DevicesTest(unittest.TestCase):
                 s.db.commit()
                 r = agent.tool(s, 'device.remote',
                                dict(name='servidor 1', host='https://servidorsrv1.ddns.net:30'), turn_id='u')
-                self.assertEqual((r['host'], r['port']), ('servidorsrv1.ddns.net', 30))
+                self.assertEqual(r['original_address'], 'https://servidorsrv1.ddns.net:30')
+                self.assertEqual(r['scheme'], 'https')
+                self.assertEqual((r['ssh_host'], r['ssh_port']),
+                                 ('servidorsrv1.ddns.net', 30))
                 from hexos.agent.hosts import resolve
                 self.assertEqual(resolve(tmp, 'servidor 1')['port'], 30)
 
@@ -200,7 +203,10 @@ class DevicesTest(unittest.TestCase):
                 lista = agent.tool(s, 'device.list', {})
                 self.assertEqual(lista['total'], 1, 'una máquina, una ficha')
                 ficha = lista['items'][0]
-                self.assertEqual((ficha['host'], ficha['port']), ('casa.ddns.net', 30))
+                self.assertEqual(ficha['original_address'], 'https://casa.ddns.net:30')
+                self.assertEqual(ficha['scheme'], 'https')
+                self.assertEqual((ficha['ssh_host'], ficha['ssh_port']),
+                                 ('casa.ddns.net', 30))
                 # Y sigue siendo el equipo que se ve en la red: no se pierde su MAC.
                 self.assertEqual(ficha['mac'], 'aa:bb:cc:dd:ee:ff')
                 self.assertTrue(ficha['seen_now'])
@@ -220,8 +226,10 @@ class DevicesTest(unittest.TestCase):
                 agent.tool(s, 'device.remote',
                            dict(name='servidor 1', host='https://casa.ddns.net:30'), turn_id='u')
                 fila = agent.tool(s, 'device.list', {})['items'][0]
-                self.assertEqual(fila['host'], 'casa.ddns.net')
-                self.assertEqual(fila['port'], 30)
+                self.assertEqual(fila['original_address'], 'https://casa.ddns.net:30')
+                self.assertEqual(fila['scheme'], 'https')
+                self.assertEqual((fila['ssh_host'], fila['ssh_port']),
+                                 ('casa.ddns.net', 30))
                 self.assertNotIn('ips', fila, 'un equipo de otra red no tiene IP en esta')
 
     def test_identificar_en_casa_absorbe_el_registro_remoto_del_mismo_nombre(self):
@@ -248,7 +256,9 @@ class DevicesTest(unittest.TestCase):
                 self.assertEqual(lista['duplicates'], [], 'una máquina, una ficha')
                 ficha = lista['items'][0]
                 self.assertEqual(ficha['mac'], 'aa:bb:cc:dd:ee:ff')
-                self.assertEqual((ficha['host'], ficha['port']), ('casa.ddns.net', 30))
+                self.assertEqual(ficha['original_address'], 'https://casa.ddns.net:30')
+                self.assertEqual((ficha['ssh_host'], ficha['ssh_port']),
+                                 ('casa.ddns.net', 30))
                 # Y con los dos caminos: la IP local primero por estar a la vista.
                 from hexos.agent.hosts import resolve
                 ruta = resolve(tmp, 'servidorsrv1')
@@ -284,7 +294,7 @@ class DevicesTest(unittest.TestCase):
                 fila = next(d for d in r['items'] if d['name'] == 'synology 2')
                 self.assertTrue(fila['only_access'])
                 self.assertTrue(fila['has_access'])
-                self.assertEqual(fila['host'], 'casa.ddns.net')
+                self.assertEqual(fila['ssh_host'], 'casa.ddns.net')
 
     def test_lo_que_sale_en_la_lista_se_puede_quitar(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -720,7 +730,7 @@ class VistasDelInventarioTest(unittest.TestCase):
                 acceso = agent.tool(s, 'device.list', {'scope': 'access'})
                 self.assertEqual([d['name'] for d in acceso['items']], ['servidor fuera'])
                 remoto = agent.tool(s, 'device.list', {'scope': 'remote'})
-                self.assertEqual([d['host'] for d in remoto['items']], ['casa.ddns.net'])
+                self.assertEqual([d['ssh_host'] for d in remoto['items']], ['casa.ddns.net'])
                 locales = agent.tool(s, 'device.list', {'scope': 'local'})
                 self.assertEqual({d['id'] for d in locales['items']},
                                  {'eth0/aa:bb', 'eth0/cc:dd'})

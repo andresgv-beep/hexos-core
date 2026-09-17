@@ -46,9 +46,14 @@ class CredentialService:
         # no puede decir un equipo y mandar el acceso a otro. Con dirección escrita manda
         # esa —es la única forma de llegar a un equipo que no está en esta red—, se valida
         # antes de tocar nada y queda anotada en el turno para que se vea a dónde fue.
-        fijada = hosts.address(payload['host']) if payload.get('host') else None
-        located = dict(host=fijada, pinned=True) if fijada else hosts.resolve(self.env.workspace, device)
-        hosts.save(self.env.workspace, device, user, password, port, fijada)
+        if payload.get('host') is not None and not isinstance(payload['host'], str):
+            raise ValueError('host debe ser una dirección escrita')
+        original = payload['host'].strip() if payload.get('host') else None
+        fijada = hosts.endpoint(original)[0] if original else None
+        located = (dict(host=fijada, pinned=True, original_address=original)
+                   if fijada else hosts.resolve(self.env.workspace, device))
+        hosts.save(self.env.workspace, device, user, password, port, fijada,
+                   original_address=located.get('original_address'))
         retomar = None
         if (self.session.credential_request or {}).get('device') == device.casefold():
             retomar = self.session.credential_request.get('pending_request')

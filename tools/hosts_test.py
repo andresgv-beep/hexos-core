@@ -136,6 +136,15 @@ class ActualizarSinContrasenaTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             update(self.tmp.name, 'synology 1', port=0)
 
+    def test_cambiar_host_no_deja_la_url_del_anterior(self):
+        from hexos.agent.hosts import update, credentials
+        update(self.tmp.name, 'synology 1', host='https://otra.ddns.net:31')
+        acceso = credentials(self.tmp.name, 'synology 1')
+        self.assertEqual(acceso['host'], 'otra.ddns.net')
+        self.assertEqual(acceso['port'], 31)
+        self.assertEqual(acceso['original_address'], 'https://otra.ddns.net:31')
+        self.assertEqual(acceso['scheme'], 'https')
+
     def test_no_inventa_accesos_ni_cambia_nada_sin_pedirlo(self):
         from hexos.agent.hosts import update, load
         with self.assertRaises(ValueError):
@@ -222,6 +231,19 @@ class DireccionFijaTest(unittest.TestCase):
         # La dirección DDNS del NAS es un nombre, no una IP.
         save(self.tmp.name, 'synology', 'helios', 'x', 22, host='micasa.synology.me')
         self.assertEqual(resolve(self.tmp.name, 'synology')['host'], 'micasa.synology.me')
+
+    def test_conserva_la_direccion_original_sin_usarla_como_argv(self):
+        from hexos.agent.hosts import cards
+        original = 'https://MiCasa.Synology.ME:5001/panel'
+        save(self.tmp.name, 'synology', 'helios', 'x', 22,
+             host='micasa.synology.me', original_address=original)
+        ficha = cards(self.tmp.name)['synology']
+        self.assertEqual(ficha['original_address'], original)
+        self.assertEqual(ficha['scheme'], 'https')
+        # La conexión sigue usando solo el hostname validado, nunca la URL.
+        ruta = resolve(self.tmp.name, 'synology')
+        self.assertEqual(ruta['host'], 'micasa.synology.me')
+        self.assertEqual(ruta['original_address'], original)
 
     def test_rechaza_lo_que_no_es_una_direccion(self):
         from hexos.agent.hosts import address
