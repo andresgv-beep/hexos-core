@@ -7,8 +7,13 @@ from .. import hosts, notes
 from .state import Environment
 
 
+# `ver` pedía un límite: con `ver\w*` casaba con «versión», y «la última versión
+# de iOS» abría una nota del NAS en mitad de una búsqueda web. Los verbos que
+# admiten pronombre lo llevan explícito; los demás cierran en el límite.
 PEDIR_VER = re.compile(
-    r'\b(?:[áa]bre|abrir|mu[eé]?stra|mostrar|ens[eé]?[ñn]a|ense[ñn]ar|saca|sacar|ver|veo)\w*\b', re.I)
+    r'\b(?:[áa]bre(?:la|lo|las|los|me)?|abrir|mu[eé]?stra(?:me|la|lo|las|los|mela)?|mostrar|'
+    r'ens[eé]?[ñn]a(?:me|la|lo|mela)?|ense[ñn]ar|saca(?:la|lo|me)?|sacar|'
+    r'ver(?:la|lo|las|los)?|verme|veo)\b', re.I)
 # Aparte, porque el atajo tiene que llamar a la herramienta que toca: con las dos
 # juntas «ciérrala» abría la nota, que es peor que no hacer nada.
 # Habla de notas, aunque no señale a ninguna: «cierra la nota», «cierra todo».
@@ -39,12 +44,28 @@ class ReferenceResolver:
     # modelo no la resuelve —pide aclaración a algo que él mismo acaba de nombrar—.
     # Pero HexOS sí sabe de qué se está hablando: lo tiene en la traza del turno
     # anterior. Se le da resuelto COMO DATO; decidir sigue siendo suyo.
-    SENALA = re.compile(
-        r'\b(?:[áa]brela|ci[ée]rrala|mu[eé]?stramela|ens[eé]?[ñn]amela|d[ée]jamela|qu[íi]tala|'
-        r'[áa]brela|esa\s+nota|esta\s+nota|la\s+nota\s+esa|la\s+[úu]ltima|la\s+primera|'
-        r'la\s+anterior|la\s+de\s+antes)\b'
-        r'|\bla\s+(\d{1,2})\b'
-        r'|\b(?:[áa]brel[oa]|mu[ée]strala|ens[ée][ñn]ala|ci[ée]rral[oa])\b', re.I)
+    # Dos familias, y la diferencia importa. Los pronombres pegados al verbo
+    # —«ábrela», «ciérrala»— solo pueden referirse a algo ya nombrado: valen
+    # solos. Los señaladores genéricos —«la última», «la 3»— son ambiguos: «la
+    # última versión de iOS» abrió una nota del NAS en mitad de una búsqueda web.
+    # Esos solo cuentan si CIERRAN la frase, porque un señalador seguido de
+    # sustantivo no señala: es el determinante de ese sustantivo.
+    PRONOMBRE = re.compile(
+        r'\b(?:[áa]brel[oa]|ci[ée]rral[oa]|mu[eé]?stramela|mu[ée]strala|ens[eé]?[ñn]amela|'
+        r'ens[ée][ñn]ala|d[ée]jamela|qu[íi]tala)\b', re.I)
+    GENERICO = re.compile(
+        r'\b(?:esa\s+nota|esta\s+nota|la\s+nota\s+esa|la\s+[úu]ltima|la\s+primera|'
+        r'la\s+anterior|la\s+de\s+antes|la\s+(\d{1,2}))'
+        r'\s*(?:[.,;:!?)\]]|$|\s+(?:por\s+favor|porfa|ahora|ya|gracias)\b)', re.I)
+
+    @classmethod
+    def senala(cls, texto):
+        """El señalador del mensaje, o None. Devuelve también su ordinal si lo trae."""
+        hallado = cls.PRONOMBRE.search(texto or '')
+        if hallado:
+            return hallado, None
+        hallado = cls.GENERICO.search(texto or '')
+        return (hallado, hallado.group(1)) if hallado else (None, None)
 
     def device_in_message(self, store, turn_id):
         """El equipo guardado que la persona nombró en este turno, si es solo uno.
@@ -187,9 +208,9 @@ class ReferenceResolver:
         id que ella vio en pantalla hace un turno, igual que se traduce «srv1» al
         equipo guardado. Si no hay a qué señalar, no se inventa ninguna.
         """
-        if not text or not self.SENALA.search(text):
+        hallado, ordinal = self.senala(text)
+        if not hallado:
             return None
-        ordinal = self.SENALA.search(text).group(1)
         # Lo último que se enseñó o listó, de más reciente a más antiguo.
         filas = store.db.execute(
             'SELECT e.body FROM tool_events e JOIN conversation c ON c.id=e.turn_id '

@@ -104,6 +104,26 @@ class RecoveryController:
                 'Si falta información imprescindible o el error no es recuperable, explica '
                 'el bloqueo brevemente. Queda un intento de recuperación.')]
             return True
+        # Un fragmento del buscador sirve para descubrir fuentes, no para sostener
+        # una respuesta. Medido en vivo: buscó «nuevo iPhone» y convirtió rumores
+        # de los snippets en hechos sin abrir una sola página. La secuencia mínima
+        # queda garantizada aquí, no en la memoria del modelo.
+        searched = any(step.get('tool') == 'web.search' and not step.get('failed')
+                       for step in turn.trace)
+        read_sources = [step for step in turn.trace
+                        if step.get('tool') == 'web.read' and not step.get('failed')
+                        and isinstance(step.get('result'), dict)
+                        and step['result'].get('url') and step['result'].get('text')]
+        if searched and not read_sources and not turn.retries.web_evidence_retries:
+            turn.retries.web_evidence_retries += 1
+            turn.previous_reply = output['reply']
+            turn.messages = [dict(role='user', content=
+                'AVISO DE HEXOS (no es la persona): solo has visto fragmentos del buscador. '
+                'No son fuentes leídas y no sostienen todavía una respuesta factual. Abre '
+                'AHORA al menos uno de los enlaces devueltos por web_search mediante web_read; '
+                'elige el más directo o autorizado para la pregunta. Después responde usando '
+                'solo lo que la fuente realmente diga. No menciones este aviso.')]
+            return True
         # Nombró dos equipos y solo se leyó uno. No es falta de sitio:
         # es no llevar la cuenta de lo que se le pidió.
         faltan = self.agent.uncovered(self.agent.devices_named(store, turn.uid), turn.trace, turn.text)

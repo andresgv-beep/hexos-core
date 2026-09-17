@@ -18,6 +18,16 @@ def default_nas_read(workspace, **kwargs):
     return read(workspace, **kwargs)
 
 
+def default_web_search(query, limit=5):
+    from ..web import search
+    return search(query, limit=limit)
+
+
+def default_web_read(url):
+    from ..web import read
+    return read(url)
+
+
 @dataclass(frozen=True)
 class AgentDependencies:
     """Capacidades externas que el núcleo del agente recibe desde fuera.
@@ -26,6 +36,8 @@ class AgentDependencies:
     entorno y no importa ni parchea transportes por su cuenta.
     """
     nas_read: Callable[..., Any] = default_nas_read
+    web_search: Callable[..., Any] = default_web_search
+    web_read: Callable[..., Any] = default_web_read
 
 
 @dataclass
@@ -58,6 +70,7 @@ class RetryState:
     coverage_mark: int = -1
     context_retries: int = 0
     format_retries: int = 0
+    web_evidence_retries: int = 0
 
 
 @dataclass

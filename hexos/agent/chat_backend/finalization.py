@@ -108,6 +108,20 @@ class TurnFinalizer:
                 for paso in hechas))
             output['reply'] = (output['reply'].rstrip() +
                                '\n\n· Aun así, esto sí quedó hecho: ' + detalle + '.')
+        # Las fuentes visibles salen de la traza, no de la memoria del modelo.
+        # Si ya citó una URL no se duplica; las que omita se añaden como registro
+        # mecánico de lo que realmente leyó en este turno.
+        sources = []
+        for step in turn.trace:
+            result = step.get('result')
+            if (step.get('tool') == 'web.read' and not step.get('failed')
+                    and isinstance(result, dict) and result.get('url')
+                    and result['url'] not in sources):
+                sources.append(result['url'])
+        missing_sources = [url for url in sources if url not in output['reply']]
+        if missing_sources:
+            output['reply'] = (output['reply'].rstrip() + '\n\nFuentes consultadas:\n' +
+                               '\n'.join('- ' + url for url in missing_sources))
         recordado = self.agent.harvest_facts(store, turn.text, turn.uid, turn.trace)
         if recordado:
             output['reply'] = output['reply'].rstrip() + '\n\n' + recordado

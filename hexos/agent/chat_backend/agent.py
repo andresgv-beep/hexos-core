@@ -22,7 +22,8 @@ class Agent:
     TurnRunner coordina el mismo orden de operaciones del archivo original.
     """
     SECCIONES = ReferenceResolver.SECCIONES
-    SENALA = ReferenceResolver.SENALA
+    PRONOMBRE = ReferenceResolver.PRONOMBRE
+    GENERICO = ReferenceResolver.GENERICO
     HECHO = ReplyPolicy.HECHO
     ESCRITURA_DICHA = ReplyPolicy.ESCRITURA_DICHA
     PROMESA = ReplyPolicy.PROMESA

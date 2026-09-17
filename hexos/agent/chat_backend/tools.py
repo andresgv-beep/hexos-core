@@ -125,6 +125,10 @@ class ToolDispatcher:
             return notes.dispatch(store, name, args, turn_id)
         if name.startswith('history.'):
             return history_tool(store, name, args)
+        if name == 'web.search':
+            return self.env.dependencies.web_search(args['query'], limit=args.get('limit', 5))
+        if name == 'web.read':
+            return self.env.dependencies.web_read(args['url'])
         if name.startswith('procedure.') or name in ('report.save', 'result.get'):
             return workflow.dispatch(store, name, args, turn_id)
         if name.startswith(('procedure.', 'report.', 'task.')):
