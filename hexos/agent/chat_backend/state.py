@@ -44,6 +44,9 @@ class SessionState:
     active_tools: list = field(default_factory=list)
     credential_request: dict | None = None
     context_cut: dict | None = None
+    # Última lectura de red: sirve para nombrar «la que termina en 129» sin
+    # convertir cada vecino observado en inventario persistente.
+    network_observation: dict | None = None
 
 
 @dataclass

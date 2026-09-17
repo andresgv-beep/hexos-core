@@ -57,10 +57,9 @@ TOOLS = {
                           effect='write_container', verify='self',
                           announces=(('reiniciar','reiniciad','reinicio'), ('parar','parad','paro'),
                                      ('arrancar','arrancad','arranco'), ('detener','detenid','detengo'))),
-    'device.refresh': spec('Guardar o actualizar inventario de vecinos con lectura pasiva local. '
-                           'Solo cuando piden guardar/actualizar dispositivos o identificar uno aún no guardado. '
-                           'No cambia sus nombres confirmados.', effect='write_inventory',
-                           announces=(('mirar','mirad','miro'), ('escanear','escanead','escaneo'))),
+    'device.refresh': spec('Alias heredado de network.local. Hace una lectura efímera y NO guarda '
+                           'vecinos ni IP; prefiere network.local. Para persistir un equipo concreto '
+                           'usa device.identify después de observarlo.'),
     'device.list': spec('Consultar lo GUARDADO en el inventario; no mira la red ahora. '
                         'scope decide una sola clase: registered (por defecto: equipos con nombre), '
                         'access (con acceso SSH), remote (con dirección fija o DDNS), local '
@@ -114,13 +113,13 @@ TOOLS = {
                           'ahora, vecinos actuales o qué hay conectado en esta red. No devuelve los '
                           'servidores remotos ni el inventario guardado: para eso usa device.list. '
                           'Devuelve IP propias, rutas y vecinos IPv4/IPv6 conocidos por el equipo. '
-                          'Deja registrado lo visto, así que después se puede nombrar con device_identify '
-                          'sin volver a leer. '
+                          'La observación queda solo en RAM, así que después se puede nombrar con '
+                          'device_identify sin volver a leer, pero no ensucia el inventario. '
                           'Devuelve los vecinos ya partidos en identified_neighbors (con nombre guardado) y '
                           'unidentified_neighbors (sin él), ambos con ip y mac, más counts y own_addresses, '
                           'que son las direcciones de este equipo y no dispositivos de la red. '
                           'Mostrar los nombres no requiere device.identify. '
-                          'Lectura pasiva local, sin sondeo. No descubre todos los dispositivos ni identifica '
+                          'Lectura pasiva local, sin sondeo y sin persistencia. No descubre todos los dispositivos ni identifica '
                           'cuál es el NAS. STALE no confirma conexión actual. Sin argumentos.',
                           effect='write_inventory',
                           announces=(('mirar','mirad','miro'), ('consultar','consultad','consulto'))),

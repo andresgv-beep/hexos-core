@@ -417,7 +417,30 @@ def resolve(workspace, name):
                          '; el nombre no distingue cuál')
     device = matches[0]
     # Direcciones observadas en la red, la más reciente y REACHABLE por delante.
-    addresses = device.get('latest_addresses') or device.get('addresses') or []
+    # Solo las IP que la persona pidió guardar viven en la ficha. Para un equipo
+    # local identificado por MAC, la ruta actual se resuelve leyendo el kernel en
+    # ese momento, sin escribirla de vuelta al inventario.
+    addresses = [dict(ip=ip, state=['SAVED'], observed_at='')
+                 for ip in device.get('saved_ips') or []]
+    addresses += device.get('latest_addresses') or device.get('addresses') or []
+    live_seen = False
+    if device.get('mac'):
+        try:
+            from .network import snapshot
+            actual = snapshot()
+            actuales = [dict(ip=n['ip'], state=n.get('state') or [],
+                             observed_at=actual['observed_at'])
+                        for n in actual['neighbors']
+                        if n.get('mac', '').casefold() == device['mac'].casefold()]
+            live_seen = bool(actuales)
+            addresses += actuales
+        except (OSError, RuntimeError, ValueError):
+            pass
+    unicas = {}
+    for entrada in addresses:
+        if entrada.get('ip'):
+            unicas[entrada['ip']] = entrada
+    addresses = list(unicas.values())
     locales = []
     for entry in addresses:
         try:
@@ -435,7 +458,7 @@ def resolve(workspace, name):
     # se le ve —otra casa, otra red—, manda la dirección fija. Y la que no se
     # eligió queda como alternativa, que es lo que faltaba: al no llegar por la
     # LAN, probar la de fuera en vez de rendirse.
-    aqui = bool(device.get('in_latest_snapshot')) and bool(locales) and not locales[0][0]
+    aqui = (live_seen or bool(device.get('in_latest_snapshot'))) and bool(locales) and not locales[0][0]
     orden = []
     if locales and (aqui or not fija):
         alcanzable, visto, host = locales[0]

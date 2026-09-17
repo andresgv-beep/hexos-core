@@ -14,10 +14,35 @@ from .work import now, string
 TTL_ANONIMO = 60
 
 
+def literal_ip(text, value):
+    """Una IP completa como unidad; 192.168.1.1 no casa dentro de .10."""
+    return bool(re.search(r'(?<![0-9a-f:.])' + re.escape(value) + r'(?![0-9a-f:.])',
+                          text or '', re.I))
+
+
 def initialize(store):
     store.db.execute('CREATE TABLE IF NOT EXISTS network_devices (id TEXT PRIMARY KEY, body TEXT NOT NULL)')
-    # Al arrancar se limpian todos los anónimos: lo que hubiera es de otra sesión.
-    limpiar_anonimos(store, ttl=0)
+    # Una observación automática no es inventario. Las versiones anteriores
+    # persistían vecinos e historiales DHCP para poder nombrarlos después. Al
+    # arrancar se retira ese ruido, conservando identidad, MAC, direcciones fijas
+    # dadas por la persona y solo las IP que aparezcan literalmente en su evidencia.
+    for fila in list(store.db.execute('SELECT id, body FROM network_devices')):
+        d = json.loads(fila['body'])
+        identidad = d.get('identity') or {}
+        if not identidad.get('name') and not d.get('pinned_host'):
+            store.db.execute('DELETE FROM network_devices WHERE id=?', (fila['id'],))
+            continue
+        evidencia = identidad.get('evidence') or ''
+        explicitas = list(d.get('saved_ips') or [])
+        for entrada in d.get('latest_addresses') or d.get('addresses') or []:
+            ip = entrada.get('ip')
+            if ip and literal_ip(evidencia, ip) and ip not in explicitas:
+                explicitas.append(ip)
+        d.update(saved_ips=explicitas, addresses=[], latest_addresses=[],
+                 in_latest_snapshot=False, last_observed_at=None)
+        store.db.execute('UPDATE network_devices SET body=? WHERE id=?',
+                         (json.dumps(d), fila['id']))
+    store.db.commit()
 
 
 def limpiar_anonimos(store, ttl=TTL_ANONIMO):
@@ -127,47 +152,41 @@ def annotate(store, observation):
 
 
 def observe(store, rows=None):
-    """Mirar la red y dejar constancia de lo visto. Devuelve (lectura, registros).
-
-    Lo hace también `network.local`: enseñar vecinos sin guardarlos dejaba ver
-    equipos que luego no se podían nombrar —«la que termina en 129» no existía en
-    el inventario— y dejaba en pie los de otra red marcados como recién vistos, así
-    que un sufijo casaba con el fantasma. Mostrar y registrar tienen que ser el
-    mismo acto o lo que se ve y lo que se puede tocar se separan.
-    """
+    """Compatibilidad: mirar y superponer en RAM, nunca persistir vecinos."""
     if rows is None:
         rows = {r['id']: json.loads(r['body']) for r in store.db.execute('SELECT * FROM network_devices')}
     observation = snapshot()
-    for device in rows.values():
+    return observation, ephemeral_rows(observation, rows)
+
+
+def ephemeral_rows(observation, rows):
+    """Superpone una instantánea en memoria sin escribir una sola IP en disco."""
+    transient = json.loads(json.dumps(rows))
+    for device in transient.values():
         device['in_latest_snapshot'] = False
+        device['latest_addresses'] = []
     for neighbor in observation['neighbors']:
         key = neighbor['interface'] + '/' + neighbor['mac'].lower()
-        device = rows.setdefault(key, dict(id=key, mac=neighbor['mac'].lower(),
-            interface=neighbor['interface'], addresses=[], identity=None))
-        if not device.get('in_latest_snapshot'):
-            device['latest_addresses'] = []
+        device = transient.setdefault(key, dict(id=key, mac=neighbor['mac'].lower(),
+            interface=neighbor['interface'], addresses=[], latest_addresses=[], identity=None))
         device['in_latest_snapshot'] = True
         device['last_observed_at'] = observation['observed_at']
-        address = dict(ip=neighbor['ip'], state=neighbor['state'], observed_at=observation['observed_at'])
-        device['addresses'] = [a for a in device['addresses'] if a['ip'] != address['ip']][-31:] + [address]
-        device['latest_addresses'].append(address)
-    for key, device in rows.items():
-        store.db.execute('INSERT OR REPLACE INTO network_devices VALUES (?,?)', (key, json.dumps(device)))
-    store.db.commit()
-    return observation, rows
+        device.setdefault('latest_addresses', [])
+        device['latest_addresses'].append(dict(
+            ip=neighbor['ip'], state=neighbor['state'],
+            observed_at=observation['observed_at']))
+    return transient
 
 
-def dispatch(store, name, args, turn_id=None):
+def dispatch(store, name, args, turn_id=None, observation=None):
     # Antes de mirar o de listar: lo anónimo y viejo no es inventario, es ruido de
     # hace un rato. Identificar también limpia, para que nadie nombre un fantasma.
     if name in ('device.list', 'device.refresh', 'device.identify'):
-        limpiar_anonimos(store)
+        limpiar_anonimos(store, ttl=0)
     rows = {r['id']: json.loads(r['body']) for r in store.db.execute('SELECT * FROM network_devices')}
     if name == 'device.refresh':
-        observation, rows = observe(store, rows)
-        return dict(saved=True, observed_at=observation['observed_at'], devices=len(rows),
-                    observed_devices=sum(d['in_latest_snapshot'] for d in rows.values()),
-                    truncated=observation['truncated'], note=observation['note'])
+        raise ValueError('device.refresh ya no persiste observaciones. Usa network.local; '
+                         'para guardar un equipo concreto usa device.identify.')
     if name == 'device.list':
         query = args.get('query', '').casefold()
         terms = [v.strip() for v in re.split(r'\s+or\s+', query) if v.strip()]
@@ -216,7 +235,7 @@ def dispatch(store, name, args, turn_id=None):
                                  ('ssh_port', d.get('pinned_port'))):
                 if valor:
                     salida[clave] = valor
-            ips = [a['ip'] for a in d.get('latest_addresses') or [] if a.get('ip')]
+            ips = list(d.get('saved_ips') or [])
             if ips:
                 salida['ips'] = ips
             if d.get('last_observed_at'):
@@ -395,6 +414,8 @@ def dispatch(store, name, args, turn_id=None):
                     note='Registrado con dirección fija: no se busca en los vecinos de la red y '
                          'sigue valiendo desde cualquier sitio. Esto no comprueba que se llegue a '
                          'él ni concede acceso; las credenciales se piden aparte por la ventana.')
+    if observation:
+        rows = ephemeral_rows(observation, rows)
     target = args['target'].casefold()
     candidates = [d for d in rows.values() if target in (d['id'].casefold(), d['mac'])]
     if not candidates:
@@ -470,9 +491,20 @@ def dispatch(store, name, args, turn_id=None):
         if order and current[0] < order[0]:
             raise ValueError('Existe una identificación más reciente; no se sustituye por una cita antigua.')
     device['identity'] = identity
-    store.db.execute('UPDATE network_devices SET body=? WHERE id=?', (json.dumps(device), device['id']))
+    # Solo una IP completa escrita por la persona se vuelve dato persistente.
+    # Un sufijo, o una IP que apareció únicamente en la observación, sirve para
+    # seleccionar el equipo pero no autoriza a guardar la dirección completa.
+    saved_ips = list(device.get('saved_ips') or [])
+    for entrada in device.get('latest_addresses') or []:
+        ip = entrada.get('ip')
+        if ip and literal_ip(quote, ip) and ip not in saved_ips:
+            saved_ips.append(ip)
+    persisted = dict(device, saved_ips=saved_ips, addresses=[], latest_addresses=[],
+                     in_latest_snapshot=False, last_observed_at=None)
+    store.db.execute('INSERT OR REPLACE INTO network_devices VALUES (?,?)',
+                     (persisted['id'], json.dumps(persisted)))
     store.db.commit()
-    return dict(saved=True, device=device, absorbed=absorbido,
+    return dict(saved=True, device=persisted, absorbed=absorbido,
                 note='Identificación atribuida al usuario; no verifica acceso ni concede permisos '
                      'sobre el dispositivo.' +
                      (' Se absorbió el registro remoto que tenía ese nombre: ahora es una sola '

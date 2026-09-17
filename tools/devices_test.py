@@ -209,7 +209,7 @@ class DevicesTest(unittest.TestCase):
                                  ('casa.ddns.net', 30))
                 # Y sigue siendo el equipo que se ve en la red: no se pierde su MAC.
                 self.assertEqual(ficha['mac'], 'aa:bb:cc:dd:ee:ff')
-                self.assertTrue(ficha['seen_now'])
+                self.assertNotIn('seen_now', ficha, 'la observación actual no se persiste')
                 # La dirección fija manda al resolver, que es la que sirve desde fuera.
                 from hexos.agent.hosts import resolve
                 self.assertEqual(resolve(tmp, 'synology 2')['host'], 'casa.ddns.net')
@@ -261,7 +261,8 @@ class DevicesTest(unittest.TestCase):
                                  ('casa.ddns.net', 30))
                 # Y con los dos caminos: la IP local primero por estar a la vista.
                 from hexos.agent.hosts import resolve
-                ruta = resolve(tmp, 'servidorsrv1')
+                with patch('hexos.agent.network.snapshot', return_value=encasa):
+                    ruta = resolve(tmp, 'servidorsrv1')
                 self.assertEqual(ruta['host'], '192.168.1.10')
                 self.assertEqual([a['host'] for a in ruta['alternatives']], ['casa.ddns.net'])
 
@@ -411,8 +412,7 @@ class DevicesTest(unittest.TestCase):
                 self.assertFalse(r['removed_record'])
                 self.assertIn('sigue en la red', r['note'])
                 registros = agent.tool(s, 'device.list', {'scope': 'unidentified'})['items']
-                self.assertEqual(len(registros), 1)
-                self.assertTrue(registros[0]['unidentified'])
+                self.assertEqual(registros, [], 'olvidar no convierte una observación en inventario')
 
     def test_con_fichas_duplicadas_dice_cuales_y_deja_borrar_por_id(self):
         # «Ambiguo» a secas dejaba sin salida: hay que poder quitar la que sobra.
@@ -467,9 +467,7 @@ class DevicesTest(unittest.TestCase):
                     agent.tool(s, 'device.forget', dict(target='servidor 1'))
                 self.assertEqual(agent.tool(s, 'device.list', {})['total'], 1)
 
-    def test_mirar_la_red_deja_registrado_lo_visto(self):
-        # Enseñar vecinos sin guardarlos dejaba ver equipos que luego no se podían
-        # nombrar, y los de otra red seguían figurando como recién vistos.
+    def test_mirar_la_red_es_efimero_pero_permite_nombrar_un_equipo(self):
         with tempfile.TemporaryDirectory() as tmp:
             agent = Agent(tmp, None)
             with agent.store() as s:
@@ -487,6 +485,8 @@ class DevicesTest(unittest.TestCase):
                 with patch('hexos.agent.devices.snapshot', return_value=nueva), \
                      patch('hexos.agent.chat.network_snapshot', return_value=nueva):
                     agent.tool(s, 'network.local', {})
+                self.assertEqual(s.db.execute('SELECT count(*) FROM network_devices').fetchone()[0], 0,
+                                 'observar no escribe vecinos en el inventario')
                 dicho = 'la que termina en 129 es el iphone'
                 s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u','now','user',dicho,dicho))
                 s.db.commit()
@@ -500,6 +500,9 @@ class DevicesTest(unittest.TestCase):
                         self.assertNotIn('seen_now', d)
                 nombres = {d['name'] for d in agent.tool(s, 'device.list', {})['items']}
                 self.assertEqual(nombres, {'iphone'})
+                ficha = agent.tool(s, 'device.list', {})['items'][0]
+                self.assertNotIn('ips', ficha, 'un sufijo no autoriza a guardar la IP completa')
+                self.assertEqual(s.db.execute('SELECT count(*) FROM network_devices').fetchone()[0], 1)
 
     def test_se_puede_nombrar_por_los_dos_ultimos_octetos(self):
         # «la que termina en 1.129» es como se habla de una IP; con solo el último
@@ -543,41 +546,46 @@ class DevicesTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             agent = Agent(tmp, None)
             with agent.store() as s:
-                with patch('hexos.agent.devices.snapshot', return_value=observation()):
-                    dispatch(s, 'device.refresh', {})
+                primera = observation()
                 quote = '192.168.1.10 es mi NAS Faro'
                 s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u','now','user',quote,quote))
                 s.db.commit()
                 args = dict(target='192.168.1.10', name='NAS Faro', kind='NAS', source_id='u', evidence=quote)
-                dispatch(s, 'device.identify', args)
-                with patch('hexos.agent.devices.snapshot', return_value=observation(ip='192.168.1.11')):
-                    dispatch(s, 'device.refresh', {})
-                self.assertEqual(dispatch(s, 'device.list', {})['items'][0]['name'], 'NAS Faro')
-                with patch('hexos.agent.devices.snapshot', return_value=observation(mac='11:22:33:44:55:66')):
-                    dispatch(s, 'device.refresh', {})
+                dispatch(s, 'device.identify', args, observation=primera)
+                ficha = dispatch(s, 'device.list', {})['items'][0]
+                self.assertEqual(ficha['name'], 'NAS Faro')
+                self.assertEqual(ficha['ips'], ['192.168.1.10'],
+                                 'solo queda la IP escrita por la persona')
+                # Ver luego otra IP —o incluso otra MAC— no crea ni modifica fichas.
+                dispatch(s, 'device.list', {}, observation=observation(ip='192.168.1.11'))
+                dispatch(s, 'device.list', {}, observation=observation(mac='11:22:33:44:55:66'))
                 lista = dispatch(s, 'device.list', {'scope': 'all'})
                 devices = lista['items']
-                self.assertEqual(len(devices), 2)
-                self.assertTrue(next(d for d in devices if d.get('seen_now'))['unidentified'])
+                self.assertEqual(len(devices), 1)
+                self.assertEqual(devices[0]['ips'], ['192.168.1.10'])
             with Agent(tmp, None).store() as s:
                 self.assertEqual(dispatch(s, 'device.list', {'query':'NAS Faro'})['total'], 1)
 
     def test_rejects_invented_or_assistant_evidence_and_old_correction(self):
         with tempfile.TemporaryDirectory() as tmp:
             with Agent(tmp, None).store() as s:
-                with patch('hexos.agent.devices.snapshot', return_value=observation()):
-                    dispatch(s, 'device.refresh', {})
+                vista = observation()
                 for uid, role, quote in [('a','assistant','192.168.1.10 es router'),
                                          ('u','user','192.168.1.10 es NAS'),
                                          ('v','user','192.168.1.10 es Raspberry')]:
                     s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', (uid,'now',role,quote,quote))
                 args=dict(target='192.168.1.10', name='router', evidence='192.168.1.10 es router')
-                with self.assertRaises(ValueError): dispatch(s,'device.identify',args)
+                with self.assertRaises(ValueError):
+                    dispatch(s, 'device.identify', args, observation=vista)
                 args['evidence']='192.168.1.10 es NAS'; args['name']='router'
-                with self.assertRaises(ValueError): dispatch(s,'device.identify',args)
-                dispatch(s,'device.identify',dict(target='192.168.1.10',name='Raspberry',source_id='v',evidence='192.168.1.10 es Raspberry'))
+                with self.assertRaises(ValueError):
+                    dispatch(s, 'device.identify', args, observation=vista)
+                dispatch(s, 'device.identify',
+                         dict(target='192.168.1.10', name='Raspberry', source_id='v',
+                              evidence='192.168.1.10 es Raspberry'), observation=vista)
                 args['name']='NAS'
-                with self.assertRaises(ValueError): dispatch(s,'device.identify',args)
+                with self.assertRaises(ValueError):
+                    dispatch(s, 'device.identify', args, observation=vista)
 
 
 class CoberturaTest(unittest.TestCase):
@@ -733,9 +741,9 @@ class VistasDelInventarioTest(unittest.TestCase):
                 self.assertEqual([d['ssh_host'] for d in remoto['items']], ['casa.ddns.net'])
                 locales = agent.tool(s, 'device.list', {'scope': 'local'})
                 self.assertEqual({d['id'] for d in locales['items']},
-                                 {'eth0/aa:bb', 'eth0/cc:dd'})
+                                 {'eth0/aa:bb'})
                 sin_nombre = agent.tool(s, 'device.list', {'scope': 'unidentified'})
-                self.assertEqual([d['id'] for d in sin_nombre['items']], ['eth0/cc:dd'])
+                self.assertEqual(sin_nombre['items'], [])
 
     def test_scope_desconocido_no_se_interpreta(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -743,6 +751,11 @@ class VistasDelInventarioTest(unittest.TestCase):
                 with self.assertRaises(ValueError) as caught:
                     dispatch(s, 'device.list', {'scope': 'quizá local'})
         self.assertIn('scope no válido', str(caught.exception))
+
+    def test_una_ip_no_se_autorizada_por_ser_prefijo_de_otra(self):
+        from hexos.agent.devices import literal_ip
+        self.assertFalse(literal_ip('registra 192.168.1.10', '192.168.1.1'))
+        self.assertTrue(literal_ip('registra 192.168.1.1 como router', '192.168.1.1'))
 
 
 class AnonimosCaducanTest(unittest.TestCase):

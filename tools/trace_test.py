@@ -175,11 +175,12 @@ class VerificacionTest(unittest.TestCase):
         entrada = agent.chat('mira')['tools'][0]
         self.assertEqual(entrada['verification'], 'no_requerida')
 
-    def test_una_escritura_local_se_da_por_confirmada(self):
+    def test_refrescar_la_red_ya_no_finge_ser_una_escritura(self):
         agent = self.agente(None,
             {'tool': 'device.refresh', 'arguments': {}}, {'reply': 'Ya.', 'work': None})
         entrada = agent.chat('actualiza')['tools'][0]
-        self.assertEqual(entrada['verification'], 'confirmada')
+        self.assertEqual(entrada['verification'], 'no_requerida')
+        self.assertFalse(entrada['changes_state'])
 
     def test_un_error_nunca_es_confirmacion(self):
         agent = self.agente(None,

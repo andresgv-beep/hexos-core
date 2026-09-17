@@ -106,14 +106,18 @@ class ToolDispatcher:
                                          'ventana en la interfaz para rellenarlo. ') +
                                         'No pidas la contraseña por el chat ni la aceptes si la escribe: no '
                                         'quedaría guardada por esta vía. Esto no dice nada sobre la salud del equipo.')
+        if name in ('network.local', 'device.refresh'):
+            # La lectura vive en RAM. Permite identificar después «la que termina
+            # en 129», pero reiniciar HexOS la elimina y ninguna IP observada entra
+            # en el inventario por el mero hecho de haber pasado por la LAN.
+            observacion = devices.snapshot()
+            self.session.network_observation = observacion
+            return dict(devices.annotate(store, observacion), persisted=False,
+                        persistence_note=('Observación efímera. No se ha guardado ninguna IP; '
+                                          'device.identify persiste solo el equipo elegido.'))
         if name.startswith('device.'):
-            return devices.dispatch(store, name, args, turn_id)
-        if name == 'network.local':
-            # Mirar y registrar en el mismo acto: lo que se enseña tiene que poder
-            # nombrarse después, y los vecinos de otra red tienen que dejar de
-            # figurar como recién vistos o un sufijo casa con el equipo equivocado.
-            observacion, _ = devices.observe(store)
-            return devices.annotate(store, observacion)
+            return devices.dispatch(store, name, args, turn_id,
+                                    observation=self.session.network_observation)
         if name == 'core.overview':
             return core.dispatch(store, name, args, self.env.profile)
         if name.startswith('note.'):
