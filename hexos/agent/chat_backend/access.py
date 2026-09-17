@@ -48,15 +48,23 @@ class CredentialService:
         # antes de tocar nada y queda anotada en el turno para que se vea a dónde fue.
         if payload.get('host') is not None and not isinstance(payload['host'], str):
             raise ValueError('host debe ser una dirección escrita')
+        pending = self.session.credential_request or {}
         original = payload['host'].strip() if payload.get('host') else None
+        # El formulario enseña el host SSH normalizado. Si la persona no lo ha
+        # cambiado, no debe sustituir la URL literal que originó el registro.
+        if (pending.get('device') == device.casefold() and original and
+                pending.get('host') == hosts.endpoint(original)[0] and
+                pending.get('original_address')):
+            original = pending['original_address']
         fijada = hosts.endpoint(original)[0] if original else None
         located = (dict(host=fijada, pinned=True, original_address=original)
                    if fijada else hosts.resolve(self.env.workspace, device))
         hosts.save(self.env.workspace, device, user, password, port, fijada,
                    original_address=located.get('original_address'))
-        retomar = None
-        if (self.session.credential_request or {}).get('device') == device.casefold():
-            retomar = self.session.credential_request.get('pending_request')
+        retomar = operacion = None
+        if pending.get('device') == device.casefold():
+            retomar = pending.get('pending_request')
+            operacion = pending.get('pending_operation')
             self.session.credential_request = None
         # Sin esta anotación el modelo sigue leyendo en su contexto que le falta el
         # acceso y responde que no lo tiene en lugar de volver a intentar la lectura.
@@ -72,6 +80,7 @@ class CredentialService:
         return dict(saved=True, device=device.casefold(), user=user,
                     host=located['host'], mac=located.get('mac'), pinned=bool(fijada),
                     resume=retomar,
+                    _resume_operation=operacion,
                     note='Guardado en credentials.json con permisos 600. '
                          'No se ha escrito en la conversación ni se ha mostrado al modelo. '
                          'resume es lo que se estaba pidiendo cuando faltó el acceso: la interfaz '

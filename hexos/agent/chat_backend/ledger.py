@@ -101,3 +101,24 @@ def completed_call(turn, name, arguments):
                 return None
         return step
     return None
+
+
+def completed_registration(turn, name, arguments):
+    """Registro equivalente ya completado aunque el modelo cambie de herramienta.
+
+    Tras device.remote, device.identify no añade nada: la dirección remota ya
+    creó o actualizó esa misma ficha. Ejecutarlo convierte un éxito en un error
+    porque identify solo acepta vecinos locales.
+    """
+    if name != 'device.identify':
+        return None
+    wanted = (arguments.get('name') or '').casefold()
+    if not wanted:
+        return None
+    for step in reversed(turn.trace):
+        result = step.get('result')
+        if (step.get('tool') == 'device.remote' and not step.get('failed') and
+                isinstance(result, dict) and result.get('saved') and
+                (result.get('device') or '').casefold() == wanted):
+            return step
+    return None

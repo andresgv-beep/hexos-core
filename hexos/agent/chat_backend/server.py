@@ -112,7 +112,18 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                 if len(data) != size:
                     raise ValueError('Mensaje incompleto')
                 if self.path == '/api/credentials':
-                    self.respond(200, agent.save_access(strict_json(data.decode('utf-8'))))
+                    saved = agent.save_access(strict_json(data.decode('utf-8')))
+                    operation = saved.pop('_resume_operation', None)
+                    resume = saved.get('resume')
+                    if resume and operation:
+                        try:
+                            saved['resumed_request'] = resume
+                            saved['resumed'] = agent.resume_access(resume, operation)
+                        except (ValueError, RuntimeError, OSError) as exc:
+                            # El acceso ya está guardado. Un fallo posterior no
+                            # puede convertir ese hecho en «no se guardó».
+                            saved['resume_error'] = str(exc)
+                    self.respond(200, saved)
                 elif self.path == '/api/thinking':
                     payload = strict_json(data.decode('utf-8'))
                     if set(payload) != {'enabled'}:

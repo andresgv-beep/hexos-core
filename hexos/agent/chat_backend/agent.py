@@ -130,6 +130,9 @@ class Agent:
     def devices_named(self, store, turn_id):
         return self.references.devices_named(store, turn_id)
 
+    def explicit_read(self, store, turn_id, text):
+        return self.references.explicit_read(store, turn_id, text)
+
     def pointed_note(self, store, text, turn_id):
         return self.references.pointed_note(store, text, turn_id)
 
@@ -156,6 +159,12 @@ class Agent:
 
     def chat(self, text, image=None):
         return self.runner.run(text, image)
+
+    def resume_access(self, text, operation):
+        """Continúa exactamente la lectura que quedó esperando credenciales."""
+        if not isinstance(operation, dict) or set(operation) != {'tool', 'arguments'}:
+            raise ValueError('Operación pendiente de acceso inválida')
+        return self.runner.run(text, initial_tool=operation)
 
     def history_budget(self):
         return self.context.history_budget()

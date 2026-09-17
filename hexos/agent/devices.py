@@ -362,16 +362,37 @@ def dispatch(store, name, args, turn_id=None, observation=None):
         # device.identify no puede alcanzarlo: no hay nada que nombrar. Este
         # registra el nombre CON su dirección, y se resuelve por ella.
         etiqueta = string(args['name'], 'name', 100)
-        # Acepta la URL tal cual se pega, con su puerto si lo trae.
-        original = string(args['host'], 'host', 300).strip()
-        destino, puerto = hosts.endpoint(original)
-        esquema = re.match(r'^([a-z][a-z0-9+.-]*)://', original, re.I)
-        esquema = esquema.group(1).casefold() if esquema else None
+        # El modelo puede quitar el esquema o el puerto aunque se le ordene no
+        # hacerlo. La autoridad es el mensaje de la persona: se recupera de ahí
+        # el literal que resuelve al mismo host propuesto por la llamada.
+        propuesto = string(args['host'], 'host', 300).strip()
+        destino_propuesto, _ = hosts.endpoint(propuesto)
         fila = store.db.execute("SELECT id,text FROM conversation WHERE id=? AND role='user'",
                                 (turn_id,)).fetchone() if turn_id else None
         if not fila:
             raise ValueError('No hay mensaje de este turno del que tomar la evidencia')
         cita = fila['text']
+        candidatos = []
+        for token in re.findall(r'\S+', cita):
+            literal = token.strip('"\'`()[]{}<>,;.!?¿¡')
+            if not literal:
+                continue
+            try:
+                host_literal, _ = hosts.endpoint(literal)
+            except (TypeError, ValueError):
+                continue
+            if host_literal.casefold() == destino_propuesto.casefold():
+                candidatos.append(literal)
+        # Una URL completa contiene más evidencia que el host recortado. Si no
+        # hay equivalente literal, la comprobación de abajo rechaza la invención.
+        original = max(candidatos, key=lambda value: (bool(re.match(
+            r'^[a-z][a-z0-9+.-]*://', value, re.I)), len(value)), default=propuesto)
+        # El diccionario es también el que acabará en la traza: debe registrar
+        # el literal realmente ejecutado, no la versión recortada por el modelo.
+        args['host'] = original
+        destino, puerto = hosts.endpoint(original)
+        esquema = re.match(r'^([a-z][a-z0-9+.-]*)://', original, re.I)
+        esquema = esquema.group(1).casefold() if esquema else None
         # Misma regla que identificar y que guardar un hecho: la dirección tiene que
         # estar en las palabras de la persona. Así no se registra un equipo deducido,
         # y menos uno al que luego se le mandaría una contraseña.

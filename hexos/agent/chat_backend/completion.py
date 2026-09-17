@@ -44,7 +44,9 @@ class ReplyPolicy:
     PROMESA = re.compile(
         r'\b(?:voy\s+a|paso\s+a|procedo\s+a|vamos\s+a)\s+(?:\w+\s+){0,2}?'
         r'(?:revisar|consultar|mirar|comprobar|leer|ejecutar|reiniciar|parar|arrancar|'
-        r'guardar|anotar|apuntar|buscar|analizar|diagnosticar|listar)\b'
+        r'guardar|anotar|apuntar|buscar|analizar|diagnosticar|listar|conectar(?:me|te|se)?)\b'
+        r'|\b(?:voy\s+a|paso\s+a|procedo\s+a|vamos\s+a)\s+'
+        r'(?:hacer|realizar)\s+(?:el|un)\s+(?:diagn[oó]stico|an[aá]lisis|informe)\b'
         r'|\bahora\s+(?:mismo\s+)?(?:reviso|consulto|miro|compruebo|leo|ejecuto|busco|analizo)\b'
         r'|\bdame\s+un\s+momento\b|\benseguida\s+te\s+(?:digo|cuento)\b', re.I)
 

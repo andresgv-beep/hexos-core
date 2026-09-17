@@ -26,6 +26,9 @@ export interface AccessSaved {
   /** Lo que se estaba pidiendo cuando faltó el acceso. La interfaz lo reenvía
    *  sola: quien acaba de rellenar la ventana no debería repetir la petición. */
   resume?: string;
+  resumedRequest?: string;
+  resumed?: ChatReply;
+  resumeError?: string;
 }
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -40,6 +43,27 @@ function parseProgress(value: unknown): Progress {
       .filter(m => typeof m.id === "string" && typeof m.text === "string" && m.text.trim())
       .map(m => ({ id: String(m.id), text: String(m.text) })),
   };
+}
+function parseChatReply(data: unknown): ChatReply {
+  if (!isRecord(data) || typeof data.reply !== "string" || !data.reply.trim() || !Array.isArray(data.tools)) {
+    throw new Error("HexOS no devolvió una respuesta completa");
+  }
+  const c = data.context_cut;
+  const contextCut = isRecord(c) && typeof c.at === "string" && typeof c.messages === "number"
+    && typeof c.characters === "number"
+    ? { at: c.at, messages: c.messages, characters: c.characters } : undefined;
+  const c2 = data.closure;
+  const closure = isRecord(c2) && typeof c2.reason === "string" && typeof c2.note === "string"
+    ? { reason: c2.reason, note: c2.note,
+        unverified: (Array.isArray(c2.unverified) ? c2.unverified : []).filter(isRecord)
+          .filter(u => typeof u.tool === "string")
+          .map(u => ({ tool: String(u.tool),
+                       verification: typeof u.verification === "string" ? u.verification : undefined,
+                       evidence: typeof u.evidence === "string" ? u.evidence : undefined })) }
+    : undefined;
+  return { reply: data.reply, tools: parseToolActivities(data.tools, "done"),
+           notes: notesTouched(data.tools), closeNotes: notesDismissed(data.tools),
+           document: data.document, contextCut, closure };
 }
 export interface HeliosTransport {
   /** `thinking` es null cuando el motor no tiene canal de pensamiento. */
@@ -103,7 +127,10 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
       }
       return { device: String(data.device), user: String(data.user),
                host: data.host, pinned: data.pinned === true,
-               resume: typeof data.resume === "string" && data.resume.trim() ? data.resume : undefined };
+               resume: typeof data.resume === "string" && data.resume.trim() ? data.resume : undefined,
+               resumedRequest: typeof data.resumed_request === "string" ? data.resumed_request : undefined,
+               resumed: data.resumed === undefined ? undefined : parseChatReply(data.resumed),
+               resumeError: typeof data.resume_error === "string" ? data.resume_error : undefined };
     },
     async dismissAccess(device, signal) {
       await request("credentials", { method: "POST", headers: { "Content-Type": "application/json" },
@@ -126,24 +153,7 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
       const init: RequestInit = image
         ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, image }), signal }
         : { method: "POST", headers: { "Content-Type": "text/plain; charset=utf-8" }, body: text, signal };
-      const data = await request("chat", init);
-      if (!isRecord(data) || typeof data.reply !== "string" || !data.reply.trim() || !Array.isArray(data.tools)) throw new Error("HexOS no devolvió una respuesta completa");
-      const c = data.context_cut;
-      const contextCut = isRecord(c) && typeof c.at === "string" && typeof c.messages === "number"
-        && typeof c.characters === "number"
-        ? { at: c.at, messages: c.messages, characters: c.characters } : undefined;
-      const c2 = data.closure;
-      const closure = isRecord(c2) && typeof c2.reason === "string" && typeof c2.note === "string"
-        ? { reason: c2.reason, note: c2.note,
-            unverified: (Array.isArray(c2.unverified) ? c2.unverified : []).filter(isRecord)
-              .filter(u => typeof u.tool === "string")
-              .map(u => ({ tool: String(u.tool),
-                           verification: typeof u.verification === "string" ? u.verification : undefined,
-                           evidence: typeof u.evidence === "string" ? u.evidence : undefined })) }
-        : undefined;
-      return { reply: data.reply, tools: parseToolActivities(data.tools, "done"),
-               notes: notesTouched(data.tools), closeNotes: notesDismissed(data.tools),
-               document: data.document, contextCut, closure };
+      return parseChatReply(await request("chat", init));
     },
   };
 }

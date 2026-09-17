@@ -199,6 +199,17 @@ TOOLS = {
     'document.search': spec('Buscar texto en un documento.', {'id':'str','query':'str'}),
 }
 
+# Compatibilidad de lectura/ejecución para trazas y clientes antiguos. Estas
+# entradas siguen validándose en TOOLS, pero el modelo no las ve: ofrecer dos
+# nombres para la misma observación vuelve ambigua una intención sencilla.
+HIDDEN_TOOLS = frozenset({'device.refresh'})
+
+
+def model_tools():
+    """Herramientas que se ofrecen al modelo, sin aliases heredados."""
+    return {name: definition for name, definition in TOOLS.items()
+            if name not in HIDDEN_TOOLS}
+
 
 def validate(name, args):
     if not isinstance(name, str) or name not in TOOLS:
@@ -224,7 +235,24 @@ def validate(name, args):
 
 def render():
     return '\n'.join(name + ': ' + json.dumps(definition, ensure_ascii=False)
-                     for name, definition in TOOLS.items())
+                     for name, definition in model_tools().items())
+
+
+def context_overhead_chars():
+    """Coste fijo aproximado del protocolo antes de historial y respuesta.
+
+    El runtime nativo recibe el catálogo dos veces: como referencia textual del
+    contrato y como declaraciones de funciones. Medir las definiciones reales
+    evita volver a reservar espacio para una cifra histórica de herramientas.
+    """
+    definitions = model_tools()
+    declarations = [
+        {'name': name.replace('.', '_'), 'description': definition['description'],
+         'required': definition['required'], 'optional': definition['optional']}
+        for name, definition in definitions.items()
+    ]
+    # Metadatos/perfil/evidencia (5k) y respuesta/resultado de herramienta (6k).
+    return len(prompt()) + len(json.dumps(declarations, ensure_ascii=False)) + 11_000
 
 
 def prompt():
@@ -280,7 +308,11 @@ def announcements():
         for infinitivo, participio, presente in definicion['announces']:
             formas.append(r'(?:voy|vamos|paso|procedo)\s+a\s+(?:\w+\s+){0,2}?' + infinitivo + r'(?:te|me|la|lo|las|los|sela)*\b')
             formas.append(r'(?:he|hemos|ya\s+he)\s+(?:\w+\s+)?' + participio + r'[oa]s?\b')
-            formas.append(r'(?:te\s+(?:la\s+|lo\s+|las\s+|los\s+)?|ahora\s+)?' + presente + r'\b')
+            # Sin sujeto también puede ser un sustantivo: «el registro del
+            # kernel» disparaba device.remote y sustituía un diagnóstico bueno.
+            # Se acepta con marca de primera persona o al comienzo de frase.
+            formas.append(r'(?:te\s+(?:la\s+|lo\s+|las\s+|los\s+)?|ahora\s+)' + presente + r'\b')
+            formas.append(r'(?:(?<=^)|(?<=[.!?\n]))\s*' + presente + r'\b')
         if formas:
             salida.append((re.compile(r'\b(?:' + '|'.join(formas) + r')', re.I), nombre))
     return salida

@@ -266,9 +266,37 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       setAccessForm({ user: "", password: "", host: "", port: "22" });
       setAccess(null);
       setAnnouncement(`Acceso de ${guardado.device} guardado en ${guardado.host}`);
-      // Retomar lo que estaba haciendo cuando pidió el acceso: quien acaba de
-      // rellenar la ventana no tiene por qué repetir la petición.
-      if (guardado.resume) void send({ preventDefault() {} } as FormEvent, guardado.resume);
+      // El backend reanuda la operación exacta que abrió el modal. La interfaz
+      // solo pinta su resultado: reenviar aquí crearía otra decisión del modelo
+      // y podría volver a pedir la misma credencial.
+      if (guardado.resumed) {
+        const id = ++nextId.current;
+        const result = guardado.resumed;
+        const cierre = result.closure;
+        const reparo = cierre && !["comprobado", "sin_operaciones"].includes(cierre.reason)
+          ? { note: cierre.note, tools: cierre.unverified.map(u => u.tool) }
+          : undefined;
+        setTurnTools(result.tools);
+        setTurns(items => [...items, { id, text: guardado.resumedRequest ?? guardado.resume ?? "Continuar operación pendiente",
+                                      pending: false, reply: result.reply, caveat: reparo }]);
+        setRevealing(Boolean(result.reply));
+        setAnnouncement(`Acceso guardado y operación reanudada para ${guardado.device}`);
+      } else if (guardado.resumeError) {
+        // El modal ya está cerrado: accessError quedaría fuera del árbol y nadie
+        // vería que la operación falló después de guardar correctamente el acceso.
+        const id = ++nextId.current;
+        setTurns(items => [...items, {
+          id,
+          text: guardado.resumedRequest ?? guardado.resume ?? "Continuar operación pendiente",
+          pending: false,
+          reply: `El acceso se guardó, pero no pude retomar la operación: ${guardado.resumeError}`,
+          caveat: { note: "La operación quedó sin respuesta final; no se da por completada.", tools: [] },
+        }]);
+        setAnnouncement(`Acceso de ${guardado.device} guardado; operación pendiente`);
+      } else if (guardado.resume) {
+        // Compatibilidad con un backend anterior al retorno atómico.
+        void send({ preventDefault() {} } as FormEvent, guardado.resume);
+      }
     } catch (error) {
       setAccessError(error instanceof Error ? error.message : "No se pudo guardar el acceso.");
     } finally {

@@ -25,8 +25,15 @@ class ReferenceResolver:
 
     # Lo que la persona pide de cada equipo, por la palabra con la que lo pide.
     # No es clasificar por ella: está escrito en su mensaje.
-    SECCIONES = ((re.compile(r'\bcontenedor|\bdocker\b', re.I), 'containers'),
+    SECCIONES = ((re.compile(r'\bdiagn[oó]st[ií]c\w*|\bsalud\b|\bestado\s+(?:general|del\s+sistema)\b', re.I), 'diagnosis'),
+                 (re.compile(r'\bcontenedor|\bdocker\b', re.I), 'containers'),
                  (re.compile(r'\bespacio\b|\bcu[áa]nto\s+(?:queda|cabe)\b|\bllen[oa]s?\b', re.I), 'space'))
+    # Referencia inequívoca al equipo del turno inmediatamente anterior. No vale
+    # un «él» suelto ni se busca arbitrariamente hacia atrás: solo estas formas y
+    # solo si el último turno de la persona registró un servidor con éxito.
+    DEVICE_DEIXIS = re.compile(
+        r'\ba\s+(?:[ée]l|ese|este)\b|\b(?:ese|este)\s+(?:servidor|equipo)\b|'
+        r'\b(?:diagnost[ií]ca|revisa|comprueba|conecta)(?:lo|le)\b', re.I)
 
     # Señalar sin nombrar: «ábrela», «esa», «la 3», «la última». Es deixis, y el
     # modelo no la resuelve —pide aclaración a algo que él mismo acaba de nombrar—.
@@ -100,6 +107,49 @@ class ReferenceResolver:
                     break
                 desde = donde + 1
         return hallados
+
+    def explicit_read(self, store, turn_id, text):
+        """Traduce una lectura inequívoca escrita por la persona.
+
+        No clasifica una intención abierta: exige exactamente un equipo guardado
+        nombrado y una sola sección literal (diagnóstico, contenedores o espacio).
+        Esas consultas piden estado actual, así que un resultado histórico no las
+        satisface. Ejecutarlas aquí evita que el modelo responda de memoria.
+        """
+        equipos = self.devices_named(store, turn_id)
+        if not equipos and self.DEVICE_DEIXIS.search(text or ''):
+            actual = store.db.execute('SELECT rowid FROM conversation WHERE id=?',
+                                      (turn_id,)).fetchone()
+            anterior = store.db.execute(
+                "SELECT id FROM conversation WHERE role='user' AND rowid<? "
+                'ORDER BY rowid DESC LIMIT 1', (actual['rowid'],)).fetchone() if actual else None
+            evento = store.db.execute(
+                'SELECT body FROM tool_events WHERE turn_id=? ORDER BY seq DESC LIMIT 1',
+                (anterior['id'],)).fetchone() if anterior else None
+            if evento:
+                try:
+                    paso = json.loads(evento['body'])
+                except (TypeError, ValueError):
+                    paso = {}
+                resultado = paso.get('result') or {}
+                nombre = (paso.get('arguments') or {}).get('name')
+                existe = False
+                if isinstance(nombre, str):
+                    try:
+                        hosts.resolve(self.env.workspace, nombre)
+                        existe = True
+                    except ValueError:
+                        pass
+                if (paso.get('tool') == 'device.remote' and not paso.get('failed')
+                        and isinstance(resultado, dict) and resultado.get('saved') is True
+                        and existe):
+                    equipos = [nombre.casefold()]
+        secciones = list(dict.fromkeys(
+            nombre for patron, nombre in self.SECCIONES if patron.search(text or '')))
+        if len(equipos) != 1 or len(secciones) != 1:
+            return None
+        return {'tool':'nas.read',
+                'arguments':{'device':equipos[0], 'section':secciones[0]}}
 
     @classmethod
     def uncovered(cls, pedidos, trace, texto='', limit=6):

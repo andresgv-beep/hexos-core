@@ -157,6 +157,19 @@ class DevicesTest(unittest.TestCase):
                 from hexos.agent.hosts import resolve
                 self.assertEqual(resolve(tmp, 'servidor 1')['port'], 30)
 
+    def test_recupera_la_url_literal_si_el_modelo_quita_el_esquema(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(tmp, None)
+            with agent.store() as s:
+                dicho = 'registra https://servidorsrv1.ddns.net como synology 1 socio'
+                s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
+                             ('u', 'now', 'user', dicho, dicho))
+                s.db.commit()
+                r = agent.tool(s, 'device.remote',
+                               dict(name='synology 1', host='servidorsrv1.ddns.net'), turn_id='u')
+                self.assertEqual(r['original_address'], 'https://servidorsrv1.ddns.net')
+                self.assertEqual(r['scheme'], 'https')
+
     def test_no_registra_una_direccion_que_la_persona_no_dijo(self):
         with tempfile.TemporaryDirectory() as tmp:
             agent = Agent(tmp, None)
@@ -641,6 +654,75 @@ class CoberturaTest(unittest.TestCase):
         from hexos.agent.chat import Agent as A
         self.assertEqual(A.uncovered(['synology 2'], [], 'mira los contenedores del synology 2'),
                          [('synology 2', None)])
+
+    def test_un_diagnostico_explicito_exige_una_lectura_de_este_turno(self):
+        from hexos.agent.chat import Agent as A
+        self.assertEqual(A.uncovered(['synology 2'], [], 'diagnostica synology 2'),
+                         [('synology 2', None)])
+        trace = [dict(tool='nas.read',
+                      arguments=dict(device='synology 2', section='diagnosis'))]
+        self.assertEqual(A.uncovered(['synology 2'], trace, 'diagnostica synology 2'), [])
+
+    def test_una_lectura_literal_y_un_equipo_se_resuelven_sin_adivinar(self):
+        agent = self.montar()
+        with agent.store() as store:
+            texto = 'diagnostica synology 2 y dame el resultado actual'
+            store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
+                             ('u','t','user',texto,texto))
+            store.db.commit()
+            self.assertEqual(agent.explicit_read(store, 'u', texto), {
+                'tool':'nas.read',
+                'arguments':{'device':'synology 2', 'section':'diagnosis'}})
+
+    def test_no_resuelve_si_hay_dos_equipos_o_dos_secciones(self):
+        agent = self.montar()
+        for uid, texto in (
+                ('u1', 'diagnostica synology 2 y servidorsrv1'),
+                ('u2', 'diagnostica synology 2 y mira sus contenedores')):
+            with agent.store() as store:
+                store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
+                                 (uid,'t','user',texto,texto))
+                store.db.commit()
+                self.assertIsNone(agent.explicit_read(store, uid, texto))
+
+    def test_el_del_turno_siguiente_es_el_servidor_recien_registrado(self):
+        import json
+        agent = self.montar()
+        with agent.store() as store:
+            store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
+                             ('registro','t','user',
+                              'https://uno.ddns.net llámalo servidorsrv1',
+                              'https://uno.ddns.net llámalo servidorsrv1'))
+            store.db.execute('INSERT INTO tool_events(turn_id,ts,body) VALUES (?,?,?)',
+                ('registro','t',json.dumps({
+                    'tool':'device.remote', 'failed':False,
+                    'arguments':{'name':'servidorsrv1','host':'https://uno.ddns.net'},
+                    'result':{'saved':True}})))
+            texto = 'conéctate a él y diagnostícalo en cuanto tengas acceso'
+            store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
+                             ('actual','t','user',texto,texto))
+            store.db.commit()
+            self.assertEqual(agent.explicit_read(store, 'actual', texto), {
+                'tool':'nas.read',
+                'arguments':{'device':'servidorsrv1', 'section':'diagnosis'}})
+
+    def test_un_pronombre_no_salta_por_encima_de_otro_turno(self):
+        import json
+        agent = self.montar()
+        with agent.store() as store:
+            store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
+                             ('registro','t','user','registra servidorsrv1','registra servidorsrv1'))
+            store.db.execute('INSERT INTO tool_events(turn_id,ts,body) VALUES (?,?,?)',
+                ('registro','t',json.dumps({'tool':'device.remote','failed':False,
+                    'arguments':{'name':'servidorsrv1','host':'uno.ddns.net'},
+                    'result':{'saved':True}})))
+            store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
+                             ('intermedio','t','user','gracias','gracias'))
+            texto = 'diagnostícalo'
+            store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
+                             ('actual','t','user',texto,texto))
+            store.db.commit()
+            self.assertIsNone(agent.explicit_read(store, 'actual', texto))
 
     def test_sin_margen_de_herramientas_no_hay_turno_que_devolver(self):
         from hexos.agent.chat import Agent as A

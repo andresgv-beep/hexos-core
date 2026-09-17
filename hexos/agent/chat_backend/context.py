@@ -5,7 +5,7 @@ import hashlib
 import json
 from typing import TYPE_CHECKING
 from uuid import uuid4
-from .. import procedures
+from .. import catalog, procedures
 from ..context import native_messages
 from ..work import now
 from .memory import AFIRMACION
@@ -262,17 +262,15 @@ class ContextManager:
     def history_budget(self):
         """Cuántos caracteres de conversación caben antes de tener que cortar.
 
-        Se deriva de la ventana del motor y no de un número a ojo: con 16.384
-        tokens y ~3,6 caracteres por token hay unos 59.000, de los que ya se van
-        fijos el preámbulo con las 23 herramientas (~12.000), los metadatos y las
-        citas (~5.000) y lo que haga falta para responder (~6.000). Lo que sobra
-        es de la conversación, y se deja un tercio de margen porque el resultado
-        de una herramienta puede llegar en mitad del turno.
+        Se deriva de la ventana del motor y del catálogo que realmente se ofrece.
+        Al coste del contrato y las declaraciones se suman reservas para perfil,
+        evidencia, resultados y respuesta. Se deja un tercio de margen porque
+        una herramienta puede devolver datos en mitad del turno.
         """
         ctx = getattr(self.agent.runtime, 'ctx', None)
         if not ctx:
             return 6000
-        return max(4000, int((ctx * 3.6 - 23000) * 0.66))
+        return max(4000, int((ctx * 3.6 - catalog.context_overhead_chars()) * 0.66))
 
     def window(self, store, turn_id, native, budget):
         """La conversación desde el último corte, y un corte nuevo si ya no cabe.

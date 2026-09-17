@@ -39,6 +39,23 @@ def runtime_with_outputs(*outputs):
 
 
 class Tests(unittest.TestCase):
+    def test_reanudacion_nativa_repone_la_llamada_antes_del_resultado(self):
+        runtime = object.__new__(NativeRuntime)
+        runtime.messages = [{'role':'system', 'content':'contexto'}]
+        runtime.pending = deque()
+        runtime.current = None
+        runtime.names = {'nas_read':'nas.read'}
+        runtime.last_preamble = 'no debe heredarse'
+        operacion = {'tool':'nas.read',
+                     'arguments':{'device':'synology 2', 'section':'diagnosis'}}
+        runtime.begin_tool([{'role':'user', 'content':'diagnostica synology 2'}], operacion)
+        runtime.tool_result({'headline':'lectura actual'})
+        llamada = runtime.messages[-1]
+        self.assertEqual(llamada['tool_calls'][0]['function']['name'], 'nas_read')
+        self.assertEqual(llamada['tool_responses'][0]['response']['headline'], 'lectura actual')
+        self.assertIsNone(runtime.current)
+        self.assertIsNone(runtime.last_preamble)
+
     def test_missing_preamble_is_generated_without_replacing_pending_call(self):
         with tempfile.TemporaryDirectory() as tmp:
             runtime=runtime_with_outputs('<|tool_call>call:history_recent{}<tool_call|>',

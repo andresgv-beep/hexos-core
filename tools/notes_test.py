@@ -269,7 +269,9 @@ class PromesaIncumplidaTest(unittest.TestCase):
     def test_las_formas_de_prometer_una_acción(self):
         for texto in ('Voy a consultar el NAS.', 'Paso a revisar los contenedores.',
                       'Ahora mismo compruebo el disco.', 'Procedo a reiniciar el contenedor.',
-                      'Enseguida te digo.'):
+                      'Enseguida te digo.', 'Voy a intentar conectarme al servidor.',
+                      'Voy a hacer el diagnóstico completo.',
+                      'Voy a realizar un informe del estado.'):
             with self.subTest(texto):
                 self.assertTrue(self.mirar(texto), texto)
 
@@ -329,6 +331,15 @@ class AnuncioSinLlamadaTest(unittest.TestCase):
     def test_exige_LA_herramienta_anunciada_no_una_cualquiera(self):
         # Guardar una nota no cumple «te la abro».
         self.assertEqual(self.mirar('Te la abro.', [dict(tool='note.save')])[1], 'note.show')
+
+    def test_un_sustantivo_en_un_resultado_no_es_una_accion_prometida(self):
+        texto = ('El registro del kernel muestra que los enlaces están activos. '
+                 'Los discos están estables en esta lectura.')
+        self.assertIsNone(self.mirar(texto, [dict(tool='nas.read', failed=False)]))
+
+    def test_el_presente_en_primera_persona_sigue_detectandose(self):
+        self.assertEqual(self.mirar('Te lo registro ahora mismo.')[1], 'device.remote')
+        self.assertEqual(self.mirar('Registro el equipo con esa dirección.')[1], 'device.remote')
 
 
 class NotaSenaladaTest(unittest.TestCase):

@@ -248,3 +248,15 @@ class CoberturaEnElBucleTest(unittest.TestCase):
         # Un aviso, y al no avanzar se cierra en vez de porfiar.
         self.assertEqual(result['reply'], 'Te lo repito igual.')
         self.assertEqual(len(runtime.recibido), 2)
+
+    def test_no_reutiliza_un_diagnostico_viejo_ante_una_peticion_actual(self):
+        from unittest.mock import patch
+        salidas = [
+            {'reply':'Lectura actual: el equipo responde y el pool está completo.', 'work':None},
+        ]
+        with patch('hexos.agent.chat.nas_read',
+                   return_value={'headline':'lectura actual', 'section':'diagnosis'}):
+            runtime, result, _ = self.correr(salidas, 'diagnostica uno ahora')
+        self.assertEqual([t['tool'] for t in result['tools']], ['nas.read'])
+        self.assertIn('Lectura actual', result['reply'])
+        self.assertIn('lectura actual', runtime.recibido[0][0]['content'])

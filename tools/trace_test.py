@@ -77,6 +77,23 @@ class TraceTest(unittest.TestCase):
         for field in ('effect', 'changes_state', 'ts', 'seconds', 'failed'):
             self.assertIn(field, saved[0])
 
+    def test_un_registro_remoto_no_se_convierte_en_identificacion_fallida(self):
+        runtime = ScriptedRuntime(
+            {'tool': 'device.remote', 'arguments': {
+                'name': 'synology 1', 'host': 'servidorsrv1.ddns.net'}},
+            {'tool': 'device.identify', 'arguments': {
+                'name': 'synology 1', 'target': 'servidorsrv1.ddns.net'}},
+            {'reply': 'Registrado.', 'work': None})
+        agent = Agent(self.tmp.name, runtime)
+        result = agent.chat(
+            'registra https://servidorsrv1.ddns.net como synology 1 socio')
+        self.assertEqual([step['tool'] for step in result['tools']], ['device.remote'])
+        self.assertEqual(result['tools'][0]['result']['original_address'],
+                         'https://servidorsrv1.ddns.net')
+        self.assertEqual(result['tools'][0]['arguments']['host'],
+                         'https://servidorsrv1.ddns.net')
+        self.assertEqual(result['diagnostics']['checkpoint_reuses'], 1)
+
 
 class AvancePorPasoTest(unittest.TestCase):
     """Un turno con varias herramientas tiene que verse entero, no solo su primer paso."""

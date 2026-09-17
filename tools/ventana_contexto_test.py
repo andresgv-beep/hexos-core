@@ -7,6 +7,7 @@ from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from hexos.agent.chat import Agent
+from hexos.agent import catalog
 from hexos.agent.chat_backend.state import AgentDependencies, TurnState
 from hexos.agent.work import now
 
@@ -48,7 +49,9 @@ class VentanaTest(unittest.TestCase):
     def test_el_presupuesto_sale_de_la_ventana_del_motor(self):
         # No es un número a ojo: crece con --ctx y nunca baja de un mínimo usable.
         grande = self.agent.history_budget()
-        self.assertGreater(grande, 20000)
+        # Con el catálogo real (contrato textual + declaraciones nativas) aún
+        # queda una ventana útil, pero ya no fingimos que caben >20k caracteres.
+        self.assertGreater(grande, 8000)
         self.agent.runtime.ctx = 8192
         self.assertLess(self.agent.history_budget(), grande)
         # Una ventana diminuta no puede dar un presupuesto negativo.
@@ -56,6 +59,19 @@ class VentanaTest(unittest.TestCase):
         self.assertEqual(self.agent.history_budget(), 4000)
         # Y un motor que no declara ventana no rompe el turno.
         self.assertEqual(Agent(self.tmp.name, RuntimeJson()).history_budget(), 6000)
+
+    def test_el_presupuesto_mide_el_catalogo_real(self):
+        antes = self.agent.history_budget()
+        catalog.TOOLS['prueba.grande'] = catalog.spec('x' * 4000)
+        try:
+            self.assertLess(self.agent.history_budget(), antes)
+        finally:
+            del catalog.TOOLS['prueba.grande']
+
+    def test_el_alias_heredado_no_se_ofrece_al_modelo(self):
+        self.assertIn('device.refresh', catalog.TOOLS)
+        self.assertNotIn('device.refresh', catalog.model_tools())
+        self.assertNotIn('device.refresh:', catalog.render())
 
     def test_acumula_en_vez_de_deslizar(self):
         # Con ventana deslizante el mensaje más viejo desaparecía en cada turno y

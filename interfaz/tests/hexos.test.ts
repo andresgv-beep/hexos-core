@@ -61,6 +61,12 @@ test('sends the access only when it is complete, and confirms where it went', as
   const vacio = await createHexosTransport('/api', fixture({ saved: true, device: 'd', user: 'u',
     host: 'h', resume: '   ' })).saveAccess({ device: 'd', user: 'u', password: 'x' });
   assert.equal(vacio.resume, undefined);
+  const reanudado = await createHexosTransport('/api', fixture({ saved: true, device: 'd', user: 'u',
+    host: 'h', resume: 'diagnostica d', resumed_request: 'diagnostica d',
+    resumed: { reply: 'Diagnóstico terminado.', tools: [] } }))
+    .saveAccess({ device: 'd', user: 'u', password: 'x' });
+  assert.equal(reanudado.resumedRequest, 'diagnostica d');
+  assert.equal(reanudado.resumed?.reply, 'Diagnóstico terminado.');
   // Sin contraseña no se llega a enviar nada.
   await assert.rejects(() => t.saveAccess({ device: 'a', user: 'b', password: '' }));
   await assert.rejects(() => t.saveAccess({ device: '', user: 'b', password: 'x' }));

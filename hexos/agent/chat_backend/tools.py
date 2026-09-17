@@ -11,7 +11,7 @@ from ..progress import announcement
 from ..work import now
 from .state import Environment, SessionState, TurnState
 from .settings import MAX_TRACE_EVENTS
-from .ledger import completed_call
+from .ledger import completed_call, completed_registration
 
 if TYPE_CHECKING:
     from .agent import Agent
@@ -92,6 +92,7 @@ class ToolDispatcher:
                 self.session.credential_request = dict(device=needed.device, requested_at=now(),
                                                reason=needed.reason, port=sabido,
                                                user=guardado.get('user'),
+                                               pending_operation=dict(tool=name, arguments=dict(args)),
                                                pending_request=pedido['text'][:2000] if pedido else None,
                                                **{k: v for k, v in (needed.located or {}).items()
                                                   if k != 'port'})
@@ -175,7 +176,8 @@ class ToolExecutor:
             # modelo. Aquí solo interesa saber si una llamada VÁLIDA ya se hizo.
             completed = None
         else:
-            completed = completed_call(turn, output['tool'], output['arguments'])
+            completed = (completed_call(turn, output['tool'], output['arguments']) or
+                         completed_registration(turn, output['tool'], output['arguments']))
         if completed is not None:
             # El modelo puede intentar repetir una llamada después de perder el KV.
             # Se le devuelve el resultado registrado, pero no se toca el mundo ni
@@ -184,13 +186,18 @@ class ToolExecutor:
             self.agent.active_tools = [*self.agent.active_tools, dict(
                 tool=output['tool'], status='done', effect=effect, seconds=0.0,
                 verification=completed.get('verification'), reused_checkpoint=True)]
+            reused = completed.get('result')
+            if completed.get('tool') != output['tool']:
+                reused = dict(reused, already_completed=True,
+                              note='El equipo ya quedó registrado por device_remote; no hace '
+                                   'falta identificarlo como vecino local.')
             if hasattr(self.agent.runtime, 'tool_result'):
-                self.agent.runtime.tool_result(completed.get('result'))
+                self.agent.runtime.tool_result(reused)
                 turn.messages = []
             else:
                 turn.messages = [dict(role='user', content=
                     'RESULTADO YA OBTENIDO EN ESTE TURNO (no se ejecutó otra vez):\n' +
-                    json.dumps(completed.get('result'), ensure_ascii=False))]
+                    json.dumps(reused, ensure_ascii=False))]
             self.agent.state = 'thinking'
             return
         if len(turn.trace) >= MAX_TRACE_EVENTS:

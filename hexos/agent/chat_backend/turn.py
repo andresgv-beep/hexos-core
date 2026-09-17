@@ -20,7 +20,7 @@ class TurnRunner:
         self.executor = ToolExecutor(agent)
         self.finalizer = TurnFinalizer(agent)
 
-    def run(self, text, image=None):
+    def run(self, text, image=None, initial_tool=None):
         if not isinstance(text, str) or len(text.encode()) > MAX_INPUT:
             raise ValueError('Mensaje vacío o mayor de 8 MiB; no se ha guardado')
         # Adjuntar una foto y no escribir nada es un turno con sentido: la pregunta
@@ -38,6 +38,22 @@ class TurnRunner:
             with self.agent.store() as store:
                 turn = TurnState(text=text, image=image)
                 self.agent.context.prepare(store, turn)
+                # Diagnóstico/contenedores/espacio + un único equipo nombrado
+                # es una lectura inequívoca y pide estado actual. No se permite
+                # que el modelo la responda reutilizando un resultado histórico.
+                if initial_tool is None:
+                    initial_tool = self.agent.explicit_read(store, turn.uid, turn.text)
+                # Reanudar tras el modal no vuelve a preguntar al modelo qué
+                # quería hacer: ejecuta la operación que abrió ese modal. El
+                # resultado sí vuelve al modelo para que lo interprete.
+                if initial_tool is not None:
+                    # El protocolo nativo exige que el resultado siga a una
+                    # llamada. Se repone esa llamada estructuralmente, sin pedir
+                    # al modelo que vuelva a decidir ni ejecutar dos veces.
+                    if hasattr(self.agent.runtime, 'begin_tool'):
+                        self.agent.runtime.begin_tool(turn.messages, initial_tool)
+                        turn.messages = []
+                    self.executor.execute(store, turn, initial_tool)
                 for _ in range(MAX_TURN_ITERATIONS):
                     output = self.recovery.generate(store, turn)
                     if output is RETRY:

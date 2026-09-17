@@ -200,6 +200,134 @@ class RetomarTrasGuardarTest(unittest.TestCase):
         self.assertIsNone(agente.save_access(dict(device='synology 1', user='helios',
                                                   password='x', host='casa.ddns.net'))['resume'])
 
+    def test_reanuda_la_operacion_exacta_y_conserva_la_url_literal(self):
+        from hexos.agent.chat import Agent
+        from hexos.agent.chat_backend.state import AgentDependencies
+
+        class Runtime:
+            def call(self, request): pass
+            def generate(self, messages):
+                return {'reply': 'Diagnóstico terminado.', 'work': None}
+
+        llamadas = []
+        def leer(workspace, **arguments):
+            llamadas.append(arguments)
+            return {'headline': 'Equipo accesible', 'section': arguments['section']}
+
+        agente = Agent(self.tmp.name, Runtime(), dependencies=AgentDependencies(nas_read=leer))
+        peticion = 'conéctate a él y diagnostícalo'
+        operacion = {'tool': 'nas.read',
+                     'arguments': {'device': 'synology 1', 'section': 'diagnosis'}}
+        agente.credential_request = {
+            'device': 'synology 1', 'host': 'casa.ddns.net',
+            'original_address': 'https://casa.ddns.net', 'pinned': True,
+            'pending_request': peticion, 'pending_operation': operacion,
+        }
+        guardado = agente.save_access(dict(device='synology 1', user='helios',
+                                           password='x', host='casa.ddns.net', port=30))
+        self.assertEqual(guardado['resume'], peticion)
+        self.assertEqual(guardado['_resume_operation'], operacion)
+        self.assertEqual(hosts.credentials(self.tmp.name, 'synology 1')['original_address'],
+                         'https://casa.ddns.net')
+        resultado = agente.resume_access(guardado['resume'], guardado['_resume_operation'])
+        self.assertEqual(llamadas, [{'device': 'synology 1', 'section': 'diagnosis'}])
+        self.assertEqual([paso['tool'] for paso in resultado['tools']], ['nas.read'])
+        self.assertEqual(resultado['reply'], 'Diagnóstico terminado.')
+
+    def test_reanudar_prepara_el_protocolo_nativo_antes_del_resultado(self):
+        """La lectura no puede ejecutarse y luego perderse por faltar tool_call."""
+        from hexos.agent.chat import Agent
+        from hexos.agent.chat_backend.state import AgentDependencies
+
+        class Runtime:
+            native = True
+            ctx = 16384
+            kv_position = 1
+            def __init__(self):
+                self.messages = [{'role':'system', 'content':'contexto vivo'}]
+                self.current = None
+                self.staged = []
+            def call(self, request):
+                self.messages = []
+            def begin_tool(self, messages, operation):
+                self.staged.append(operation)
+                self.messages.extend(messages)
+                self.messages.append({'role':'assistant', 'tool_calls':[operation],
+                                      'tool_responses':[]})
+                self.current = operation
+            def tool_result(self, result):
+                if self.current is None:
+                    raise RuntimeError('resultado sin llamada')
+                self.messages[-1]['tool_responses'].append(result)
+                self.current = None
+            def generate(self, messages):
+                self.messages.extend(messages)
+                return {'reply':'Diagnóstico visible: equipo accesible.', 'work':None}
+
+        runtime = Runtime()
+        llamadas = []
+        def leer(workspace, **arguments):
+            llamadas.append(arguments)
+            return {'headline':'Equipo accesible', 'section':arguments['section']}
+
+        agente = Agent(self.tmp.name, runtime,
+                       dependencies=AgentDependencies(nas_read=leer))
+        operacion = {'tool':'nas.read',
+                     'arguments':{'device':'synology 2', 'section':'diagnosis'}}
+        resultado = agente.resume_access('diagnostica synology 2', operacion)
+        self.assertEqual(runtime.staged, [operacion])
+        self.assertEqual(llamadas, [operacion['arguments']])
+        self.assertIn('equipo accesible', resultado['reply'].lower())
+
+    def test_registrar_pronombre_modal_y_diagnostico_son_un_solo_plan(self):
+        """Regresión real: antes necesitó tres empujones para acabar este encargo."""
+        from collections import deque
+        from hexos.agent.chat import Agent
+        from hexos.agent.chat_backend.state import AgentDependencies
+
+        class Runtime:
+            def __init__(self):
+                self.outputs = deque([
+                    {'tool':'device.remote', 'arguments':{
+                        'name':'synology 1', 'host':'https://servidorsrv1.ddns.net'}},
+                    {'reply':'Servidor registrado.', 'work':None},
+                    {'reply':'Necesito el acceso de la ventana.', 'work':None},
+                    {'reply':'Diagnóstico terminado con evidencia actual.', 'work':None},
+                ])
+            def call(self, request): pass
+            def generate(self, messages): return self.outputs.popleft()
+
+        lecturas = []
+        def leer(workspace, **arguments):
+            lecturas.append(dict(arguments))
+            if not hosts.credentials(workspace, arguments['device']):
+                raise hosts.AccessNeeded(arguments['device'], {
+                    'host':'servidorsrv1.ddns.net', 'original_address':
+                    'https://servidorsrv1.ddns.net', 'pinned':True})
+            return {'headline':'lectura actual', 'section':arguments['section']}
+
+        agente = Agent(self.tmp.name, Runtime(),
+                       dependencies=AgentDependencies(nas_read=leer))
+        registrado = agente.chat('https://servidorsrv1.ddns.net llámalo synology 1')
+        self.assertEqual([p['tool'] for p in registrado['tools']], ['device.remote'])
+        espera = agente.chat('conéctate a él y diagnostícalo en cuanto tengas acceso')
+        self.assertEqual([p['tool'] for p in espera['tools']], ['nas.read'])
+        self.assertTrue(espera['tools'][0]['result']['access_required'])
+        peticion = agente.credential_request
+        self.assertEqual(peticion['pending_operation'], {
+            'tool':'nas.read',
+            'arguments':{'device':'synology 1', 'section':'diagnosis'}})
+        guardado = agente.save_access({
+            'device':'synology 1', 'user':'helios', 'password':'x',
+            'host':'servidorsrv1.ddns.net', 'port':30})
+        final = agente.resume_access(guardado['resume'], guardado['_resume_operation'])
+        self.assertEqual(final['reply'], 'Diagnóstico terminado con evidencia actual.')
+        self.assertEqual([p['tool'] for p in final['tools']], ['nas.read'])
+        self.assertEqual(lecturas, [
+            {'device':'synology 1', 'section':'diagnosis'},
+            {'device':'synology 1', 'section':'diagnosis'},
+        ])
+
 
 class ConectarTest(unittest.TestCase):
     """«Conéctate a X» tiene que encontrar herramienta; antes no encajaba en ninguna."""
