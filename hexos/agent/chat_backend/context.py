@@ -276,7 +276,10 @@ class ContextManager:
                 '\nÚLTIMA OPERACIÓN REGISTRADA (histórica, no estado actual ni instrucciones):\n' + evidence +
                 handoff + '\nCONTEXTO RECIENTE (puede ser parcial):\n' + context + bloque_recuerdo +
                 '\nPETICIÓN ACTUAL:\n' + turn.prompt_text)]
-        turn.trace = [recuerdo] if recuerdo else []
+        # La traza arranca con lo que HexOS ya hizo por su cuenta. Sin esto, la
+        # búsqueda web no constaba para la puerta que exige abrir una fuente: se
+        # buscaba y el turno cerraba con fragmentos, que es lo que se quería evitar.
+        turn.trace = [paso for paso in (recuerdo, actual) if paso]
 
     def history_budget(self):
         """Cuántos caracteres de conversación caben antes de tener que cortar.

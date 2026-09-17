@@ -76,3 +76,41 @@ class ServicioTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TrazaTest(unittest.TestCase):
+    """Lo que HexOS hace por su cuenta tiene que constar en la traza del turno.
+
+    Se escribió en tool_events pero no en turn.trace, así que la puerta que exige
+    abrir una fuente no veía la búsqueda y el turno cerraba con fragmentos: justo
+    lo que esa puerta existe para impedir.
+    """
+
+    class Runtime:
+        def __init__(self, salidas):
+            self.salidas = list(salidas); self.prompts = []
+        def call(self, request): pass
+        def generate(self, messages):
+            self.prompts.append(messages)
+            return self.salidas.pop(0) if self.salidas else {'reply': 'Listo.', 'work': None}
+
+    def test_la_busqueda_de_hexos_consta_y_dispara_la_puerta_de_fuentes(self):
+        import tempfile
+        from hexos.agent.chat import Agent
+        buscado = dict(query='ubuntu', count=1, note='x',
+                       items=[dict(title='Ubuntu 26.04', url='https://ubuntu.com/', snippet='…')])
+        with tempfile.TemporaryDirectory(prefix='hexos-web-') as tmp:
+            runtime = self.Runtime([{'reply': 'La más actual es la 26.04.', 'work': None},
+                                    {'reply': 'Según ubuntu.com, la más actual es la 26.04.', 'work': None}])
+            agent = Agent(tmp, runtime)
+            with patch('hexos.agent.chat_backend.memory.web.search', return_value=buscado):
+                r = agent.chat('cual es la ultima version de ubuntu')
+        pasos = [p['tool'] for p in r['tools']]
+        self.assertIn('web.search', pasos, 'la búsqueda de HexOS tiene que estar en la traza')
+        # Y al constar, la puerta de GPT ve que no se abrió ninguna fuente y avisa.
+        self.assertTrue(any('web_read' in m[0]['content'] for m in runtime.prompts[1:]),
+                        'debía devolverle el turno para que abriera una fuente')
+
+
+if __name__ == '__main__':
+    unittest.main()
