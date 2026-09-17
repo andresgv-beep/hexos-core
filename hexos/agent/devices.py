@@ -171,6 +171,11 @@ def dispatch(store, name, args, turn_id=None):
     if name == 'device.list':
         query = args.get('query', '').casefold()
         terms = [v.strip() for v in re.split(r'\s+or\s+', query) if v.strip()]
+        scope = (args.get('scope') or 'registered').casefold()
+        scopes = {'registered', 'access', 'remote', 'local', 'unidentified', 'all'}
+        if scope not in scopes:
+            raise ValueError('scope no válido: usa registered, access, remote, local, '
+                             'unidentified o all')
         # Un equipo con acceso guardado y sin ficha en el inventario se podía alcanzar
         # pero no salía al preguntar cuáles hay. Eso confunde a cualquiera: aparece
         # aquí, con su origen dicho, para que la lista sea TODO lo que se puede tocar.
@@ -185,7 +190,9 @@ def dispatch(store, name, args, turn_id=None):
                 addresses=[], latest_addresses=[], in_latest_snapshot=False,
                 last_observed_at=None, only_access=True,
                 identity=dict(name=nombre, kind=None, source='saved_access'))
-        found = [d for d in rows.values() if not terms or any(q in json.dumps(d, ensure_ascii=False).casefold() for q in terms)]
+        found = [d for d in rows.values()
+                 if not terms or any(q in json.dumps(d, ensure_ascii=False).casefold()
+                                     for q in terms)]
         found.sort(key=lambda d: (d['identity'] is None, d['id']))
         # `pinned_host` va dentro: sin él, un equipo de otra red salía en la lista
         # sin dirección ninguna —`latest_addresses` está vacío porque no se le ve
@@ -219,17 +226,39 @@ def dispatch(store, name, args, turn_id=None):
                 salida['unidentified'] = True
             return salida
 
-        compact = [fila(d) for d in found[:48]]
+        compact_all = [fila(d) for d in found]
+        def pertenece(d):
+            if scope == 'all':
+                return True
+            if scope == 'registered':
+                return bool(d.get('name'))
+            if scope == 'access':
+                return bool(d.get('has_access'))
+            if scope == 'remote':
+                return bool(d.get('host'))
+            if scope == 'local':
+                return bool(d.get('mac') or d.get('ips'))
+            return not d.get('name')  # unidentified
+
+        selected = [d for d in compact_all if pertenece(d)]
+        counts = dict(
+            registered=sum(bool(d.get('name')) for d in compact_all),
+            with_access=sum(bool(d.get('has_access')) for d in compact_all),
+            remote=sum(bool(d.get('host')) for d in compact_all),
+            local_observed=sum(bool(d.get('mac') or d.get('ips')) for d in compact_all),
+            visible_in_last_observation=sum(bool(d.get('seen_now')) for d in compact_all),
+            unidentified=sum(not d.get('name') for d in compact_all),
+        )
         repetidos = duplicados(rows, accesos)
-        # Sin solaparse: los nombrados en una lista y los anónimos en la otra. Antes
-        # `devices` los llevaba TODOS y `identified_devices` repetía los nombrados,
-        # así que el modelo los veía dos veces y al enumerarlos repetía las IPs.
-        return dict(identified_devices=[d for d in compact if d.get('name')],
-                    devices=[d for d in compact if not d.get('name')],
-                    duplicates=repetidos, total=len(found), truncated=len(found)>48,
-                    note='Inventario histórico. identified_devices son los que tienen nombre y '
-                         'devices los que no: no se solapan, la lista completa es la suma. '
-                         'Consulta network.local para el estado actual. '
+        # Una petición, una naturaleza y una lista. Antes se devolvían identificados
+        # y anónimos juntos y el modelo confundía «guardado» con «visible ahora».
+        return dict(scope=scope, items=selected[:48], counts=counts,
+                    duplicates=repetidos, total=len(selected), truncated=len(selected)>48,
+                    note='Inventario persistente, no una lectura actual. items contiene solo la '
+                         'clase pedida por scope. registered=equipos con nombre; access=con '
+                         'credencial SSH; remote=con dirección fija; local=observados alguna vez '
+                         'en una red local; unidentified=sin nombre. Consulta network.local para '
+                         'IPs y vecinos visibles ahora. '
                          'host es la dirección fija de un equipo de otra red; los de esta '
                          'red no la tienen y se ven por ips. seen_now es que se le vio en la '
                          'última lectura de red. Las claves vacías se omiten: '

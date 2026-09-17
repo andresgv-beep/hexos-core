@@ -39,7 +39,8 @@ class DevicesTest(unittest.TestCase):
                 s.db.commit()
                 with self.assertRaises(ValueError):
                     agent.tool(s,'device.identify',dict(target='10',name='NAS'),turn_id='u')
-                self.assertTrue(all(d.get('unidentified') for d in agent.tool(s,'device.list',{})['devices']))
+                lista = agent.tool(s, 'device.list', {'scope': 'unidentified'})
+                self.assertTrue(all(d.get('unidentified') for d in lista['items']))
 
     def test_two_suffixes_use_current_message_and_reject_wrong_target(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -135,7 +136,7 @@ class DevicesTest(unittest.TestCase):
                 self.assertEqual(located['host'], 'servidorsrv1.ddns.net')
                 self.assertTrue(located['pinned'])
                 # Y aparece en el inventario como cualquier otro equipo con nombre.
-                nombres = [d['name'] for d in agent.tool(s, 'device.list', {})['identified_devices']]
+                nombres = [d['name'] for d in agent.tool(s, 'device.list', {})['items']]
                 self.assertIn('synology 1', nombres)
 
     def test_acepta_la_url_tal_cual_se_pega_y_se_queda_el_puerto(self):
@@ -198,7 +199,7 @@ class DevicesTest(unittest.TestCase):
                 self.assertTrue(r['attached_to_known'])
                 lista = agent.tool(s, 'device.list', {})
                 self.assertEqual(lista['total'], 1, 'una máquina, una ficha')
-                ficha = lista['identified_devices'][0]
+                ficha = lista['items'][0]
                 self.assertEqual((ficha['host'], ficha['port']), ('casa.ddns.net', 30))
                 # Y sigue siendo el equipo que se ve en la red: no se pierde su MAC.
                 self.assertEqual(ficha['mac'], 'aa:bb:cc:dd:ee:ff')
@@ -218,7 +219,7 @@ class DevicesTest(unittest.TestCase):
                 s.db.commit()
                 agent.tool(s, 'device.remote',
                            dict(name='servidor 1', host='https://casa.ddns.net:30'), turn_id='u')
-                fila = agent.tool(s, 'device.list', {})['identified_devices'][0]
+                fila = agent.tool(s, 'device.list', {})['items'][0]
                 self.assertEqual(fila['host'], 'casa.ddns.net')
                 self.assertEqual(fila['port'], 30)
                 self.assertNotIn('ips', fila, 'un equipo de otra red no tiene IP en esta')
@@ -245,7 +246,7 @@ class DevicesTest(unittest.TestCase):
                 self.assertEqual(r['absorbed'], 'remoto/servidorsrv1')
                 lista = agent.tool(s, 'device.list', {})
                 self.assertEqual(lista['duplicates'], [], 'una máquina, una ficha')
-                ficha = lista['identified_devices'][0]
+                ficha = lista['items'][0]
                 self.assertEqual(ficha['mac'], 'aa:bb:cc:dd:ee:ff')
                 self.assertEqual((ficha['host'], ficha['port']), ('casa.ddns.net', 30))
                 # Y con los dos caminos: la IP local primero por estar a la vista.
@@ -280,7 +281,7 @@ class DevicesTest(unittest.TestCase):
             save(tmp, 'synology 2', 'helios', 'x', 22, host='casa.ddns.net')
             with agent.store() as s:
                 r = agent.tool(s, 'device.list', {})
-                fila = next(d for d in r['identified_devices'] if d['name'] == 'synology 2')
+                fila = next(d for d in r['items'] if d['name'] == 'synology 2')
                 self.assertTrue(fila['only_access'])
                 self.assertTrue(fila['has_access'])
                 self.assertEqual(fila['host'], 'casa.ddns.net')
@@ -296,7 +297,7 @@ class DevicesTest(unittest.TestCase):
                 s.db.commit()
                 r = agent.tool(s, 'device.forget', dict(target='synology 2'), turn_id='u')
                 self.assertEqual(r['forgotten_access'], 'synology 2')
-                self.assertEqual(agent.tool(s, 'device.list', {})['identified_devices'], [])
+                self.assertEqual(agent.tool(s, 'device.list', {})['items'], [])
             self.assertEqual(load(tmp), {})
 
     def test_un_identificado_sin_acceso_lo_dice(self):
@@ -309,7 +310,7 @@ class DevicesTest(unittest.TestCase):
                 s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u','now','user',dicho,dicho))
                 s.db.commit()
                 agent.tool(s, 'device.identify', dict(target='192.168.1.10', name='impresora'), turn_id='u')
-                fila = agent.tool(s, 'device.list', {})['identified_devices'][0]
+                fila = agent.tool(s, 'device.list', {})['items'][0]
                 self.assertNotIn('has_access', fila, 'identificado no es lo mismo que alcanzable')
                 self.assertNotIn('only_access', fila)
 
@@ -399,7 +400,7 @@ class DevicesTest(unittest.TestCase):
                 r = agent.tool(s, 'device.forget', dict(target='impresora'), turn_id='u2')
                 self.assertFalse(r['removed_record'])
                 self.assertIn('sigue en la red', r['note'])
-                registros = agent.tool(s, 'device.list', {})['devices']
+                registros = agent.tool(s, 'device.list', {'scope': 'unidentified'})['items']
                 self.assertEqual(len(registros), 1)
                 self.assertTrue(registros[0]['unidentified'])
 
@@ -483,11 +484,11 @@ class DevicesTest(unittest.TestCase):
                 agent.tool(s, 'device.identify', dict(target='129', name='iphone'), turn_id='u')
                 # Y el router de la otra red deja de figurar como recién visto, así
                 # que un sufijo no puede casar con el fantasma.
-                lista = agent.tool(s, 'device.list', {})
-                for d in lista['identified_devices'] + lista['devices']:
+                lista = agent.tool(s, 'device.list', {'scope': 'all'})
+                for d in lista['items']:
                     if d['mac'] == 'f8:98:ef:93:cc:11':
                         self.assertNotIn('seen_now', d)
-                nombres = {d['name'] for d in agent.tool(s, 'device.list', {})['identified_devices']}
+                nombres = {d['name'] for d in agent.tool(s, 'device.list', {})['items']}
                 self.assertEqual(nombres, {'iphone'})
 
     def test_se_puede_nombrar_por_los_dos_ultimos_octetos(self):
@@ -508,7 +509,7 @@ class DevicesTest(unittest.TestCase):
                 s.db.commit()
                 agent.tool(s, 'device.identify', dict(target='1.1', name='router'), turn_id='u')
                 agent.tool(s, 'device.identify', dict(target='1.129', name='iphone 16 pro'), turn_id='u')
-                nombres = {d['name'] for d in agent.tool(s, 'device.list', {})['identified_devices']}
+                nombres = {d['name'] for d in agent.tool(s, 'device.list', {})['items']}
                 self.assertEqual(nombres, {'router', 'iphone 16 pro'})
 
     def test_unos_octetos_ambiguos_no_nombran_nada(self):
@@ -541,11 +542,11 @@ class DevicesTest(unittest.TestCase):
                 dispatch(s, 'device.identify', args)
                 with patch('hexos.agent.devices.snapshot', return_value=observation(ip='192.168.1.11')):
                     dispatch(s, 'device.refresh', {})
-                self.assertEqual(dispatch(s,'device.list',{})['identified_devices'][0]['name'], 'NAS Faro')
+                self.assertEqual(dispatch(s, 'device.list', {})['items'][0]['name'], 'NAS Faro')
                 with patch('hexos.agent.devices.snapshot', return_value=observation(mac='11:22:33:44:55:66')):
                     dispatch(s, 'device.refresh', {})
-                lista = dispatch(s, 'device.list', {})
-                devices = lista['identified_devices'] + lista['devices']
+                lista = dispatch(s, 'device.list', {'scope': 'all'})
+                devices = lista['items']
                 self.assertEqual(len(devices), 2)
                 self.assertTrue(next(d for d in devices if d.get('seen_now'))['unidentified'])
             with Agent(tmp, None).store() as s:
@@ -665,7 +666,7 @@ class ExitoNegadoTest(unittest.TestCase):
 
 
 class SinSolaparTest(unittest.TestCase):
-    """Las dos listas no pueden llevar el mismo equipo: el modelo lo enumera dos veces."""
+    """La vista completa lleva una sola fila por equipo."""
 
     def test_los_nombrados_salen_una_sola_vez(self):
         from unittest.mock import patch
@@ -678,14 +679,60 @@ class SinSolaparTest(unittest.TestCase):
                 s.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', ('u','now','user',dicho,dicho))
                 s.db.commit()
                 agent.tool(s, 'device.identify', dict(target='192.168.1.10', name='impresora'), turn_id='u')
-                r = agent.tool(s, 'device.list', {})
-        con_nombre = {d['id'] for d in r['identified_devices']}
-        sin_nombre = {d['id'] for d in r['devices']}
-        self.assertTrue(con_nombre, 'la impresora tiene que estar entre los nombrados')
-        self.assertEqual(con_nombre & sin_nombre, set(), 'un equipo no puede salir en las dos listas')
-        self.assertTrue(all(d.get('unidentified') for d in r['devices']))
-        # Y el total sigue cuadrando con la suma de las dos.
-        self.assertEqual(r['total'], len(con_nombre) + len(sin_nombre))
+                r = agent.tool(s, 'device.list', {'scope': 'all'})
+                con_nombre = {d['id'] for d in r['items'] if d.get('name')}
+                sin_nombre = {d['id'] for d in r['items'] if not d.get('name')}
+                self.assertTrue(con_nombre, 'la impresora tiene que estar entre los nombrados')
+                self.assertEqual(con_nombre & sin_nombre, set(), 'un equipo solo tiene una fila')
+                self.assertTrue(all(d.get('unidentified') for d in r['items'] if not d.get('name')))
+                self.assertEqual(r['total'], len(con_nombre) + len(sin_nombre))
+
+
+class VistasDelInventarioTest(unittest.TestCase):
+    """Guardado, remoto, acceso y red local no vuelven a mezclarse en una lista."""
+
+    def test_cada_scope_devuelve_solo_su_naturaleza(self):
+        from datetime import datetime, timezone
+        from hexos.agent import hosts
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(tmp, None)
+            ahora = datetime.now(timezone.utc).isoformat()
+            local = dict(id='eth0/aa:bb', mac='aa:bb', interface='eth0',
+                         addresses=[], latest_addresses=[dict(ip='192.168.1.20')],
+                         in_latest_snapshot=True, last_observed_at=ahora,
+                         identity=dict(name='nas casa', kind='NAS', source='user_statement'))
+            anonimo = dict(id='eth0/cc:dd', mac='cc:dd', interface='eth0',
+                           addresses=[], latest_addresses=[dict(ip='192.168.1.21')],
+                           in_latest_snapshot=True, last_observed_at=ahora, identity=None)
+            hosts.save(tmp, 'servidor fuera', 'helios', 'x', 30, host='casa.ddns.net')
+            with agent.store() as s:
+                for d in (local, anonimo):
+                    s.db.execute('INSERT INTO network_devices VALUES (?,?)',
+                                 (d['id'], json.dumps(d)))
+                s.db.commit()
+
+                registrados = agent.tool(s, 'device.list', {})
+                self.assertEqual(registrados['scope'], 'registered')
+                self.assertEqual({d['name'] for d in registrados['items']},
+                                 {'nas casa', 'servidor fuera'})
+                self.assertNotIn('192.168.1.21', json.dumps(registrados['items']))
+
+                acceso = agent.tool(s, 'device.list', {'scope': 'access'})
+                self.assertEqual([d['name'] for d in acceso['items']], ['servidor fuera'])
+                remoto = agent.tool(s, 'device.list', {'scope': 'remote'})
+                self.assertEqual([d['host'] for d in remoto['items']], ['casa.ddns.net'])
+                locales = agent.tool(s, 'device.list', {'scope': 'local'})
+                self.assertEqual({d['id'] for d in locales['items']},
+                                 {'eth0/aa:bb', 'eth0/cc:dd'})
+                sin_nombre = agent.tool(s, 'device.list', {'scope': 'unidentified'})
+                self.assertEqual([d['id'] for d in sin_nombre['items']], ['eth0/cc:dd'])
+
+    def test_scope_desconocido_no_se_interpreta(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with Agent(tmp, None).store() as s:
+                with self.assertRaises(ValueError) as caught:
+                    dispatch(s, 'device.list', {'scope': 'quizá local'})
+        self.assertIn('scope no válido', str(caught.exception))
 
 
 class AnonimosCaducanTest(unittest.TestCase):

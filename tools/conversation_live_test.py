@@ -126,7 +126,7 @@ def main():
             inventory.clear_context()
             turn(inventory, 'inventory_recall', 'Consulta el inventario y dime qué IP tiene mi NAS Puerto.')
             with inventory.store() as s:
-                saved = inventory.tool(s, 'device.list', {})['devices']
+                saved = inventory.tool(s, 'device.list', {'scope': 'unidentified'})['items']
                 if len(saved) != 1 or not saved[0]['identity'] or 'Puerto' not in saved[0]['identity']['name']:
                     records.append(dict(case='inventory_persistence', error='Identificación o corrección no persistida'))
                     output.write_text(json.dumps(records, ensure_ascii=False, indent=2))
@@ -147,7 +147,7 @@ def main():
                 records.append(dict(case='network_identity_read',error='No recuperó nombres mediante lectura'))
                 output.write_text(json.dumps(records, ensure_ascii=False, indent=2))
             with suffix_agent.store() as s:
-                saved = suffix_agent.tool(s,'device.list',{})['devices']
+                saved = suffix_agent.tool(s, 'device.list', {'scope': 'unidentified'})['items']
                 names = {d['latest_addresses'][0]['ip']:d['identity']['name'].casefold() if d['identity'] else None for d in saved}
                 if names != {'192.168.1.243':'synology','192.168.1.131':'nimos nas','192.168.1.249':None}:
                     records.append(dict(case='suffix_persistence',error='Nombres o direcciones incorrectos', names=names))

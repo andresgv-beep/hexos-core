@@ -61,11 +61,17 @@ TOOLS = {
                            'Solo cuando piden guardar/actualizar dispositivos o identificar uno aún no guardado. '
                            'No cambia sus nombres confirmados.', effect='write_inventory',
                            announces=(('mirar','mirad','miro'), ('escanear','escanead','escaneo'))),
-    'device.list': spec('Consultar inventario persistente e identidades atribuidas al usuario. '
-                        'query opcional filtra nombre, IP, MAC o tipo; admite OR entre nombres. '
-                        'Sin query devuelve todos, con identificados primero. identity null: sin identificar. '
+    'device.list': spec('Consultar lo GUARDADO en el inventario; no mira la red ahora. '
+                        'scope decide una sola clase: registered (por defecto: equipos con nombre), '
+                        'access (con acceso SSH), remote (con dirección fija o DDNS), local '
+                        '(observados alguna vez en esta red), unidentified (observados sin nombre) '
+                        'o all. Para «IPs/equipos visibles ahora en la red local» NO uses esta '
+                        'herramienta: usa network.local. query opcional filtra nombre, IP, MAC o '
+                        'tipo y admite OR entre nombres. El resultado siempre está en items y dice '
+                        'el scope aplicado; visible_now solo describe la última observación guardada. '
                         'duplicates señala nombres distintos que llevan al MISMO equipo: si aparece alguno, '
-                        'dilo y pregunta cuál conservar antes de tocar nada.', optional={'query':'str'}),
+                        'dilo y pregunta cuál conservar antes de tocar nada.',
+                        optional={'query':'str','scope':'str'}),
     'device.connect': spec('Conectar con un equipo ya registrado para comprobar que se puede entrar. '
                            'Úsala cuando pidan conectarse, probar el acceso o entrar en un equipo, sin '
                            'pedir todavía un diagnóstico. Si falta la credencial, HexOS abre la ventana '
@@ -103,7 +109,10 @@ TOOLS = {
                             {'kind':'str'}, effect='write_inventory',
                             announces=(('identificar','identificad','identifico'),
                                        ('nombrar','nombrad','nombro'), ('registrar','registrad','registro'))),
-    'network.local': spec('Mirar ahora la red: IP propias, rutas y vecinos IPv4/IPv6 conocidos por el equipo. '
+    'network.local': spec('Mirar AHORA la red local: úsala para buscar IPs locales, equipos visibles '
+                          'ahora, vecinos actuales o qué hay conectado en esta red. No devuelve los '
+                          'servidores remotos ni el inventario guardado: para eso usa device.list. '
+                          'Devuelve IP propias, rutas y vecinos IPv4/IPv6 conocidos por el equipo. '
                           'Deja registrado lo visto, así que después se puede nombrar con device_identify '
                           'sin volver a leer. '
                           'Devuelve los vecinos ya partidos en identified_neighbors (con nombre guardado) y '
