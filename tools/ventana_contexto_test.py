@@ -332,3 +332,23 @@ class CheckpointDentroDelTurnoTest(unittest.TestCase):
         from hexos.agent.chat_backend.ledger import completed_call
         self.assertIsNone(completed_call(
             turn, 'nas.read', {'device':'nas','section':'containers'}))
+
+
+class TopeOperativoTest(unittest.TestCase):
+    """Cuánto se arrastra no es cuánto cabe: al subir la ventana a 131k el corte
+    dejó de dispararse y cada turno iba más lento que el anterior."""
+
+    def limite(self, ctx):
+        from hexos.agent.chat_backend.context import ContextManager
+        return ContextManager.kv_operating_limit(ContextManager, ctx)
+
+    def test_con_una_ventana_grande_el_tope_no_se_va_con_ella(self):
+        self.assertEqual(self.limite(131072), 12000)
+        self.assertEqual(self.limite(32768), 12000)
+
+    def test_con_una_ventana_pequeña_manda_la_ventana(self):
+        # Con 8k no se puede arrastrar 12k: ahí el límite real es lo que cabe.
+        self.assertEqual(self.limite(8192), int(8192 * 0.7))
+
+    def test_sin_ventana_declarada_no_se_inventa_un_tope(self):
+        self.assertEqual(self.limite(0), 0)

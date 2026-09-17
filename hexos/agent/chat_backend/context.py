@@ -294,6 +294,24 @@ class ContextManager:
             return 6000
         return max(4000, int((ctx * 3.6 - catalog.context_overhead_chars()) * 0.66))
 
+    # Cuánto conviene ARRASTRAR, que no es lo mismo que cuánto cabe. La ventana
+    # dice si un turno con una lectura gorda revienta; esto dice a partir de dónde
+    # cada turno va más lento que el anterior, porque en decodificación cada token
+    # nuevo mira todo lo que hay detrás. Medido: 31 tok/s con 2-5k de KV, 27,7 con
+    # 5-9k, 24,8 con 9-20k y 17,1 por encima de 20k.
+    KV_OPERATIVO = 12000
+
+    def kv_operating_limit(self, ctx):
+        """El tope de arrastre, nunca por encima de lo que cabe de verdad.
+
+        Era una fracción de la ventana, y al subirla a 131k el umbral se fue a
+        91.750: dejó de dispararse y la conversación crecía sin freno. Un tope
+        absoluto no se descoloca al cambiar la ventana.
+        """
+        if not ctx:
+            return 0
+        return min(self.KV_OPERATIVO, int(ctx * 0.7))
+
     def window(self, store, turn_id, native, budget):
         """La conversación desde el último corte, y un corte nuevo si ya no cabe.
 
@@ -315,7 +333,8 @@ class ContextManager:
         # y el turno murió. El tope deja sitio para una lectura gorda y su respuesta.
         ctx = getattr(self.agent.runtime, 'ctx', 0) or 0
         ocupado = getattr(self.agent.runtime, 'kv_position', 0) or 0
-        if sum(len(f['text']) for f in filas) <= budget and (not ctx or ocupado <= ctx * 0.7):
+        tope = self.kv_operating_limit(ctx)
+        if sum(len(f['text']) for f in filas) <= budget and (not tope or ocupado <= tope):
             return corte, filas
         # Ya no cabe: se corta por entero y se empieza limpio. Ir soltando el
         # mensaje más viejo dejaría el prompt cambiando por delante en cada turno,
@@ -329,7 +348,8 @@ class ContextManager:
         store.db.commit()
         self.agent.context_cut = dict(at=now(), messages=len(filas),
                                 characters=sum(len(f['text']) for f in filas),
-                                reason='kv' if ctx and ocupado > ctx * 0.7 else 'caracteres',
+                                reason='kv' if tope and ocupado > tope else 'caracteres',
+                                kv_limit=tope,
                                 kv_position=ocupado, ctx=ctx)
         return nuevo, []
 
