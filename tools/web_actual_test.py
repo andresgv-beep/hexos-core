@@ -49,11 +49,15 @@ class ServicioTest(unittest.TestCase):
 
     def test_entrega_los_resultados_como_dato_y_dice_quién_buscó(self):
         with patch('hexos.agent.chat_backend.memory.web.search',
-                   return_value=[dict(title='Ubuntu 26.04', url='https://ubuntu.com/')]):
+                   return_value=dict(query='ubuntu', count=1, note='x',
+                                     items=[dict(title='Ubuntu 26.04', url='https://ubuntu.com/',
+                                                 snippet='…')])):
             paso = self.servicio().recall_web('cual es la ultima version de ubuntu')
         self.assertEqual(paso['tool'], 'web.search')
         self.assertEqual(paso['result']['requested_by'], 'hexos')
         self.assertFalse(paso['failed'])
+        # Se conserva la forma que devuelve web.search, sin reinventarla.
+        self.assertEqual(paso['result']['items'][0]['url'], 'https://ubuntu.com/')
         # Y deja claro que un titular no es una fuente leída.
         self.assertIn('web_read', paso['result']['note'])
 

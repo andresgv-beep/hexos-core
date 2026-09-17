@@ -180,10 +180,12 @@ class MemoryService:
                         effect='read', changes_state=False, ts=now(),
                         seconds=round(time.monotonic() - empezado, 3), failed=True,
                         result=dict(error=str(exc)[:200], requested_by='hexos'))
+        # `encontrados` ya trae {query, items, count, note}: se conserva tal cual y
+        # solo se añade quién lo pidió, para que la traza no invente otra forma.
         return dict(tool='web.search', arguments=dict(query=text.strip()[:200]),
                     effect='read', changes_state=False, ts=now(),
                     seconds=round(time.monotonic() - empezado, 3), failed=False,
-                    result=dict(results=encontrados, requested_by='hexos',
+                    result=dict(encontrados, requested_by='hexos',
                                 note='Lo buscó HexOS al ver que la pregunta pide un dato de ahora; '
                                      'el modelo no lo pidió. Son titulares y fragmentos: para '
                                      'afirmar algo hay que abrir la fuente con web_read.'))
