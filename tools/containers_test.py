@@ -102,7 +102,8 @@ class EfectoDesconocidoTest(unittest.TestCase):
         with self.agent.store() as store:
             with patch('hexos.agent.chat.nas_read', return_value=salida):
                 return self.agent.tool(store, 'nas.container',
-                                       dict(container='handbrake', action='restart', **extra),
+                                       dict(device='synology', container='handbrake',
+                                            action='restart', **extra),
                                        turn_id='u1')
 
     def test_el_timeout_queda_anotado_mas_alla_del_turno(self):
@@ -128,7 +129,8 @@ class EfectoDesconocidoTest(unittest.TestCase):
                     container='handbrake',
                     container_state=dict(name='handbrake', state='running', status='Up 2 seconds'))):
                 self.agent.tool(store, 'nas.read',
-                                dict(section='containers', container='handbrake'), turn_id='u2')
+                                dict(device='synology', section='containers',
+                                     container='handbrake'), turn_id='u2')
             self.assertIsNone(self.agent.pending_effect(store, 'synology', 'handbrake'))
         # Y una vez aclarado, la escritura vuelve a estar permitida.
         self.actuar(dict(outcome='hecho', container='handbrake', action='restart'))

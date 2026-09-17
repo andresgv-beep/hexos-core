@@ -241,21 +241,49 @@ def match(workspace, name):
 
 
 def only_device(workspace):
-    """El único equipo con acceso guardado, o un error que los nombra.
+    """El único destino inequívoco, o un error que nombra las opciones.
 
     `device` tenía por defecto 'synology', y con dos equipos guardados eso mandaba
     la lectura al que no era sin avisar: se pedía el estado de uno y contestaba
-    por el otro. Con uno solo el atajo se conserva; con varios hay que decir cuál.
+    por el otro. Un único acceso guardado manda. Si aún no hay credencial, un único
+    equipo nombrado en el inventario permite abrir la ventana para ese equipo real.
+    Nunca se fabrica un nombre por defecto.
     """
     guardados = sorted(load(workspace))
     if len(guardados) == 1:
         return guardados[0]
-    if not guardados:
-        # Sin ninguno, el nombre habitual mantiene el camino de pedir el acceso.
-        return 'synology'
-    raise ValueError('Hay varios equipos guardados y no has dicho cuál: ' +
-                     ', '.join(repr(n) for n in guardados) +
-                     '. Repite la lectura indicando device.')
+    if len(guardados) > 1:
+        raise ValueError('Hay varios equipos guardados y no has dicho cuál: ' +
+                         ', '.join(repr(n) for n in guardados) +
+                         '. Repite la lectura indicando device.')
+
+    database = Path(workspace) / 'work.sqlite'
+    inventario = set()
+    if database.exists():
+        connection = sqlite3.connect('file:' + str(database) + '?mode=ro', uri=True)
+        try:
+            rows = connection.execute('SELECT body FROM network_devices')
+            for (body,) in rows:
+                try:
+                    name = (json.loads(body).get('identity') or {}).get('name')
+                except (TypeError, json.JSONDecodeError):
+                    continue
+                if isinstance(name, str) and name.strip():
+                    inventario.add(name.strip().casefold())
+        except sqlite3.Error:
+            # Un inventario aún no inicializado equivale aquí a no tener un destino;
+            # el lector detallado (`resolve`) dará el error de almacenamiento si se usa.
+            pass
+        finally:
+            connection.close()
+    if len(inventario) == 1:
+        return next(iter(inventario))
+    if inventario:
+        raise ValueError('Hay varios equipos registrados y no has dicho cuál: ' +
+                         ', '.join(repr(n) for n in sorted(inventario)) +
+                         '. Repite la lectura indicando device.')
+    raise ValueError('No hay ningún equipo con acceso guardado ni un único equipo registrado. '
+                     'Registra primero el equipo o indica una dirección para añadirlo al inventario.')
 
 
 HOSTNAME = re.compile(r'[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*', re.I)

@@ -14,7 +14,7 @@ class NasSessionTest(unittest.TestCase):
                      smart=[dict(disk='sda',exit_code=0,summary='197 Current_Pending_Sector 0x0012 100 100 000 Old_age Always - 0')])
         with patch('hexos.agent.nas_session.hosts.credentials',return_value=dict(user='u',password='p',port=22)), \
              patch('hexos.agent.nas_session.execute',return_value=payload):
-            result=read('/unused','diagnosis')
+            result=read('/unused','diagnosis',device='fixture')
         self.assertTrue(result['facts']['raid'][0]['all_configured_members_present'])
         self.assertEqual(result['facts']['links_in_error_log'],[dict(link='ata1',disk='sda')])
         self.assertEqual(result['facts']['smart_attributes'][0]['attributes']['Current_Pending_Sector'],'0')
@@ -156,14 +156,15 @@ class NasSessionTest(unittest.TestCase):
     def test_smart_without_disk_collects_diagnosis(self):
         with patch('hexos.agent.nas_session.hosts.credentials',return_value=dict(user='u',password='p',port=22)), \
              patch('hexos.agent.nas_session.execute',return_value=dict(error='fixture')) as run:
-            result=read('/unused','smart')
+            result=read('/unused','smart',device='fixture')
         self.assertEqual(run.call_args.args[2],'diagnosis')
         self.assertEqual(result['effective_section'],'diagnosis')
 
     def test_read_without_stored_credentials_explains_how_to_save_them(self):
         with patch('hexos.agent.nas_session.hosts.credentials',return_value=None), \
              patch('hexos.agent.nas_session.execute') as run:
-            with self.assertRaises(ValueError) as caught: read('/unused','diagnosis')
+            with self.assertRaises(ValueError) as caught:
+                read('/unused','diagnosis',device='synology')
         run.assert_not_called()
         message=str(caught.exception)
         # Ya no manda ejecutar un script: lo pide la interfaz.

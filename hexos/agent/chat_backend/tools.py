@@ -37,7 +37,12 @@ class ToolDispatcher:
                 nombrado = self.references.device_in_message(store, turn_id)
                 if nombrado:
                     args = dict(args, device=nombrado)
-            equipo = args.get('device') or 'synology'
+                else:
+                    # El único acceso guardado puede resolverse sin preguntar. Con
+                    # ninguno o con varios, only_device devuelve un error explícito;
+                    # nunca se inventa un destino llamado «synology».
+                    args = dict(args, device=hosts.only_device(self.env.workspace))
+            equipo = args['device']
             objetivo = args.get('container')
             if name == 'nas.container' and objetivo:
                 # Una escritura anterior sobre este mismo destino se quedó sin saber

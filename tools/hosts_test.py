@@ -173,9 +173,32 @@ class ElegirEquipoTest(unittest.TestCase):
         self.assertIn('synology 1', str(caught.exception))
         self.assertIn('varios equipos', str(caught.exception))
 
-    def test_sin_ninguno_conserva_el_camino_de_pedir_acceso(self):
+    def test_sin_ninguno_no_inventa_un_synology(self):
         from hexos.agent.hosts import only_device
-        self.assertEqual(only_device(self.tmp.name), 'synology')
+        with self.assertRaises(ValueError) as caught:
+            only_device(self.tmp.name)
+        self.assertIn('ningún equipo con acceso', str(caught.exception))
+
+    def test_unico_equipo_inventariado_abre_su_camino_de_acceso(self):
+        from hexos.agent.hosts import only_device
+        inventory(self.tmp.name, [device('a', 'servidor casa', '192.168.1.20')])
+        self.assertEqual(only_device(self.tmp.name), 'servidor casa')
+
+    def test_varios_equipos_sin_acceso_no_eligen_uno(self):
+        from hexos.agent.hosts import only_device
+        inventory(self.tmp.name, [device('a', 'servidor casa', '192.168.1.20'),
+                                  device('b', 'nas taller', '192.168.1.21')])
+        with self.assertRaises(ValueError) as caught:
+            only_device(self.tmp.name)
+        self.assertIn('varios equipos registrados', str(caught.exception))
+
+    def test_las_politicas_no_fijan_un_synology_ni_una_ip(self):
+        from hexos.agent.catalog import prompt
+        from hexos.agent.native import POLICY
+        for texto in (prompt(), POLICY):
+            self.assertNotIn('192.168.1.243', texto)
+            self.assertNotIn('Synology configurado', texto)
+            self.assertIn('equipos', texto)
 
 
 class DireccionFijaTest(unittest.TestCase):

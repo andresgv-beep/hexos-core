@@ -183,6 +183,7 @@ class RetomarTrasGuardarTest(unittest.TestCase):
 
         agente = Agent(self.tmp.name, Runtime())
         peticion = 'revisa el estado de synology 1'
+        inventory(self.tmp.name, name='synology 1')
         with agente.store() as store:
             store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
                              ('u1', now(), 'user', peticion, peticion))
