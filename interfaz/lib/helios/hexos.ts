@@ -79,7 +79,8 @@ export interface HeliosTransport {
   setThinking(enabled: boolean, signal?: AbortSignal): Promise<boolean>;
   history(signal?: AbortSignal): Promise<HistoryMessage[]>;
   /** `image` es base64 de PNG/JPEG/WebP, sin la cabecera `data:`. Una por turno. */
-  send(text: string, signal?: AbortSignal, image?: string): Promise<ChatReply>;
+  /** `thinking` abre el canal solo durante este turno; no cambia la preferencia AUTO. */
+  send(text: string, signal?: AbortSignal, image?: string, thinking?: boolean): Promise<ChatReply>;
 }
 
 /** Existing HexOS HTTP contract, inspected 2026-09-12. No connection at import time.
@@ -147,11 +148,13 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
       if (!Array.isArray(data) || !data.every(row => row && (row.role === "user" || row.role === "assistant") && typeof row.text === "string")) throw new Error("Historial de HexOS no válido");
       return data.map(({ role, text }) => ({ role, text }));
     },
-    async send(text, signal, image) {
+    async send(text, signal, image, thinking) {
       if (!text.trim()) throw new Error("Escribe un mensaje");
-      // Con imagen el contrato es JSON; sin ella se mantiene el text/plain de siempre.
-      const init: RequestInit = image
-        ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, image }), signal }
+      // Con imagen o razonamiento puntual el contrato es JSON; el chat ordinario
+      // conserva text/plain para seguir siendo compatible con clientes anteriores.
+      const init: RequestInit = image || thinking !== undefined
+        ? { method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text, ...(image ? { image } : {}), ...(thinking !== undefined ? { thinking } : {}) }), signal }
         : { method: "POST", headers: { "Content-Type": "text/plain; charset=utf-8" }, body: text, signal };
       return parseChatReply(await request("chat", init));
     },

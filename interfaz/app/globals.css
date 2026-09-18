@@ -374,6 +374,8 @@ input[type="range"] { width: 100%; accent-color: #8dc9f2; cursor: pointer; heigh
   border-radius: 6px; background: transparent; color: #a9d5ea; font: inherit; cursor: pointer;
 }
 .reply-code button:hover { color: #effaff; background: #7acfff18; }
+.reply-code-actions { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; }
+.reply-code-actions button:not(:last-child) { color: #83c7e8; }
 .reply-code pre {
   max-width: 100%; margin: 0; padding: 14px 16px; overflow-x: auto;
   color: #d9eef9; font-size: 12.5px; line-height: 1.6; tab-size: 2;
@@ -393,6 +395,34 @@ input[type="range"] { width: 100%; accent-color: #8dc9f2; cursor: pointer; heigh
 .syntax-function { color: #90c7ff; }
 .syntax-property { color: #8dd6c5; }
 .syntax-operator { color: #9fb6c5; }
+.code-preview-backdrop {
+  position: fixed; inset: 0; z-index: 35; display: grid; place-items: center;
+  padding: 24px; background: #02070ccd; backdrop-filter: blur(8px);
+}
+.code-preview-panel {
+  width: min(1180px, 96vw); height: min(820px, 92svh); display: flex; flex-direction: column;
+  overflow: hidden; border: 1px solid #79d1ff70; border-radius: 18px;
+  background: #07131d; box-shadow: 0 24px 90px #000c, 0 0 35px #39bfff20;
+}
+.code-preview-panel > header {
+  min-height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 12px 0 18px;
+  border-bottom: 1px solid #79d1ff2d; color: #9cdaef;
+}
+.code-preview-panel h2 { font-size: 14px; letter-spacing: .06em; }
+.code-preview-panel header span { margin-left: auto; color: #63869a; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.code-preview-panel header button {
+  width: 34px; height: 34px; display: grid; place-items: center; border: 0;
+  border-radius: 8px; background: transparent; color: #98bdd1; cursor: pointer;
+}
+.code-preview-panel header button:hover { color: #effaff; background: #7acfff18; }
+.code-preview-panel iframe { flex: 1; width: 100%; min-height: 0; border: 0; background: #fff; }
+@media (max-width: 700px) {
+  .reply-code header { align-items: flex-start; gap: 6px; padding: 8px; }
+  .reply-code-actions { flex-wrap: wrap; justify-content: flex-end; }
+  .code-preview-backdrop { padding: 8px; }
+  .code-preview-panel { width: 100%; height: 96svh; border-radius: 13px; }
+  .code-preview-panel header span { display: none; }
+}
 /* Copiar la respuesta la copiaba dos veces: la visible y la del lector de pantalla. */
 .helios-answer .sr-only { user-select: none; }
 

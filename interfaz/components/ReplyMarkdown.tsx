@@ -5,12 +5,18 @@ import { Check, Copy } from "lucide-react";
 import { parseReply, type Inline } from "@/lib/helios/markdown";
 import { highlightCode } from "@/lib/helios/highlight";
 
-export function ReplyMarkdown({ text }: { text: string }) {
+export interface CodeActions {
+  onImproveCode?: (code: string, language?: string) => void;
+  onPreviewCode?: (code: string, language?: string) => void;
+}
+
+export function ReplyMarkdown({ text, onImproveCode, onPreviewCode }: { text: string } & CodeActions) {
   const bloques = parseReply(text);
   return <div className="helios-answer">{bloques.map((bloque, indice) => {
     if (bloque.kind === "code") {
       const codigo = bloque.lines.map(linea => linea.map(parte => parte.text).join("")).join("\n");
-      return <ReplyCode key={indice} code={codigo} language={bloque.language} />;
+      return <ReplyCode key={indice} code={codigo} language={bloque.language}
+        onImprove={onImproveCode} onPreview={onPreviewCode} />;
     }
     if (bloque.kind === "p") return <p key={indice}>{bloque.lines[0].map((parte, i) => <InlinePart key={i} part={parte} />)}</p>;
     const Lista = bloque.kind === "ol" ? "ol" : "ul";
@@ -25,11 +31,13 @@ function InlinePart({ part }: { part: Inline }) {
   return part.text;
 }
 
-export function ReplyCode({ code, language, children, copy = true }: {
+export function ReplyCode({ code, language, children, copy = true, onImprove, onPreview }: {
   code: string;
   language?: string;
   children?: ReactNode;
   copy?: boolean;
+  onImprove?: (code: string, language?: string) => void;
+  onPreview?: (code: string, language?: string) => void;
 }) {
   const [copiado, setCopiado] = useState(false);
   async function copiar() {
@@ -44,10 +52,16 @@ export function ReplyCode({ code, language, children, copy = true }: {
   return <section className="reply-code" aria-label={`Bloque de código${language ? ` ${language}` : ""}`}>
     <header>
       <span>{language || "código"}</span>
-      {copy && <button type="button" onClick={copiar} aria-label="Copiar código">
-        {copiado ? <Check size={14} /> : <Copy size={14} />}
-        {copiado ? "Copiado" : "Copiar"}
-      </button>}
+      <span className="reply-code-actions">
+        {onImprove && <button type="button" onClick={() => onImprove(code, language)}>Mejorar</button>}
+        {onPreview && <button type="button" onClick={() => onPreview(code, language)}>
+          {["html", "htm"].includes((language ?? "").toLowerCase()) ? "Ver" : "Crear vista"}
+        </button>}
+        {copy && <button type="button" onClick={copiar} aria-label="Copiar código">
+          {copiado ? <Check size={14} /> : <Copy size={14} />}
+          {copiado ? "Copiado" : "Copiar"}
+        </button>}
+      </span>
     </header>
     <pre><code>{contenido}</code></pre>
   </section>;

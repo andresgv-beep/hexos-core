@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ConversationStream, type Turn } from "../components/ConversationStream";
 import { ReplyMarkdown } from "../components/ReplyMarkdown";
+import { CodePreview } from "../components/CodePreview";
 
 function render(turn: Partial<Turn>) {
   return renderToStaticMarkup(createElement(ConversationStream, {
@@ -54,4 +55,19 @@ test("el código cercado se pinta como bloque y nunca como HTML ejecutable", () 
   assert.match(html, /script/);
   assert.match(html, />jsx</);
   assert.doesNotMatch(html, /<script>/);
+});
+
+test("un bloque de código ofrece mejora y vista cuando la conversación las conecta", () => {
+  const html = renderToStaticMarkup(createElement(ReplyMarkdown, {
+    text: "```jsx\n<App />\n```", onImproveCode() {}, onPreviewCode() {},
+  }));
+  assert.match(html, />Mejorar</);
+  assert.match(html, />Crear vista</);
+});
+
+test("la maqueta se abre en un iframe aislado", () => {
+  const html = renderToStaticMarkup(createElement(CodePreview, { html: "<h1>Panel</h1>", onClose() {} }));
+  assert.match(html, /sandbox="allow-scripts"/);
+  assert.match(html, /Vista previa de la interfaz generada/);
+  assert.doesNotMatch(html, /allow-same-origin|allow-forms/);
 });

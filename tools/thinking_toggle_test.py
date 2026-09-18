@@ -11,8 +11,11 @@ from hexos.agent.chat import Agent
 class RuntimeConPensamiento:
     def __init__(self, thinking=False):
         self.thinking = thinking
+        self.durante = []
     def call(self, request): pass
-    def generate(self, messages): return {'reply': '', 'work': None}
+    def generate(self, messages):
+        self.durante.append(self.thinking)
+        return {'reply': 'Listo.', 'work': None}
 
 
 class RuntimeSinPensamiento:
@@ -61,6 +64,14 @@ class ThinkingToggleTest(unittest.TestCase):
         for malo in ('true', 1, None, [], {'enabled': True}):
             with self.assertRaises(ValueError):
                 agente.set_thinking(malo)
+
+    def test_un_turno_puede_pensar_sin_cambiar_la_preferencia(self):
+        runtime = RuntimeConPensamiento(False)
+        agente = Agent(self.tmp.name, runtime)
+        agente.chat('Revisa este código.', thinking=True)
+        self.assertEqual(runtime.durante, [True])
+        self.assertFalse(runtime.thinking)
+        self.assertFalse(agente.thinking())
 
 
 if __name__ == '__main__':

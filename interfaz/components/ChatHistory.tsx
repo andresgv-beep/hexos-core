@@ -5,13 +5,14 @@ import { X } from "lucide-react";
 import type { HistoryMessage } from "@/lib/helios/hexos";
 import type { Turn } from "./ConversationStream";
 import { ReplyMarkdown } from "./ReplyMarkdown";
+import type { CodeActions } from "./ReplyMarkdown";
 
-export function ChatHistory({ previous, messages, historyError, onClose }: {
+export function ChatHistory({ previous, messages, historyError, onClose, onImproveCode, onPreviewCode }: {
   previous: HistoryMessage[];
   messages: Turn[];
   historyError: string;
   onClose: () => void;
-}) {
+} & CodeActions) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const element = dialog.current;
@@ -23,12 +24,12 @@ export function ChatHistory({ previous, messages, historyError, onClose }: {
     <div className="history-messages">
       {historyError && <p role="status">{historyError}</p>}
       {!previous.length && !messages.length && <p className="history-empty">Aquí podrás volver a leer nuestra conversación.</p>}
-      {previous.map((message, index) => <div key={`previous-${index}`} className={`history-entry ${message.role}`}><span className="message-author">{message.role === "user" ? "TÚ" : "HELIOS"}</span>{message.role === "assistant" ? <ReplyMarkdown text={message.text} /> : <p>{message.text}</p>}</div>)}
+      {previous.map((message, index) => <div key={`previous-${index}`} className={`history-entry ${message.role}`}><span className="message-author">{message.role === "user" ? "TÚ" : "HELIOS"}</span>{message.role === "assistant" ? <ReplyMarkdown text={message.text} onImproveCode={onImproveCode} onPreviewCode={onPreviewCode} /> : <p>{message.text}</p>}</div>)}
       {messages.map(message => <div key={message.id} className="history-turn">
         <div className="history-entry user"><span className="message-author">TÚ</span><p>{message.text}</p></div>
         <div className="history-entry assistant"><span className="message-author">HELIOS</span>{message.pending
           ? <p>Helios está pensando…</p>
-          : message.reply ? <ReplyMarkdown text={message.reply} />
+          : message.reply ? <ReplyMarkdown text={message.reply} onImproveCode={onImproveCode} onPreviewCode={onPreviewCode} />
           : <p>{message.error || "Sin respuesta recibida."}</p>}</div>
       </div>)}
     </div>

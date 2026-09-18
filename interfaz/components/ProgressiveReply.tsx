@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { parseReply, regroup, tokenize, type Token } from "@/lib/helios/markdown";
 import { ReplyCode } from "./ReplyMarkdown";
+import type { CodeActions } from "./ReplyMarkdown";
 
 /** Revelado visual del contrato HTTP actual —la respuesta llega entera—, no
  *  streaming de tokens.
@@ -10,7 +11,9 @@ import { ReplyCode } from "./ReplyMarkdown";
  *  Por palabras y con desvanecido, no letra a letra: carácter a carácter parecía
  *  una máquina de escribir, y lo que se quiere es que el texto aparezca. Cada
  *  palabra entra con su propia animación al montarse. */
-export function ProgressiveReply({ text, onComplete }: { text: string; onComplete?: () => void }) {
+export function ProgressiveReply({ text, onComplete, onImproveCode, onPreviewCode }: {
+  text: string; onComplete?: () => void;
+} & CodeActions) {
   // Helios escribe en Markdown: se interpreta antes de revelar, para que una lista
   // sea una lista y no un párrafo con asteriscos dentro.
   const words = useMemo(() => tokenize(parseReply(text)), [text]);
@@ -75,7 +78,8 @@ export function ProgressiveReply({ text, onComplete }: { text: string; onComplet
       <div aria-hidden={!complete}>{regroup(words.slice(0, visible)).map(bloque => {
         if (bloque.kind === "code") {
           const codigo = bloque.lines.map(linea => linea.parts.map(parte => parte.text).join("")).join("\n");
-          return <ReplyCode key={bloque.index} code={codigo} language={bloque.language} copy={complete}>
+          return <ReplyCode key={bloque.index} code={codigo} language={bloque.language} copy={complete}
+            onImprove={complete ? onImproveCode : undefined} onPreview={complete ? onPreviewCode : undefined}>
             {!complete && bloque.lines.map((linea, i) => <Fragment key={linea.index}>
               {i > 0 && "\n"}
               {linea.parts.map((parte, j) => <Palabra key={j} token={parte} />)}

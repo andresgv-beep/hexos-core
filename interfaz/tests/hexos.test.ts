@@ -21,6 +21,15 @@ test('sends the existing plain-text contract, preserves Unicode and AbortSignal'
   assert.equal(response.reply, 'Hola');
   assert.deepEqual(response.document, { id: 'a' });
 });
+test('a code review can think for one turn without changing AUTO', async () => {
+  const fetcher = (async (url, init) => {
+    assert.equal(url, '/api/chat');
+    assert.deepEqual(init?.headers, { 'Content-Type': 'application/json' });
+    assert.deepEqual(JSON.parse(String(init?.body)), { text: 'Revisa el componente', thinking: true });
+    return Response.json({ reply: 'Revisado', tools: [] });
+  }) as typeof fetch;
+  assert.equal((await createHexosTransport('/api', fetcher).send('Revisa el componente', undefined, undefined, true)).reply, 'Revisado');
+});
 test('maps only states actually exposed by HexOS', async () => {
   for (const state of ['idle', 'thinking', 'tool']) {
     const result = await createHexosTransport('/api', fixture({ state, mode: 'native-experimental' })).status();

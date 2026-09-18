@@ -138,15 +138,19 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                         result = store.dispatch(strict_json(data.decode('utf-8')), actor='user')
                     self.respond(200, result)
                 elif self.headers.get('Content-Type','').startswith('application/json'):
-                    # Forma con adjunto: {"text": "...", "image": "<base64 de PNG/JPEG>"}.
+                    # Forma ampliada: adjunto o pensamiento limitado a este turno.
                     # El text/plain de siempre sigue valiendo para un turno sin imagen.
                     payload = strict_json(data.decode('utf-8'))
-                    if set(payload) - {'text', 'image'}:
-                        raise ValueError('campos permitidos: text, image')
+                    if set(payload) - {'text', 'image', 'thinking'}:
+                        raise ValueError('campos permitidos: text, image, thinking')
+                    thinking = payload.get('thinking')
+                    if thinking is not None and not isinstance(thinking, bool):
+                        raise ValueError('thinking debe ser true o false')
                     # Con imagen el texto puede venir vacío: la pregunta la pone el agente.
                     mensaje = string(payload.get('text'), 'text', MAX_INPUT,
                                      empty=payload.get('image') is not None)
-                    self.respond(200, agent.chat(mensaje, decode_image(payload.get('image'))))
+                    self.respond(200, agent.chat(mensaje, decode_image(payload.get('image')),
+                                                 thinking=thinking))
                 else:
                     self.respond(200, agent.chat(data.decode('utf-8')))
             except (ValueError, RuntimeError, OSError) as exc:

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ProgressiveReply } from "./ProgressiveReply";
 import { ReplyMarkdown } from "./ReplyMarkdown";
+import type { CodeActions } from "./ReplyMarkdown";
 
 export interface Turn {
   id: number;
@@ -23,8 +24,8 @@ const SALIDA_MS = 420;
  *  Un turno entra, el anterior se va. Lo que se fue no se pierde —está en el
  *  historial, tras la esfera—, pero deja de ocupar la pantalla, porque lo que
  *  uno quiere tener delante son las notas y los informes, no lo ya leído. */
-export function ConversationStream({ turn, onReplyComplete }:
-  { turn: Turn | null; onReplyComplete?: (id: number) => void }) {
+export function ConversationStream({ turn, onReplyComplete, onImproveCode, onPreviewCode }:
+  { turn: Turn | null; onReplyComplete?: (id: number) => void } & CodeActions) {
   const [saliente, setSaliente] = useState<Turn | null>(null);
   const anterior = useRef<Turn | null>(null);
   useEffect(() => {
@@ -38,13 +39,14 @@ export function ConversationStream({ turn, onReplyComplete }:
 
   if (!turn && !saliente) return null;
   return <section className="conversation-stream" aria-label="Conversación con Helios" aria-live="polite">
-    {saliente && <TurnoVisible turn={saliente} saliendo />}
-    {turn && <TurnoVisible key={turn.id} turn={turn} onReplyComplete={onReplyComplete} />}
+    {saliente && <TurnoVisible turn={saliente} saliendo onImproveCode={onImproveCode} onPreviewCode={onPreviewCode} />}
+    {turn && <TurnoVisible key={turn.id} turn={turn} onReplyComplete={onReplyComplete}
+      onImproveCode={onImproveCode} onPreviewCode={onPreviewCode} />}
   </section>;
 }
 
-function TurnoVisible({ turn, saliendo, onReplyComplete }:
-  { turn: Turn; saliendo?: boolean; onReplyComplete?: (id: number) => void }) {
+function TurnoVisible({ turn, saliendo, onReplyComplete, onImproveCode, onPreviewCode }:
+  { turn: Turn; saliendo?: boolean; onReplyComplete?: (id: number) => void } & CodeActions) {
   return <article className={`stream-turn${saliendo ? " leaving" : ""}`} aria-hidden={saliendo || undefined}>
     <p className="stream-question"><span className="message-author">TÚ</span>{turn.text}</p>
     <div className="stream-body">
@@ -55,8 +57,9 @@ function TurnoVisible({ turn, saliendo, onReplyComplete }:
         {turn.progress?.length ? "Helios está en ello…" : "Helios está pensando…"}
       </p>}
       {turn.reply && (saliendo
-        ? <ReplyMarkdown text={turn.reply} />
-        : <ProgressiveReply key={turn.reply} text={turn.reply} onComplete={() => onReplyComplete?.(turn.id)} />)}
+        ? <ReplyMarkdown text={turn.reply} onImproveCode={onImproveCode} onPreviewCode={onPreviewCode} />
+        : <ProgressiveReply key={turn.reply} text={turn.reply} onComplete={() => onReplyComplete?.(turn.id)}
+            onImproveCode={onImproveCode} onPreviewCode={onPreviewCode} />)}
       {/* El reparo viaja pegado a la respuesta: es lo que evita creerse lo que no pasó. */}
       {turn.caveat && <p className="reply-caveat" role="note">
         {turn.caveat.note}

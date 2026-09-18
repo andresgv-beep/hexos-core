@@ -158,8 +158,25 @@ class Agent:
     def tool(self, store, name, args, *, turn_id=None):
         return self.dispatcher.dispatch(store, name, args, turn_id=turn_id)
 
-    def chat(self, text, image=None):
-        return self.runner.run(text, image)
+    def chat(self, text, image=None, *, thinking=None):
+        """Ejecuta un turno, con pensamiento opcional solo para ese encargo.
+
+        La preferencia general sigue viviendo en ``runtime.thinking`` y en la
+        base de datos. Una revisión de código puede abrir el canal durante este
+        turno sin dejar cambiado el botón AUTO de la persona.
+        """
+        if thinking is None:
+            return self.runner.run(text, image)
+        if not isinstance(thinking, bool):
+            raise ValueError('thinking debe ser true o false')
+        if not hasattr(self.runtime, 'thinking'):
+            raise ValueError('Este motor no tiene canal de pensamiento')
+        previous = self.runtime.thinking
+        self.runtime.thinking = thinking
+        try:
+            return self.runner.run(text, image)
+        finally:
+            self.runtime.thinking = previous
 
     def resume_access(self, text, operation):
         """Continúa exactamente la lectura que quedó esperando credenciales."""
