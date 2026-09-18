@@ -3,6 +3,7 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ConversationStream, type Turn } from "../components/ConversationStream";
+import { ReplyMarkdown } from "../components/ReplyMarkdown";
 
 function render(turn: Partial<Turn>) {
   return renderToStaticMarkup(createElement(ConversationStream, {
@@ -43,4 +44,12 @@ test("el reparo viaja pegado a la respuesta, no se pierde en la mudanza", () => 
 
 test("sin turno no se pinta nada", () => {
   assert.equal(renderToStaticMarkup(createElement(ConversationStream, { turn: null })), "");
+});
+
+test("el código cercado se pinta como bloque y nunca como HTML ejecutable", () => {
+  const html = renderToStaticMarkup(createElement(ReplyMarkdown, { text: "```jsx\n<script>alert(1)</script>\n```" }));
+  assert.match(html, /class="reply-code"/);
+  assert.match(html, /<pre><code>&lt;script&gt;alert\(1\)&lt;\/script&gt;<\/code><\/pre>/);
+  assert.match(html, />jsx</);
+  assert.doesNotMatch(html, /<script>/);
 });

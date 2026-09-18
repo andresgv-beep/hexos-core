@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { parseReply, regroup, tokenize, type Token } from "@/lib/helios/markdown";
+import { ReplyCode } from "./ReplyMarkdown";
 
 /** Revelado visual del contrato HTTP actual —la respuesta llega entera—, no
  *  streaming de tokens.
@@ -14,7 +15,7 @@ export function ProgressiveReply({ text, onComplete }: { text: string; onComplet
   // sea una lista y no un párrafo con asteriscos dentro.
   const words = useMemo(() => tokenize(parseReply(text)), [text]);
   const [visible, setVisible] = useState(0);
-  const paragraph = useRef<HTMLParagraphElement>(null);
+  const paragraph = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   const finish = useRef<() => void>(() => {});
   const completionReported = useRef(false);
@@ -70,8 +71,17 @@ export function ProgressiveReply({ text, onComplete }: { text: string; onComplet
     <div ref={paragraph} className="helios-answer">
       {/* El texto entero para quien usa lector de pantalla. No se puede seleccionar:
           si no, copiar la respuesta la copiaba dos veces. */}
-      <span className="sr-only">{text}</span>
-      <div aria-hidden="true">{regroup(words.slice(0, visible)).map(bloque => {
+      {!complete && <span className="sr-only">{text}</span>}
+      <div aria-hidden={!complete}>{regroup(words.slice(0, visible)).map(bloque => {
+        if (bloque.kind === "code") {
+          const codigo = bloque.lines.map(linea => linea.parts.map(parte => parte.text).join("")).join("\n");
+          return <ReplyCode key={bloque.index} code={codigo} language={bloque.language} copy={complete}>
+            {bloque.lines.map((linea, i) => <Fragment key={linea.index}>
+              {i > 0 && "\n"}
+              {linea.parts.map((parte, j) => <Palabra key={j} token={parte} />)}
+            </Fragment>)}
+          </ReplyCode>;
+        }
         const lineas = bloque.lines.map(linea =>
           <Fragment key={linea.index}>{linea.parts.map((parte, i) =>
             <Palabra key={i} token={parte} />)}</Fragment>);

@@ -51,3 +51,17 @@ test("un texto sin marcas sigue siendo un párrafo", () => {
   const bloques = parseReply("Hola.");
   assert.deepEqual(bloques, [{ kind: "p", lines: [[{ text: "Hola." }]] }]);
 });
+
+test("un bloque cercado conserva lenguaje, saltos y código JSX", () => {
+  const bloques = parseReply("Aquí va:\n```jsx\n<div className=\"panel\">\n  Hola\n</div>\n```\nFin.");
+  assert.deepEqual(bloques.map(b => b.kind), ["p", "code", "p"]);
+  assert.equal(bloques[1].language, "jsx");
+  assert.equal(bloques[1].lines.map(linea => linea[0].text).join("\n"), '<div className="panel">\n  Hola\n</div>');
+});
+
+test("un bloque cortado sin cerca final no se mezcla con el párrafo", () => {
+  const bloques = parseReply("```tsx\nconst listo = true;");
+  assert.equal(bloques.length, 1);
+  assert.equal(bloques[0].kind, "code");
+  assert.equal(bloques[0].lines[0][0].text, "const listo = true;");
+});

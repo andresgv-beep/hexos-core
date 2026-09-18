@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ProgressiveReply } from "./ProgressiveReply";
+import { ReplyMarkdown } from "./ReplyMarkdown";
 
 export interface Turn {
   id: number;
@@ -54,7 +55,7 @@ function TurnoVisible({ turn, saliendo, onReplyComplete }:
         {turn.progress?.length ? "Helios está en ello…" : "Helios está pensando…"}
       </p>}
       {turn.reply && (saliendo
-        ? <p className="helios-answer">{turn.reply}</p>
+        ? <ReplyMarkdown text={turn.reply} />
         : <ProgressiveReply key={turn.reply} text={turn.reply} onComplete={() => onReplyComplete?.(turn.id)} />)}
       {/* El reparo viaja pegado a la respuesta: es lo que evita creerse lo que no pasó. */}
       {turn.caveat && <p className="reply-caveat" role="note">

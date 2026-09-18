@@ -5,10 +5,15 @@
  *  Deliberadamente pequeño: solo lo que este modelo usa de verdad. Nada de HTML
  *  incrustado, que además sería texto ajeno metido en la página. */
 export interface Inline { text: string; bold?: boolean; code?: boolean }
-export interface Block { kind: "p" | "ul" | "ol"; lines: Inline[][] }
+export interface Block {
+  kind: "p" | "ul" | "ol" | "code";
+  lines: Inline[][];
+  language?: string;
+}
 
 const VINETA = /^\s*[*-]\s+(.*)$/;
 const NUMERO = /^\s*\d+[.)]\s+(.*)$/;
+const CERCA = /^\s*```([^\s`]*)\s*$/;
 
 /** Negrita y código dentro de una línea. Un asterisco suelto es un asterisco. */
 export function inlines(text: string): Inline[] {
@@ -28,12 +33,29 @@ export function inlines(text: string): Inline[] {
 export function parseReply(text: string): Block[] {
   const bloques: Block[] = [];
   let parrafo: string[] = [];
+  let codigo: string[] | null = null;
+  let lenguaje = "";
   const cerrarParrafo = () => {
     if (!parrafo.length) return;
     bloques.push({ kind: "p", lines: [inlines(parrafo.join(" "))] });
     parrafo = [];
   };
   for (const linea of text.split("\n")) {
+    const cerca = CERCA.exec(linea);
+    if (codigo !== null) {
+      if (cerca) {
+        bloques.push({ kind: "code", language: lenguaje, lines: codigo.map(texto => [{ text: texto }]) });
+        codigo = null;
+        lenguaje = "";
+      } else codigo.push(linea);
+      continue;
+    }
+    if (cerca) {
+      cerrarParrafo();
+      codigo = [];
+      lenguaje = cerca[1];
+      continue;
+    }
     const vineta = VINETA.exec(linea);
     const numero = vineta ? null : NUMERO.exec(linea);
     if (vineta || numero) {
@@ -48,17 +70,24 @@ export function parseReply(text: string): Block[] {
     if (!linea.trim()) { cerrarParrafo(); continue; }
     parrafo.push(linea.trim());
   }
+  // Una cerca sin cerrar sigue siendo código: los modelos locales pueden cortar
+  // justo antes de los tres acentos al alcanzar su límite de salida.
+  if (codigo !== null) bloques.push({ kind: "code", language: lenguaje, lines: codigo.map(texto => [{ text: texto }]) });
   cerrarParrafo();
   return bloques;
 }
 
 /** Una palabra, sabiendo de qué bloque y línea viene. El revelado avanza sobre
  *  esta lista, así que la estructura no depende de cuánto se lleve mostrado. */
-export interface Token extends Inline { block: number; line: number; kind: Block["kind"] }
+export interface Token extends Inline { block: number; line: number; kind: Block["kind"]; language?: string }
 
 export function tokenize(blocks: Block[]): Token[] {
   const salida: Token[] = [];
   blocks.forEach((bloque, b) => bloque.lines.forEach((linea, l) => {
+    if (bloque.kind === "code") {
+      salida.push({ text: linea.map(trozo => trozo.text).join(""), block: b, line: l, kind: "code", language: bloque.language });
+      return;
+    }
     linea.forEach(trozo => {
       if (trozo.code) { salida.push({ ...trozo, block: b, line: l, kind: bloque.kind }); return; }
       // Se conservan los espacios para no rehacer el texto al juntarlo.
@@ -71,12 +100,12 @@ export function tokenize(blocks: Block[]): Token[] {
 }
 
 /** Los tokens ya mostrados, devueltos a su forma de bloques y líneas. */
-export function regroup(tokens: Token[]): { kind: Block["kind"]; index: number; lines: { index: number; parts: Token[] }[] }[] {
-  const salida: { kind: Block["kind"]; index: number; lines: { index: number; parts: Token[] }[] }[] = [];
+export function regroup(tokens: Token[]): { kind: Block["kind"]; index: number; language?: string; lines: { index: number; parts: Token[] }[] }[] {
+  const salida: { kind: Block["kind"]; index: number; language?: string; lines: { index: number; parts: Token[] }[] }[] = [];
   for (const token of tokens) {
     let bloque = salida[salida.length - 1];
     if (!bloque || bloque.index !== token.block) {
-      bloque = { kind: token.kind, index: token.block, lines: [] };
+      bloque = { kind: token.kind, index: token.block, language: token.language, lines: [] };
       salida.push(bloque);
     }
     let linea = bloque.lines[bloque.lines.length - 1];
