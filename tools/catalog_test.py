@@ -26,6 +26,13 @@ class DeclarablesTest(unittest.TestCase):
         self.assertIn('note.save.cuando', str(e.exception))
         self.assertIn('bool', str(e.exception))
 
+    def test_el_contrato_nativo_cabe_sin_duplicar_el_manual(self):
+        from hexos.agent.native import POLICY
+        descriptions = [catalog.model_description(name) for name in catalog.model_tools()]
+        self.assertLess(len(POLICY), 3500)
+        self.assertLess(sum(map(len, descriptions)), 7000)
+        self.assertNotIn('profile.remember', catalog.model_tools())
+
 
 class VerbosDeclaradosTest(unittest.TestCase):
     """Una herramienta que cambia algo y no declara con qué palabras se canta se
