@@ -408,7 +408,14 @@ input[type="range"] { width: 100%; accent-color: #8dc9f2; cursor: pointer; heigh
   min-height: 56px; display: flex; align-items: center; gap: 11px; padding: 0 12px 0 18px;
   border-bottom: 1px solid #79d1ff2d; color: #9cdaef;
 }
-.code-workspace-heading > div { display: flex; flex-direction: column; min-width: 100px; }
+.code-workspace-drag {
+  min-width: 0; display: flex; align-items: center; gap: 11px; padding: 8px 4px 8px 0;
+  border: 0; background: transparent; color: #9cdaef; cursor: grab; touch-action: none;
+}
+.code-workspace-drag:active { cursor: grabbing; }
+.code-workspace-drag:focus-visible { outline: 1px solid #7ed5ff88; outline-offset: 4px; border-radius: 6px; }
+.code-workspace-drag > span { display: flex; flex-direction: column; min-width: 100px; text-align: left; }
+.code-workspace-drag > svg:last-child { color: #426e84; opacity: .7; }
 .code-workspace-heading strong { color: #d8effa; font-size: 12px; font-weight: 500; letter-spacing: .06em; }
 .code-workspace-heading small { color: #62869a; font-size: 9px; text-transform: uppercase; }
 .code-workspace-heading nav { display: flex; gap: 3px; margin-left: auto; padding: 3px; border-radius: 9px; background: #020a10a6; }
@@ -438,7 +445,8 @@ input[type="range"] { width: 100%; accent-color: #8dc9f2; cursor: pointer; heigh
   .reply-code-actions { flex-wrap: wrap; justify-content: flex-end; }
   .code-workspace { inset: 70px 8px 126px; width: auto; border-radius: 13px; }
   .code-workspace-heading { padding-left: 12px; }
-  .code-workspace-heading > div { display: none; }
+  .code-workspace-drag > span, .code-workspace-drag > svg:last-child { display: none; }
+  .code-workspace-drag { cursor: default; touch-action: auto; }
 }
 /* Copiar la respuesta la copiaba dos veces: la visible y la del lector de pantalla. */
 .helios-answer .sr-only { user-select: none; }

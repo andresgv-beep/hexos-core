@@ -531,7 +531,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     {historyOpen && <ChatHistory previous={previous} messages={turns} historyError={historyError} onClose={closeHistory}
       onOpenArtifact={artifact => { setCodeArtifact(artifact); setHistoryOpen(false); }}
       onImproveCode={improveCode} onPreviewCode={previewCode} />}
-    {codeArtifact && <CodeWorkspace key={`${codeArtifact.code}:${codeArtifact.previewHtml ? "preview" : "code"}`} artifact={codeArtifact} busy={sending}
+    {codeArtifact && <CodeWorkspace artifact={codeArtifact} busy={sending}
       onClose={() => setCodeArtifact(null)} onImprove={improveCode} onCreatePreview={previewCode} />}
     {access && <div className="access-backdrop">
       <div className="access-panel" role="dialog" aria-modal="true" aria-labelledby="access-title">

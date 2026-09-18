@@ -71,6 +71,7 @@ test("el código y la interfaz comparten una ventana con dos modos", () => {
     busy: false, onClose() {}, onImprove() {}, onCreatePreview() {},
   }));
   assert.match(html, /sandbox="allow-scripts"/);
+  assert.match(html, /Mover espacio de código con las flechas/);
   assert.match(html, /> Código</);
   assert.match(html, /> Interfaz</);
   assert.match(html, /Vista previa de la interfaz generada/);

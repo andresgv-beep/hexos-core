@@ -19,7 +19,16 @@ export function codeRevisionPrompt(request: string, artifact: ReplyArtifact): st
 }
 
 const CSP = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'";
-const HEAD = `<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="${CSP}">`;
+const SCROLLBARS = `<style>
+html{color-scheme:dark;scrollbar-color:#4f7f98 #0a1721;scrollbar-width:thin}
+*{scrollbar-color:#4f7f98 #0a1721;scrollbar-width:thin}
+*::-webkit-scrollbar{width:10px;height:10px}
+*::-webkit-scrollbar-track{background:#0a1721}
+*::-webkit-scrollbar-thumb{background:#315f78;border:2px solid #0a1721;border-radius:999px}
+*::-webkit-scrollbar-thumb:hover{background:#4c8ba8}
+*::-webkit-scrollbar-corner{background:#0a1721}
+</style>`;
+const HEAD = `<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="${CSP}">${SCROLLBARS}`;
 
 export function extractHtmlPreview(reply: string): string | null {
   const blocks = parseReply(reply).filter(block => block.kind === "code" && ["html", "htm"].includes((block.language ?? "").toLowerCase()));

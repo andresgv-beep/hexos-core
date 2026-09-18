@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Code2, MonitorUp, Sparkles, X } from "lucide-react";
+import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { Code2, GripHorizontal, MonitorUp, Sparkles, X } from "lucide-react";
 import { ReplyCode } from "./ReplyMarkdown";
 import { previewDocument, type ReplyArtifact } from "@/lib/helios/preview";
 
@@ -12,16 +12,60 @@ export function CodeWorkspace({ artifact, busy, onClose, onImprove, onCreatePrev
   onImprove: (code: string, language?: string) => void;
   onCreatePreview: (code: string, language?: string) => void;
 }) {
-  const [mode, setMode] = useState<"code" | "preview">(artifact.previewHtml ? "preview" : "code");
-  return <section className="code-workspace" aria-label="Espacio de trabajo de código">
+  const artifactKey = `${artifact.code}\u0000${artifact.previewHtml ?? ""}`;
+  const defaultMode = artifact.previewHtml ? "preview" : "code";
+  const [view, setView] = useState<{ artifactKey: string; mode: "code" | "preview" }>(
+    { artifactKey, mode: defaultMode });
+  const mode = view.artifactKey === artifactKey ? view.mode : defaultMode;
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const panel = useRef<HTMLElement>(null);
+  const drag = useRef<{ pointer: number; x: number; y: number; originX: number; originY: number } | null>(null);
+  function move(x: number, y: number) {
+    const bounds = panel.current?.getBoundingClientRect();
+    if (!bounds) return;
+    const baseLeft = bounds.left - offset.x;
+    const baseTop = bounds.top - offset.y;
+    const margin = 12;
+    setOffset({
+      x: Math.max(margin - baseLeft, Math.min(window.innerWidth - margin - bounds.width - baseLeft, x)),
+      y: Math.max(margin - baseTop, Math.min(window.innerHeight - margin - bounds.height - baseTop, y)),
+    });
+  }
+  function beginMove(event: PointerEvent<HTMLButtonElement>) {
+    if (event.button !== 0 || window.matchMedia("(max-width: 700px)").matches) return;
+    drag.current = { pointer: event.pointerId, x: event.clientX, y: event.clientY,
+      originX: offset.x, originY: offset.y };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+  function keyboardMove(event: KeyboardEvent<HTMLButtonElement>) {
+    const direction: Record<string, [number, number]> = {
+      ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1],
+    };
+    const delta = direction[event.key];
+    if (!delta || window.matchMedia("(max-width: 700px)").matches) return;
+    event.preventDefault();
+    const step = event.shiftKey ? 40 : 12;
+    move(offset.x + delta[0] * step, offset.y + delta[1] * step);
+  }
+  return <section ref={panel} className="code-workspace" aria-label="Espacio de trabajo de código"
+    style={{ transform: `translate3d(${offset.x}px, ${offset.y}px, 0)` }}>
     <header className="code-workspace-heading">
-      <Code2 size={18} aria-hidden="true" />
-      <div><strong>Implementación</strong><small>{artifact.language || "código"} · pide cambios en el chat</small></div>
+      <button type="button" className="code-workspace-drag" aria-label="Mover espacio de código con las flechas"
+        title="Arrastra para mover" onPointerDown={beginMove} onPointerMove={event => {
+          const current = drag.current;
+          if (current?.pointer === event.pointerId) move(current.originX + event.clientX - current.x,
+            current.originY + event.clientY - current.y);
+        }} onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }}
+        onLostPointerCapture={() => { drag.current = null; }} onKeyDown={keyboardMove}>
+        <Code2 size={18} aria-hidden="true" />
+        <span><strong>Implementación</strong><small>{artifact.language || "código"} · pide cambios en el chat</small></span>
+        <GripHorizontal size={15} aria-hidden="true" />
+      </button>
       <nav aria-label="Vista del trabajo">
-        <button type="button" className={mode === "code" ? "active" : ""} onClick={() => setMode("code")}>
+        <button type="button" className={mode === "code" ? "active" : ""} onClick={() => setView({ artifactKey, mode: "code" })}>
           <Code2 size={14} /> Código
         </button>
-        <button type="button" className={mode === "preview" ? "active" : ""} onClick={() => setMode("preview")}>
+        <button type="button" className={mode === "preview" ? "active" : ""} onClick={() => setView({ artifactKey, mode: "preview" })}>
           <MonitorUp size={14} /> Interfaz
         </button>
       </nav>
