@@ -68,12 +68,13 @@ test("un bloque de código ofrece mejora y vista cuando la conversación las con
 test("el código y la interfaz comparten una ventana con dos modos", () => {
   const html = renderToStaticMarkup(createElement(CodeWorkspace, {
     artifact: { reply: "Listo", code: "<h1>Panel</h1>", language: "html", previewHtml: "<h1>Panel</h1>" },
-    busy: false, onClose() {}, onImprove() {}, onCreatePreview() {},
+    busy: false, canUndo: true, onUndo() {}, onClose() {}, onImprove() {}, onCreatePreview() {},
   }));
   assert.match(html, /sandbox="allow-scripts"/);
   assert.match(html, /Mover espacio de código con las flechas/);
   assert.match(html, /> Código</);
   assert.match(html, /> Interfaz</);
   assert.match(html, /Vista previa de la interfaz generada/);
+  assert.match(html, /Deshacer<\/button>/);
   assert.doesNotMatch(html, /allow-same-origin|allow-forms/);
 });

@@ -1,13 +1,15 @@
 "use client";
 
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
-import { Code2, GripHorizontal, MonitorUp, Sparkles, X } from "lucide-react";
+import { Code2, GripHorizontal, MonitorUp, RotateCcw, Sparkles, X } from "lucide-react";
 import { ReplyCode } from "./ReplyMarkdown";
 import { previewDocument, type ReplyArtifact } from "@/lib/helios/preview";
 
-export function CodeWorkspace({ artifact, busy, onClose, onImprove, onCreatePreview }: {
+export function CodeWorkspace({ artifact, busy, canUndo, onUndo, onClose, onImprove, onCreatePreview }: {
   artifact: ReplyArtifact;
   busy: boolean;
+  canUndo: boolean;
+  onUndo: () => void;
   onClose: () => void;
   onImprove: (code: string, language?: string) => void;
   onCreatePreview: (code: string, language?: string) => void;
@@ -62,6 +64,9 @@ export function CodeWorkspace({ artifact, busy, onClose, onImprove, onCreatePrev
         <GripHorizontal size={15} aria-hidden="true" />
       </button>
       <nav aria-label="Vista del trabajo">
+        {canUndo && <button type="button" onClick={onUndo} title="Recuperar la versión anterior">
+          <RotateCcw size={14} /> Deshacer
+        </button>}
         <button type="button" className={mode === "code" ? "active" : ""} onClick={() => setView({ artifactKey, mode: "code" })}>
           <Code2 size={14} /> Código
         </button>

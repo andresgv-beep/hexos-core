@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { codeRevisionPrompt, extractHtmlPreview, extractReplyArtifact, previewDocument } from "../lib/helios/preview";
+import { assessCodeRevision, codeRevisionPrompt, extractHtmlPreview, extractReplyArtifact, previewDocument } from "../lib/helios/preview";
 
 test("extrae la última maqueta HTML de una respuesta con varios bloques", () => {
   const html = extractHtmlPreview("```jsx\n<App />\n```\n```html\n<main>Vista</main>\n```");
@@ -33,5 +33,15 @@ test("una petición con código abierto exige editar la versión completa", () =
   assert.match(prompt, /export const App/);
   assert.match(prompt, /versión completa actualizada/);
   assert.match(prompt, /No le indiques al usuario dónde pegar nada/);
+  assert.match(prompt, /modificación mínima necesaria/);
   assert.match(prompt, /tsx/);
+});
+
+test("rechaza una mejora pequeña que borra gran parte de la interfaz", () => {
+  const before = { reply: "", language: "html", code: "<main>" + "x".repeat(2000) + "</main>" };
+  const after = { reply: "", language: "html", code: "<main>" + "x".repeat(900) + "</main>" };
+  const result = assessCodeRevision("añade un botón para cambiar el tema", before, after);
+  assert.equal(result.safe, false);
+  assert.match(result.reason || "", /eliminaba/);
+  assert.equal(assessCodeRevision("elimina las secciones antiguas", before, after).safe, true);
 });
