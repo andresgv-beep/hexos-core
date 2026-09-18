@@ -49,7 +49,9 @@ test("sin turno no se pinta nada", () => {
 test("el código cercado se pinta como bloque y nunca como HTML ejecutable", () => {
   const html = renderToStaticMarkup(createElement(ReplyMarkdown, { text: "```jsx\n<script>alert(1)</script>\n```" }));
   assert.match(html, /class="reply-code"/);
-  assert.match(html, /<pre><code>&lt;script&gt;alert\(1\)&lt;\/script&gt;<\/code><\/pre>/);
+  assert.match(html, /class="syntax-tag"/);
+  assert.match(html, /&lt;/);
+  assert.match(html, /script/);
   assert.match(html, />jsx</);
   assert.doesNotMatch(html, /<script>/);
 });

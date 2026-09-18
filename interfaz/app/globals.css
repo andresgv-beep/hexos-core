@@ -383,6 +383,16 @@ input[type="range"] { width: 100%; accent-color: #8dc9f2; cursor: pointer; heigh
   padding: 0; border-radius: 0; background: transparent; color: inherit;
   font-size: inherit; white-space: pre; overflow-wrap: normal;
 }
+.syntax-comment { color: #698697; font-style: italic; }
+.syntax-string { color: #a8d88d; }
+.syntax-number { color: #e4b982; }
+.syntax-keyword { color: #d29cf4; }
+.syntax-literal { color: #72c8f2; }
+.syntax-tag { color: #75d5e8; }
+.syntax-attribute { color: #e5bd78; }
+.syntax-function { color: #90c7ff; }
+.syntax-property { color: #8dd6c5; }
+.syntax-operator { color: #9fb6c5; }
 /* Copiar la respuesta la copiaba dos veces: la visible y la del lector de pantalla. */
 .helios-answer .sr-only { user-select: none; }
 

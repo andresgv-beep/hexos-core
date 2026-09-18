@@ -3,6 +3,7 @@
 import { type ReactNode, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { parseReply, type Inline } from "@/lib/helios/markdown";
+import { highlightCode } from "@/lib/helios/highlight";
 
 export function ReplyMarkdown({ text }: { text: string }) {
   const bloques = parseReply(text);
@@ -36,6 +37,10 @@ export function ReplyCode({ code, language, children, copy = true }: {
     setCopiado(true);
     window.setTimeout(() => setCopiado(false), 1600);
   }
+  const contenido = children === undefined || children === null || children === false
+    ? highlightCode(code, language).map((token, index) =>
+      <span key={index} className={token.kind ? `syntax-${token.kind}` : undefined}>{token.text}</span>)
+    : children;
   return <section className="reply-code" aria-label={`Bloque de código${language ? ` ${language}` : ""}`}>
     <header>
       <span>{language || "código"}</span>
@@ -44,6 +49,6 @@ export function ReplyCode({ code, language, children, copy = true }: {
         {copiado ? "Copiado" : "Copiar"}
       </button>}
     </header>
-    <pre><code>{children ?? code}</code></pre>
+    <pre><code>{contenido}</code></pre>
   </section>;
 }
