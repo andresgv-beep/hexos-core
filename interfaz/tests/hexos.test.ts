@@ -30,6 +30,18 @@ test('a code review can think for one turn without changing AUTO', async () => {
   }) as typeof fetch;
   assert.equal((await createHexosTransport('/api', fetcher).send('Revisa el componente', undefined, undefined, true)).reply, 'Revisado');
 });
+test('keeps the visible request separate from private code context', async () => {
+  const fetcher = (async (_url, init) => {
+    assert.deepEqual(JSON.parse(String(init?.body)), {
+      text: 'Edita el código completo: const App = () => null',
+      thinking: true,
+      display_text: 'pon modo oscuro',
+    });
+    return Response.json({ reply: 'Listo', tools: [] });
+  }) as typeof fetch;
+  await createHexosTransport('/api', fetcher).send(
+    'Edita el código completo: const App = () => null', undefined, undefined, true, 'pon modo oscuro');
+});
 test('maps only states actually exposed by HexOS', async () => {
   for (const state of ['idle', 'thinking', 'tool']) {
     const result = await createHexosTransport('/api', fixture({ state, mode: 'native-experimental' })).status();

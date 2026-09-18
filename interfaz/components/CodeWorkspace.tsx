@@ -16,7 +16,7 @@ export function CodeWorkspace({ artifact, busy, onClose, onImprove, onCreatePrev
   return <section className="code-workspace" aria-label="Espacio de trabajo de código">
     <header className="code-workspace-heading">
       <Code2 size={18} aria-hidden="true" />
-      <div><strong>Implementación</strong><small>{artifact.language || "código"}</small></div>
+      <div><strong>Implementación</strong><small>{artifact.language || "código"} · pide cambios en el chat</small></div>
       <nav aria-label="Vista del trabajo">
         <button type="button" className={mode === "code" ? "active" : ""} onClick={() => setMode("code")}>
           <Code2 size={14} /> Código

@@ -77,6 +77,9 @@ class RetryState:
 class TurnState:
     text: str
     image: Any = None
+    # Puede contener contexto de trabajo que el modelo necesita, mientras
+    # ``text`` conserva exactamente lo que la persona escribió y verá luego.
+    model_request: str = ''
     uid: str = ''
     document: dict | None = None
     prompt_text: str = ''

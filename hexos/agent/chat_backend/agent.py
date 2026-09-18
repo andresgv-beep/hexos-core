@@ -158,7 +158,7 @@ class Agent:
     def tool(self, store, name, args, *, turn_id=None):
         return self.dispatcher.dispatch(store, name, args, turn_id=turn_id)
 
-    def chat(self, text, image=None, *, thinking=None):
+    def chat(self, text, image=None, *, thinking=None, display_text=None):
         """Ejecuta un turno, con pensamiento opcional solo para ese encargo.
 
         La preferencia general sigue viviendo en ``runtime.thinking`` y en la
@@ -166,7 +166,7 @@ class Agent:
         turno sin dejar cambiado el botón AUTO de la persona.
         """
         if thinking is None:
-            return self.runner.run(text, image)
+            return self.runner.run(text, image, display_text=display_text)
         if not isinstance(thinking, bool):
             raise ValueError('thinking debe ser true o false')
         if not hasattr(self.runtime, 'thinking'):
@@ -174,7 +174,7 @@ class Agent:
         previous = self.runtime.thinking
         self.runtime.thinking = thinking
         try:
-            return self.runner.run(text, image)
+            return self.runner.run(text, image, display_text=display_text)
         finally:
             self.runtime.thinking = previous
 

@@ -80,7 +80,7 @@ export interface HeliosTransport {
   history(signal?: AbortSignal): Promise<HistoryMessage[]>;
   /** `image` es base64 de PNG/JPEG/WebP, sin la cabecera `data:`. Una por turno. */
   /** `thinking` abre el canal solo durante este turno; no cambia la preferencia AUTO. */
-  send(text: string, signal?: AbortSignal, image?: string, thinking?: boolean): Promise<ChatReply>;
+  send(text: string, signal?: AbortSignal, image?: string, thinking?: boolean, displayText?: string): Promise<ChatReply>;
 }
 
 /** Existing HexOS HTTP contract, inspected 2026-09-12. No connection at import time.
@@ -148,13 +148,14 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
       if (!Array.isArray(data) || !data.every(row => row && (row.role === "user" || row.role === "assistant") && typeof row.text === "string")) throw new Error("Historial de HexOS no válido");
       return data.map(({ role, text }) => ({ role, text }));
     },
-    async send(text, signal, image, thinking) {
+    async send(text, signal, image, thinking, displayText) {
       if (!text.trim()) throw new Error("Escribe un mensaje");
       // Con imagen o razonamiento puntual el contrato es JSON; el chat ordinario
       // conserva text/plain para seguir siendo compatible con clientes anteriores.
-      const init: RequestInit = image || thinking !== undefined
+      const init: RequestInit = image || thinking !== undefined || displayText !== undefined
         ? { method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text, ...(image ? { image } : {}), ...(thinking !== undefined ? { thinking } : {}) }), signal }
+            body: JSON.stringify({ text, ...(image ? { image } : {}), ...(thinking !== undefined ? { thinking } : {}),
+              ...(displayText !== undefined ? { display_text: displayText } : {}) }), signal }
         : { method: "POST", headers: { "Content-Type": "text/plain; charset=utf-8" }, body: text, signal };
       return parseChatReply(await request("chat", init));
     },

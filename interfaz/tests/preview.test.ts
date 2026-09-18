@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { extractHtmlPreview, extractReplyArtifact, previewDocument } from "../lib/helios/preview";
+import { codeRevisionPrompt, extractHtmlPreview, extractReplyArtifact, previewDocument } from "../lib/helios/preview";
 
 test("extrae la última maqueta HTML de una respuesta con varios bloques", () => {
   const html = extractHtmlPreview("```jsx\n<App />\n```\n```html\n<main>Vista</main>\n```");
@@ -21,4 +21,15 @@ test("separa conversación, código principal y maqueta", () => {
   assert.equal(result?.language, "tsx");
   assert.equal(result?.code, "export const App = () => <main />;");
   assert.equal(result?.previewHtml, "<main>Vista</main>");
+});
+
+test("una petición con código abierto exige editar la versión completa", () => {
+  const prompt = codeRevisionPrompt("pon modo oscuro", {
+    reply: "", code: "export const App = () => <main />;", language: "tsx",
+  });
+  assert.match(prompt, /pon modo oscuro/);
+  assert.match(prompt, /export const App/);
+  assert.match(prompt, /versión completa actualizada/);
+  assert.match(prompt, /No le indiques al usuario dónde pegar nada/);
+  assert.match(prompt, /tsx/);
 });

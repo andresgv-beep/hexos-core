@@ -47,6 +47,15 @@ class ChatTest(unittest.TestCase):
             read = restarted.tool(store, 'document.read', {'id': doc['id'], 'start': 8001, 'count': 1})
             self.assertEqual(read['lines'][0]['text'], 'FINAL=47')
 
+    def test_work_context_reaches_model_without_polluting_visible_history(self):
+        hidden = 'Edita la implementación completa: const App = () => null'
+        self.agent.chat(hidden, display_text='pon modo oscuro')
+        with self.agent.store() as store:
+            row = store.db.execute(
+                "SELECT text,model_text FROM conversation WHERE role='user'").fetchone()
+        self.assertEqual(row['text'], 'pon modo oscuro')
+        self.assertEqual(row['model_text'], hidden)
+
     def test_invalid_classification_does_not_create_job(self):
         self.agent.runtime.generate = lambda _: {'reply':'hola','work':dict(
             title='x',kind='inventado',scope='NAS',tags=[],reason='x')}

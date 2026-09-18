@@ -20,9 +20,12 @@ class TurnRunner:
         self.executor = ToolExecutor(agent)
         self.finalizer = TurnFinalizer(agent)
 
-    def run(self, text, image=None, initial_tool=None):
+    def run(self, text, image=None, initial_tool=None, display_text=None):
         if not isinstance(text, str) or len(text.encode()) > MAX_INPUT:
             raise ValueError('Mensaje vacío o mayor de 8 MiB; no se ha guardado')
+        if display_text is not None and (not isinstance(display_text, str)
+                or not display_text.strip() or len(display_text.encode()) > MAX_INPUT):
+            raise ValueError('Texto visible vacío o mayor de 8 MiB; no se ha guardado')
         # Adjuntar una foto y no escribir nada es un turno con sentido: la pregunta
         # está implícita. Se rellena aquí y no en cada cliente, que es como acabaron
         # la interfaz nueva y chat.html discrepando —una la ponía, la otra daba 409.
@@ -30,13 +33,14 @@ class TurnRunner:
             if image is None:
                 raise ValueError('Mensaje vacío o mayor de 8 MiB; no se ha guardado')
             text = IMAGEN_SIN_TEXTO
+        visible = display_text if display_text is not None else text
         if not self.agent.lock.acquire(blocking=False):
             raise RuntimeError('Ya hay un turno en curso')
         self.agent.state = 'thinking'
         self.agent.active_tools = []
         try:
             with self.agent.store() as store:
-                turn = TurnState(text=text, image=image)
+                turn = TurnState(text=visible, image=image, model_request=text)
                 self.agent.context.prepare(store, turn)
                 # Diagnóstico/contenedores/espacio + un único equipo nombrado
                 # es una lectura inequívoca y pide estado actual. No se permite

@@ -113,7 +113,7 @@ class ContextManager:
         turn.uid = uuid4().hex
         self.agent.progress = {'turn_id':turn.uid, 'messages':[]}
         turn.document = None
-        turn.prompt_text = turn.text
+        turn.prompt_text = turn.model_request or turn.text
         # Si el mensaje trae un dato suyo, la cosecha lo guardará al cerrar
         # el turno: se le retira la herramienta para que no lo haga él también.
         cosechara = bool(self.agent.profile and hasattr(self.agent.runtime, 'extract_facts')
@@ -131,13 +131,13 @@ class ContextManager:
             nota_imagen = ('[La persona adjuntó una imagen de %dx%d en este turno. '
                            'La estás viendo ahora; en turnos posteriores solo quedará '
                            'lo que digas de ella.]\n' % (width, height))
-        if len(turn.text) > 6000:
-            digest = hashlib.sha256(turn.text.encode()).hexdigest()
-            turn.document = dict(id=uuid4().hex, bytes=len(turn.text.encode()),
-                            lines=len(turn.text.splitlines()), sha256=digest)
+        if len(turn.prompt_text) > 6000:
+            digest = hashlib.sha256(turn.prompt_text.encode()).hexdigest()
+            turn.document = dict(id=uuid4().hex, bytes=len(turn.prompt_text.encode()),
+                            lines=len(turn.prompt_text.splitlines()), sha256=digest)
             store.db.execute('INSERT INTO documents VALUES (?,?,?,?)',
-                             (turn.document['id'], now(), turn.text, digest))
-            turn.prompt_text = (turn.text[:1200] + '\n[Fin de vista parcial del mensaje. '
+                             (turn.document['id'], now(), turn.prompt_text, digest))
+            turn.prompt_text = (turn.prompt_text[:1200] + '\n[Fin de vista parcial del mensaje. '
                 'El texto completo está guardado como documento: ' + json.dumps(turn.document) +
                 '. Usa document.read o document.search según la petición. '
                 'Si no contiene una tarea concreta, pregunta qué desea hacer con él.]')
