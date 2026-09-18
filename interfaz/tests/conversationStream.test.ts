@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ConversationStream, type Turn } from "../components/ConversationStream";
 import { ReplyMarkdown } from "../components/ReplyMarkdown";
-import { CodePreview } from "../components/CodePreview";
+import { CodeWorkspace } from "../components/CodeWorkspace";
 
 function render(turn: Partial<Turn>) {
   return renderToStaticMarkup(createElement(ConversationStream, {
@@ -65,9 +65,14 @@ test("un bloque de código ofrece mejora y vista cuando la conversación las con
   assert.match(html, />Crear vista</);
 });
 
-test("la maqueta se abre en un iframe aislado", () => {
-  const html = renderToStaticMarkup(createElement(CodePreview, { html: "<h1>Panel</h1>", onClose() {} }));
+test("el código y la interfaz comparten una ventana con dos modos", () => {
+  const html = renderToStaticMarkup(createElement(CodeWorkspace, {
+    artifact: { reply: "Listo", code: "<h1>Panel</h1>", language: "html", previewHtml: "<h1>Panel</h1>" },
+    busy: false, onClose() {}, onImprove() {}, onCreatePreview() {},
+  }));
   assert.match(html, /sandbox="allow-scripts"/);
+  assert.match(html, /> Código</);
+  assert.match(html, /> Interfaz</);
   assert.match(html, /Vista previa de la interfaz generada/);
   assert.doesNotMatch(html, /allow-same-origin|allow-forms/);
 });
