@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { ArrowUp, MessageSquare, SlidersHorizontal, Square, X } from "lucide-react";
-import { HeliosOrb } from "./orb/HeliosOrb";
+import { NebulaOrb } from "./orb/NebulaOrb";
 import { AttachmentButton, ChatAttachments, type Attachment } from "./ChatAttachments";
 import { ChatHistory } from "./ChatHistory";
 import { SystemMonitor } from "./SystemMonitor";
@@ -576,9 +576,9 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     <ConversationStream turn={turns[turns.length - 1] ?? null} onReplyComplete={() => setRevealing(false)}
       onImproveCode={improveCode} onPreviewCode={previewCode} />
     <section className="presence" aria-label="Presencia de Helios">
-      <div ref={orbStage} className="orb-stage">
+      <div ref={orbStage} className="orb-stage nebula-stage">
         <div className="orb-halo" aria-hidden="true" />
-        <HeliosOrb signal={{ phase, energy: active.energy }} brightness={brightness} motion onExpansion={syncOrbExpansion} hovered={orbHovered} />
+        <NebulaOrb signal={{ phase, energy: active.energy }} brightness={brightness} motion onExpansion={syncOrbExpansion} hovered={orbHovered} />
         <ToolSatellites tools={turnTools} />
         <button ref={orbButton} className="orb-history-trigger" aria-label="Abrir todo el chat" title="Abrir conversación" aria-haspopup="dialog" onClick={() => setHistoryOpen(true)}
           onPointerEnter={() => { orbHovered.current = true; }} onPointerLeave={() => { orbHovered.current = false; }} onFocus={() => { orbHovered.current = true; }} onBlur={() => { orbHovered.current = false; }} />

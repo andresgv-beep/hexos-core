@@ -1,7 +1,7 @@
 # Arquitectura actual de la interfaz
 
 Revisión documental del 2026-09-19, contrastada con `HeliosExperience.tsx`,
-`HeliosOrb.tsx`, `Bloom.tsx`, `hexos.ts`, `CodeWorkspace.tsx` y `vite.config.ts`.
+`NebulaOrb.tsx`, `hexos.ts`, `CodeWorkspace.tsx` y `vite.config.ts`.
 
 ## Flujo conectado
 
@@ -11,7 +11,7 @@ HeliosExperience
   ├─ ConversationStream → respuesta provisional/final y herramientas
   ├─ CodeWorkspace → código coloreado / iframe de preview
   ├─ paneles de notas, acceso y telemetría
-  └─ HeliosOrb → estado visual de conversación
+  └─ NebulaOrb → estado visual de conversación
 ```
 
 `createHexosTransport` se instancia en el producto. Los mensajes se envían al
@@ -50,17 +50,16 @@ y los componentes actuales antes de añadir capacidades de ejecución.
 
 ## Esfera y coste gráfico real
 
-- Three.js con React Three Fiber, `frameloop="demand"` y temporizador limitado a
-  `MAX_FPS=30`; no equivale a una garantía de 30 fps.
-- `dpr={2}` y `antialias: false` en Canvas.
-- `Bloom.tsx` usa EffectComposer, RenderPass, UnrealBloomPass y OutputPass.
-  Por tanto sí hay postprocesado y render targets; ya no es el diseño anterior
-  de una sola pasada sin bloom.
+- WebGL 2 directo con un único rectángulo y un fragment shader procedural,
+  limitado a `MAX_FPS=30` y `MAX_DPR=1.4`.
+- La esfera, la nebulosa y su halo se componen en una sola pasada, sin Three.js,
+  geometría 3D ni postprocesado. Los píxeles alejados del halo salen antes de
+  calcular el ruido procedural.
 - `HeliosExperience` habilita movimiento. Se detiene cuando se oculta la página,
   la esfera sale del área visible o el navegador solicita movimiento reducido.
 - `sampleAmplitude` es una entrada opcional de animación, no audio real.
-- Los recursos del composer se liberan al desmontar. El coste depende del tamaño
-  del canvas, GPU y carga del equipo; no afirmar que DPR 1/24 fps siguen vigentes.
+- Programa, shaders y buffer se liberan al desmontar. El coste depende del tamaño
+  del canvas, GPU y carga del equipo; no inferirlo solo por ser una única pasada.
 
 ## Desarrollo y validación
 

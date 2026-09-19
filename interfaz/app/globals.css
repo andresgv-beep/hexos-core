@@ -8,7 +8,7 @@ button, input { font: inherit; }
 button, a, input { -webkit-tap-highlight-color: transparent; }
 button { cursor: pointer; color: inherit; transition: background .2s, color .2s, border-color .2s; }
 button:focus-visible, a:focus-visible, input:focus-visible, [tabindex="0"]:focus-visible { outline: 2px solid #88d9ff; outline-offset: 4px; }
-.helios-app { --phase-color: #66c7ff; height: 100svh; min-height: 420px; position: relative; overflow: hidden; isolation: isolate; background: radial-gradient(ellipse at 50% 44%, #0b1521 0%, #060b12 42%, #05090e 75%); }
+.helios-app { --phase-color: #66c7ff; height: 100svh; min-height: 420px; position: relative; overflow: hidden; isolation: isolate; background: radial-gradient(ellipse at 50% 44%, #08111b 0%, #04080e 44%, #020509 78%); }
 .ambient-light { position: absolute; width: min(650px, 100vw); aspect-ratio: 1; left: 50%; top: 10%; transform: translateX(-50%); background: radial-gradient(circle, color-mix(in srgb, var(--phase-color) 6%, transparent), transparent 68%); pointer-events: none; transition: background 2s; }
 .topbar { height: 88px; margin: 0 38px; display: flex; justify-content: flex-end; align-items: center; position: relative; z-index: 7; }
 .brand { text-decoration: none; display: flex; align-items: center; gap: 14px; color: #e0ebf3; font-size: 19px; letter-spacing: .32em; }
@@ -18,6 +18,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, [tabindex="0"]:focus
 .presence { position: absolute; inset: 58px 0 84px; display: flex; align-items: center; justify-content: center; pointer-events: none; }
 .orb-stage { width: min(1014px, 100vw); height: min(858px, 100%); position: relative; }
 .orb-canvas { position: absolute; inset: 0; z-index: 1; mask-image: radial-gradient(ellipse 50% 50% at center, #000 62%, transparent 100%); }
+.nebula-orb { mask-image: none; }
+.nebula-stage .orb-halo { display: none; }
+.nebula-orb canvas { display: block; width: 100%; height: 100%; }
+.nebula-orb-fallback { display: none; position: absolute; inset: 0; margin: auto; width: min(58%, 540px); aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, #111b35 0 45%, #06111f 65%, #57cfff 72%, transparent 74%); box-shadow: 0 0 28px #36bfff55; }
+.nebula-orb[data-failed="true"] canvas { display: none; }
+.nebula-orb[data-failed="true"] .nebula-orb-fallback { display: block; }
 .orb-halo { position: absolute; width: 68%; height: 80%; left: 16%; top: 10%; border-radius: 50%; background: radial-gradient(ellipse, transparent 34%, color-mix(in srgb, var(--phase-color) 5%, transparent) 60%, transparent 72%); filter: blur(15px); transition: background 2s; }
 .tool-satellites { position: absolute; z-index: 4; inset: 0; pointer-events: none; color: #a7ddf8; animation: satellites-enter .55s cubic-bezier(.2,.8,.2,1) both; }
 .satellite-title { position: absolute; z-index: 2; top: 1.5%; left: 70%; transform: translateX(-50%); color: #82cbed; font-size: 8px; letter-spacing: .32em; white-space: nowrap; text-shadow: 0 0 10px #4ac8ff55; }

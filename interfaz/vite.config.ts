@@ -62,19 +62,6 @@ export default defineConfig(async () => {
         },
       },
     },
-    // `three` and `three/addons` otherwise pre-bundle into two separate copies
-    // of the library, so the composer's passes and the scene disagree about
-    // every class identity ("Multiple instances of Three.js being imported").
-    resolve: { dedupe: ["three"] },
-    optimizeDeps: {
-      include: [
-        "three",
-        "three/addons/postprocessing/EffectComposer.js",
-        "three/addons/postprocessing/RenderPass.js",
-        "three/addons/postprocessing/UnrealBloomPass.js",
-        "three/addons/postprocessing/OutputPass.js",
-      ],
-    },
     plugins: [
       attachmentPlugin(),
       vinext(),
