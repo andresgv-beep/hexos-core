@@ -35,6 +35,7 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                                    'active_tools':[dict(item) for item in agent.active_tools],
                                    'credential_request': agent.credential_request,
                                    'thinking': agent.thinking(),
+                                   'generation': agent.generation_snapshot(),
                                    'mode':'native-experimental' if native_template else 'json'})
             elif self.path == '/api/core':
                 # El panel se pinta sin gastar un turno del modelo, pero del MISMO
@@ -94,7 +95,7 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
 
         def do_POST(self):
             if self.path not in ('/api/chat', '/api/work', '/api/context/reset', '/api/credentials',
-                                 '/api/thinking'):
+                                 '/api/thinking', '/api/cancel'):
                 self.respond(404, {'error':'ruta inexistente'})
                 return
             # Una página abierta en otra pestaña no puede accionar el agente ni,
@@ -111,7 +112,13 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                 data = self.rfile.read(size)
                 if len(data) != size:
                     raise ValueError('Mensaje incompleto')
-                if self.path == '/api/credentials':
+                if self.path == '/api/cancel':
+                    payload = strict_json(data.decode('utf-8'))
+                    if set(payload) != {'request_id'}:
+                        raise ValueError('se espera request_id')
+                    rid = string(payload['request_id'], 'request_id', 128)
+                    self.respond(200, agent.cancel_generation(rid))
+                elif self.path == '/api/credentials':
                     saved = agent.save_access(strict_json(data.decode('utf-8')))
                     operation = saved.pop('_resume_operation', None)
                     resume = saved.get('resume')
@@ -141,8 +148,11 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                     # Forma ampliada: adjunto o pensamiento limitado a este turno.
                     # El text/plain de siempre sigue valiendo para un turno sin imagen.
                     payload = strict_json(data.decode('utf-8'))
-                    if set(payload) - {'text', 'image', 'thinking', 'display_text'}:
-                        raise ValueError('campos permitidos: text, image, thinking, display_text')
+                    if set(payload) - {'text', 'image', 'thinking', 'display_text', 'request_id'}:
+                        raise ValueError('campos permitidos: text, image, thinking, display_text, request_id')
+                    rid = payload.get('request_id')
+                    if rid is not None:
+                        rid = string(rid, 'request_id', 128)
                     thinking = payload.get('thinking')
                     if thinking is not None and not isinstance(thinking, bool):
                         raise ValueError('thinking debe ser true o false')
@@ -153,7 +163,7 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                     if visible is not None:
                         visible = string(visible, 'display_text', MAX_INPUT)
                     self.respond(200, agent.chat(mensaje, decode_image(payload.get('image')),
-                                                 thinking=thinking, display_text=visible))
+                                                 thinking=thinking, display_text=visible, request_id=rid))
                 else:
                     self.respond(200, agent.chat(data.decode('utf-8')))
             except (ValueError, RuntimeError, OSError) as exc:

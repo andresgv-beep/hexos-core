@@ -5,6 +5,7 @@ import json
 import re
 import time
 from .. import web
+from ..native_transport import TurnCancelled
 from ..work import now, string
 from ..continuity import history_tool
 from .state import Environment
@@ -255,6 +256,8 @@ class MemoryService:
         empezado = time.monotonic()
         try:
             candidatos = self.env.runtime.extract_facts(text)
+        except TurnCancelled:
+            raise
         except Exception:
             return ''
         # Queda registrada como cualquier otra generación: sin esto su coste es invisible.

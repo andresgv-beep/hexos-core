@@ -11,6 +11,9 @@ export interface Turn {
   reply?: string;
   error?: string;
   pending?: boolean;
+  preview?: string;
+  streamed?: boolean;
+  generationStatus?: string;
   /** Lo que Helios anuncia que va a hacer, mientras lo hace. Palabras suyas. */
   progress?: string[];
   /** Solo cuando la respuesta NO se sostiene entera en lo comprobado. */
@@ -54,9 +57,12 @@ function TurnoVisible({ turn, saliendo, onReplyComplete, onImproveCode, onPrevie
         {turn.progress.map((linea, i) => <li key={i}>{linea}</li>)}
       </ul>}
       {turn.pending && <p className="reply-status" role="status">
-        {turn.progress?.length ? "Helios está en ello…" : "Helios está pensando…"}
+        {turn.generationStatus || (turn.progress?.length ? "Helios está en ello…" : "Helios está pensando…")}
       </p>}
-      {turn.reply && (saliendo
+      {turn.pending && turn.preview && <div className="reply-preview" aria-label="Respuesta en generación">
+        <ReplyMarkdown text={turn.preview} />
+      </div>}
+      {turn.reply && (saliendo || turn.streamed
         ? <ReplyMarkdown text={turn.reply} onImproveCode={onImproveCode} onPreviewCode={onPreviewCode} />
         : <ProgressiveReply key={turn.reply} text={turn.reply} onComplete={() => onReplyComplete?.(turn.id)}
             onImproveCode={onImproveCode} onPreviewCode={onPreviewCode} />)}

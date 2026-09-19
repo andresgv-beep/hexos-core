@@ -1,5 +1,9 @@
 # Herramientas nativas Gemma: integración opt-in
 
+Transporte actualizado: [generación progresiva y cancelación desde la interfaz](PROGRESSIVE_NATIVE_RUNTIME.md).
+La ruta nativa recomendada usa ahora `helios_runtime`; el puente
+`helios_formatted` descrito en la integración inicial queda como compatibilidad.
+
 Estado: experimental, no sustituye por defecto la ruta JSON. Un modelo, un chat,
 sin orquestación entre bloques. No habilita SSH ni acceso adicional a dispositivos.
 
@@ -37,7 +41,7 @@ servidor anterior: no cargar dos modelos en la GPU para comparar estas rutas.
 
 ```bash
 python3 -m hexos.agent.chat --workspace runtime/workspace \
-  --runtime ../Hector-engine/build/helios_formatted \
+  --runtime ../Hector-engine/build/helios_runtime \
   --model ../helios_convert_v9.1/output/helios-gemma4-e4b_qwen3-8b_qwen25-coder-7b.hnf \
   --native-template ../helios_convert_v9.1/models/gemma-4-E4B-it/chat_template.jinja
 ```
@@ -62,8 +66,9 @@ no es necesario borrar conversaciones ni informes.
 - Una llamada completa puede terminar por cesión nativa o EOS. Un corte por límite
   de tokens nunca autoriza ejecución. Llamadas múltiples se validan sintácticamente
   y contra el catálogo antes de ejecutar la primera; no son una transacción global.
-- El puente reconstruye el KV en cada generación. No demuestra continuación
-  incremental eficiente y aumenta el prefill en secuencias largas.
+- El puente original reconstruía el KV en cada generación. La ruta NDJSON actual
+  solicita reutilización del prefijo textual; tras cancelación o un turno visual
+  reconstruye el contexto para mantener consistente la conversación.
 - El adaptador no aporta todavía las propuestas de clasificación que la respuesta
   estructurada JSON devolvía en `work`; devuelve `work: null`. No hay paridad total.
 - La corrección conversacional añade un reintento de formato. Para pseudollamadas,

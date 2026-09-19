@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from uuid import uuid4
+from ..native_transport import TurnCancelled
+from ..work import now
 from ..work import string
 from .finalization import TurnFinalizer
 from .recovery import RecoveryController, RETRY
@@ -20,7 +23,7 @@ class TurnRunner:
         self.executor = ToolExecutor(agent)
         self.finalizer = TurnFinalizer(agent)
 
-    def run(self, text, image=None, initial_tool=None, display_text=None):
+    def run(self, text, image=None, initial_tool=None, display_text=None, request_id=None):
         if not isinstance(text, str) or len(text.encode()) > MAX_INPUT:
             raise ValueError('Mensaje vacío o mayor de 8 MiB; no se ha guardado')
         if display_text is not None and (not isinstance(display_text, str)
@@ -38,10 +41,13 @@ class TurnRunner:
             raise RuntimeError('Ya hay un turno en curso')
         self.agent.state = 'thinking'
         self.agent.active_tools = []
+        turn = None
         try:
+            self.agent.begin_generation(request_id)
             with self.agent.store() as store:
                 turn = TurnState(text=visible, image=image, model_request=text)
                 self.agent.context.prepare(store, turn)
+                self.agent.check_cancelled()
                 # Diagnóstico/contenedores/espacio + un único equipo nombrado
                 # es una lectura inequívoca y pide estado actual. No se permite
                 # que el modelo la responda reutilizando un resultado histórico.
@@ -51,6 +57,7 @@ class TurnRunner:
                 # quería hacer: ejecuta la operación que abrió ese modal. El
                 # resultado sí vuelve al modelo para que lo interprete.
                 if initial_tool is not None:
+                    self.agent.check_cancelled()
                     # El protocolo nativo exige que el resultado siga a una
                     # llamada. Se repone esa llamada estructuralmente, sin pedir
                     # al modelo que vuelva a decidir ni ejecutar dos veces.
@@ -59,7 +66,9 @@ class TurnRunner:
                         turn.messages = []
                     self.executor.execute(store, turn, initial_tool)
                 for _ in range(MAX_TURN_ITERATIONS):
+                    self.agent.check_cancelled()
                     output = self.recovery.generate(store, turn)
+                    self.agent.check_cancelled()
                     if output is RETRY:
                         continue
                     output, clarification = self.normalize_decision(output)
@@ -76,7 +85,23 @@ class TurnRunner:
                     return self.finalizer.finish(store, turn, output, job)
                 raise RuntimeError('Se alcanzó el límite de consultas del turno; lo hecho hasta '
                                    'aquí queda en la traza y no se ha comprobado lo que faltaba')
+        except TurnCancelled:
+            snapshot = self.agent.generation_snapshot() or {}
+            partial = snapshot.get('text', '').strip()
+            reply = (partial + '\n\n' if partial else '') + '[Respuesta interrumpida por la persona.]'
+            # Rebuild the next prompt from the archive and tool ledger, not an
+            # incomplete assistant prefix or half a tool call.
+            self.agent.runtime.call({'type': 'reset'})
+            if turn and turn.uid:
+                with self.agent.store() as store:
+                    store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
+                        (uuid4().hex, now(), 'assistant', reply, reply))
+                    store.db.commit()
+            return dict(reply=reply, tools=turn.trace if turn else [], cancelled=True)
         finally:
+            if hasattr(self.agent.runtime, 'pending_image'):
+                self.agent.runtime.pending_image = None
+            self.agent.end_generation()
             self.agent.state = 'idle'
             self.agent.lock.release()
 

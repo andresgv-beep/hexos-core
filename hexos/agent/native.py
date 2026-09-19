@@ -9,6 +9,7 @@ import re
 import subprocess
 import threading
 
+from .native_transport import NativeTransport, TurnCancelled, visible_preview
 from . import catalog
 from .decisions import InvalidDecision, validate_reply
 
@@ -168,7 +169,17 @@ class NativeRuntime:
         self.repair_call = False
         # Imagen de un solo uso: se consume en la generación siguiente.
         self.pending_image = None
+        self.on_update = None
+        self._transport = None
         self.log=open(Path(workspace)/'hector-native.log','a')
+        if Path(binary).name != 'helios_formatted':
+            try:
+                self._transport = NativeTransport(binary, model, ctx, self.log)
+                self.proc = self._transport.proc
+            except Exception:
+                self.log.close()
+                raise
+            return
         self.proc=subprocess.Popen([binary,model,str(ctx),'<|tool_response>'],stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,stderr=self.log,
             # Los pesos de visión (322 MB) se quedan paginados en RAM del host:
@@ -198,6 +209,34 @@ class NativeRuntime:
         except Exception as exc:self.events.put(exc)
 
     def event(self):
+        if getattr(self, '_transport', None):
+            completion = ''
+            def update(event):
+                nonlocal completion
+                if self._aux_generation:
+                    return
+                if event['type'] == 'text_delta':
+                    completion += event['text']
+                    self.notify(dict(phase='generating', text=visible_preview(
+                        getattr(self, '_completion_prefix', '') + completion,
+                        self._last_prompt.endswith('<|channel>thought\n'))))
+                elif event['type'] in ('prefill_progress', 'prefill'):
+                    self.notify(dict(phase='prefill', processed=event.get('processed_tokens', event.get('tokens', 0)),
+                                     total=event.get('total_tokens', 0)))
+            result = self._transport.finish(update)
+            stats, times = result['usage'], result['timings']
+            if not self._aux_generation:
+                self.kv_position = result['model_state']['cache_position']
+            raw = result['visible_text']
+            reason = result['finish_reason']
+            if reason == 'cancelled' or self._transport.cancelled.is_set():
+                self.last_generation = dict(raw=raw, finish_reason='cancelled', tokens=stats['generated_tokens'],
+                                            prefill_tokens=stats['prefill_tokens'], timings=times)
+                raise TurnCancelled('Generación detenida')
+            header = [str(len(raw.encode())), str(round(sum(times.get(k, 0) for k in ('queue_ms','prefill_ms','decode_ms')))),
+                      str(stats['generated_tokens']), '1' if reason == 'stop' else '0', reason,
+                      str(stats['prefill_tokens']), str(stats.get('prefill_reused', 0))]
+            return header, raw
         try:result=self.events.get(timeout=180)
         except queue.Empty:
             self.proc.terminate();raise RuntimeError('timeout del motor nativo')
@@ -206,6 +245,8 @@ class NativeRuntime:
 
     def attach_image(self, pixels, width, height):
         """Adjunta una imagen RGB8 al turno siguiente. Se consume una sola vez."""
+        if getattr(self, '_transport', None) and not self._transport.model_info.get('multimodal'):
+            raise RuntimeError('unsupported_attachment: este HNF no incluye un adaptador visual')
         if width <= 0 or height <= 0 or len(pixels) != width * height * 3:
             raise ValueError('la imagen debe ser RGB8 con tamaño coherente')
         self.pending_image = (pixels, width, height)
@@ -220,6 +261,13 @@ class NativeRuntime:
         """
         data = prompt.encode()
         if len(data) > 1024*1024: raise ValueError('prompt nativo demasiado grande')
+        if getattr(self, '_transport', None):
+            self._aux_generation = auxiliar
+            self._last_prompt = prompt
+            if not auxiliar:
+                self.notify(dict(phase='prefill', text='', processed=0, total=0))
+            self._transport.start(prompt, image, auxiliar)
+            return data
         marca = '*' if auxiliar else ''
         if image is None:
             header = (marca + str(len(data))).encode(); body = data
@@ -232,6 +280,11 @@ class NativeRuntime:
 
     def call(self,request):
         if request!={'type':'reset'}:raise ValueError('solo reset en adaptador nativo')
+        if getattr(self, '_transport', None):
+            self._transport.control(dict(type='reset', session='0'))
+        self.kv_position = 0
+        # ContextManager may reset the old conversation AFTER attaching the new
+        # turn's image. Keep that attachment until generate consumes it.
         self.messages=[];self.pending.clear();self.current=None
         self.repair_call = False
         self.last_preamble = None
@@ -309,6 +362,7 @@ class NativeRuntime:
         prompt=self.template.render(messages=rendered,tools=tools,bos_token='<bos>',
                                     add_generation_prompt=True,enable_thinking=getattr(self, 'thinking', False))
         prompt += prefix
+        self._completion_prefix = prefix
         data = self.send(prompt, image)
         header,completion=self.event()
         raw = prefix + completion
@@ -323,7 +377,7 @@ class NativeRuntime:
         # una estimación: lo que decide si el turno siguiente cabe. Sin esto el
         # corte automático miraba caracteres de conversación, que no incluyen el
         # resultado de una herramienta, y se llegó a 16.380 de 16.384.
-        if len(header) > 6:
+        if len(header) > 6 and not getattr(self, '_transport', None):
             self.kv_position = int(header[6]) + int(header[5]) + int(header[2])
         if header[4]=='error':raise RuntimeError(raw)
         raw, reasoning = split_thinking(raw, prompt.endswith('<|channel>thought\n'))
@@ -346,6 +400,7 @@ class NativeRuntime:
                 except ValueError as exc:
                     raise NativeSyntax(str(exc)) from exc
             # Solo publicar el texto una vez validadas todas las llamadas.
+            self.notify(dict(phase='tool', text=''))
             self.last_preamble = preamble or None
             message = {'role':'assistant','tool_calls':[{'function':c} for c in calls], 'tool_responses':[]}
             if reasoning is not None:
@@ -454,6 +509,24 @@ class NativeRuntime:
         try:validate_reply(raw)
         except InvalidDecision:return None
         return raw.strip()
+
+    def notify(self, update):
+        callback = getattr(self, 'on_update', None)
+        if callback:
+            callback(update)
+
+    def begin_request(self, callback):
+        self.on_update = callback
+        if getattr(self, '_transport', None):
+            self._transport.cancelled.clear()
+
+    def cancel(self):
+        if getattr(self, '_transport', None):
+            self._transport.cancel()
+
+    @property
+    def progressive(self):
+        return bool(getattr(self, '_transport', None))
 
     def close(self):
         if self.proc.poll() is None:

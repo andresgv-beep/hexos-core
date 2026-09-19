@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Native Gemma with progressive NDJSON. The UI proxies this agent on port 8080.
+set -euo pipefail
+if [[ $# -lt 3 || $# -gt 5 ]]; then
+    echo "Uso: $0 modelo.hnf plantilla.jinja workspace [ctx=16384] [puerto=8080]" >&2
+    exit 2
+fi
+repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+model_path=$(realpath -- "$1")
+template_path=$(realpath -- "$2")
+workspace_path=$(realpath -m -- "$3")
+engine_binary=${HELIOS_RUNTIME_BIN:-$repo_dir/../Hector-engine/build/helios_runtime}
+if [[ ! -x "$engine_binary" || ! -f "$model_path" || ! -f "$template_path" ]]; then
+    echo 'Falta el runtime compilado, el modelo o la plantilla.' >&2
+    exit 2
+fi
+cd -- "$repo_dir"
+exec python3 -u -m hexos.agent.chat --workspace "$workspace_path" \
+    --runtime "$engine_binary" --model "$model_path" --native-template "$template_path" \
+    --ctx "${4:-16384}" --port "${5:-8080}"

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
-import { ArrowUp, MessageSquare, SlidersHorizontal, X } from "lucide-react";
+import { ArrowUp, MessageSquare, SlidersHorizontal, Square, X } from "lucide-react";
 import { HeliosOrb } from "./orb/HeliosOrb";
 import { AttachmentButton, ChatAttachments, type Attachment } from "./ChatAttachments";
 import { ChatHistory } from "./ChatHistory";
@@ -178,6 +178,11 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     setFront(note.id);
   }, []);
   const [sending, setSending] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const [canStop, setCanStop] = useState(false);
+  const [liveResponding, setLiveResponding] = useState(false);
+  const activeRequestId = useRef<string | null>(null);
+  const streamedRequest = useRef(false);
   const [connection, setConnection] = useState<"checking" | "ready" | "offline">("checking");
   const [announcement, setAnnouncement] = useState("");
   const [turnTools, setTurnTools] = useState<ToolActivity[]>([]);
@@ -194,7 +199,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [revealing, setRevealing] = useState(false);
-  const phase = turnTools.some(tool => tool.status === "running") ? "tool" : sending ? "thinking" : revealing ? "responding" : "idle";
+  const phase = turnTools.some(tool => tool.status === "running") ? "tool" : sending ? (liveResponding ? "responding" : "thinking") : revealing ? "responding" : "idle";
   const active = phases[phase];
   useEffect(() => () => request.current?.abort(), []);
   useEffect(() => {
@@ -205,6 +210,20 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       try {
         const status = await transport.status();
         if (!disposed && status.tools.length) setTurnTools(items => mergeToolActivities(items, status.tools));
+        const generation = status.generation;
+        const target = ventanaEnCurso.current;
+        if (!disposed && generation && generation.requestId === activeRequestId.current && target !== null) {
+          setCanStop(generation.cancellable);
+          setLiveResponding(generation.phase === "generating" && Boolean(generation.text));
+          if (generation.text) streamedRequest.current = true;
+          const label = generation.cancelling ? "Deteniendo…"
+            : generation.phase === "prefill" ? (generation.total > 0
+              ? `Leyendo contexto: ${generation.processed} / ${generation.total} tokens`
+              : "Leyendo contexto…")
+            : generation.phase === "generating" ? "Generando respuesta…" : "Helios está en ello…";
+          setTurns(items => items.map(item => item.id === target && item.pending
+            ? { ...item, preview: generation.text, streamed: item.streamed || Boolean(generation.text), generationStatus: label } : item));
+        }
       } catch { /* The chat request owns connection errors; this poll is visual telemetry. */ }
       if (!disposed) timer = setTimeout(poll, 450);
     };
@@ -394,6 +413,9 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     setDraft(""); setAnnouncement("Esperando a Helios");
     inputRef.current?.focus();
     setSending(true);
+    setStopping(false); setCanStop(false); setLiveResponding(false);
+    activeRequestId.current = crypto.randomUUID();
+    streamedRequest.current = false;
     const controller = new AbortController();
     request.current = controller;
     try {
@@ -401,7 +423,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       // código: piensa durante ese turno aunque AUTO siga apagado globalmente.
       const turnThinking = options?.thinking ?? (editingArtifact ? true : undefined);
       const hiddenWorkContext = payload !== visibleQuestion ? visibleQuestion : undefined;
-      const result = await transport.send(payload, controller.signal, imagen, turnThinking, hiddenWorkContext);
+      const result = await transport.send(payload, controller.signal, imagen, turnThinking, hiddenWorkContext, activeRequestId.current);
       if (!controller.signal.aborted) {
         setConnection("ready");
         setTurnTools(items => mergeToolActivities(items, result.tools));
@@ -447,7 +469,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
           ? { note: cierre.note, tools: cierre.unverified.map(u => u.tool) }
           : undefined;
         let visibleReply = result.reply;
-        if (options?.previewSource) {
+        if (!result.cancelled && options?.previewSource) {
           const html = extractHtmlPreview(result.reply);
           if (html) {
             applyCodeArtifact({ reply: "", code: options.previewSource.code,
@@ -458,7 +480,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
             visibleReply = extractReplyArtifact(result.reply)?.reply || "He preparado la interfaz en la ventana de trabajo.";
           }
           else setAnnouncement("Helios respondió, pero no entregó un bloque HTML que se pueda visualizar");
-        } else {
+        } else if (!result.cancelled) {
           const artifact = extractReplyArtifact(result.reply);
           if (artifact) {
             reparo = undefined;
@@ -473,9 +495,10 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
             }
           }
         }
-        setRevealing(Boolean(visibleReply));
-        setTurns(items => items.map(item => item.id === id ? { ...item, pending: false, reply: visibleReply, caveat: reparo } : item));
-        setAnnouncement(`Helios ha respondido en la conversación ${id}`);
+        setRevealing(Boolean(visibleReply) && !streamedRequest.current && !result.cancelled);
+        setTurns(items => items.map(item => item.id === id ? { ...item, pending: false, reply: visibleReply,
+          streamed: item.streamed || result.cancelled, caveat: reparo } : item));
+        setAnnouncement(result.cancelled ? "Generación detenida" : `Helios ha respondido en la conversación ${id}`);
       }
     } catch (error) {
       if (!controller.signal.aborted) {
@@ -491,6 +514,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       setTurnTools(items => items.map(tool =>
         tool.status === "running" ? { ...tool, status: "failed" } : tool));
       if (!controller.signal.aborted) setSending(false);
+      setStopping(false); setCanStop(false); setLiveResponding(false); activeRequestId.current = null;
       if (request.current === controller) request.current = null;
       if (ventanaEnCurso.current === id) ventanaEnCurso.current = null;
       enVuelo.current = false;
@@ -499,6 +523,17 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       if (encolado && !controller.signal.aborted) {
         void send({ preventDefault() {} } as FormEvent, encolado.text, encolado.options);
       }
+    }
+  }
+  async function stopGeneration() {
+    const rid = activeRequestId.current;
+    if (!rid || !transport.cancel || stopping) return;
+    setStopping(true);
+    try {
+      if (!await transport.cancel(rid)) setStopping(false);
+    } catch (error) {
+      setStopping(false);
+      setAnnouncement(error instanceof Error ? error.message : "No se pudo detener la generación");
     }
   }
   function improveCode(code: string, language?: string) {
@@ -564,7 +599,10 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         <AttachmentButton onSelect={files => void addAttachments(files)} disabled={sending} />
         <MessageSquare className="composer-spark" size={19} aria-hidden="true" />
         <input ref={inputRef} aria-label="Mensaje para Helios" aria-describedby={connection !== "ready" ? "connection-note" : undefined} placeholder={codeArtifact ? "Pide un cambio en esta implementación…" : "Escribe a Helios…"} value={draft} maxLength={4000} onChange={event => setDraft(event.target.value)} />
-        <button className="send-button" type="submit" disabled={(!draft.trim() && !attachments.length) || sending || historyLoading || attachments.some(file => file.status !== "ready")} aria-label="Enviar mensaje"><ArrowUp size={21} /></button>
+        {sending ? <button className="send-button" type="button" onClick={() => void stopGeneration()}
+          disabled={!canStop || stopping || !transport.cancel} aria-label={stopping ? "Deteniendo generación" : "Detener generación"}>
+          <Square size={18} /></button>
+          : <button className="send-button" type="submit" disabled={(!draft.trim() && !attachments.length) || historyLoading || attachments.some(file => file.status !== "ready")} aria-label="Enviar mensaje"><ArrowUp size={21} /></button>}
       </form>
       {contextCut && <p className="connection-note" role="status">
         Se llenó la memoria de trabajo y he empezado de cero con {contextCut.messages} mensajes recogidos.

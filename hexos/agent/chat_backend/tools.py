@@ -234,6 +234,7 @@ class ToolExecutor:
                 # Se añade, no se reemplaza: el estado final no borra los avances.
                 self.agent.progress={'turn_id':turn.uid,
                                'messages':[*self.agent.progress['messages'], event]}
+            self.agent.check_cancelled()
             result = self.agent.tool(store, output['tool'], output['arguments'], turn_id=turn.uid)
         except (ValueError, TypeError) as exc:
             result = {'error': str(exc)}

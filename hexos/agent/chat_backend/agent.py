@@ -2,6 +2,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+import threading
+from uuid import uuid4
+from ..native_transport import TurnCancelled
+from .live import LiveGeneration
 from ..work import WorkStore
 from .access import CredentialService
 from .completion import ReplyPolicy
@@ -33,6 +37,8 @@ class Agent:
         self.env = Environment(Path(workspace), runtime, profile,
                                dependencies or AgentDependencies())
         self.session = SessionState()
+        self.live_lock = threading.Lock()
+        self.live = None
         with self.store() as store:
             initialize(store)
         self.access = CredentialService(self.env, self.session, self.store)
@@ -158,7 +164,7 @@ class Agent:
     def tool(self, store, name, args, *, turn_id=None):
         return self.dispatcher.dispatch(store, name, args, turn_id=turn_id)
 
-    def chat(self, text, image=None, *, thinking=None, display_text=None):
+    def chat(self, text, image=None, *, thinking=None, display_text=None, request_id=None):
         """Ejecuta un turno, con pensamiento opcional solo para ese encargo.
 
         La preferencia general sigue viviendo en ``runtime.thinking`` y en la
@@ -166,7 +172,7 @@ class Agent:
         turno sin dejar cambiado el botón AUTO de la persona.
         """
         if thinking is None:
-            return self.runner.run(text, image, display_text=display_text)
+            return self.runner.run(text, image, display_text=display_text, request_id=request_id)
         if not isinstance(thinking, bool):
             raise ValueError('thinking debe ser true o false')
         if not hasattr(self.runtime, 'thinking'):
@@ -174,7 +180,7 @@ class Agent:
         previous = self.runtime.thinking
         self.runtime.thinking = thinking
         try:
-            return self.runner.run(text, image, display_text=display_text)
+            return self.runner.run(text, image, display_text=display_text, request_id=request_id)
         finally:
             self.runtime.thinking = previous
 
@@ -183,6 +189,36 @@ class Agent:
         if not isinstance(operation, dict) or set(operation) != {'tool', 'arguments'}:
             raise ValueError('Operación pendiente de acceso inválida')
         return self.runner.run(text, initial_tool=operation)
+
+    def begin_generation(self, request_id=None):
+        with self.live_lock:
+            self.live = LiveGeneration(request_id or uuid4().hex,
+                                       bool(getattr(self.runtime, 'progressive', False)))
+            if hasattr(self.runtime, 'begin_request'):
+                self.runtime.begin_request(self.live.update)
+
+    def generation_snapshot(self):
+        with self.live_lock:
+            return self.live.snapshot() if self.live else None
+
+    def cancel_generation(self, request_id):
+        with self.live_lock:
+            if not self.live or self.live.request_id != request_id or not self.live.data['cancellable']:
+                return dict(ok=False, request_id=request_id)
+            self.live.stop.set()
+            self.live.update(dict(cancelling=True))
+            self.runtime.cancel()
+            return dict(ok=True, request_id=request_id)
+
+    def check_cancelled(self):
+        if self.live and self.live.stop.is_set():
+            raise TurnCancelled('Generación detenida')
+
+    def end_generation(self):
+        with self.live_lock:
+            if hasattr(self.runtime, 'on_update'):
+                self.runtime.on_update = None
+            self.live = None
 
     def history_budget(self):
         return self.context.history_budget()

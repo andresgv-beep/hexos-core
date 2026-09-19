@@ -4,6 +4,46 @@ import { createHexosTransport } from '../lib/helios/hexos';
 import { clampEnergy, phaseFromHexos } from '../lib/helios/state';
 import { mergeToolActivities } from '../lib/helios/tools';
 
+test('live status exposes sanitized preview, progress and the exact cancellation target', async () => {
+  const status = await createHexosTransport('/api', fixture({ state: 'thinking', mode: 'native-experimental',
+    generation: { request_id: 'one', text: 'Hola', phase: 'generating', processed: 512,
+      total: 1024, cancellable: true, cancelling: false } })).status();
+  assert.deepEqual(status.generation, { requestId: 'one', text: 'Hola', phase: 'generating',
+    processed: 512, total: 1024, cancellable: true, cancelling: false });
+});
+
+test('identified chat and cancel reach the server without aborting the terminal response', async () => {
+  const seen: string[] = [];
+  const fetcher = (async (url, init) => {
+    seen.push(String(url));
+    const body = JSON.parse(String(init?.body));
+    assert.equal(body.request_id, 'one');
+    return String(url).endsWith('/cancel') ? Response.json({ ok: true })
+      : Response.json({ reply: '[Respuesta interrumpida]', tools: [], cancelled: true });
+  }) as typeof fetch;
+  const transport = createHexosTransport('/api', fetcher);
+  assert.equal(await transport.cancel?.('one'), true);
+  const result = await transport.send('Hola', undefined, undefined, undefined, undefined, 'one');
+  assert.equal(result.cancelled, true);
+  assert.deepEqual(seen, ['/api/cancel', '/api/chat']);
+});
+
+test('aborting an identified HTTP wait also requests server cancellation', async () => {
+  const controller = new AbortController();
+  const calls: string[] = [];
+  const fetcher = (async (url, init) => {
+    calls.push(String(url));
+    if (String(url).endsWith('/cancel')) return Response.json({ ok: true });
+    return new Promise<Response>((_, reject) => init?.signal?.addEventListener('abort',
+      () => reject(new DOMException('Aborted', 'AbortError')), { once: true }));
+  }) as typeof fetch;
+  const request = createHexosTransport('/api', fetcher).send('Hola', controller.signal,
+    undefined, undefined, undefined, 'one');
+  controller.abort();
+  await assert.rejects(request, { name: 'AbortError' });
+  assert.deepEqual(calls, ['/api/chat', '/api/cancel']);
+});
+
 function fixture(data: unknown, status = 200) {
   return (async () => Response.json(data, { status })) as typeof fetch;
 }

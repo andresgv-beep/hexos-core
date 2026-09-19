@@ -6,7 +6,8 @@ import { notesDismissed, notesTouched, parseToolActivities, type ToolActivity } 
 export interface ContextCut { at: string; messages: number; characters: number }
 /** Cómo se cierra el turno según lo COMPROBADO, no según lo que diga la respuesta. */
 export interface Closure { reason: string; note: string; unverified: { tool: string; verification?: string; evidence?: string }[] }
-export interface ChatReply { reply: string; tools: ToolActivity[]; notes: string[]; closeNotes: string[] | "todas" | null; document?: unknown; contextCut?: ContextCut; closure?: Closure }
+export interface ChatReply { reply: string; tools: ToolActivity[]; notes: string[]; closeNotes: string[] | "todas" | null; document?: unknown; contextCut?: ContextCut; closure?: Closure; cancelled?: boolean }
+export interface Generation { requestId: string; phase: string; text: string; processed: number; total: number; cancellable: boolean; cancelling: boolean }
 export interface HistoryMessage { role: "user" | "assistant"; text: string }
 /** Lo que Helios dice que va a hacer, antes de hacerlo. Lo escribe el modelo, no
  *  HexOS, y llega a mitad de turno: por eso viaja aparte de la respuesta. */
@@ -63,12 +64,12 @@ function parseChatReply(data: unknown): ChatReply {
     : undefined;
   return { reply: data.reply, tools: parseToolActivities(data.tools, "done"),
            notes: notesTouched(data.tools), closeNotes: notesDismissed(data.tools),
-           document: data.document, contextCut, closure };
+           document: data.document, contextCut, closure, cancelled: data.cancelled === true };
 }
 export interface HeliosTransport {
   /** `thinking` es null cuando el motor no tiene canal de pensamiento. */
   status(signal?: AbortSignal): Promise<{ phase: HeliosPhase; mode: string; thinking: boolean | null;
-    tools: ToolActivity[]; credentialRequest: CredentialRequest | null; progress: Progress }>;
+    tools: ToolActivity[]; credentialRequest: CredentialRequest | null; progress: Progress; generation?: Generation }>;
   /** Guarda el acceso de un equipo. `host` fija su dirección: sin ella se busca
    *  entre los vecinos de la red, que solo sirve estando en la misma. */
   saveAccess(input: { device: string; user: string; password: string; host?: string; port?: number },
@@ -80,13 +81,14 @@ export interface HeliosTransport {
   history(signal?: AbortSignal): Promise<HistoryMessage[]>;
   /** `image` es base64 de PNG/JPEG/WebP, sin la cabecera `data:`. Una por turno. */
   /** `thinking` abre el canal solo durante este turno; no cambia la preferencia AUTO. */
-  send(text: string, signal?: AbortSignal, image?: string, thinking?: boolean, displayText?: string): Promise<ChatReply>;
+  send(text: string, signal?: AbortSignal, image?: string, thinking?: boolean, displayText?: string, requestId?: string): Promise<ChatReply>;
+  cancel?(requestId: string): Promise<boolean>;
 }
 
 /** Existing HexOS HTTP contract, inspected 2026-09-12. No connection at import time.
  * Use a same-origin proxy in the host application; never connect the browser to
- * Héctor's shared memory / native protocol. Cancellation stops waiting locally;
- * the current HexOS endpoint cannot cancel generation on the server.
+ * Héctor's shared memory / native protocol. Live snapshots are delivered by
+ * status; cancellation targets the exact request and waits for its terminal reply.
  */
 export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetch): HeliosTransport {
   const endpoint = base.replace(/\/$/, "");
@@ -103,6 +105,12 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
       if (!isRecord(data) || typeof data.mode !== "string") throw new Error("Modo de HexOS no válido");
       const thinking = typeof data.thinking === "boolean" ? data.thinking : null;
       const r = data.credential_request;
+      const g = data.generation;
+      const generation = isRecord(g) && typeof g.request_id === "string" && typeof g.text === "string"
+        ? { requestId: g.request_id, text: g.text, phase: String(g.phase ?? "preparing"),
+            processed: typeof g.processed === "number" ? g.processed : 0,
+            total: typeof g.total === "number" ? g.total : 0,
+            cancellable: g.cancellable === true, cancelling: g.cancelling === true } : undefined;
       const credentialRequest = isRecord(r) && typeof r.device === "string"
         ? { device: r.device, host: typeof r.host === "string" ? r.host : undefined,
             mac: typeof r.mac === "string" ? r.mac : undefined, pinned: r.pinned === true,
@@ -113,7 +121,7 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
         : null;
       return { phase: phaseFromHexos(data.state), mode: data.mode, thinking,
                tools: parseToolActivities(data.active_tools, "running"), credentialRequest,
-               progress: parseProgress(data.progress) };
+               progress: parseProgress(data.progress), generation };
     },
     async saveAccess({ device, user, password, host, port }, signal) {
       if (!device.trim() || !user.trim()) throw new Error("Faltan el equipo y el usuario");
@@ -148,16 +156,28 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
       if (!Array.isArray(data) || !data.every(row => row && (row.role === "user" || row.role === "assistant") && typeof row.text === "string")) throw new Error("Historial de HexOS no válido");
       return data.map(({ role, text }) => ({ role, text }));
     },
-    async send(text, signal, image, thinking, displayText) {
+    async cancel(requestId) {
+      const data = await request("cancel", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ request_id: requestId }) });
+      return isRecord(data) && data.ok === true;
+    },
+    async send(text, signal, image, thinking, displayText, requestId) {
       if (!text.trim()) throw new Error("Escribe un mensaje");
       // Con imagen o razonamiento puntual el contrato es JSON; el chat ordinario
       // conserva text/plain para seguir siendo compatible con clientes anteriores.
-      const init: RequestInit = image || thinking !== undefined || displayText !== undefined
+      const init: RequestInit = image || thinking !== undefined || displayText !== undefined || requestId !== undefined
         ? { method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ text, ...(image ? { image } : {}), ...(thinking !== undefined ? { thinking } : {}),
-              ...(displayText !== undefined ? { display_text: displayText } : {}) }), signal }
+              ...(displayText !== undefined ? { display_text: displayText } : {}),
+              ...(requestId ? { request_id: requestId } : {}) }), signal }
         : { method: "POST", headers: { "Content-Type": "text/plain; charset=utf-8" }, body: text, signal };
-      return parseChatReply(await request("chat", init));
+      const stop = () => {
+        if (requestId) void fetcher(`${endpoint}/cancel`, { method: "POST", keepalive: true,
+          headers: { "Content-Type": "application/json" }, body: JSON.stringify({ request_id: requestId }) }).catch(() => {});
+      };
+      signal?.addEventListener("abort", stop, { once: true });
+      try { return parseChatReply(await request("chat", init)); }
+      finally { signal?.removeEventListener("abort", stop); }
     },
   };
 }

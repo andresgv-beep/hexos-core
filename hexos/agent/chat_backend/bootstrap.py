@@ -27,7 +27,7 @@ def main():
     parser.add_argument('--ctx', type=int, default=32768)
     parser.add_argument('--hera', help='CLI HERA para recuperar el perfil confirmado')
     parser.add_argument('--memory-home', help='Perfil HERA existente; requiere --hera')
-    parser.add_argument('--native-template', help='Opt-in Gemma nativo: plantilla oficial; --runtime debe ser helios_formatted')
+    parser.add_argument('--native-template', help='Gemma nativo con plantilla oficial; usar --runtime helios_runtime para progreso y cancelación')
     parser.add_argument('--native-thinking', action='store_true', help='Activar pensamiento de Gemma en el adaptador nativo')
     args = parser.parse_args()
     if args.native_thinking and not args.native_template:

@@ -1,0 +1,7 @@
+Prueba local 2026-09-19, NativeRuntime NDJSON, gemma4_e4b_hq62k.hnf, ctx 16384.
+Plantilla: models/gema e4b/chat_template.jinja
+Imagen RGB azul 32x32: reply Azul.
+Siguiente turno textual: reply seguimos.
+Extracción: [{"key":"yo/nombre","value":"Andrés"}]
+Estado auxiliar: cache_position 327, max_seq_len 1024.
+Workspace temporal: /tmp/hexos-vision-transport-vytzzzpo

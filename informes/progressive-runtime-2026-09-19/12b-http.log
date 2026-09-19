@@ -1,0 +1,5 @@
+LIVE_PREVIEW {'updates': 4, 'chars': 49, 'seconds': 3.1362209470025846}
+CANCEL {'ms': 18.88622299884446, 'reply': 'En el confín donde el mapa se rinde ante el vacío\n\n[Respuesta interrumpida por la persona.]'}
+NEXT seguimos.
+TOOLS ['note.list'] No tienes ninguna nota guardada.
+PASS live: progressive HTTP preview, targeted cancellation, archived partial, next turn and validated tool
