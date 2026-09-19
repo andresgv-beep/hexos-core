@@ -59,13 +59,14 @@ function TurnoVisible({ turn, saliendo, onReplyComplete, onImproveCode, onPrevie
       {turn.pending && <p className="reply-status" role="status">
         {turn.generationStatus || (turn.progress?.length ? "Helios está en ello…" : "Helios está pensando…")}
       </p>}
-      {turn.pending && turn.preview && <div className="reply-preview" aria-label="Respuesta en generación">
-        <ReplyMarkdown text={turn.preview} />
-      </div>}
-      {turn.reply && (saliendo || turn.streamed
-        ? <ReplyMarkdown text={turn.reply} onImproveCode={onImproveCode} onPreviewCode={onPreviewCode} />
-        : <ProgressiveReply key={turn.reply} text={turn.reply} onComplete={() => onReplyComplete?.(turn.id)}
-            onImproveCode={onImproveCode} onPreviewCode={onPreviewCode} />)}
+      {(turn.preview || turn.reply) && (saliendo
+        ? <ReplyMarkdown text={turn.reply || turn.preview || ""} onImproveCode={onImproveCode} onPreviewCode={onPreviewCode} />
+        : <div className={turn.pending ? "reply-preview" : undefined}
+            aria-label={turn.pending ? "Respuesta en generación" : undefined}>
+          <ProgressiveReply text={turn.reply || turn.preview || ""} live={Boolean(turn.pending)}
+            onComplete={() => onReplyComplete?.(turn.id)}
+            onImproveCode={onImproveCode} onPreviewCode={onPreviewCode} />
+        </div>)}
       {/* El reparo viaja pegado a la respuesta: es lo que evita creerse lo que no pasó. */}
       {turn.caveat && <p className="reply-caveat" role="note">
         {turn.caveat.note}

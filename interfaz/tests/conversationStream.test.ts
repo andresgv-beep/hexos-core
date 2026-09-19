@@ -36,6 +36,13 @@ test("mientras trabaja, enseña lo que él anuncia", () => {
   assert.match(html, /Helios está en ello/);
 });
 
+test("el texto progresivo pasa por el revelador y no aparece en ráfagas crudas", () => {
+  const html = render({ pending: true, preview: "Primera ráfaga recibida", streamed: true });
+  assert.match(html, /aria-label="Respuesta en generación"/);
+  assert.match(html, /class="sr-only">Primera ráfaga recibida/);
+  assert.match(html, /class="reveal-all"/);
+});
+
 test("el reparo viaja pegado a la respuesta, no se pierde en la mudanza", () => {
   const html = render({ reply: "Lo he guardado.", caveat: { note: "No consta ninguna escritura.", tools: ["nas.read"] } });
   assert.match(html, /role="note"/);

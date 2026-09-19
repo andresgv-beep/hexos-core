@@ -11,53 +11,72 @@ import type { CodeActions } from "./ReplyMarkdown";
  *  Por palabras y con desvanecido, no letra a letra: carácter a carácter parecía
  *  una máquina de escribir, y lo que se quiere es que el texto aparezca. Cada
  *  palabra entra con su propia animación al montarse. */
-export function ProgressiveReply({ text, onComplete, onImproveCode, onPreviewCode }: {
-  text: string; onComplete?: () => void;
+export function ProgressiveReply({ text, live = false, onComplete, onImproveCode, onPreviewCode }: {
+  text: string; live?: boolean; onComplete?: () => void;
 } & CodeActions) {
   // Helios escribe en Markdown: se interpreta antes de revelar, para que una lista
   // sea una lista y no un párrafo con asteriscos dentro.
   const words = useMemo(() => tokenize(parseReply(text)), [text]);
   const [visible, setVisible] = useState(0);
+  const wordsRef = useRef(words);
+  const cursor = useRef(0);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const wake = useRef<() => void>(() => {});
   const paragraph = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   const finish = useRef<() => void>(() => {});
   const completionReported = useRef(false);
   useEffect(() => {
-    let cursor = 0;
-    let timer: ReturnType<typeof setTimeout> | undefined;
     const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
     function showAll() {
-      clearTimeout(timer);
-      cursor = words.length;
-      setVisible(cursor);
+      clearTimeout(timer.current);
+      timer.current = undefined;
+      cursor.current = wordsRef.current.length;
+      setVisible(cursor.current);
     }
     finish.current = showAll;
     function step() {
+      timer.current = undefined;
       if (document.hidden) return;
       if (preference.matches) { showAll(); return; }
       const container = paragraph.current?.closest(".window-content, .stream-body");
       if (container) follow.current = container.scrollHeight - container.scrollTop - container.clientHeight < 60;
       // De dos en dos: una palabra y el espacio que la sigue.
-      cursor = Math.min(cursor + 2, words.length);
-      setVisible(cursor);
-      if (cursor < words.length) {
-        const anterior = words[cursor - 2]?.text ?? "";
-        timer = setTimeout(step, /[.!?]$/.test(anterior) ? 190 : 52);
+      cursor.current = Math.min(cursor.current + 2, wordsRef.current.length);
+      setVisible(cursor.current);
+      if (cursor.current < wordsRef.current.length) {
+        const anterior = wordsRef.current[cursor.current - 2]?.text ?? "";
+        timer.current = setTimeout(step, /[.!?]$/.test(anterior) ? 190 : 52);
       }
     }
-    function resume() {
-      clearTimeout(timer);
-      if (!document.hidden && cursor < words.length) timer = setTimeout(step, 52);
+    function resume(delay = 52) {
+      clearTimeout(timer.current);
+      timer.current = undefined;
+      if (!document.hidden && cursor.current < wordsRef.current.length)
+        timer.current = setTimeout(step, delay);
     }
+    wake.current = () => { if (!timer.current) resume(); };
     function reduce() { if (preference.matches) showAll(); }
-    timer = setTimeout(step, 52);
-    document.addEventListener("visibilitychange", resume);
+    resume();
+    const visibility = () => resume();
+    document.addEventListener("visibilitychange", visibility);
     preference.addEventListener("change", reduce);
     return () => {
-      clearTimeout(timer);
-      document.removeEventListener("visibilitychange", resume);
+      clearTimeout(timer.current);
+      timer.current = undefined;
+      document.removeEventListener("visibilitychange", visibility);
       preference.removeEventListener("change", reduce);
     };
+  }, []);
+  // El objetivo crece con los fragmentos del motor, pero el cursor visual no se
+  // reinicia. Así recepción y presentación tienen ritmos independientes.
+  useEffect(() => {
+    wordsRef.current = words;
+    if (cursor.current > words.length) {
+      cursor.current = words.length;
+      setVisible(words.length);
+    }
+    wake.current();
   }, [words]);
   useLayoutEffect(() => {
     const container = paragraph.current?.closest(".window-content, .stream-body");
@@ -65,11 +84,11 @@ export function ProgressiveReply({ text, onComplete, onImproveCode, onPreviewCod
   }, [visible]);
   const complete = visible >= words.length;
   useEffect(() => {
-    if (complete && !completionReported.current) {
+    if (complete && !live && !completionReported.current) {
       completionReported.current = true;
       onComplete?.();
     }
-  }, [complete, onComplete]);
+  }, [complete, live, onComplete]);
   return <>
     <div ref={paragraph} className="helios-answer">
       {/* El texto entero para quien usa lector de pantalla. No se puede seleccionar:
