@@ -1,5 +1,9 @@
 # Contexto separado del diálogo y recuperación local
 
+> **Documento histórico / evidencia de una fase.** Sus pendientes y pruebas
+> describen ese corte, no el producto actual. [Estado vigente](../IMPLEMENTATION_STATUS.md)
+> (revisado 2026-09-19).
+
 2026-09-12. Seguimiento de la captura donde «qué tal va todo» provocaba un volcado
 del encargo antiguo, «qué quiere decir eso» repetía su ID y «vale» seguía explicándolo.
 
@@ -101,6 +105,7 @@ y recuperación. Existe `--native-thinking` para continuar esa evaluación, pero
 servidor queda sin ese modo activado. El adaptador separa el canal de pensamiento
 de la respuesta visible y distingue las continuaciones con canal abierto.
 
-La autorización independiente de escrituras ordinarias, contexto global por tokens,
-KV incremental, visión y cancelación siguen pendientes. Esta corrección no añade
+En este corte seguían pendientes autorización independiente, presupuesto global
+por tokens, KV incremental, visión y cancelación. KV incremental, visión compatible
+y cancelación ya se implementaron después; consultar el estado vigente. Esta corrección no añade
 permisos para dispositivos ni herramientas nuevas de escritura.

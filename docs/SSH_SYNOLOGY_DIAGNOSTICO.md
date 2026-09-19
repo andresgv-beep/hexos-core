@@ -1,5 +1,25 @@
 # Preparación del diagnóstico SSH de Synology
 
+## Estado actual del acceso (2026-09-19)
+
+El catálogo ya expone `nas.read`, `nas.container` y `device.connect` para equipos
+registrados. El acceso se configura por el diálogo de credenciales de la interfaz
+o las utilidades locales. `hosts.py` guarda credenciales y `nas_session.execute`
+las usa; **ya no describe el flujo actual una sesión de ocho horas solo en RAM**.
+No se ha modificado ni comprobado ningún equipo remoto en esta revisión documental.
+
+La implementación vigente está en `hexos/agent/hosts.py`, `nas_session.py` y
+`chat_backend/access.py`. El modelo no recibe una shell libre; cada operación
+y sus argumentos pasan por catálogo/ejecutor. El diagnóstico de salud no autoriza
+reparaciones. Los resultados de interpretación que siguen son evidencia histórica,
+no certificación de que toda respuesta actual sea correcta.
+
+## Registro histórico de integración de Synology
+
+Los párrafos siguientes conservan la secuencia de conexión inicial, sesión
+temporal y aceptación de septiembre. Las referencias a contraseña solo en RAM,
+SSH rechazado o herramienta aún sin exponer describen etapas anteriores.
+
 ## Herramienta activa: nas.read
 
 El catálogo y el ejecutor del chat incorporan `nas.read`. La sección `diagnosis`

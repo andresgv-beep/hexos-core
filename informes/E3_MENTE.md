@@ -1,5 +1,9 @@
 # E3 · pasos 2 y 3 — perfil, recuperación previa y MemoryDelta
 
+> **Documento histórico / evidencia de una fase.** Sus pendientes y pruebas
+> describen ese corte, no el producto actual. [Estado vigente](../IMPLEMENTATION_STATUS.md)
+> (revisado 2026-09-19).
+
 Tres piezas sobre el almacén ya aprobado. Las dos propiedades que había que
 demostrar no son "funciona", son **"no hace lo que no debe"**.
 

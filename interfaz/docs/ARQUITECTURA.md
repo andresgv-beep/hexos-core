@@ -1,68 +1,74 @@
-# Helios: interfaz y esfera
+# Arquitectura actual de la interfaz
 
-## Estado actual
+Revisión documental del 2026-09-19, contrastada con `HeliosExperience.tsx`,
+`HeliosOrb.tsx`, `Bloom.tsx`, `hexos.ts`, `CodeWorkspace.tsx` y `vite.config.ts`.
 
-La interfaz usa React y TypeScript. La esfera vuelve a usar Three.js mediante React Three Fiber para recuperar el volumen, el halo y la profundidad de la tercera versión. Se retiraron el bloom HDR, EffectComposer, los render targets extra y MSAA multipasada tras el bloqueo y la saturación blanca que reportó el usuario. El resplandor se calcula dentro de cada luz en un único renderizado. El motor de conversación y los otros repositorios no se modificaron.
-
-La animación arranca **pausada**. Solo se activa al pulsar «Activar movimiento». Restablecer la apariencia también deja el movimiento pausado. El código no guarda esta preferencia como activa entre recargas.
-
-## Presupuesto gráfico
-
-- Máximo de 24 dibujos por segundo con `frameloop="demand"`; React Three Fiber no mantiene un bucle libre a 60 fps.
-- Resolución fija 1×, sin multiplicarla por la densidad de pantalla.
-- 380 nodos conectados, 720 partículas tenues, tres órbitas y ocho cometas con estelas.
-- Un único renderizado WebGL directo, sin bloom, postprocesado, render targets HDR ni pasadas adicionales.
-- Ningún temporizador de dibujo queda activo al pausar, ocultar la pestaña, sacar la esfera del área visible o solicitar movimiento reducido.
-- Al desmontar se cancelan temporizadores y observadores y se liberan las geometrías GPU.
-
-Las pruebas acotan el número de instancias, segmentos, órbitas y cometas, y comprueban que el renderer no importe la cadena multipasada retirada. No son un benchmark del navegador ni garantizan el rendimiento del portátil con otras cargas.
-
-## Componentes
+## Flujo conectado
 
 ```text
-HeliosExperience (controles y demostración)
-  └─ HeliosOrb (ciclo de vida, pausa y presupuesto)
-       ├─ geometry (geometría estable y presupuesto)
-       └─ shaders (deformación, luces, malla y cometas)
-
-Integración futura:
-React → HeliosTransport → HTTP de HexOS → orquestación → Héctor
+HeliosExperience
+  ├─ HeliosTransport → /api/helios → proxy Vite → agente Python :8080
+  ├─ ConversationStream → respuesta provisional/final y herramientas
+  ├─ CodeWorkspace → código coloreado / iframe de preview
+  ├─ paneles de notas, acceso y telemetría
+  └─ HeliosOrb → estado visual de conversación
 ```
 
-`components/orb/HeliosOrb.tsx` conserva la interfaz del componente anterior:
+`createHexosTransport` se instancia en el producto. Los mensajes se envían al
+agente real. Durante un turno se consulta estado cada 450 ms; se muestra solo
+la generación cuyo `request_id` coincide. La respuesta final viene de POST chat.
+No se usa SSE en esta ruta ni se simula el streaming con una animación de escritura.
+Las respuestas antiguas/no progresivas pueden conservar su presentación animada.
 
-```tsx
-<HeliosOrb
-  signal={{ phase: 'thinking', energy: 0.65 }}
-  brightness={1}
-  motion={false}
-/>
-```
+| Endpoint Python, detrás de `/api/helios` | Uso |
+|---|---|
+| GET `/api/status` | Estado, avances, herramientas activas, pensamiento, acceso y generación provisional |
+| POST `/api/chat` | JSON con texto, ID y opciones; respuesta final, herramientas y cancelación si corresponde |
+| POST `/api/cancel` | Detener el turno identificado; espera confirmación del backend |
+| GET `/api/history` | Historial y eventos conservados |
+| GET `/api/telemetry` | Métricas del sistema, no estimaciones del modelo |
+| GET `/api/core`, `/api/notes` | Recursos persistidos y notas |
 
-`sampleAmplitude(timeSeconds)` acepta una amplitud normalizada 0–1 y se consulta durante el dibujo, sin actualizar React en cada fotograma. La demostración usa una envolvente de sílabas y pausas al responder. En el futuro puede leer la amplitud real de reproducción. No se activa el micrófono ni se genera voz.
+Los adjuntos locales usan también `/api/attachments`, atendido por el plugin de
+Vite. El backend Python recibe la imagen codificada en el JSON del turno; no
+utiliza el endpoint RGB8 del servidor C. El selector no certifica que todo HNF
+sea visual: el adaptador rechaza imágenes si el modelo no declara esa capacidad.
 
-El dibujo mantiene una escala suave, colores de azul a naranja, núcleos estables y cometas de 12–16 segundos por tramo. Los halos son gradientes locales dentro del shader de cada luz. La densidad se limita para conservar el aspecto tridimensional sin volver a la carga de la versión fallida.
+## Cancelación y código
 
-## Contrato de integración existente
+Detener envía una orden real al agente; no consiste en abortar el fetch. La
+respuesta parcial queda marcada como interrumpida y puede continuarse el chat.
+Al abandonar una petición se intenta enviar cancelación, sin garantía de entrega.
+Las herramientas externas ya iniciadas no se matan a mitad de ejecución.
 
-Se consultaron en modo lectura `hexos-core/hexos/agent/chat.py`, su cliente `chat.html` y `Hector-engine/src/hexos_bridge.hpp` el 12 de septiembre de 2026.
+El código parcial no sustituye automáticamente el artefacto abierto. Las
+respuestas finales pasan la selección y protección de revisiones existentes.
+El preview es HTML mediante `srcDoc` en un iframe `sandbox="allow-scripts"`;
+no instala dependencias ni compila cualquier proyecto React. La ventana se puede
+mover y alterna Código/Interfaz. Ver los contratos en `lib/helios/preview.ts`
+y los componentes actuales antes de añadir capacidades de ejecución.
 
-| Operación de HexOS | Contrato |
-| --- | --- |
-| GET `/api/status` | `{ state: 'idle' \| 'thinking' \| 'tool', mode: string }` |
-| POST `/api/chat` | Cuerpo `text/plain; charset=utf-8`; JSON con `reply`, `tools` y `document` opcional |
-| GET `/api/history` | Filas con `role`, `text` y metadatos |
+## Esfera y coste gráfico real
 
-`lib/helios/hexos.ts` implementa este contrato con validación y AbortSignal, pero no se instancia en la demostración. La esfera no conoce URLs ni protocolos del motor. El chat actual devuelve la respuesta completa: no se inventan streaming de tokens, telemetría emocional de CK ni datos de audio.
+- Three.js con React Three Fiber, `frameloop="demand"` y temporizador limitado a
+  `MAX_FPS=30`; no equivale a una garantía de 30 fps.
+- `dpr={2}` y `antialias: false` en Canvas.
+- `Bloom.tsx` usa EffectComposer, RenderPass, UnrealBloomPass y OutputPass.
+  Por tanto sí hay postprocesado y render targets; ya no es el diseño anterior
+  de una sola pasada sin bloom.
+- `HeliosExperience` habilita movimiento. Se detiene cuando se oculta la página,
+  la esfera sale del área visible o el navegador solicita movimiento reducido.
+- `sampleAmplitude` es una entrada opcional de animación, no audio real.
+- Los recursos del composer se liberan al desmontar. El coste depende del tamaño
+  del canvas, GPU y carga del equipo; no afirmar que DPR 1/24 fps siguen vigentes.
 
-La integración posterior necesita servir la interfaz bajo el mismo origen de `/api` o un proxy fijo a HexOS. El servidor actual escucha en `127.0.0.1:8080`. Cancelar fetch no cancela la generación del motor; el endpoint actual carece de esa operación. Deben controlarse los envíos simultáneos y las respuestas tardías al cambiar de sesión.
+## Desarrollo y validación
 
-## Verificación
+`vite.config.ts` configura el proxy de desarrollo y el plugin local de adjuntos.
+Cambiar el puerto del agente requiere cambiar el destino de ese proxy. Un build
+no configura por sí solo el despliegue remoto ni su enrutado.
 
-- `npm run check`: tipos.
-- `npm run lint`: análisis estático.
-- `npm test`: contrato, amplitud, expansión, límites de geometría, render único y pausa inicial.
-- `npm run build`: compilación.
-- `npm run test:render`: HTML compilado; comprueba que el movimiento arranca pausado.
-
-Estas pruebas no sustituyen una comprobación de estabilidad y color en el navegador real del usuario.
+Tipos, pruebas de contratos/componentes y build/render están en `package.json`.
+La validación de cancelación/texto progresivo se hizo también en navegador real;
+la evidencia está en [integración progresiva](../../docs/PROGRESSIVE_NATIVE_RUNTIME.md).
+No hay telemetría emocional ni voz real inferibles del movimiento de la esfera.

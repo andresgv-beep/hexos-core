@@ -1,5 +1,9 @@
 # Corrección del recorrido conversacional nativo
 
+> **Documento histórico / evidencia de una fase.** Sus pendientes y pruebas
+> describen ese corte, no el producto actual. [Estado vigente](../IMPLEMENTATION_STATUS.md)
+> (revisado 2026-09-19).
+
 2026-09-12. Cambios aplicados al chat experimental y comprobados con E4B local.
 Sucede a AUDITORIA_CONVERSACION_NATIVA.md, que conserva los fallos anteriores.
 

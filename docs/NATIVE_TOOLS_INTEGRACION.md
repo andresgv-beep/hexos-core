@@ -17,7 +17,7 @@ Los dos turnos del incidente responden con el nombre; el recorrido con correcci�
 cambio de tema y recuperación tras reiniciar pasa. Las limitaciones restantes
 de autorización y contexto largo siguen documentadas.
 
-Estado más reciente: [contexto separado del diálogo](CONVERSACION_CONTEXTO_Y_FOCO.md).
+Seguimiento de aquel corte: [contexto separado del diálogo](CONVERSACION_CONTEXTO_Y_FOCO.md).
 La secuencia social ya no vuelca el encargo antiguo. Se recuperan citas recientes
 y resultados locales como fuentes de contexto, y pasan 47 pruebas Python.
 
@@ -33,6 +33,10 @@ Héctor solo añade mecanismos opt-in de entrada preformateada, tokens de parada
 supresión del cierre automático del turno. `helios_formatted` es un puente interno
 experimental: recibe longitud y bytes, no contiene herramientas ni política. Los
 valores predeterminados de `InferenceSession` conservan la ruta anterior.
+
+La guía operativa vigente es [estado de implementación](../IMPLEMENTATION_STATUS.md).
+Los recuentos y límites de las pruebas iniciales que siguen son históricos; ya
+hay contexto incremental, imágenes compatibles y cancelación en la ruta NDJSON.
 
 ## Arranque
 

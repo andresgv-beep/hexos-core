@@ -1,5 +1,9 @@
 # E4 · condición 1 — el parser de `MemoryDelta`, estricto
 
+> **Documento histórico / evidencia de una fase.** Sus pendientes y pruebas
+> describen ese corte, no el producto actual. [Estado vigente](../IMPLEMENTATION_STATUS.md)
+> (revisado 2026-09-19).
+
 Primera condición de E4: endurecer el parser antes de que la salida de un
 modelo entre por él. **45 pruebas · 0 fallos** en la mente, cuatro sabotajes.
 

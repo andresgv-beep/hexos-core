@@ -1,5 +1,9 @@
 # E4 · paso 1 — cola durable, sin trabajador
 
+> **Documento histórico / evidencia de una fase.** Sus pendientes y pruebas
+> describen ese corte, no el producto actual. [Estado vigente](../IMPLEMENTATION_STATUS.md)
+> (revisado 2026-09-19). El trabajador de ensayo posterior se documenta en E4_REFLEXION; no se activa por ello en el agente actual.
+
 **31 pruebas · 0 fallos**, cinco sabotajes y una carrera de trabajadores de
 verdad. No hay nada que ejecute un job, y eso no es una fase a medias: la cola
 tiene que ser demostrablemente durable e idempotente **antes** de que algo

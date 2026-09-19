@@ -1,5 +1,9 @@
 # Auditoría exploratoria del prompt del agente
 
+> **Documento histórico / evidencia de una fase.** Sus pendientes y pruebas
+> describen ese corte, no el producto actual. [Estado vigente](../IMPLEMENTATION_STATUS.md)
+> (revisado 2026-09-19).
+
 Fecha: 2026-09-12. Ruta evaluada: `hexos/agent/chat.py`, no CK legacy.
 Nota posterior: esta captura corresponde al ciclo v1. El ciclo v2 separa
 resumen y guardado; ejecutar el script ahora compara el prompt vigente y no

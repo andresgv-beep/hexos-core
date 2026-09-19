@@ -1,5 +1,9 @@
 # E4 · subhito — varios chats, uno activo
 
+> **Documento histórico / evidencia de una fase.** Sus pendientes y pruebas
+> describen ese corte, no el producto actual. [Estado vigente](../IMPLEMENTATION_STATUS.md)
+> (revisado 2026-09-19).
+
 Héctor ya multiplexa sesiones y HexOS puede tener varios chats con uno solo
 activo. **19 pruebas de conmutación contra el runtime real · 0 fallos**, además
 de las 19 de aislamiento en C++.

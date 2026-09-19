@@ -1,5 +1,14 @@
 # Política de residencia del runtime
 
+## Alcance actualizado (2026-09-19)
+
+Esta política automática corresponde a `hexos_serve` y `runtime/run-helios-chat`.
+El agente nativo Python utiliza otra entrada: `NativeTransport` fija
+`HELIOS_EMBED_MMAP=1` y `HELIOS_VISION_MMAP=1` al crear el proceso, incluso si
+había otro valor en el entorno, y no ejecuta el probe automático descrito abajo.
+No afirmar paridad de overrides ni autodetección entre ambas rutas.
+La asignación de la sesión auxiliar en NDJSON es diferida y de 1024 tokens.
+
 ## Objetivo
 
 HEXOS decide cómo arranca Héctor; Héctor valida y ejecuta el mecanismo. La
@@ -79,9 +88,9 @@ Gemma, SigLIP o cualquier arquitectura futura.
 No se cambia el binario ejecutado: `helios_chat` carga el adaptador declarado
 por el HNF y HexOS ya acepta imágenes RGB8 para el siguiente turno. El
 transporte se documenta en
-`MULTIMODAL_TRANSPORT.md`; la UI todavía debe conectar su selector de ficheros
-con ese endpoint. La política de residencia sigue siendo inocua para un motor
-de solo texto.
+[MULTIMODAL_TRANSPORT.md](MULTIMODAL_TRANSPORT.md). El selector de la interfaz
+React actual ya está conectado al JSON del agente Python, no a ese endpoint C.
+La capacidad de visión del HNF sigue siendo necesaria.
 
 El doble buffer pertenece al pipeline genérico de Héctor, no a Gemma 4. Cada
 arquitectura declara fases y el runtime común administra las dos ventanas,

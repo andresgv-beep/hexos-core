@@ -1,5 +1,9 @@
 # E4 · trabajador de reflexión — SOLO ENSAYO
 
+> **Documento histórico / evidencia de una fase.** Sus pendientes y pruebas
+> describen ese corte, no el producto actual. [Estado vigente](../IMPLEMENTATION_STATUS.md)
+> (revisado 2026-09-19).
+
 **22 pruebas · 0 fallos.** El trabajador corre, evalúa y **no escribe nada**.
 
 ```

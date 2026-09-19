@@ -1,4 +1,32 @@
-# Transporte multimodal HexOS → Héctor
+# Transporte multimodal: agente Python y servidor C
+
+## Ruta actual: agente Python y React (2026-09-19)
+
+React envía `image` como base64 en el JSON de POST `/api/chat`, junto con texto
+y `request_id`. `chat_backend/images.py` decodifica con Pillow, convierte a RGB
+y reduce el lado mayor a 1536 píxeles. El cuerpo HTTP tiene un límite total de
+8 MiB; además, el decodificador limita la imagen a 16 MiB (el límite HTTP puede
+alcanzarse antes por el base64). No son los 300 MiB del protocolo C.
+
+`NativeRuntime.attach_image` comprueba `ready.model.multimodal` y rechaza HNF
+sin visión. `NativeTransport` envía una cabecera NDJSON `attachment`, los RGB8
+y después el turno con su ID. El transporte Python limita esos píxeles a 64 MiB;
+los tamaños anteriores normalmente son más restrictivos.
+
+El adjunto se libera al terminar. Tras un turno visual, el siguiente prompt
+textual se reconstruye: los tokens visuales no se pueden comparar con el
+historial textual. En el archivo se conserva la indicación del adjunto y la
+respuesta, no una imagen reutilizable en cada turno. El selector de React está
+conectado, pero no está condicionado por `vision.status` del servidor C.
+
+Prueba real: E4B reconoce una imagen azul y responde al siguiente turno textual.
+El HNF 12B textual no admite imágenes. [Evidencia](PROGRESSIVE_NATIVE_RUNTIME.md).
+
+## Ruta C conservada: endpoint RGB8 v1
+
+Lo que sigue describe `hexos_serve` y su cliente de `helios_chat`, **no la API
+Python**. Su selección de capacidades y estados `staging` no son el contrato
+de la interfaz React actual.
 
 ## Responsabilidades
 

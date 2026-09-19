@@ -1,5 +1,9 @@
 # CK v4 — EL NORTE (escrito el 2026-07-29, la noche que Héctor arrancó)
 
+> **Documento histórico / evidencia de una fase.** Sus pendientes y pruebas
+> describen ese corte, no el producto actual. [Estado vigente](../IMPLEMENTATION_STATUS.md)
+> (revisado 2026-09-19).
+
 > **Documento histórico/de laboratorio.** El contrato normativo y genérico
 > nacido de estos fallos vive en
 > [`CK_V5_CONTRATO.md`](CK_V5_CONTRATO.md). Este fichero conserva el porqué.

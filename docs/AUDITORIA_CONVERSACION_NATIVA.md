@@ -1,5 +1,9 @@
 # Auditoría de conversación real y arquitectura
 
+> **Documento histórico / evidencia de una fase.** Sus pendientes y pruebas
+> describen ese corte, no el producto actual. [Estado vigente](../IMPLEMENTATION_STATUS.md)
+> (revisado 2026-09-19).
+
 Fecha: 2026-09-12. Investigación local con E4B, sin cambios al comportamiento
 del servidor. Se añadieron instrumentos de diagnóstico; no se considera corregido
 el chat. No se modificaron dispositivos ni se creó un commit.

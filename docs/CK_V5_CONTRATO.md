@@ -1,7 +1,12 @@
 # CK v5 — contrato ejecutable local
 
+**Ámbito del contrato:** ruta CK en C, no política normativa del agente Python
+actual. Existe el port `hexos/src/ck/ck_policy.c`, además de la referencia de
+Héctor. La dirección posterior y sus capacidades están en
+[estado actual](../IMPLEMENTATION_STATUS.md).
+
 **Estado:** primera rebanada implementada en `Hector-engine/src/ck_policy.*`.
-Este documento es normativo. `CK_V4_NORTE.md` conserva el diario de fallos,
+Este documento es normativo para esa ruta CK histórica. `CK_V4_NORTE.md` conserva el diario de fallos,
 experimentos y decisiones que llevaron hasta aquí.
 
 ## 1. Propósito

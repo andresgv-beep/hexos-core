@@ -1,5 +1,9 @@
 # E3 · cableado opt-in — memoria por la ruta real
 
+> **Documento histórico / evidencia de una fase.** Sus pendientes y pruebas
+> describen ese corte, no el producto actual. [Estado vigente](../IMPLEMENTATION_STATUS.md)
+> (revisado 2026-09-19).
+
 La ruta `--runtime` ya lleva memoria. **29 pruebas · 0 fallos** contra un modelo
 de verdad cargado (`tools/ruta_memoria_test.py`), que es lo único que el almacén
 no podía demostrar solo.

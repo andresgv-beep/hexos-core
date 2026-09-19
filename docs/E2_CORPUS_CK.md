@@ -1,5 +1,9 @@
 # E2 — Corpus de comparación de CK
 
+> **Documento histórico / evidencia de una fase.** Sus pendientes y pruebas
+> describen ese corte, no el producto actual. [Estado vigente](../IMPLEMENTATION_STATUS.md)
+> (revisado 2026-09-19).
+
 **Fase:** E2 del [plan de evacuación](PLAN_EVACUACION_COGNITIVA.md)
 **Barrera:** el mismo corpus entra en el `ck_policy` de Héctor y en el CK de
 HexOS, y ambos deben producir **`TurnFrame` idéntico campo por campo** y

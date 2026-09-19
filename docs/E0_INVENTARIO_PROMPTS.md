@@ -1,5 +1,9 @@
 # E0 — Inventario de prompts activos y su propietario
 
+> **Documento histórico / evidencia de una fase.** Sus pendientes y pruebas
+> describen ese corte, no el producto actual. [Estado vigente](../IMPLEMENTATION_STATUS.md)
+> (revisado 2026-09-19).
+
 **Base auditada:** `Hector-engine@1bca9b5` · **Fecha:** 2026-08-02
 
 Segundo entregable de E0 del [plan de evacuación](PLAN_EVACUACION_COGNITIVA.md).

@@ -1,5 +1,9 @@
 # Conversación larga sin desvarío — plan
 
+> **Documento histórico / evidencia de una fase.** Sus pendientes y pruebas
+> describen ese corte, no el producto actual. [Estado vigente](../IMPLEMENTATION_STATUS.md)
+> (revisado 2026-09-19).
+
 > Abierto el 2026-08-02. Objetivo: que Héctor pueda charlar mucho rato sin
 > degradarse, con la ventana de contexto bien dimensionada y la compactación
 > disparando cuando toca. Este documento se escribe DESPUÉS de medir, no antes.

@@ -1,5 +1,9 @@
 # E2 — Evacuación del CK: barrera de cierre
 
+> **Documento histórico / evidencia de una fase.** Sus pendientes y pruebas
+> describen ese corte, no el producto actual. [Estado vigente](../IMPLEMENTATION_STATUS.md)
+> (revisado 2026-09-19).
+
 El CK ya no vive solo dentro de `helios_chat`. HexOS clasifica el turno con su
 propio port en C, compone el contrato y manda mensajes tipados a
 `helios_runtime`. La ruta legacy sigue siendo la predeterminada y el oráculo.

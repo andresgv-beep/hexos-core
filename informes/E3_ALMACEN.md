@@ -1,5 +1,9 @@
 # E3 · paso 1 — el almacén de HERA
 
+> **Documento histórico / evidencia de una fase.** Sus pendientes y pruebas
+> describen ese corte, no el producto actual. [Estado vigente](../IMPLEMENTATION_STATUS.md)
+> (revisado 2026-09-19).
+
 El `hera/src/hera.c` de enero no tenía ni un `fopen`. Lo que hay escrito de
 verdad es la memoria de `helios_chat.cpp` — `append_fact`, `append_candidate`,
 `memory_is_duplicate` — y esa sabe **añadir líneas pero no sustituirlas**. Es el

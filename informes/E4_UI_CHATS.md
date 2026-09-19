@@ -1,5 +1,9 @@
 # E4 · UI de chats
 
+> **Documento histórico / evidencia de una fase.** Sus pendientes y pruebas
+> describen ese corte, no el producto actual. [Estado vigente](../IMPLEMENTATION_STATUS.md)
+> (revisado 2026-09-19).
+
 **36 pruebas · 0 fallos** contra el servidor y el motor de verdad. Héctor no se
 ha tocado.
 

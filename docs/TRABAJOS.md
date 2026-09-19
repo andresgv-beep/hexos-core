@@ -1,11 +1,9 @@
 # Fichas de trabajo del agente doméstico
 
-Implementación inicial: `hexos/agent/work.py`, Python estándar + SQLite.
-HexOS es C en su servidor actual; este módulo Python es independiente y se
-consume mediante JSON por stdin/stdout o mediante su API Python. El prototipo
-`hexos/agent/chat.py` lo conecta ahora al modelo y a una interfaz de pruebas.
-El almacén no necesita GPU. Este servidor Python no sustituye internamente al
-servidor C: es una ruta experimental independiente, con una conversación.
+El almacén Python/SQLite vive en `hexos/agent/work.py` y lo utiliza el agente
+HTTP actual (`hexos/agent/chat_backend/`), conectado a React. El servidor C
+`hexos_serve` se conserva como otra ruta; no es el backend de esta interfaz.
+El almacén no necesita GPU. [Estado actualizado](../IMPLEMENTATION_STATUS.md).
 
 ## Datos y responsabilidad
 
@@ -53,12 +51,12 @@ vigente para evitar sobrescribir cambios concurrentes. Campos desconocidos y
 claves JSON repetidas se rechazan. La lista devuelve hasta 100 fichas compactas;
 las fechas filtran por última actualización, con extremos inclusivos UTC.
 
-## Comprobación y paso siguiente
+## Comprobación del almacén
 
 `python3 tools/work_test.py` comprueba reapertura, propuesta/corrección,
 historial, búsqueda por fecha/ámbito, conflictos y rechazos sin escritura parcial.
 
-## Chat experimental y documentos largos
+## Ruta JSON de pruebas y documentos largos
 
 Desde la raíz del repo:
 
@@ -67,12 +65,12 @@ python3 -m hexos.agent.chat --workspace runtime/workspace \
   --runtime /ruta/Hector-engine/build/helios_runtime --model /ruta/modelo.hnf
 ```
 
-Abrir `http://127.0.0.1:8080/`, no el HTML por `file://`. La interfaz es un
-panel de pruebas, no la esfera neuronal final. La ruta permite texto y llamadas
-JSON validadas; aún no conecta adjuntos visuales, audio, SSH ni búsqueda web.
-No modifica el motor ni carga modelos auxiliares. Una propuesta de clasificación
-puede corregirse desde la interfaz. No se certifica todavía el comportamiento
-del modelo para cualquier clase de encargo.
+Ese comando, sin `--native-template`, selecciona decisiones JSON y el panel
+HTML de compatibilidad en `http://127.0.0.1:8080/`. La interfaz React conectada
+está en 3000; para la ruta nativa seguir el [arranque actual](../README.md).
+El catálogo actual ya incorpora SSH y web; las imágenes requieren el adaptador
+nativo y un HNF visual. Voz sigue pendiente. La clasificación JSON no tiene
+paridad total en nativo. No se certifica cualquier clase de encargo.
 
 El mensaje se guarda íntegro hasta 8 MiB UTF-8; los mayores se rechazan. Sobre
 6000 caracteres se registra además como documento con SHA256 y se entrega una
@@ -109,19 +107,22 @@ sigue dependiendo del modelo y no está certificada para cualquier conversación
 
 El modelo selecciona acciones según la petición. El esquema verifica argumentos,
 no demuestra que haya interpretado correctamente una autorización en lenguaje
-natural. No hay SSH ni escrituras remotas; no se debe ampliar esa autoridad sin
-una barrera de permisos/confirmación adecuada al recurso.
+natural. El catálogo actual sí tiene SSH y acciones remotas acotadas; validar
+argumentos no concede autoridad adicional sobre un recurso.
 
 «Limpiar contexto del modelo» resetea KV y establece un corte de historial para
 inferencia, sin borrar conversación, documentos, trabajos o informes. Después,
 el encargo aporta referencias y el contenido se recupera por herramienta.
-El historial reciente permanece limitado a ocho mensajes: no se promete memoria
-arbitraria de toda conversación. Tampoco hay todavía búsqueda general de encargos.
+La ruta JSON conserva ocho mensajes; la nativa conserva el bloque desde el
+último corte con presupuesto y posición KV. El archivo puede consultarse con
+herramientas de historial. No se promete contexto infinito; la búsqueda de
+fichas usa los filtros definidos por el almacén.
 
 Las llamadas y resultados quedan en tool_events. Se incorpora al siguiente turno
 la última operación posterior al corte (hasta 4000 caracteres o metadatos). Los
 contadores diagnostics revelan correcciones de JSON, esquema y recuperación.
-Hay máximo seis iteraciones por turno y un intento por clase de corrección; los
+Los límites actuales son diez iteraciones del bucle y seis eventos de traza
+(`chat_backend/settings.py`); la recuperación tiene sus límites propios. Los
 errores persistentes se muestran, no se convierten en éxito.
 
 ## Pruebas del recorrido

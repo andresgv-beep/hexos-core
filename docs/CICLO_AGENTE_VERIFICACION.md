@@ -1,7 +1,11 @@
 # Ciclo de investigación, verificación y progreso visible
 
 Fecha: 2026-09-14.
-Estado: diseño acordado; no implica implementación ni certificación de capacidades.
+Estado actualizado el 2026-09-19: diseño con implementación parcial en
+`chat_backend/turn.py`, `tools.py`, `verification.py` y `finalization.py`.
+Ya existen encadenamiento, traza, comprobación de efectos, cierre y progreso.
+No se certifica con ello la investigación autónoma de cualquier encargo.
+[Estado operativo](../IMPLEMENTATION_STATUS.md).
 Alcance: agente doméstico, un chat y un modelo principal. Módulos de HexOS;
 Héctor conserva su responsabilidad de inferencia genérica.
 
@@ -47,7 +51,9 @@ documentos son datos, nunca instrucciones para ampliar el alcance.
 
 ## Contrato reutilizable de herramientas
 
-Campos conceptuales, pendientes de concretar en los tipos y esquemas existentes:
+Campos del diseño original. El catálogo ya declara efectos y verificación;
+la traza registra estados y evidencia. La tabla expresa el contrato deseado,
+no una lista de campos íntegramente ausentes:
 
 | Elemento | Propósito |
 |---|---|
@@ -133,9 +139,11 @@ del mecanismo de evaluación de la conducta del modelo. Los tests de esquema no
 certifican autonomía ni calidad diagnóstica. No usar servidores reales para pruebas
 de escritura sin una autorización concreta.
 
-## Encaje pendiente en el código existente
+## Referencias del diseño inicial y ubicación actual
 
-Puntos inspeccionados como referencia, no instrucciones para un port ciego:
+Los puntos siguientes se inspeccionaron al redactar el diseño. El ciclo se
+encuentra ahora descompuesto en `hexos/agent/chat_backend/`; `chat.py` es entrada
+de compatibilidad, no el archivo donde rehacer todo el bucle:
 
 - `hexos/agent/chat.py`: bucle que ya encadena herramientas y acepta finalización;
   registro de resultados y publicación de avances actualmente centrada en el primero.
@@ -147,5 +155,6 @@ Puntos inspeccionados como referencia, no instrucciones para un port ciego:
 - Ruta de UI vigente de HexOS: localizar su consumo de eventos antes de modificarla;
   no crear otra interfaz paralela.
 
-Siguiente paso acordado: revisar este encaje y diseñar el cambio mínimo con las dos
-primeras herramientas. Este documento no autoriza nuevas acciones sobre servidores.
+El siguiente trabajo es evaluar límites y fiabilidad sobre la implementación
+actual, no volver a crear el ciclo. Este documento no autoriza nuevas acciones
+sobre servidores.

@@ -1,5 +1,9 @@
 # HERA — nota de portación (2026-07-31)
 
+> **Documento histórico / evidencia de una fase.** Sus pendientes y pruebas
+> describen ese corte, no el producto actual. [Estado vigente](../IMPLEMENTATION_STATUS.md)
+> (revisado 2026-09-19). La portación ya tiene almacén, perfil, deltas y cola en `hera/src/`; no está toda por comenzar.
+
 > **Por qué este módulo parece inerte:** el código de `hera/src/hera.c` es el
 > esqueleto de enero (umbrales fijos, `hera_query_memories` devuelve vacío,
 > integración con memory_core detrás de `#ifdef` apagados). **No está muerto:

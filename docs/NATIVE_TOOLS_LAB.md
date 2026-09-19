@@ -1,5 +1,9 @@
 # Gemma E4B: laboratorio de herramientas nativas
 
+> **Documento histórico / evidencia de una fase.** Sus pendientes y pruebas
+> describen ese corte, no el producto actual. [Estado vigente](../IMPLEMENTATION_STATUS.md)
+> (revisado 2026-09-19).
+
 Fecha: 2026-09-12. Sin cambios en Héctor, sin despliegue de la vía nativa.
 Herramientas simuladas: read_disk, list_jobs y save_report. No accede a equipos.
 

@@ -1,5 +1,9 @@
 # E4 · registro y API de chats en HexOS
 
+> **Documento histórico / evidencia de una fase.** Sus pendientes y pruebas
+> describen ese corte, no el producto actual. [Estado vigente](../IMPLEMENTATION_STATUS.md)
+> (revisado 2026-09-19). La UI del servidor C se documentó después en E4_UI_CHATS; no es la interfaz React actual.
+
 **29 pruebas · 0 fallos** contra el servidor y el motor de verdad. La UI queda
 para después, como pediste.
 

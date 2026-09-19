@@ -1,6 +1,12 @@
 # Plan de evacuación cognitiva
 
-**Estado:** propuesto, pendiente de comenzar  
+La dirección de producto posterior es [un modelo y un chat](AGENTE_DOMESTICO_PLAN.md).
+Los informes E2/E3/E4 documentan el port, memoria y sesiones ya existentes;
+no se declara completado todo el plan ni activado todo ello en Python.
+[Mapa vigente](../IMPLEMENTATION_STATUS.md).
+
+**Estado:** plan histórico iniciado y con hitos implementados (E2, E3 y E4);
+no es una lista actual de trabajo sin comenzar.
 **Fecha:** 2026-08-02  
 **Repos implicados:** `Hector-engine` y `hexos-core`  
 **Bases auditadas:** `Hector-engine@1bca9b5`, `hexos-core@74b5741`
