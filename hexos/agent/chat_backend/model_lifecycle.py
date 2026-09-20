@@ -266,6 +266,9 @@ class ModelLifecycle:
     def tool_result(self, result):
         return self._invoke('tool_result', result)
 
+    def require_read(self, name):
+        return self._invoke('require_read', name)
+
     def extract_facts(self, text):
         return self._invoke('extract_facts', text)
 

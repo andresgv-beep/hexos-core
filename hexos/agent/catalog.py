@@ -221,20 +221,26 @@ HIDDEN_TOOLS = frozenset({'device.refresh', 'profile.remember'})
 NATIVE_DESCRIPTIONS = {
     'nas.read': ('Leer por SSH un equipo guardado. section: diagnosis para salud, space para uso, '
                  'containers para estado, system, storage, kernel, messages o smart. device identifica '
-                 'el equipo; smart admite disk y containers admite container. No cambia nada.'),
+                 'el equipo; smart admite disk y containers admite container. Resuelve la dirección '
+                 'del inventario; si faltan credenciales, la interfaz las solicita, nunca el chat. '
+                 'No cambia nada. diagnosis ya recoge kernel y SMART: amplía solo si falta evidencia. '
+                 'SMART PASSED no descarta fallos físicos; el recuento RAID no identifica el disco averiado.'),
     'nas.container': ('Arrancar, parar o reiniciar un contenedor real con action=start|stop|restart. '
                       'Solo por petición explícita. Para comprobar estado usa nas_read containers.'),
     'device.list': ('Consultar inventario guardado. scope: registered, access, remote, local, '
-                    'unidentified o all; query filtra. No observa la red actual.'),
+                    'unidentified o all; query filtra. No observa la red actual: para eso usa network_local.'),
     'device.connect': ('Probar acceso a un equipo registrado por su nombre. La interfaz solicita '
                        'credenciales si faltan; no las pidas en el chat.'),
     'device.forget': 'Olvidar el nombre y acceso del equipo señalado por target.',
     'device.remote': ('Registrar name con una dirección externa host escrita literalmente por la '
-                      'persona; kind es opcional. No comprueba conectividad.'),
+                      'persona, conservando URL, esquema y puerto; kind es opcional. Si falta nombre '
+                      'o dirección y no consta en el diálogo, pregunta ese dato. No comprueba conectividad.'),
     'device.identify': ('Poner name a un dispositivo ya observado. target puede ser IP, sufijo, MAC o '
                         'id; kind solo si la persona lo indicó. No adivines identidades.'),
     'network.local': ('Observar ahora direcciones y vecinos de la red local de forma pasiva. Distingue '
-                      'identified_neighbors, unidentified_neighbors y own_addresses. Sin argumentos.'),
+                      'identified_neighbors, unidentified_neighbors y own_addresses. No guarda IPs '
+                      'ni descubre toda la LAN; STALE no confirma conexión actual. Para lo guardado '
+                      'usa device_list. Sin argumentos.'),
     'core.overview': 'Resumir qué conserva Helios localmente: notas, informes, trabajos y perfil.',
     'note.save': ('Crear una nota con title y body, o actualizarla con id y revision. Solo cuando la '
                   'persona pide anotar o guardar.'),
@@ -297,9 +303,9 @@ def render():
 def context_overhead_chars():
     """Coste fijo aproximado del protocolo antes de historial y respuesta.
 
-    El runtime nativo recibe el catálogo dos veces: como referencia textual del
-    contrato y como declaraciones de funciones. Medir las definiciones reales
-    evita volver a reservar espacio para una cifra histórica de herramientas.
+    El runtime nativo recibe declaraciones de funciones con descripciones compactas,
+    no el catálogo largo como texto adicional. Esta estimación incluye reservas,
+    no es un recuento de tokens ni de caracteres efectivamente enviados.
     """
     definitions = model_tools()
     declarations = [

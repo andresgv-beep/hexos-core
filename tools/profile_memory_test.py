@@ -267,7 +267,9 @@ class ProfileMemoryTest(unittest.TestCase):
         # la llamada del texto, así que mencionarla —aunque sea para prohibirla—
         # basta para que el modelo la emita y gaste una generación de más.
         self.assertNotIn('profile_remember', POLICY)
-        self.assertIn('HexOS lo anota solo al cerrar el turno', POLICY)
+        self.assertIn('La memoria persistente la gestiona HexOS', POLICY)
+        self.assertIn('sin confirmación', POLICY)
+        self.assertNotIn('HexOS lo anota solo al cerrar el turno', POLICY)
         # Fase 3: consultar el perfil antes de preguntar un dato que ya consta.
         self.assertIn('Antes de preguntar un dato de la persona', POLICY)
 

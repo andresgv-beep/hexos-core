@@ -24,6 +24,19 @@ class RecoveryController:
         self.agent = agent
 
     def generate(self, store, turn: TurnState):
+        # Evitar generar y mostrar una respuesta basada solo en fragmentos para
+        # descartarla después. No elige URL ni ejecuta herramientas fuera del
+        # bucle: el modelo completa la llamada y el ejecutor la valida como siempre.
+        # El catálogo permanece estable para conservar el prefijo KV.
+        if (turn.native and not turn.retries.web_read_guided
+                and hasattr(self.agent.runtime, 'require_read')
+                and not any(s.get('tool') == 'web.read' for s in turn.trace)):
+            has_links = any(s.get('tool') == 'web.search' and not s.get('failed')
+                and isinstance(s.get('result'), dict)
+                and any(isinstance(i, dict) and i.get('url')
+                        for i in s['result'].get('items', [])) for s in turn.trace)
+            if has_links:
+                turn.retries.web_read_guided = self.agent.runtime.require_read('web.read')
         try:
             try:
                 output = self.agent.runtime.generate(turn.messages)

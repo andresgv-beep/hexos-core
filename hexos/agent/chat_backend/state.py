@@ -71,6 +71,7 @@ class RetryState:
     context_retries: int = 0
     format_retries: int = 0
     web_evidence_retries: int = 0
+    web_read_guided: bool = False
 
 
 @dataclass

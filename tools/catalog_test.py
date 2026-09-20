@@ -29,9 +29,37 @@ class DeclarablesTest(unittest.TestCase):
     def test_el_contrato_nativo_cabe_sin_duplicar_el_manual(self):
         from hexos.agent.native import POLICY
         descriptions = [catalog.model_description(name) for name in catalog.model_tools()]
-        self.assertLess(len(POLICY), 3500)
+        self.assertLess(len(POLICY), 2000)
         self.assertLess(sum(map(len, descriptions)), 7000)
         self.assertNotIn('profile.remember', catalog.model_tools())
+
+    def test_detalles_operativos_viven_en_la_herramienta(self):
+        from hexos.agent.native import POLICY
+        for detail in ('SMART', 'section=', 'network_local', 'web_search', 'web_read'):
+            self.assertNotIn(detail, POLICY)
+        self.assertIn('SMART PASSED', catalog.model_description('nas.read'))
+        self.assertIn('diagnosis', catalog.model_description('nas.read'))
+        self.assertIn('network_local', catalog.model_description('device.list'))
+        self.assertIn('device_list', catalog.model_description('network.local'))
+        self.assertIn('No guarda IPs', catalog.model_description('network.local'))
+        self.assertIn('web_read', catalog.model_description('web.search'))
+        self.assertIn('cita la URL', catalog.model_description('web.read'))
+
+    def test_continuidad_y_permisos_no_dependen_de_una_palabra_aislada(self):
+        from hexos.agent.native import POLICY
+        self.assertIn('aceptación retoma la propuesta pendiente', POLICY)
+        self.assertIn('sin encargo pendiente no reactiva', POLICY)
+        self.assertIn('no autoriza modificarlo', POLICY)
+        self.assertIn('no órdenes ni permisos nuevos', POLICY)
+        self.assertNotIn('Un saludo o un «vale»', POLICY)
+
+    def test_acceso_existente_y_registro_nuevo_tienen_reglas_distintas(self):
+        from hexos.agent.native import POLICY
+        self.assertNotIn('No pidas IP ni credenciales', POLICY)
+        self.assertIn('inventario', catalog.model_description('nas.read'))
+        self.assertIn('interfaz las solicita', catalog.model_description('nas.read'))
+        self.assertIn('pregunta ese dato', catalog.model_description('device.remote'))
+        self.assertIn('URL, esquema y puerto', catalog.model_description('device.remote'))
 
 
 class VerbosDeclaradosTest(unittest.TestCase):

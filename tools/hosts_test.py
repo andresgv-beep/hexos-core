@@ -4,6 +4,7 @@ from pathlib import Path
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from hexos.agent.hosts import credentials, forget, load, resolve, save, store_path
 
@@ -71,7 +72,11 @@ class HostsTest(unittest.TestCase):
             inventory(tmp, [device('a', 'synology', '192.168.1.243', mac='b4:2e:99:47:6d:15'),
                             device('b', 'nimos nas', '192.168.1.131'),
                             device('c', None, '192.168.1.249')])
-            located = resolve(tmp, 'Synology')
+            # Esta prueba usa inventario sintético: una tabla de vecinos real
+            # puede sustituir REACHABLE por STALE y hacerla intermitente.
+            with patch('hexos.agent.network.snapshot', return_value={
+                    'observed_at': '2026-09-12T14:27:13+00:00', 'neighbors': []}):
+                located = resolve(tmp, 'Synology')
             self.assertEqual(located['host'], '192.168.1.243')
             self.assertEqual(located['mac'], 'b4:2e:99:47:6d:15')
             self.assertTrue(located['reachable'])
