@@ -5,12 +5,8 @@ import { parseReply, regroup, tokenize, type Token } from "@/lib/helios/markdown
 import { ReplyCode } from "./ReplyMarkdown";
 import type { CodeActions } from "./ReplyMarkdown";
 
-/** Revelado visual del contrato HTTP actual —la respuesta llega entera—, no
- *  streaming de tokens.
- *
- *  Por palabras y con desvanecido, no letra a letra: carácter a carácter parecía
- *  una máquina de escribir, y lo que se quiere es que el texto aparezca. Cada
- *  palabra entra con su propia animación al montarse. */
+/** Suaviza las actualizaciones progresivas del servidor: palabras en prosa y
+ *  fragmentos pequeños en código, manteniendo un cursor visual independiente. */
 export function ProgressiveReply({ text, live = false, onComplete, onImproveCode, onPreviewCode }: {
   text: string; live?: boolean; onComplete?: () => void;
 } & CodeActions) {
@@ -46,7 +42,8 @@ export function ProgressiveReply({ text, live = false, onComplete, onImproveCode
       setVisible(cursor.current);
       if (cursor.current < wordsRef.current.length) {
         const anterior = wordsRef.current[cursor.current - 2]?.text ?? "";
-        timer.current = setTimeout(step, /[.!?]$/.test(anterior) ? 190 : 52);
+        const code = wordsRef.current[cursor.current - 2]?.kind === "code";
+        timer.current = setTimeout(step, !code && /[.!?]$/.test(anterior) ? 190 : 52);
       }
     }
     function resume(delay = 52) {

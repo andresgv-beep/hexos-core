@@ -39,6 +39,7 @@ class Agent:
         self.session = SessionState()
         self.live_lock = threading.Lock()
         self.live = None
+        self.runtime_turn_acquired = False
         with self.store() as store:
             initialize(store)
         self.access = CredentialService(self.env, self.session, self.store)
@@ -194,8 +195,20 @@ class Agent:
         with self.live_lock:
             self.live = LiveGeneration(request_id or uuid4().hex,
                                        bool(getattr(self.runtime, 'progressive', False)))
+        try:
+            if hasattr(self.runtime, 'acquire_turn'):
+                self.live.update(dict(phase='loading'))
+                self.runtime.acquire_turn(self.live.stop)
+                self.runtime_turn_acquired = True
+                self.check_cancelled()
+                self.live.update(dict(phase='preparing'))
             if hasattr(self.runtime, 'begin_request'):
                 self.runtime.begin_request(self.live.update)
+        except Exception:
+            if self.runtime_turn_acquired:
+                self.runtime.release_turn()
+                self.runtime_turn_acquired = False
+            raise
 
     def generation_snapshot(self):
         with self.live_lock:
@@ -219,6 +232,9 @@ class Agent:
             if hasattr(self.runtime, 'on_update'):
                 self.runtime.on_update = None
             self.live = None
+        if self.runtime_turn_acquired:
+            self.runtime.release_turn()
+            self.runtime_turn_acquired = False
 
     def history_budget(self):
         return self.context.history_budget()

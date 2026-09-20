@@ -2,6 +2,18 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { inlines, parseReply, regroup, tokenize } from "../lib/helios/markdown";
 
+test("el código progresivo conserva espacios y líneas sin revelar líneas enteras de golpe", () => {
+  const source = '  const mensaje = "hola 🌍";\n\n    console.log(mensaje);';
+  const tokens = tokenize(parseReply('```js\n' + source));
+  assert.ok(tokens.every(token => Array.from(token.text).length <= 4));
+  const restored = regroup(tokens)[0].lines.map(line => line.parts.map(part => part.text).join('')).join('\n');
+  assert.equal(restored, source);
+  const before = tokenize(parseReply('```js\nconst mensaje'));
+  const after = tokenize(parseReply('```js\nconst mensaje = "más contenido que llega después";'));
+  assert.deepEqual(after.slice(0, before.length - 1), before.slice(0, -1));
+  assert.ok(after.length > before.length + 3);
+});
+
 test("un listado de vecinos sale como lista, no como párrafo", () => {
   // Salida real de Helios, 14/09/2026.
   const bloques = parseReply(

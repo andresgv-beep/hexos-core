@@ -7,6 +7,7 @@ from pathlib import Path
 from ..continuity import HeraProfile
 from ..telemetry import SystemTelemetry
 from .agent import Agent
+from .model_lifecycle import ModelLifecycle
 from .runtime import Runtime
 from .server import make_handler
 
@@ -29,7 +30,11 @@ def main():
     parser.add_argument('--memory-home', help='Perfil HERA existente; requiere --hera')
     parser.add_argument('--native-template', help='Gemma nativo con plantilla oficial; usar --runtime helios_runtime para progreso y cancelación')
     parser.add_argument('--native-thinking', action='store_true', help='Activar pensamiento de Gemma en el adaptador nativo')
+    parser.add_argument('--model-idle-seconds', type=int, default=600,
+                        help='Descargar el modelo tras estos segundos sin actividad (por defecto: 600)')
     args = parser.parse_args()
+    if args.model_idle_seconds <= 0:
+        parser.error('--model-idle-seconds debe ser mayor que cero')
     if args.native_thinking and not args.native_template:
         parser.error('--native-thinking requiere --native-template')
     if bool(args.hera) != bool(args.memory_home):
@@ -37,7 +42,12 @@ def main():
     Path(args.workspace).mkdir(parents=True, exist_ok=True)
     if args.native_template:
         from ..native import NativeRuntime
-        runtime = NativeRuntime(args.runtime,args.model,args.ctx,args.workspace,args.native_template,thinking=args.native_thinking)
+        runtime = ModelLifecycle(
+            lambda: NativeRuntime(args.runtime,args.model,args.ctx,args.workspace,
+                                  args.native_template,thinking=args.native_thinking),
+            ctx=args.ctx, thinking=args.native_thinking,
+            idle_seconds=args.model_idle_seconds, native=True,
+            progressive=Path(args.runtime).name != 'helios_formatted')
     else:
         runtime = Runtime(args.runtime, args.model, args.ctx, args.workspace)
     agent = Agent(args.workspace, runtime,

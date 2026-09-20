@@ -85,7 +85,14 @@ export function tokenize(blocks: Block[]): Token[] {
   const salida: Token[] = [];
   blocks.forEach((bloque, b) => bloque.lines.forEach((linea, l) => {
     if (bloque.kind === "code") {
-      salida.push({ text: linea.map(trozo => trozo.text).join(""), block: b, line: l, kind: "code", language: bloque.language });
+      // Fragmentos fijos: una línea parcial puede crecer entre consultas al
+      // servidor. Revelar la línea como un token hacía aparecer todo ese tramo
+      // de golpe, incluso aunque su token ya estuviese visible.
+      const chars = Array.from(linea.map(trozo => trozo.text).join(""));
+      for (let i = 0; i < Math.max(1, chars.length); i += 4) {
+        salida.push({ text: chars.slice(i, i + 4).join(""), block: b, line: l,
+          kind: "code", language: bloque.language });
+      }
       return;
     }
     linea.forEach(trozo => {

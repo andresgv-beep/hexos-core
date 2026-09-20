@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
-import { ArrowUp, MessageSquare, SlidersHorizontal, Square, X } from "lucide-react";
+import { ArrowUp, Code2, MessageSquare, SlidersHorizontal, Square, X } from "lucide-react";
 import { NebulaOrb } from "./orb/NebulaOrb";
 import { AttachmentButton, ChatAttachments, type Attachment } from "./ChatAttachments";
 import { ChatHistory } from "./ChatHistory";
@@ -114,6 +114,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const [windows, setWindows] = useState<NoteWindowState[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [codeArtifact, setCodeArtifact] = useState<ReplyArtifact | null>(null);
+  const [codeOpen, setCodeOpen] = useState(false);
   const [codeHistory, setCodeHistory] = useState<ReplyArtifact[]>([]);
   const [previous, setPrevious] = useState<HistoryMessage[]>([]);
   const [historyError, setHistoryError] = useState("");
@@ -134,6 +135,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       setCodeHistory(items => [...items, codeArtifact].slice(-12));
     }
     setCodeArtifact(next);
+    setCodeOpen(true);
   }
   function openHistoricalArtifact(artifact: ReplyArtifact) {
     let index = -1;
@@ -142,6 +144,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     }
     setCodeHistory(index > 0 ? historicalArtifacts.slice(Math.max(0, index - 12), index) : []);
     setCodeArtifact(artifact);
+    setCodeOpen(true);
     setHistoryOpen(false);
   }
   function undoCodeArtifact() {
@@ -198,7 +201,20 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const closeRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const lastWarmup = useRef(0);
   const [revealing, setRevealing] = useState(false);
+  function updateDraft(value: string) {
+    setDraft(value);
+    if (!value.trim()) return;
+    // El primer carácter despierta el modelo. Mientras siga escribiendo, un
+    // aviso como máximo cada 30 s mantiene viva la reserva sin inundar el API.
+    const now = Date.now();
+    if (now - lastWarmup.current < 30_000) return;
+    lastWarmup.current = now;
+    void transport.warmup().catch(() => {
+      // El envío es la barrera autoritativa y mostrará el error si la carga falla.
+    });
+  }
   const phase = turnTools.some(tool => tool.status === "running") ? "tool" : sending ? (liveResponding ? "responding" : "thinking") : revealing ? "responding" : "idle";
   const active = phases[phase];
   useEffect(() => () => request.current?.abort(), []);
@@ -217,6 +233,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
           setLiveResponding(generation.phase === "generating" && Boolean(generation.text));
           if (generation.text) streamedRequest.current = true;
           const label = generation.cancelling ? "Deteniendo…"
+            : generation.phase === "loading" ? "Cargando el modelo…"
             : generation.phase === "prefill" ? (generation.total > 0
               ? `Leyendo contexto: ${generation.processed} / ${generation.total} tokens`
               : "Leyendo contexto…")
@@ -388,7 +405,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       if (forzado) reenvioPendiente.current = { text: forzado, options };
       return;
     }
-    const editingArtifact = !forzado ? codeArtifact : null;
+    const editingArtifact = !forzado && codeOpen ? codeArtifact : null;
     const visibleQuestion = options?.displayText ?? question;
     const text = visibleQuestion + attachments.map(file => `\n\nAdjunto: ${file.name}`).join("");
     // La imagen viaja aparte, en su propio campo; solo los documentos van en el texto.
@@ -593,12 +610,17 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     </section>
     <section className="conversation" aria-label="Chat con Helios">
     <CoreShelf reload={coreReload} onOpenNote={abrirNota} onTotal={setCoreTotal} />
+      {!codeOpen && (codeArtifact || historicalArtifacts.length > 0) &&
+        <button type="button" className="history-code-open" onClick={() => {
+          if (codeArtifact) setCodeOpen(true);
+          else openHistoricalArtifact(historicalArtifacts[historicalArtifacts.length - 1]);
+        }}><Code2 size={15} aria-hidden="true" /> Abrir implementación</button>}
       {!!attachments.length && <ChatAttachments files={attachments} onRemove={removeAttachment} />}
       {attachmentError && <p className="attachment-error" role="alert">{attachmentError}</p>}
       <form className="composer" onSubmit={send} onDragOver={event => { if (event.dataTransfer.types.includes("Files")) event.preventDefault(); }} onDrop={event => { event.preventDefault(); if (!sending) void addAttachments(Array.from(event.dataTransfer.files)); }}>
         <AttachmentButton onSelect={files => void addAttachments(files)} disabled={sending} />
         <MessageSquare className="composer-spark" size={19} aria-hidden="true" />
-        <input ref={inputRef} aria-label="Mensaje para Helios" aria-describedby={connection !== "ready" ? "connection-note" : undefined} placeholder={codeArtifact ? "Pide un cambio en esta implementación…" : "Escribe a Helios…"} value={draft} maxLength={4000} onChange={event => setDraft(event.target.value)} />
+        <input ref={inputRef} aria-label="Mensaje para Helios" aria-describedby={connection !== "ready" ? "connection-note" : undefined} placeholder={codeOpen && codeArtifact ? "Pide un cambio en esta implementación…" : "Escribe a Helios…"} value={draft} maxLength={4000} onChange={event => updateDraft(event.target.value)} />
         {sending ? <button className="send-button" type="button" onClick={() => void stopGeneration()}
           disabled={!canStop || stopping || !transport.cancel} aria-label={stopping ? "Deteniendo generación" : "Detener generación"}>
           <Square size={18} /></button>
@@ -615,9 +637,9 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     {historyOpen && <ChatHistory previous={previous} messages={turns} historyError={historyError} onClose={closeHistory}
       onOpenArtifact={openHistoricalArtifact}
       onImproveCode={improveCode} onPreviewCode={previewCode} />}
-    {codeArtifact && <CodeWorkspace artifact={codeArtifact} busy={sending}
+    {codeOpen && codeArtifact && <CodeWorkspace artifact={codeArtifact} busy={sending}
       canUndo={Boolean(codeHistory.length || fallbackArtifact)} onUndo={undoCodeArtifact}
-      onClose={() => setCodeArtifact(null)} onImprove={improveCode} onCreatePreview={previewCode} />}
+      onClose={() => { setCodeOpen(false); inputRef.current?.focus(); }} onImprove={improveCode} onCreatePreview={previewCode} />}
     {access && <div className="access-backdrop">
       <div className="access-panel" role="dialog" aria-modal="true" aria-labelledby="access-title">
         <h2 id="access-title" className="panel-title">

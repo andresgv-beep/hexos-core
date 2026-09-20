@@ -47,6 +47,15 @@ test('aborting an identified HTTP wait also requests server cancellation', async
 function fixture(data: unknown, status = 200) {
   return (async () => Response.json(data, { status })) as typeof fetch;
 }
+test('the first keystroke can warm the model without waiting for ready', async () => {
+  const seen: { url: string; body: unknown }[] = [];
+  const fetcher = (async (url, init) => {
+    seen.push({ url: String(url), body: JSON.parse(String(init?.body)) });
+    return Response.json({ state: 'loading', ready: false }, { status: 202 });
+  }) as typeof fetch;
+  assert.equal(await createHexosTransport('/api', fetcher).warmup(), 'loading');
+  assert.deepEqual(seen, [{ url: '/api/model/warmup', body: {} }]);
+});
 test('sends the existing plain-text contract, preserves Unicode and AbortSignal', async () => {
   const signal = new AbortController().signal;
   const fetcher = (async (url, init) => {

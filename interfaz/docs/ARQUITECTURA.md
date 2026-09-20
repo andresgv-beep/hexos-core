@@ -24,10 +24,18 @@ Las respuestas antiguas/no progresivas pueden conservar su presentación animada
 |---|---|
 | GET `/api/status` | Estado, avances, herramientas activas, pensamiento, acceso y generación provisional |
 | POST `/api/chat` | JSON con texto, ID y opciones; respuesta final, herramientas y cancelación si corresponde |
+| POST `/api/model/warmup` | Carga anticipada al escribir; cuerpo `{}`, devuelve el estado sin esperar a la GPU |
 | POST `/api/cancel` | Detener el turno identificado; espera confirmación del backend |
 | GET `/api/history` | Historial y eventos conservados |
 | GET `/api/telemetry` | Métricas del sistema, no estimaciones del modelo |
 | GET `/api/core`, `/api/notes` | Recursos persistidos y notas |
+
+HexOS mantiene el modelo nativo descargado hasta recibir actividad. React avisa
+al escribir (como máximo una vez cada 30 segundos); el turno espera el `ready`
+real y muestra «Cargando el modelo…» mientras tanto. Una reserva cubre el turno
+completo, también las herramientas. Tras 600 segundos inactivo cierra el proceso
+de Héctor. El historial persiste y el siguiente turno reconstruye su contexto.
+Consultar `/api/status` no despierta el modelo ni reinicia el temporizador.
 
 Los adjuntos locales usan también `/api/attachments`, atendido por el plugin de
 Vite. El backend Python recibe la imagen codificada en el JSON del turno; no

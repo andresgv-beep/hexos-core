@@ -78,6 +78,8 @@ export interface HeliosTransport {
   dismissAccess(device: string, signal?: AbortSignal): Promise<void>;
   /** Enciende o apaga el canal de pensamiento de Gemma. HexOS lo recuerda. */
   setThinking(enabled: boolean, signal?: AbortSignal): Promise<boolean>;
+  /** Avisa a HexOS al empezar a escribir. Inicia la carga, pero no bloquea la UI. */
+  warmup(signal?: AbortSignal): Promise<"unloaded" | "loading" | "ready" | "unloading" | "error" | "closed">;
   history(signal?: AbortSignal): Promise<HistoryMessage[]>;
   /** `image` es base64 de PNG/JPEG/WebP, sin la cabecera `data:`. Una por turno. */
   /** `thinking` abre el canal solo durante este turno; no cambia la preferencia AUTO. */
@@ -150,6 +152,14 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
         body: JSON.stringify({ enabled }), signal });
       if (!isRecord(data) || typeof data.thinking !== "boolean") throw new Error("HexOS no confirmó el cambio");
       return data.thinking;
+    },
+    async warmup(signal) {
+      const data = await request("model/warmup", { method: "POST",
+        headers: { "Content-Type": "application/json" }, body: "{}", signal });
+      if (!isRecord(data) || typeof data.state !== "string") throw new Error("HexOS no confirmó la carga del modelo");
+      const states = ["unloaded", "loading", "ready", "unloading", "error", "closed"] as const;
+      if (!states.includes(data.state as typeof states[number])) throw new Error("Estado del modelo no válido");
+      return data.state as typeof states[number];
     },
     async history(signal) {
       const data = await request("history", { signal });

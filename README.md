@@ -23,6 +23,15 @@ consulta equipos configurados y web pública, publica telemetría y muestra text
 progresivo con cancelación. La visión requiere un HNF con adaptador compatible;
 el 12B textual usado en la última prueba no incorpora visión utilizable.
 
+En la ruta nativa, el proceso HTTP arranca sin ocupar la GPU. El primer carácter escrito en React
+inicia la carga del modelo; si el mensaje se envía antes de que Héctor anuncie
+`ready`, el turno espera esa barrera. Tras 10 minutos sin actividad HexOS cierra
+el runtime y libera el modelo. El siguiente turno reconstruye el contexto desde
+el historial persistente: no reutiliza un KV que ya no existe.
+El plazo se configura con `--model-idle-seconds` (600 por defecto). Las consultas
+de estado de la interfaz no renuevan ese plazo; un turno activo lo mantiene
+cargado hasta finalizar, incluidas sus herramientas y la extracción de memoria.
+
 El repositorio también conserva el supervisor C, Memory Core, HNF-EXT, HERA,
 `cognitive_stub` y el servidor C `hexos_serve`. La existencia de un stub de pruebas
 **no significa que el motor o el agente sean simulados**.

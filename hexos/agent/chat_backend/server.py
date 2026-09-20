@@ -35,6 +35,9 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                                    'active_tools':[dict(item) for item in agent.active_tools],
                                    'credential_request': agent.credential_request,
                                    'thinking': agent.thinking(),
+                                   'model': (agent.runtime.status()
+                                             if hasattr(agent.runtime, 'status') else
+                                             {'state':'ready', 'ready':True}),
                                    'generation': agent.generation_snapshot(),
                                    'mode':'native-experimental' if native_template else 'json'})
             elif self.path == '/api/core':
@@ -95,7 +98,7 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
 
         def do_POST(self):
             if self.path not in ('/api/chat', '/api/work', '/api/context/reset', '/api/credentials',
-                                 '/api/thinking', '/api/cancel'):
+                                 '/api/thinking', '/api/cancel', '/api/model/warmup'):
                 self.respond(404, {'error':'ruta inexistente'})
                 return
             # Una página abierta en otra pestaña no puede accionar el agente ni,
@@ -118,6 +121,13 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                         raise ValueError('se espera request_id')
                     rid = string(payload['request_id'], 'request_id', 128)
                     self.respond(200, agent.cancel_generation(rid))
+                elif self.path == '/api/model/warmup':
+                    if strict_json(data.decode('utf-8')) != {}:
+                        raise ValueError('Se espera {}')
+                    if hasattr(agent.runtime, 'warmup'):
+                        self.respond(202, agent.runtime.warmup())
+                    else:
+                        self.respond(200, {'state':'ready', 'ready':True})
                 elif self.path == '/api/credentials':
                     saved = agent.save_access(strict_json(data.decode('utf-8')))
                     operation = saved.pop('_resume_operation', None)
