@@ -15,6 +15,7 @@ con ese estado y con el código.
 | [E1_PROTOCOLO_RUNTIME.md](E1_PROTOCOLO_RUNTIME.md) | Estado del protocolo implementado y diferencias con E1. |
 | [INVENTARIO_DISPOSITIVOS.md](INVENTARIO_DISPOSITIVOS.md) | Registro y atribución de equipos. |
 | [NAS_CONTENIDO.md](NAS_CONTENIDO.md) | Exploración y catálogo de archivos; arquitectura prevista de HandBrake. |
+| [NAS_DOCUMENTOS.md](NAS_DOCUMENTOS.md) | Apertura verificada, lectura de texto por fragmentos, visor y descarga de documentos NAS. |
 | [FILE_CATALOG_ARCHITECTURE.md](FILE_CATALOG_ARCHITECTURE.md) | Base modular implementada, contratos y etapas pendientes para bibliotecas, sincronización y acceso a archivos. |
 | [MULTIMODAL_TRANSPORT.md](MULTIMODAL_TRANSPORT.md) | Python/base64/NDJSON separado del endpoint RGB8 C. |
 | [NATIVE_TOOLS_INTEGRACION.md](NATIVE_TOOLS_INTEGRACION.md) | Integración nativa; incluye evidencia de sus primeros cortes. |

@@ -10,6 +10,7 @@ from ..work import strict_json, string
 from .images import decode_image
 from .settings import MAX_INPUT
 from .history_archive import history_page
+from .file_http import serve as serve_file
 
 
 def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, native_template=False):
@@ -31,6 +32,8 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                 self.send_header('Content-Length', str(len(data)))
                 self.end_headers()
                 self.wfile.write(data)
+            elif self.path == '/api/files' or self.path.startswith('/api/files/'):
+                serve_file(self, agent.env.workspace)
             elif self.path == '/api/status':
                 self.respond(200, {'state': agent.state, 'progress':agent.progress,
                                    'active_tools':[dict(item) for item in agent.active_tools],

@@ -5,7 +5,9 @@
 Helios dirige desde la máquina de IA. Los archivos permanecen en el NAS; su
 Python 3 recorre metadatos mediante el usuario SSH ya configurado, sin sudo,
 instalaciones ni escritura remota. Hexos guarda localmente un catálogo SQLite
-de rutas, tamaños y fechas. No descarga películas ni lee su contenido.
+de rutas, tamaños y fechas. El buscador no descarga películas ni lee su contenido.
+La apertura de documentos de hasta 8 MiB y su lectura/descarga se documentan en
+[NAS_DOCUMENTOS.md](NAS_DOCUMENTOS.md).
 
 Implementado: navegar carpetas, indexar varias raíces de un mismo equipo y
 buscar recursivamente extensiones arbitrarias (MKV, MP4, AVI, MP3, etc.), con tamaños mínimo y máximo

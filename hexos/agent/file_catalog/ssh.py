@@ -9,7 +9,7 @@ from .. import hosts, nas_session
 from ..nas_files_remote import MARKER
 
 def remote_command(request):
-    script = 'nas_shares_remote.py' if request['operation'] == 'shares' else 'nas_files_remote.py'
+    script = {'shares': 'nas_shares_remote.py', 'file_open': 'nas_document_remote.py'}.get(request['operation'], 'nas_files_remote.py')
     source = (Path(__file__).parent.parent / script).read_text()
     # Código fijo y un único argumento JSON citado; ninguna ruta es código shell.
     return 'python3 -c ' + shlex.quote(source) + ' ' + shlex.quote(json.dumps(request, ensure_ascii=True))

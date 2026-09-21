@@ -536,3 +536,5 @@ input[type="range"] { width: 100%; accent-color: #8dc9f2; cursor: pointer; heigh
   & > .conversation { position: fixed; left: 0; right: 0; bottom: 0;
     width: auto; transform: none; padding: 8px 12px calc(10px + env(safe-area-inset-bottom)); z-index: 20; }
 }
+.nas-file-text { white-space: pre-wrap; overflow-wrap: anywhere; font: 14px/1.6 monospace; padding: 16px; background: #04121c; }
+.nas-file-viewer select { max-width: 100%; color: inherit; background: #0b2130; padding: 8px; }

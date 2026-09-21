@@ -35,11 +35,11 @@ class ToolDispatcher:
                 validate_file_request(request['text'], name, args)
         if name == 'profile.remember':
             return self.memory.remember_fact(store, args, turn_id)
-        if name in ('nas.search', 'nas.locations', 'nas.directory_page'):
+        if name in ('nas.search', 'nas.locations', 'nas.directory_page', 'nas.file_read'):
             return self.env.dependencies.nas_files(self.env.workspace, operation=name.split('.')[1], **args)
         if name in ('nas.read', 'nas.container', 'device.connect', 'nas.browse', 'nas.index', 'nas.find',
-                    'nas.directories', 'nas.shares'):
-            if not args.get('device'):
+                    'nas.directories', 'nas.shares', 'nas.file_open'):
+            if not args.get('device') and name != 'nas.file_open':
                 # El modelo omite a veces el equipo aunque la persona lo haya nombrado.
                 # No se adivina: se lee su mensaje y solo vale si UNO de los guardados
                 # aparece ahí. Con ninguno o con varios, que pregunte.
@@ -51,7 +51,7 @@ class ToolDispatcher:
                     # ninguno o con varios, only_device devuelve un error explícito;
                     # nunca se inventa un destino llamado «synology».
                     args = dict(args, device=hosts.only_device(self.env.workspace))
-            equipo = args['device']
+            equipo = args.get('device')
             objetivo = args.get('container')
             if name == 'nas.container' and objetivo:
                 # Una escritura anterior sobre este mismo destino se quedó sin saber
@@ -72,7 +72,7 @@ class ToolDispatcher:
             extra = ({'section':'container'} if name == 'nas.container' else
                      {'section':'system'} if name == 'device.connect' else {})
             try:
-                if name in ('nas.browse', 'nas.index', 'nas.find', 'nas.directories', 'nas.shares'):
+                if name in ('nas.browse', 'nas.index', 'nas.find', 'nas.directories', 'nas.shares', 'nas.file_open'):
                     salida = self.env.dependencies.nas_files(self.env.workspace,
                                                              operation=name.split('.')[1], **args)
                 else:

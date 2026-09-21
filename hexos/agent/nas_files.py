@@ -7,10 +7,20 @@ from . import hosts, nas_session  # Compatibilidad con integraciones existentes.
 from .file_catalog.ssh import observe, remote_command
 from .file_catalog.service import FileCatalog
 from .file_catalog.directories import DirectoryCatalog
+from .file_catalog import file_access
+
 from .file_catalog.sqlite_repository import SQLiteCatalog, database, remember_directories, publish_snapshot
 from .file_catalog.validation import (integer, path_argument, roots_argument, extensions_argument,
                                       filters_argument, parents_within_root, scan_coverage)
 from .file_catalog.presentation import bounded_page, PAGE_CHARS
+
+
+def file_open(workspace, **kwargs):
+    return file_access.open_file(workspace, lambda device, request: observe(workspace, device, request), **kwargs)
+
+
+def file_read(workspace, **kwargs):
+    return file_access.read(workspace, **kwargs)
 
 
 def service(workspace):

@@ -5,6 +5,7 @@ import { ArrowUp, Code2, MessageSquare, SlidersHorizontal, Square, X } from "luc
 import { NebulaOrb } from "./orb/NebulaOrb";
 import { AttachmentButton, ChatAttachments, type Attachment } from "./ChatAttachments";
 import { ChatHistory } from "./ChatHistory";
+import { NasFileViewer } from "./NasFileViewer";
 import { MobileWorkspace } from "./MobileWorkspace";
 import { createClientId } from "@/lib/helios/ids";
 import { SystemMonitor } from "./SystemMonitor";
@@ -125,6 +126,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   }, []);
   const [windows, setWindows] = useState<NoteWindowState[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [fileViewer, setFileViewer] = useState<{ id?: string } | null>(null);
   const [codeArtifact, setCodeArtifact] = useState<ReplyArtifact | null>(null);
   const [codeOpen, setCodeOpen] = useState(false);
   const [codeHistory, setCodeHistory] = useState<ReplyArtifact[]>([]);
@@ -383,6 +385,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       if (guardado.resumed) {
         const id = ++nextId.current;
         const result = guardado.resumed;
+        if (result.fileIds?.length) setFileViewer({ id: result.fileIds.at(-1) });
         const cierre = result.closure;
         const reparo = cierre && !["comprobado", "sin_operaciones"].includes(cierre.reason)
           ? { note: cierre.note, tools: cierre.unverified.map(u => u.tool) }
@@ -477,6 +480,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       const turnThinking = options?.thinking ?? (editingArtifact ? true : undefined);
       const hiddenWorkContext = payload !== visibleQuestion ? visibleQuestion : undefined;
       const result = await transport.send(payload, controller.signal, imagen, turnThinking, hiddenWorkContext, activeRequestId.current);
+      if (result.fileIds?.length) setFileViewer({ id: result.fileIds.at(-1) });
       if (!controller.signal.aborted) {
         setConnection("ready");
         setTurnTools(items => mergeToolActivities(items, result.tools));
@@ -623,9 +627,11 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       artifact={codeArtifact ?? historicalArtifacts[historicalArtifacts.length - 1] ?? null}
       busy={sending} error={historyError} onBrowseNotes={() => setCoreOpen(true)}
       hasEarlier={historyNext !== null} olderLoading={olderLoading} onLoadEarlier={loadOlderHistory}
+      onOpenFiles={() => setFileViewer({})}
       onImprove={improveCode} onPreview={previewCode} />}
     <div className="ambient-light" aria-hidden="true" />
     <header className="topbar">
+      <button className="history-code-open" onClick={() => setFileViewer({})}>Archivos del NAS</button>
       <button ref={settingsRef} className={`icon-button ${settings ? "selected" : ""}`} aria-label="Ajustar luminosidad" aria-expanded={settings} onClick={() => setSettings(true)}><SlidersHorizontal size={19} /></button>
     </header>
     <SystemMonitor autoEnabled={thinking} autoBusy={thinkingBusy} onToggleAuto={() => void toggleThinking()}
@@ -675,6 +681,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       {connection !== "ready" && <p id="connection-note" className="connection-note" role="status">{connection === "checking" ? "Conectando con Helios…" : "Sin conexión con Helios. Puedes volver a intentar el envío."}</p>}
     </section>
     <span className="sr-only" role="status">{announcement}</span>
+    {fileViewer && <NasFileViewer key={fileViewer.id ?? 'library'} initialId={fileViewer.id} onClose={() => setFileViewer(null)} />}
     {historyOpen && <ChatHistory previous={previous} messages={turns} historyError={historyError} onClose={closeHistory}
       hasEarlier={historyNext !== null} olderLoading={olderLoading} onLoadEarlier={loadOlderHistory}
       onOpenArtifact={openHistoricalArtifact}

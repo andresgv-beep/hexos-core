@@ -10,12 +10,13 @@ import { CodeWorkspace } from "./CodeWorkspace";
 const panels = ["Notas", "Chat", "Código", "Visualización"];
 /** Presentation only: no second transport, conversation or agent. */
 export function MobileWorkspace({ previous, turns, notes, artifact, busy, error, onBrowseNotes,
-  onImprove, onPreview, hasEarlier, olderLoading, onLoadEarlier }: {
+  onImprove, onPreview, hasEarlier, olderLoading, onLoadEarlier, onOpenFiles }: {
   previous: HistoryMessage[]; turns: Turn[]; notes: NoteDetail[]; artifact: ReplyArtifact | null;
   busy: boolean; error: string; onBrowseNotes: () => void;
   onImprove: (code: string, language?: string) => void;
   onPreview: (code: string, language?: string) => void;
   hasEarlier?: boolean; olderLoading?: boolean; onLoadEarlier?: () => Promise<void>;
+  onOpenFiles?: () => void;
 }) {
   const [page, setPage] = useState(1);
   const rail = useRef<HTMLDivElement>(null);
@@ -76,6 +77,7 @@ export function MobileWorkspace({ previous, turns, notes, artifact, busy, error,
         onScroll={event => { const el = event.currentTarget;
           following.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100; }}>
         {error && <p role="alert">{error}</p>}
+        {onOpenFiles && <button className="history-code-open" onClick={onOpenFiles}>Archivos del NAS</button>}
         {hasEarlier && <button type="button" className="history-code-open" disabled={olderLoading}
           onClick={() => void loadEarlier()}>{olderLoading ? "Cargando mensajes…" : "Cargar mensajes anteriores"}</button>}
         {!previous.length && !turns.length && <p>Habla con Helios. Tu conversación continúa aquí.</p>}

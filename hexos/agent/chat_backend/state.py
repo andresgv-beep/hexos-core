@@ -28,7 +28,8 @@ def default_nas_files(workspace, *, operation, **kwargs):
     return {'browse': nas_files.browse, 'index': nas_files.index,
             'search': nas_files.search, 'find': nas_files.find,
             'locations': nas_files.locations, 'directories': nas_files.directories,
-            'shares': nas_files.shares, 'directory_page': nas_files.directory_page}[operation](workspace, **kwargs)
+            'shares': nas_files.shares, 'directory_page': nas_files.directory_page,
+            'file_open': nas_files.file_open, 'file_read': nas_files.file_read}[operation](workspace, **kwargs)
 
 
 def default_web_read(url):

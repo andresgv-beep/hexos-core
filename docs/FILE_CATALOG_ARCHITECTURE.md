@@ -97,13 +97,14 @@ archivo visible con cursores estables, separado de la ventana de contexto.
    tratamiento de cambios, eliminaciones y fallos parciales. Una ruta sin acceso
    no debe provocar eliminaciones del catálogo. Los snapshots actuales no son
    un sincronizador incremental ni reconocen renombrados como identidad estable.
-3. Acceso al archivo desde la interfaz y pines persistentes, con revalidación de
-   existencia y permisos. Lectores de contenido PDF/Markdown como capacidad
-   separada de la búsqueda de metadatos.
+3. Pines persistentes y lectores PDF/DOCX. Ampliar el acceso ya disponible para
+   texto UTF-8 manteniendo la revalidación del archivo y la lectura por fragmentos.
 4. Conversión con HandBrake como servicio de trabajos propio, después de
    revalidar el archivo de origen y definir verificación y publicación del resultado.
 
-No hay aún refresco automático, lectura documental, descarga, pines ni conversión.
+La ampliación del 2026-09-21 incorpora lectura de texto, visor y descarga acotada
+en [NAS_DOCUMENTOS.md](NAS_DOCUMENTOS.md). No hay aún refresco automático,
+extracción PDF/DOCX, pines ni conversión.
 Las búsquedas persistentes actuales son snapshots consultables; no son objetos
 de consulta guardada. Cada etapa debe añadir su contrato y pruebas sin incorporar
 esas responsabilidades a `service.py` o al despachador del chat.
