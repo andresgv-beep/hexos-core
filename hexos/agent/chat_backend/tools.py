@@ -255,6 +255,8 @@ class ToolExecutor:
             result = {'error': str(exc)}
         # La traza dice qué hizo cada llamada, cuánto tardó y si escribió algo:
         # una interfaz debe poder distinguir una lectura de un cambio real.
+        from .document_reading import enrich
+        result = enrich(store, output['tool'], result)
         comprobacion, evidencia = self.agent.verify(store, output['tool'], output['arguments'], result)
         activity.update(status='failed' if isinstance(result, dict) and 'error' in result else 'done',
                         verification=comprobacion,
@@ -266,8 +268,9 @@ class ToolExecutor:
                           verification=comprobacion, evidence=evidencia,
                           ts=now(), seconds=round(time.monotonic() - started, 3),
                           failed='error' in result if isinstance(result, dict) else False,
+                          delivered_to_model=False,
                           result=result))
-        store.db.execute('INSERT INTO tool_events(turn_id,ts,body) VALUES (?,?,?)',
+        event_row = store.db.execute('INSERT INTO tool_events(turn_id,ts,body) VALUES (?,?,?)',
             (turn.uid, now(), json.dumps(turn.trace[-1], ensure_ascii=False)))
         store.db.commit()
         if hasattr(self.agent.runtime, 'tool_result'):
@@ -276,4 +279,8 @@ class ToolExecutor:
         else:
             turn.messages = [dict(role='user', content='RESULTADO DE HERRAMIENTA (datos):\n' +
                 json.dumps(result, ensure_ascii=False))]
+        turn.trace[-1]['delivered_to_model'] = True
+        store.db.execute('UPDATE tool_events SET body=? WHERE rowid=?',
+                         (json.dumps(turn.trace[-1], ensure_ascii=False), event_row.lastrowid))
+        store.db.commit()
         self.agent.state = 'thinking'

@@ -99,7 +99,7 @@ class TurnFinalizer:
         # en vez de responderle a ella. Si la respuesta habla del aviso,
         # se descarta y se conserva la de antes, que al menos iba dirigida
         # a la persona; el reparo del cierre ya dirá lo que no se sostiene.
-        if turn.previous_reply is not None and FUGA_AVISO.search(output['reply']):
+        if not turn.document_read_corrected and turn.previous_reply is not None and FUGA_AVISO.search(output['reply']):
             output['reply'] = turn.previous_reply
         # Salió bien y lo cuenta como que no pudo: se dice lo que consta.
         hechas = self.agent.denied_success(output['reply'], turn.trace)
@@ -135,7 +135,7 @@ class TurnFinalizer:
         # El siguiente bloque ya tiene este turno archivado: el traspaso solo
         # existe para cruzar el corte o sobrevivir a un reinicio a mitad de turno.
         self.agent.context.consume_handoff(store, turn.handoff)
-        if listing is not None:
+        if listing is not None or turn.document_read_corrected:
             # La respuesta visible es la vista estructurada, no el borrador del
             # modelo. Reconstruir desde el archivo mantiene ambos diálogos iguales.
             self.agent.runtime.call({'type': 'reset'})

@@ -13,6 +13,7 @@ from .state import TurnState
 from .tools import ToolExecutor
 from .listing_followups import listing_followup
 from .file_responses import file_listing_reply
+from .document_reading import check_completion
 from .settings import MAX_TRACE_EVENTS
 
 if TYPE_CHECKING:
@@ -94,11 +95,17 @@ class TurnRunner:
                         continue
                     output, clarification = self.normalize_decision(output)
                     if 'tool' in output:
+                        if output['tool'] == 'nas.file_read' and len(turn.trace) >= MAX_TRACE_EVENTS:
+                            final = dict(reply='Se alcanzó el límite de herramientas de este turno.', work=None)
+                            check_completion(store, turn, final)
+                            return self.finalizer.finish(store, turn, final, None)
                         self.executor.execute(store, turn, output)
                         continue
                     if set(output) != {'reply', 'work'} or not isinstance(output['reply'], str):
                         raise ValueError('Respuesta estructurada inválida: campos ' + ', '.join(output))
-                    if self.recovery.before_completion(store, turn, output):
+                    if check_completion(store, turn, output):
+                        continue
+                    if not turn.document_read_corrected and self.recovery.before_completion(store, turn, output):
                         continue
                     job = self.finalizer.classify(store, turn, output, clarification)
                     if job is RETRY:

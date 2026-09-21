@@ -96,6 +96,9 @@ class TurnState:
     prompt_text: str = ''
     pointed_note: dict | None = None
     listing_followup: bool = False
+    document_read_mark: tuple | None = None
+    document_read_retries: int = 0
+    document_read_corrected: bool = False
     native: bool = False
     budget: int = 0
     boundary: int = 0

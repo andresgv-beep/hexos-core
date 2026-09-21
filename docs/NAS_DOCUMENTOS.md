@@ -76,3 +76,41 @@ Comprueba que se registra una sola llamada y que el texto de pensamiento no se
 muestra ni se ejecuta. La batería ampliada de backend pasa 291 pruebas; esta
 regresión usa una salida simulada, pendiente de repetir con el 12B real.
 El cambio es Python: requiere reiniciar el backend, sin recompilar el motor.
+
+### Cobertura verificable y cierre de lectura
+
+`chat_backend/document_reading.py` calcula `reading_progress` a partir de las
+lecturas satisfactorias de `tool_events`, por `file_id` de copia inmutable.
+Une rangos semiabiertos `[inicio, fin)`; releer o solapar no suma dos veces y
+llegar al final con huecos no significa completar el documento. `continue_from`
+señala el primer carácter pendiente; `next_offset` sigue indicando el final del
+fragmento individual. Se exponen `covered_ranges`, caracteres entregados,
+pendientes, porcentaje y `document_complete`.
+
+Todos los offsets son puntos de código Unicode (`unicode_code_points`) del texto
+UTF-8 ya decodificado, sin BOM. No son bytes ni índices UTF-16 de JavaScript.
+El lector devuelve `end_offset` y prefiere el último salto de línea en los 200
+caracteres anteriores al corte. Si no existe, corta por caracteres sin superar
+el límite; las líneas largas siempre avanzan. El consumidor usa el offset
+devuelto, nunca suma el tamaño solicitado por su cuenta.
+
+La cobertura se conserva entre turnos y reinicios mediante el registro existente.
+El visor y las descargas no aportan cobertura al modelo. Las nuevas llamadas
+registran si el resultado fue entregado al adaptador del modelo; una entrega
+fallida no suma. Los registros antiguos sin ese campo mantienen su significado
+histórico de lectura satisfactoria. Cobertura acredita entrega, no comprensión
+ni permanencia de todos los fragmentos en la ventana de contexto.
+
+El cierre de un turno con lecturas incompletas sustituye la prosa del modelo por
+el estado calculado: no basta con pedirle que sea honesto. Esto también suprime
+resúmenes parciales en ese cierre; el visor conserva el texto. Una petición
+explícita de lectura completa o una afirmación de finalización puede provocar
+hasta dos reintentos con progreso, dentro del límite de seis herramientas.
+Al agotarse el margen se publica el estado parcial y la posición de continuación.
+La comprobación «¿lo has leído todo?» recupera la última lectura entre turnos.
+Este seguimiento se limita a las copias NAS implicadas; no es un verificador
+semántico universal de afirmaciones sobre cualquier documento en el historial.
+
+Regresiones en `tools/document_reading_test.py`: caso 8.000/66.978, huecos,
+duplicados, copias distintas, reinicios, entrega fallida, visor independiente,
+Unicode, cortes de línea, cierre falso entre turnos y límite de herramientas.
