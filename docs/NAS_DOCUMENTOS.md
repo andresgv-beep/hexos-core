@@ -62,3 +62,17 @@ La descarga a través del proxy de la interfaz coincide con el SHA-256 de la cop
 `runtime/logs/file-open-live.json` y `runtime/logs/file-download-live.json`.
 Esto valida herramientas y HTTP; no certifica la elección del lector por el 12B
 en la otra máquina ni sustituye una comprobación visual del visor en navegador.
+
+### Continuación de lectura y formato nativo
+
+El intérprete acepta un bloque `thought` cerrado después del preámbulo visible
+y antes de la llamada. Separa el razonamiento sin alterar los argumentos ni los
+marcadores dentro de cadenas de la herramienta. Los canales incompletos,
+anidados o repetidos y las llamadas malformadas siguen rechazándose.
+
+`tools/native_channels_test.py` reproduce la secuencia reportada por el 12B:
+preámbulo, canal vacío y `nas.file_read` con `offset=4000`, `count=4000`.
+Comprueba que se registra una sola llamada y que el texto de pensamiento no se
+muestra ni se ejecuta. La batería ampliada de backend pasa 291 pruebas; esta
+regresión usa una salida simulada, pendiente de repetir con el 12B real.
+El cambio es Python: requiere reiniciar el backend, sin recompilar el motor.

@@ -46,17 +46,29 @@ class NativeSyntax(InvalidDecision):
 
 
 def split_thinking(text, open_thought=False):
+    """Separa un bloque thought cerrado, incluso tras un preámbulo visible.
+
+    Solo se interpreta antes de la llamada: los marcadores dentro de sus
+    argumentos siguen siendo datos y no se reescriben. El resto del protocolo
+    continúa validándose por el parser estricto de llamadas/respuestas.
+    """
     if open_thought:
         text = '<|channel>thought\n' + text
     text = text.lstrip()
     prefix = '<|channel>thought\n'
     reasoning = None
-    if text.startswith(prefix):
-        end = text.find('<channel|>', len(prefix))
+    start = text.find(prefix)
+    call = text.find('<|tool_call>')
+    if start >= 0 and (call < 0 or start < call):
+        end = text.find('<channel|>', start + len(prefix))
         if end < 0:
             raise NativeSyntax('canal de pensamiento incompleto')
-        reasoning = text[len(prefix):end]
-        text = text[end+len('<channel|>'):].lstrip()
+        reasoning = text[start + len(prefix):end]
+        if '<|channel>' in reasoning:
+            raise NativeSyntax('canales de pensamiento anidados')
+        before, after = text[:start], text[end+len('<channel|>'):]
+        separator = '\n' if before and after and not before[-1].isspace() and not after[0].isspace() else ''
+        text = (before + separator + after).lstrip()
     return text, reasoning
 
 
