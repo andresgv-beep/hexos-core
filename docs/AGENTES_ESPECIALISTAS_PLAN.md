@@ -4,6 +4,10 @@
 > [agente doméstico de un solo modelo y un chat](AGENTE_DOMESTICO_PLAN.md).
 > Se conserva este documento como antecedente, no como trabajo pendiente.
 
+> Actualización 2026-09-21: el nuevo alcance limitado se documenta en
+> [Tareas internas y contextos aislados](INTERNAL_TASKS_ARCHITECTURE.md).
+> Empieza por supervisión de películas; no reactiva las propuestas de este documento.
+
 ## Propósito y alcance
 
 Helios mantiene una sola identidad visible, aunque varios modelos o sesiones

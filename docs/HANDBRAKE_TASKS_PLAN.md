@@ -3,6 +3,28 @@
 Estado: diseño e inspección de lectura completados; ejecución e interfaz pendientes.
 No se han copiado películas ni iniciado conversiones con este trabajo.
 
+Actualizado con las decisiones de la conversación del 2026-09-21.
+El contrato de contextos, recursos y separación de módulos vive en
+[INTERNAL_TASKS_ARCHITECTURE.md](INTERNAL_TASKS_ARCHITECTURE.md).
+
+## Alcance de la primera versión
+
+Solo películas de las carpetas de películas de multimedia 1 o multimedia 3.
+Series, temporadas, documentales y entradas ambiguas no entran automáticamente;
+su clasificación se abordará después.
+
+El 12B interpreta la petición y propone una selección de 1–5 archivos. HexOS
+valida la selección y crea un lote con una ficha independiente por película.
+Una sola ficha activa: copiar, comprimir, verificar, publicar y cerrar antes de
+copiar la siguiente. No preparar cinco copias grandes por adelantado.
+
+Cada ficha conserva equipo, identidad y ruta exacta de origen, subcarpetas,
+destino resuelto, perfil congelado, estado, observaciones e intentos. La salida
+vuelve a la carpeta de origen de esa película, sin deducir el disco de su título.
+Para pruebas, política inicial conservadora: `Título.optimizada.mkv` junto al
+original, sin sobrescritura. Un destino existente produce conflicto, no permiso
+para sustituirlo. Reemplazo con respaldo queda fuera de esta primera versión.
+
 ## Hallazgos de la instalación
 
 Inspección SSH del 21 de septiembre de 2026, contenedor `HandBrake` en Synology 1:
@@ -89,16 +111,20 @@ Ejemplo solicitado: arranque con ETA 56 min → comprobar a los 2 min → si que
 56 min, esperar 30 → si quedan 20 min, esperar 20 → si queda 1 min, esperar 1.
 Una ETA agotada solo dispara una consulta; nunca marca éxito.
 
-El backend obtiene la observación y adjunta un resumen acotado al turno de Helios
-reactivado, con job_id y evidencia. Ese turno no repite la petición inicial ni
-puede duplicar el lanzamiento. Si el modelo está ocupado, se conserva la
-notificación pendiente; el trabajador puede seguir registrando el estado.
+El backend obtiene y registra la observación sin necesitar inferencia. Si hace
+falta una decisión del agente, crea una solicitud con job_id, revisión y evidencia
+para un turno interno aislado, nunca para la conversación activa del usuario.
+Ese turno no repite la petición inicial ni puede duplicar el lanzamiento. Si el
+modelo está ocupado, la solicitud espera; la vigilancia determinista continúa.
 Una señal fiable de finalización puede adelantar la observación programada.
 
 ## Persistencia y recuperación
 
-Estados separados: pendiente, copiando, preparada, comprimiendo, verificando,
-pendiente_de_publicación, completada, error, cancelación_solicitada y cancelada.
+Estados separados: pendiente, copiando, preparada, comprimiendo, recuperando,
+verificando, pendiente_de_publicación, publicando, completada, error,
+cancelación_solicitada y cancelada. El lote puede pausarse sin perder las fichas.
+Pausar el lote impide iniciar nuevos elementos; no supone suspender el encoder
+activo. Cancelar una tarea activa es una operación distinta.
 
 Guardar fuente, destino, identidad del proceso, hash del preset, timestamps,
 bytes copiados, bytes provisionales/finales, porcentaje por fase, ETA, próximo
@@ -106,15 +132,51 @@ control y evidencia de cada transición. Reclamo transaccional con lease impide
 dos trabajadores sobre la misma tarea. Recuperar una tarea tras reinicio exige
 consultar el proceso y reconciliar sus archivos antes de reintentar una acción.
 
-Cancelar señala el proceso concreto y verifica su parada; no detiene todo el
-contenedor ni otras conversiones. Los restos de staging pertenecen a la tarea;
+Cancelar señala el proceso concreto y verifica su parada; la cancelación ordinaria
+no detiene todo el contenedor ni otras conversiones. Los restos de staging pertenecen a la tarea;
 no limpiar archivos ajenos ni borrar originales automáticamente.
+
+## Bloqueos y recuperación acotada
+
+Observar fase/pasada, porcentaje, actividad del proceso, logs, tamaño provisional
+y hora de cada medida. Confirmar ausencia de avance con varias observaciones
+válidas y un umbral por fase. Una ETA fija, un archivo que todavía no crece o un
+fallo de SSH por separado no prueban bloqueo. Los umbrales se fijan con medidas.
+
+1. Registrar evidencia y marcar recuperando; impedir otra conversión del lote.
+2. Intentar detener solo el proceso de la ficha y comprobar la parada.
+3. Si no responde, permitir reinicio del contenedor únicamente tras comprobar
+   que no hay trabajos manuales o ajenos que se interrumpirían. Si no se puede
+   comprobar exclusividad, pausar y notificar; no reiniciar a ciegas.
+4. Verificar contenedor utilizable y proceso previo ausente antes de relanzar.
+5. Separar la salida parcial y no publicarla. El nuevo intento tiene identidad
+   propia y usa el mismo origen verificado y preset congelado.
+6. Máximo un reintento automático por ficha; persistir el contador antes de
+   lanzarlo. Un nuevo fallo termina en error, sin bucle de reinicios.
+
+Un fallo propio de una película permite avanzar a la siguiente tras cerrar su
+recuperación. Disco lleno, servicio inaccesible o conflicto de exclusividad son
+problemas compartidos: pausar el lote para no repetir el mismo fallo cinco veces.
+
+## Publicación y fin verificable
+
+Ni `running` del contenedor ni 100 % de una pasada equivalen a película terminada.
+Se requiere terminación satisfactoria del trabajo identificado y validación de
+su archivo. Objetivo de 5–8 GB, validez técnica y valoración visual se registran
+por separado: RF 19 no promete un tamaño fijo. Si no satisface un criterio
+obligatorio de la tarea, conservar el resultado para revisión sin publicarlo.
+
+Publicar sin sobrescribir mediante temporal en el filesystem de destino y
+verificación de la copia. Completada significa salida publicada y registrada en
+el catálogo, no solo encoder finalizado. La limpieza posterior se limita a los
+temporales propios cuya publicación esté comprobada; nunca al original.
 
 ## Decisiones pendientes
 
-- Publicación junto al original o sustitución conservando respaldo.
 - Verificar interfaces de progreso, launcher y lector de metadatos disponibles
   en la instalación antes de implementar el adaptador.
+- Confirmar con una conversión real duración, pistas preservadas y tolerancias.
+- Política futura de reemplazo/backups; primera versión conserva el original.
 
 ## Pruebas necesarias antes de lanzar una película real
 
@@ -123,3 +185,7 @@ copia/compresión/publicación; reclamación concurrente; desconexión SSH; disc
 lleno; copia incompleta; entrada modificada; mismo nombre en dos carpetas;
 archivo de salida previo; perfil incorrecto; fallo del encoder; duración o pistas
 incorrectas; publicación entre discos; cancelación sin afectar otros procesos.
+
+Añadir: reinicio con trabajo ajeno, segunda recuperación bloqueada, fallo
+compartido que pausa el lote, exclusión de series/documentales, no copiar el
+siguiente elemento antes de cerrar el anterior y publicación sin sobrescritura.

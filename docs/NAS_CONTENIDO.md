@@ -218,15 +218,21 @@ vacíos, raíces fallidas, importación única, paginación y separación por eq
 
 ## Siguiente capa: trabajos de HandBrake en el NAS (diseño, no disponible)
 
+Diseño detallado vigente: [flujo de películas](HANDBRAKE_TASKS_PLAN.md) y
+[tareas internas/contextos aislados](INTERNAL_TASKS_ARCHITECTURE.md).
+La primera versión será secuencial, con fichas por película y perfil MKV del usuario.
+
 Las herramientas de consulta no arrancarán conversiones. El servicio de trabajos
 será distinto del catálogo y tendrá un adaptador para HandBrakeCLI. El agente
 seleccionará archivos por su identidad de catálogo y elegirá un preset existente;
 el ejecutor validará rutas y construirá argumentos, sin aceptar comandos libres.
 
-La cola y el estado de ejecución residirán en el NAS para sobrevivir a cerrar
-Helios o perder SSH. Cada trabajo tendrá ID estable, origen y versión observada,
+El coordinador HexOS conservará la cola autoritativa en disco; el NAS conservará
+un registro durable de cada ejecución para sobrevivir a perder SSH o al cierre
+del coordinador. Cada trabajo tendrá ID estable, origen y versión observada,
 preset y versión, destino, estado, progreso, error y evidencia de verificación.
-La consulta del estado reconciliará el trabajo real antes de cualquier reintento.
+Al volver el coordinador reconciliará el trabajo real antes de cualquier reintento.
+Durante su caída no se promete iniciar tareas nuevas ni observar vencimientos.
 
 Estados previstos:
 

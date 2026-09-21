@@ -16,6 +16,8 @@ con ese estado y con el código.
 | [INVENTARIO_DISPOSITIVOS.md](INVENTARIO_DISPOSITIVOS.md) | Registro y atribución de equipos. |
 | [NAS_CONTENIDO.md](NAS_CONTENIDO.md) | Exploración y catálogo de archivos; arquitectura prevista de HandBrake. |
 | [NAS_DOCUMENTOS.md](NAS_DOCUMENTOS.md) | Apertura verificada, lectura de texto por fragmentos, visor y descarga de documentos NAS. |
+| [INTERNAL_TASKS_ARCHITECTURE.md](INTERNAL_TASKS_ARCHITECTURE.md) | Diseño de tareas internas, contextos aislados, prioridad del chat y etapas; no implementado. |
+| [HANDBRAKE_TASKS_PLAN.md](HANDBRAKE_TASKS_PLAN.md) | Lotes secuenciales de películas, preset MKV, supervisión, recuperación y publicación; no implementado. |
 | [FILE_CATALOG_ARCHITECTURE.md](FILE_CATALOG_ARCHITECTURE.md) | Base modular implementada, contratos y etapas pendientes para bibliotecas, sincronización y acceso a archivos. |
 | [MULTIMODAL_TRANSPORT.md](MULTIMODAL_TRANSPORT.md) | Python/base64/NDJSON separado del endpoint RGB8 C. |
 | [NATIVE_TOOLS_INTEGRACION.md](NATIVE_TOOLS_INTEGRACION.md) | Integración nativa; incluye evidencia de sus primeros cortes. |
@@ -33,7 +35,8 @@ Interfaz: [uso](../interfaz/README.md) y [arquitectura](../interfaz/docs/ARQUITE
 
 Los hallazgos siguen siendo evidencia de aquel corte. Las prioridades operativas
 actuales están en `IMPLEMENTATION_STATUS.md`. CK y la ruta C no son el agente
-Python; los especialistas están aparcados.
+Python. El plan antiguo de especialistas sigue como antecedente; el diseño
+acotado de tareas internas del 2026-09-21 está enlazado arriba y aún no está implementado.
 
 - [AGENTES_ESPECIALISTAS_PLAN.md](AGENTES_ESPECIALISTAS_PLAN.md).
 - [AUDITORIA_CONVERSACION_NATIVA.md](AUDITORIA_CONVERSACION_NATIVA.md).

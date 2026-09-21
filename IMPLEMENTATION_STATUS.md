@@ -69,8 +69,14 @@ un límite distinto de validar argumentos o comprobar un resultado.
 6. La cancelación no mata una herramienta externa ya en ejecución: espera su
    resultado y evita iniciar nuevas tras comprobar la señal.
 
-Multichat, modelos especialistas y reflexión en segundo plano pertenecen a
-rutas históricas o alcance aparcado, no a una obligación pendiente de este producto.
+Multichat visible y reflexión general en segundo plano siguen fuera de este alcance.
+El 2026-09-21 se documentó un diseño acotado de
+[tareas internas con contextos aislados](docs/INTERNAL_TASKS_ARCHITECTURE.md),
+con [HandBrake como primer caso](docs/HANDBRAKE_TASKS_PLAN.md): lotes de 1–5
+películas, ejecución secuencial, supervisor sin LLM y prioridad del chat.
+**Solo documentación e inspección de la instalación; no hay todavía cola,
+worker, turnos internos ni reparto entre GPU implementados.** Primer hito:
+repositorio, transiciones y planificador con reloj y HandBrake simulados.
 
 ## Evidencia y mantenimiento
 
