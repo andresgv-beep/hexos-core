@@ -14,6 +14,8 @@ con ese estado y con el código.
 | [CICLO_AGENTE_VERIFICACION.md](CICLO_AGENTE_VERIFICACION.md) | Diseño e implementación parcial; no certifica autonomía general. |
 | [E1_PROTOCOLO_RUNTIME.md](E1_PROTOCOLO_RUNTIME.md) | Estado del protocolo implementado y diferencias con E1. |
 | [INVENTARIO_DISPOSITIVOS.md](INVENTARIO_DISPOSITIVOS.md) | Registro y atribución de equipos. |
+| [NAS_CONTENIDO.md](NAS_CONTENIDO.md) | Exploración y catálogo de archivos; arquitectura prevista de HandBrake. |
+| [FILE_CATALOG_ARCHITECTURE.md](FILE_CATALOG_ARCHITECTURE.md) | Base modular implementada, contratos y etapas pendientes para bibliotecas, sincronización y acceso a archivos. |
 | [MULTIMODAL_TRANSPORT.md](MULTIMODAL_TRANSPORT.md) | Python/base64/NDJSON separado del endpoint RGB8 C. |
 | [NATIVE_TOOLS_INTEGRACION.md](NATIVE_TOOLS_INTEGRACION.md) | Integración nativa; incluye evidencia de sus primeros cortes. |
 | [PROGRESSIVE_NATIVE_RUNTIME.md](PROGRESSIVE_NATIVE_RUNTIME.md) | Progreso, cancelación, arranque y aceptación real. |

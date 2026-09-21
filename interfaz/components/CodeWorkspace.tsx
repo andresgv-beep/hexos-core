@@ -5,7 +5,8 @@ import { Code2, GripHorizontal, MonitorUp, RotateCcw, Sparkles, X } from "lucide
 import { ReplyCode } from "./ReplyMarkdown";
 import { previewDocument, type ReplyArtifact } from "@/lib/helios/preview";
 
-export function CodeWorkspace({ artifact, busy, canUndo, onUndo, onClose, onImprove, onCreatePreview }: {
+export function CodeWorkspace({ artifact, busy, canUndo, onUndo, onClose, onImprove, onCreatePreview, fixedMode }: {
+  fixedMode?: "code" | "preview";
   artifact: ReplyArtifact;
   busy: boolean;
   canUndo: boolean;
@@ -18,7 +19,7 @@ export function CodeWorkspace({ artifact, busy, canUndo, onUndo, onClose, onImpr
   const defaultMode = artifact.previewHtml ? "preview" : "code";
   const [view, setView] = useState<{ artifactKey: string; mode: "code" | "preview" }>(
     { artifactKey, mode: defaultMode });
-  const mode = view.artifactKey === artifactKey ? view.mode : defaultMode;
+  const mode = fixedMode ?? (view.artifactKey === artifactKey ? view.mode : defaultMode);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const panel = useRef<HTMLElement>(null);
   const drag = useRef<{ pointer: number; x: number; y: number; originX: number; originY: number } | null>(null);
@@ -63,7 +64,7 @@ export function CodeWorkspace({ artifact, busy, canUndo, onUndo, onClose, onImpr
         <span><strong>Implementación</strong><small>{artifact.language || "código"} · pide cambios en el chat</small></span>
         <GripHorizontal size={15} aria-hidden="true" />
       </button>
-      <nav aria-label="Vista del trabajo">
+      {!fixedMode && <nav aria-label="Vista del trabajo">
         {canUndo && <button type="button" onClick={onUndo} title="Recuperar la versión anterior">
           <RotateCcw size={14} /> Deshacer
         </button>}
@@ -73,7 +74,7 @@ export function CodeWorkspace({ artifact, busy, canUndo, onUndo, onClose, onImpr
         <button type="button" className={mode === "preview" ? "active" : ""} onClick={() => setView({ artifactKey, mode: "preview" })}>
           <MonitorUp size={14} /> Interfaz
         </button>
-      </nav>
+      </nav>}
       <button type="button" className="code-workspace-close" onClick={onClose} aria-label="Cerrar espacio de código"><X size={19} /></button>
     </header>
     <div className="code-workspace-body">

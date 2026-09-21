@@ -5,6 +5,7 @@ import json
 import re
 from .. import hosts, notes
 from .state import Environment
+from .file_requests import explicit_directory_read, explicit_share_read
 
 
 # `ver` pedía un límite: con `ver\w*` casaba con «versión», y «la última versión
@@ -133,11 +134,15 @@ class ReferenceResolver:
         """Traduce una lectura inequívoca escrita por la persona.
 
         No clasifica una intención abierta: exige exactamente un equipo guardado
-        nombrado y una sola sección literal (diagnóstico, contenedores o espacio).
+        nombrado y una sección literal, o un mandato simple de directorios o
+        recursos compartidos reconocido por file_requests.
         Esas consultas piden estado actual, así que un resultado histórico no las
         satisface. Ejecutarlas aquí evita que el modelo responda de memoria.
         """
         equipos = self.devices_named(store, turn_id)
+        directory_read = explicit_directory_read(text, equipos) or explicit_share_read(text, equipos)
+        if directory_read:
+            return directory_read
         if not equipos and self.DEVICE_DEIXIS.search(text or ''):
             actual = store.db.execute('SELECT rowid FROM conversation WHERE id=?',
                                       (turn_id,)).fetchone()

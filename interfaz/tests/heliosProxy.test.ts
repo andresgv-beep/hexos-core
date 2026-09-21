@@ -10,3 +10,13 @@ test("maps the local chat UI origin to HexOS while retaining cross-site protecti
     assert.equal(heliosProxyOrigin(origin), origin);
   }
 });
+
+test("LAN access accepts only the explicitly configured exact origin", () => {
+  const allowed = 'http://192.168.1.41:3000';
+  assert.equal(heliosProxyOrigin(allowed, allowed), 'http://127.0.0.1:8080');
+  for (const origin of ['http://192.168.1.42:3000', 'http://192.168.1.41:3001',
+    'http://192.168.1.41:3000.evil.test', 'null', undefined])
+    assert.equal(heliosProxyOrigin(origin, allowed), origin);
+  assert.equal(heliosProxyOrigin(allowed, '*'), allowed);
+  assert.equal(heliosProxyOrigin(allowed, allowed + '/path'), allowed);
+});

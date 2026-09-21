@@ -90,6 +90,13 @@ class ReplyPolicy:
             if herramienta in llamadas:
                 continue
             encontrada = patron.search(reply)
+            if encontrada and herramienta == 'note.show':
+                # Mostrar resultados en la respuesta no abre una nota en la UI.
+                # El verbo solo no identifica el objeto de la acción.
+                objeto = reply[encontrada.end():].split('\n', 1)[0].split('.', 1)[0][:120]
+                if (re.search(r'\b(?:archivos|resultados|rutas|tamaños|datos|coincidencias|carpetas)\b', objeto, re.I)
+                        and not re.search(r'\bnota\b', objeto, re.I)):
+                    continue
             # Una pregunta no es un anuncio: «¿te la abro?» pide permiso.
             if encontrada and '?' not in reply[encontrada.end():encontrada.end() + 40].split('.')[0]:
                 return encontrada.group(0), herramienta

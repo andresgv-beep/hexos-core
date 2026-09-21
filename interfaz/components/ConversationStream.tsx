@@ -48,7 +48,7 @@ export function ConversationStream({ turn, onReplyComplete, onImproveCode, onPre
   </section>;
 }
 
-function TurnoVisible({ turn, saliendo, onReplyComplete, onImproveCode, onPreviewCode }:
+export function TurnoVisible({ turn, saliendo, onReplyComplete, onImproveCode, onPreviewCode }:
   { turn: Turn; saliendo?: boolean; onReplyComplete?: (id: number) => void } & CodeActions) {
   return <article className={`stream-turn${saliendo ? " leaving" : ""}`} aria-hidden={saliendo || undefined}>
     <p className="stream-question"><span className="message-author">TÚ</span>{turn.text}</p>

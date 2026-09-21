@@ -319,6 +319,13 @@ class AnuncioSinLlamadaTest(unittest.TestCase):
     def test_si_la_llamó_no_se_le_reprocha(self):
         self.assertIsNone(self.mirar('Te muestro la nota.', [dict(tool='note.show')]))
 
+    def test_mostrar_resultados_no_abre_una_nota(self):
+        for text in ('Te muestro los cinco archivos más grandes de cada NAS.',
+                     'He mostrado los resultados de la búsqueda.',
+                     'Te enseño las carpetas encontradas:'):
+            self.assertIsNone(self.mirar(text, [dict(tool='nas.find')]))
+        self.assertEqual(self.mirar('Te muestro la nota con los resultados.')[1], 'note.show')
+
     def test_pedir_permiso_no_es_anunciar(self):
         for texto in ('¿Te la abro?', '¿Quieres que te muestre la nota?'):
             with self.subTest(texto):

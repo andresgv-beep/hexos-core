@@ -11,6 +11,9 @@ from .recovery import RecoveryController, RETRY
 from .settings import MAX_INPUT, IMAGEN_SIN_TEXTO, MAX_TURN_ITERATIONS
 from .state import TurnState
 from .tools import ToolExecutor
+from .listing_followups import listing_followup
+from .file_responses import file_listing_reply
+from .settings import MAX_TRACE_EVENTS
 
 if TYPE_CHECKING:
     from .agent import Agent
@@ -52,7 +55,10 @@ class TurnRunner:
                 # es una lectura inequívoca y pide estado actual. No se permite
                 # que el modelo la responda reutilizando un resultado histórico.
                 if initial_tool is None:
-                    initial_tool = self.agent.explicit_read(store, turn.uid, turn.text)
+                    initial_tool = listing_followup(store, turn.uid, turn.text)
+                    turn.listing_followup = initial_tool is not None
+                    if initial_tool is None:
+                        initial_tool = self.agent.explicit_read(store, turn.uid, turn.text)
                 # Reanudar tras el modal no vuelve a preguntar al modelo qué
                 # quería hacer: ejecuta la operación que abrió ese modal. El
                 # resultado sí vuelve al modelo para que lo interprete.
@@ -65,6 +71,21 @@ class TurnRunner:
                         self.agent.runtime.begin_tool(turn.messages, initial_tool)
                         turn.messages = []
                     self.executor.execute(store, turn, initial_tool)
+                if turn.listing_followup:
+                    while len(turn.trace) < MAX_TRACE_EVENTS:
+                        page = turn.trace[-1].get('result') or {}
+                        if 'error' in page or page.get('next_offset') is None or not page.get('snapshot_id'):
+                            break
+                        call = dict(tool='nas.directory_page', arguments=dict(
+                            snapshot_id=page['snapshot_id'], offset=page['next_offset'], limit=100))
+                        self.agent.check_cancelled()
+                        if hasattr(self.agent.runtime, 'begin_tool'):
+                            self.agent.runtime.begin_tool(turn.messages, call)
+                            turn.messages = []
+                        self.executor.execute(store, turn, call)
+                    reply = file_listing_reply(turn.text, turn.trace, continuation=True)
+                    if reply is not None:
+                        return self.finalizer.finish(store, turn, dict(reply=reply, work=None), None)
                 for _ in range(MAX_TURN_ITERATIONS):
                     self.agent.check_cancelled()
                     output = self.recovery.generate(store, turn)

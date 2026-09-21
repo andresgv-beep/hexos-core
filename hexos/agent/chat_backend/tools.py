@@ -12,6 +12,7 @@ from ..work import now
 from .state import Environment, SessionState, TurnState
 from .settings import MAX_TRACE_EVENTS
 from .ledger import completed_call, completed_registration
+from .file_requests import validate_file_request
 
 if TYPE_CHECKING:
     from .agent import Agent
@@ -27,9 +28,17 @@ class ToolDispatcher:
 
     def dispatch(self, store, name, args, *, turn_id=None):
         catalog.validate(name, args)
+        if turn_id and name in ('nas.find', 'nas.search', 'nas.directories'):
+            request = store.db.execute("SELECT text FROM conversation WHERE id=? AND role='user'",
+                                       (turn_id,)).fetchone()
+            if request:
+                validate_file_request(request['text'], name, args)
         if name == 'profile.remember':
             return self.memory.remember_fact(store, args, turn_id)
-        if name in ('nas.read', 'nas.container', 'device.connect'):
+        if name in ('nas.search', 'nas.locations', 'nas.directory_page'):
+            return self.env.dependencies.nas_files(self.env.workspace, operation=name.split('.')[1], **args)
+        if name in ('nas.read', 'nas.container', 'device.connect', 'nas.browse', 'nas.index', 'nas.find',
+                    'nas.directories', 'nas.shares'):
             if not args.get('device'):
                 # El modelo omite a veces el equipo aunque la persona lo haya nombrado.
                 # No se adivina: se lee su mensaje y solo vale si UNO de los guardados
@@ -63,7 +72,11 @@ class ToolDispatcher:
             extra = ({'section':'container'} if name == 'nas.container' else
                      {'section':'system'} if name == 'device.connect' else {})
             try:
-                salida = self.env.dependencies.nas_read(self.env.workspace, **extra, **args)
+                if name in ('nas.browse', 'nas.index', 'nas.find', 'nas.directories', 'nas.shares'):
+                    salida = self.env.dependencies.nas_files(self.env.workspace,
+                                                             operation=name.split('.')[1], **args)
+                else:
+                    salida = self.env.dependencies.nas_read(self.env.workspace, **extra, **args)
                 if objetivo:
                     estado = (salida.get('container_state') or {}).get('status')
                     if name == 'nas.container' and salida.get('outcome') == 'desconocido':
@@ -220,6 +233,8 @@ class ToolExecutor:
             # generación entera en cada paso para redactar «voy a mirarlo»
             # cuesta más que el paso mismo; si el modelo no dice nada por su
             # cuenta, la herramienta que corre ya se ve en la traza.
+            if turn.listing_followup and primera:
+                preamble = 'Recupero todas las páginas del listado anterior, conservando la carpeta y la búsqueda.'
             if not preamble and primera and hasattr(self.agent.runtime,'announce'):
                 preamble=self.agent.runtime.announce(output['tool'],output['arguments'],turn.text)
                 generation=getattr(self.agent.runtime,'last_announcement_generation',None)

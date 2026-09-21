@@ -9,6 +9,7 @@ from .. import core, notes, catalog
 from ..work import strict_json, string
 from .images import decode_image
 from .settings import MAX_INPUT
+from .history_archive import history_page
 
 
 def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, native_template=False):
@@ -70,6 +71,15 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                 with agent.store() as store:
                     jobs = [json.loads(r['body']) for r in store.db.execute('SELECT body FROM jobs ORDER BY rowid DESC LIMIT 100')]
                 self.respond(200, jobs)
+            elif self.path.startswith('/api/history?'):
+                query = parse_qs(urlparse(self.path).query)
+                try:
+                    with agent.store() as store:
+                        page = history_page(store, limit=int(query.get('limit', ['100'])[0]),
+                            before=int(query['before'][0]) if 'before' in query else None)
+                    self.respond(200, page)
+                except ValueError as exc:
+                    self.respond(400, {'error': str(exc)})
             elif self.path == '/api/history':
                 with agent.store() as store:
                     rows = [dict(r) for r in store.db.execute('SELECT * FROM conversation ORDER BY rowid DESC LIMIT 100')][::-1]

@@ -47,6 +47,7 @@ export default defineConfig(async () => {
 
   return {
     server: {
+      host: process.env.HELIOS_UI_HOST || "127.0.0.1",
       ...(isCodexSeatbeltSandbox ? { watch: { useFsEvents: false, usePolling: true } } : {}),
       // Local interface only: forward the existing contract to the running agent.
       proxy: {

@@ -58,7 +58,15 @@ def checkpoint_messages(trace, budget=6500):
     remaining = budget
     for index, step in enumerate(trace):
         left = max(1, len(trace) - index)
-        result = compact(step.get('result'), max(500, min(4000, remaining // left)))
+        source = step.get('result')
+        if step.get('tool') in ('nas.find', 'nas.search') and isinstance(source, dict) and source.get('scan_id'):
+            # Un checkpoint de catálogo es una referencia consultable. Conservar
+            # filtros y desplazamiento evita repetir la primera página grande.
+            source = {key: source[key] for key in ('headline','scan_id','device','observed_at','complete',
+                      'total_matches','filters','offset','next_offset','returned_count') if key in source}
+            source['note'] = ('Página ya obtenida. nas.search recupera los archivos con scan_id y filters; '
+                              'para continuar usa next_offset como offset. limit=5 da detalle acotado.')
+        result = compact(source, max(500, min(4000, remaining // left)))
         alias = step['tool'].replace('.', '_')
         message = {
             'role': 'assistant',

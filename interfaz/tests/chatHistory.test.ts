@@ -25,3 +25,13 @@ test("history keeps generated code outside the conversation and can reopen it", 
   assert.match(html, /Abrir implementación/);
   assert.doesNotMatch(html, /SecretPanel|class="reply-code"/);
 });
+
+test('older archive remains reachable beyond the initial page', () => {
+  const html = renderToStaticMarkup(createElement(ChatHistory, {
+    previous: [{ role: 'user', text: 'Mensaje reciente' }], messages: [],
+    historyError: '', hasEarlier: true, olderLoading: false,
+    async onLoadEarlier() {}, onClose() {}, onOpenArtifact() {},
+  }));
+  assert.match(html, /Cargar mensajes anteriores/);
+  assert.match(html, /Mensaje reciente/);
+});

@@ -53,8 +53,10 @@ class RecoveryController:
             # quedaba colgado: la ventana mide la conversación, pero el
             # resultado de una herramienta entra a mitad de turno y no
             # cuenta para ese presupuesto. Se corta de verdad —KV incluido—
-            # y se reintenta una vez desde limpio.
-            if 'context_full' not in str(exc) or turn.retries.context_retries:
+            # y se reconstruye desde operaciones registradas. Puede recuperarse
+            # de nuevo si avanzó la traza; nunca insiste sin avance ni más de 3 veces.
+            if ('context_full' not in str(exc) or turn.retries.context_retries >= 3 or
+                    (turn.retries.context_retries and len(turn.trace) <= turn.checkpointed_steps)):
                 raise
             turn.retries.context_retries += 1
             turn.checkpointed_steps = len(turn.trace)
@@ -71,9 +73,10 @@ class RecoveryController:
                                     reason='context_full')
             turn.history = []
             if turn.native:
-                turn.metadata += self.agent.context.handoff_text(turn.handoff)
-                turn.messages = native_messages([], turn.metadata, turn.prompt_text, {},
-                                           turn.memory_evidence, budget=turn.budget)
+                # Recuperar el encargo y sus operaciones, no reinyectar perfil,
+                # recuerdos y traspasos acumulados que llenaron la ventana.
+                turn.messages = native_messages([], '', turn.prompt_text, {},
+                                           [], budget=turn.budget)
                 # Lo ya ejecutado vuelve como llamadas y respuestas nativas. Un
                 # resumen en prosa no conserva causalidad y permitió que el modelo
                 # registrara y diagnosticara el mismo equipo dos veces.
@@ -152,7 +155,11 @@ class RecoveryController:
             turn.messages = [dict(role='user', content=
                 'AVISO DE HEXOS (no es la persona): en este turno falta por leer ' +
                 pendiente + '. Un resumen que lo dé por revisado sería falso. Léelo ahora '
-                'con nas_read. Si no puedes con alguno, dilo nombrándolo y di por qué. '
+                'con la herramienta que corresponda a la petición original: nas_find para buscar '
+                'archivos, nas_directories para buscar carpetas, nas_shares para listar compartidas, '
+                'nas_browse para listar una carpeta, nas_read para diagnóstico o estado. '
+                'Conserva los filtros pedidos; no sustituyas buscar archivos por consultar espacio libre. '
+                'Si no puedes con alguno, dilo nombrándolo y di por qué. '
                 'Queda un intento.')]
             return True
         # «Dijo que lo hacía y no lo hizo», en tres vistas de lo mismo:

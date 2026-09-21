@@ -307,3 +307,19 @@ test('closing every note is said once, not by listing them all', async () => {
   // La fallida no cuenta: cerrar una ventana que sigue ahí confunde más que el error.
   assert.deepEqual((await createHexosTransport('/bridge/api/', una).send('cierra esa')).closeNotes, ['abc']);
 });
+
+test('history pages preserve the earlier cursor and validate the response', async () => {
+  const urls: string[] = [];
+  const fetcher = (async (url) => {
+    urls.push(String(url));
+    return Response.json({ messages: [{ id: 'old', role: 'user', text: 'Anterior' }], next_before: 40 });
+  }) as typeof fetch;
+  const transport = createHexosTransport('/api', fetcher);
+  assert.deepEqual(await transport.historyPage?.(100), {
+    messages: [{ role: 'user', text: 'Anterior' }], nextBefore: 40,
+  });
+  assert.deepEqual(urls, ['/api/history?limit=100&before=100']);
+  for (const data of [ { messages: [], next_before: -1 }, { messages: [{ role: 'system', text: 'x' }], next_before: null } ]) {
+    await assert.rejects(createHexosTransport('/api', fixture(data)).historyPage!(), /historial/);
+  }
+});

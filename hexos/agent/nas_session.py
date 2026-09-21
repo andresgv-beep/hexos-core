@@ -586,6 +586,15 @@ def execute(workspace, device, section, disk=None, container=None, action=None):
                     storage=storage, kernel=kernel, smart=smart,
                     note='Lecturas correlacionadas automáticamente. Errores SMART o ausencia de datos no equivalen a salud. '
                          'section=smart da el detalle de un disco. No se ejecutan tests ni reparaciones.')
+    return execute_remote(workspace, device, remote, section, disk, container, action)
+
+
+def execute_remote(workspace, device, remote, section, disk=None, container=None, action=None,
+                   *, elevated=True, max_output=18000, payload_marker=None):
+    """Transporte compartido; solo los adaptadores internos construyen `remote`.
+
+    No se expone como herramienta. El explorador usa el usuario SSH sin sudo.
+    """
     located = hosts.resolve(workspace, device)
     account = hosts.credentials(workspace, device)
     if not account:
@@ -607,8 +616,9 @@ def execute(workspace, device, section, disk=None, container=None, action=None):
                 '-o', 'ConnectTimeout=5', '-o', 'NumberOfPasswordPrompts=1',
                 '-o', 'PubkeyAuthentication=no', '-o', 'ForwardAgent=no', '-o', 'ClearAllForwardings=yes',
                 '-p', str(puerto), account['user'] + '@' + ruta['host'],
-                "sudo -p '__HEXOS_SUDO__:' /bin/sh -c " + quoted]
-        resultado = _ssh(argv, password, device, ruta, puerto, section, disk, container, action)
+                ("sudo -p '__HEXOS_SUDO__:' /bin/sh -c " if elevated else '/bin/sh -c ') + quoted]
+        resultado = _ssh(argv, password, device, ruta, puerto, section, disk, container, action,
+                         max_output=max_output, payload_marker=payload_marker)
         intentos.append(dict(host=ruta['host'], port=puerto, pinned=ruta.get('pinned', False),
                              unreachable=resultado.pop('_unreachable')))
         # Solo se pasa a la siguiente si NO se llegó al equipo. Un error de dentro
@@ -622,10 +632,12 @@ def execute(workspace, device, section, disk=None, container=None, action=None):
     raise ValueError('No se pudo alcanzar ' + repr(device) + ' por ninguna de sus direcciones')
 
 
-def _ssh(argv, password, device, located, port, section, disk, container, action):
+def _ssh(argv, password, device, located, port, section, disk, container, action, *, max_output=18000,
+         payload_marker=None):
     """Una conexión y su lectura. `_unreachable` dice si ni siquiera se llegó."""
     import pexpect
-    proc = pexpect.spawn('/usr/bin/ssh', argv, encoding='utf-8', codec_errors='replace', timeout=40)
+    proc = pexpect.spawn('/usr/bin/ssh', argv, encoding='utf-8', codec_errors='replace', timeout=40,
+                         searchwindowsize=4096)
     output = []; prompts = 0; timeout = False; deadline = time.monotonic() + 45
     try:
         while True:
@@ -644,7 +656,15 @@ def _ssh(argv, password, device, located, port, section, disk, container, action
                 timeout = True; break
     finally:
         proc.close(force=True)
-    text = ''.join(output).replace(password, '[credencial omitida]')
+    text = ''.join(output)
+    if payload_marker:
+        # El payload base64 solo contiene metadatos del lector. Redactar una
+        # coincidencia accidental con la clave lo corrompería. Nunca se expone
+        # el resto de esta salida desde el adaptador de archivos.
+        text = '\n'.join(line if line.startswith(payload_marker) else
+                         line.replace(password, '[credencial omitida]') for line in text.splitlines())
+    else:
+        text = text.replace(password, '[credencial omitida]')
     # Ni se llegó al equipo: eso sí justifica probar otra dirección suya.
     inalcanzable = bool(re.search(
         r'No route to host|Connection refused|Connection timed out|Network is unreachable|'
@@ -659,7 +679,7 @@ def _ssh(argv, password, device, located, port, section, disk, container, action
     return dict(target=device, host=located['host'], port=port, observed_at=now(), section=section,
                 disk=disk, container=container, action=action, _unreachable=inalcanzable,
                 exit_code=proc.exitstatus, timed_out=timeout,
-                output=text[-18000:], truncated=len(text) > 18000,
+                output=text[-max_output:], truncated=len(text) > max_output,
                 note='Lectura real SSH con la credencial guardada. '
                      'Errores, permisos o salida vacía no prueban salud.')
 

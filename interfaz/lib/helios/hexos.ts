@@ -9,6 +9,7 @@ export interface Closure { reason: string; note: string; unverified: { tool: str
 export interface ChatReply { reply: string; tools: ToolActivity[]; notes: string[]; closeNotes: string[] | "todas" | null; document?: unknown; contextCut?: ContextCut; closure?: Closure; cancelled?: boolean }
 export interface Generation { requestId: string; phase: string; text: string; processed: number; total: number; cancellable: boolean; cancelling: boolean }
 export interface HistoryMessage { role: "user" | "assistant"; text: string }
+export interface HistoryPage { messages: HistoryMessage[]; nextBefore: number | null }
 /** Lo que Helios dice que va a hacer, antes de hacerlo. Lo escribe el modelo, no
  *  HexOS, y llega a mitad de turno: por eso viaja aparte de la respuesta. */
 export interface Progress { turnId: string | null; messages: { id: string; text: string }[] }
@@ -81,6 +82,7 @@ export interface HeliosTransport {
   /** Avisa a HexOS al empezar a escribir. Inicia la carga, pero no bloquea la UI. */
   warmup(signal?: AbortSignal): Promise<"unloaded" | "loading" | "ready" | "unloading" | "error" | "closed">;
   history(signal?: AbortSignal): Promise<HistoryMessage[]>;
+  historyPage?(before?: number, signal?: AbortSignal): Promise<HistoryPage>;
   /** `image` es base64 de PNG/JPEG/WebP, sin la cabecera `data:`. Una por turno. */
   /** `thinking` abre el canal solo durante este turno; no cambia la preferencia AUTO. */
   send(text: string, signal?: AbortSignal, image?: string, thinking?: boolean, displayText?: string, requestId?: string): Promise<ChatReply>;
@@ -165,6 +167,14 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
       const data = await request("history", { signal });
       if (!Array.isArray(data) || !data.every(row => row && (row.role === "user" || row.role === "assistant") && typeof row.text === "string")) throw new Error("Historial de HexOS no válido");
       return data.map(({ role, text }) => ({ role, text }));
+    },
+    async historyPage(before, signal) {
+      const data = await request(`history?limit=100${before === undefined ? "" : `&before=${before}`}`, { signal });
+      if (!isRecord(data) || !Array.isArray(data.messages) ||
+          !data.messages.every(row => isRecord(row) && (row.role === "user" || row.role === "assistant") && typeof row.text === "string") ||
+          !(data.next_before === null || (Number.isSafeInteger(data.next_before) && Number(data.next_before) > 0)))
+        throw new Error("Página de historial de HexOS no válida");
+      return { messages: data.messages.map(({ role, text }) => ({ role, text })), nextBefore: data.next_before as number | null };
     },
     async cancel(requestId) {
       const data = await request("cancel", { method: "POST", headers: { "Content-Type": "application/json" },

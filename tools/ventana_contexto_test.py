@@ -322,6 +322,23 @@ class CheckpointDentroDelTurnoTest(unittest.TestCase):
         self.assertIn('nas_read', rendered)
         self.assertIn('Diagnóstico obtenido', rendered)
 
+    def test_recupera_otro_desbordamiento_solo_si_hay_avance(self):
+        self.runtime.decisions = [
+            {'tool':'nas.read', 'arguments':{'device':'nas', 'section':'system'}},
+            RuntimeError('context_full'),
+            {'tool':'nas.read', 'arguments':{'device':'nas', 'section':'space'}},
+            RuntimeError('context_full'),
+            {'reply':'Las dos lecturas están disponibles.', 'work':None},
+        ]
+        result = self.agent.chat('Consulta sistema y espacio del equipo nas')
+        self.assertEqual(self.reads, 2)
+        self.assertEqual(result['diagnostics']['context_retries'], 2)
+
+    def test_no_reintenta_indefinidamente_sin_avance(self):
+        self.runtime.decisions = [RuntimeError('context_full'), RuntimeError('context_full')]
+        with self.assertRaisesRegex(RuntimeError, 'context_full'):
+            self.agent.chat('hola')
+
     def test_una_lectura_anterior_a_una_escritura_no_se_reutiliza(self):
         turn = TurnState(text='comprueba de nuevo', checkpointed_steps=2, trace=[
             dict(tool='nas.read', arguments={'device':'nas','section':'containers'},

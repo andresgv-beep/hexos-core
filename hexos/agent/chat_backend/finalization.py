@@ -10,6 +10,7 @@ from .completion import FUGA_AVISO
 from .references import PEDIR_CERRAR, PEDIR_VER, NOTA_MENCIONADA
 from .recovery import RETRY
 from .state import TurnState
+from .file_responses import file_listing_reply
 
 if TYPE_CHECKING:
     from .agent import Agent
@@ -48,6 +49,9 @@ class TurnFinalizer:
         return job
 
     def finish(self, store, turn: TurnState, output: dict, job) -> dict:
+        listing = file_listing_reply(turn.text, turn.trace, continuation=turn.listing_followup)
+        if listing is not None:
+            output['reply'] = listing
         # Señaló una nota, HexOS la resolvió, y el modelo respondió sin
         # abrirla —preguntando a cuál se refería, con el id delante—. No hay
         # nada que insistirle: no afirmó nada. Así que la abre HexOS y lo
@@ -131,6 +135,10 @@ class TurnFinalizer:
         # El siguiente bloque ya tiene este turno archivado: el traspaso solo
         # existe para cruzar el corte o sobrevivir a un reinicio a mitad de turno.
         self.agent.context.consume_handoff(store, turn.handoff)
+        if listing is not None:
+            # La respuesta visible es la vista estructurada, no el borrador del
+            # modelo. Reconstruir desde el archivo mantiene ambos diálogos iguales.
+            self.agent.runtime.call({'type': 'reset'})
         corte_avisado, self.agent.context_cut = self.agent.context_cut, None
         return dict(reply=output['reply'], work=job, document=turn.document, tools=turn.trace, context_sources=turn.context_sources, progress=self.agent.progress,
             context_cut=corte_avisado, closure=self.agent.closure(turn.trace, output['reply']),

@@ -16,6 +16,10 @@ de enero que decía «motor inexistente»; aquel corte se conserva en
 | Verificación | Comprobación de informes/perfil/acciones declaradas y efectos desconocidos persistidos; no certifica todo objetivo arbitrario | [verification.py](hexos/agent/chat_backend/verification.py) |
 | Notas/documentos/informes | Persistencia, recuperación, revisiones de notas y paneles de interfaz | [notes.py](hexos/agent/notes.py), [TRABAJOS](docs/TRABAJOS.md) |
 | Dispositivos, NAS y SSH | Lecturas y acciones acotadas del catálogo con acceso configurado; no shell arbitraria del modelo | [inventario](docs/INVENTARIO_DISPOSITIVOS.md), [diagnóstico](docs/SSH_SYNOLOGY_DIAGNOSTICO.md) |
+| Contenido NAS (2026-09-20) | Memoria local de directorios, navegación y buscador recursivo por extensiones, tamaños opcionales y páginas acotadas. Lecturas reales en ambos Synology; cobertura parcial donde faltan permisos. HandBrake no conectado | [arquitectura y límites](docs/NAS_CONTENIDO.md) |
+| Base de archivos (2026-09-20) | Servicio con lector y repositorio inyectados; SSH, SQLite, validación y presentación separados. Compatibilidad con herramientas y catálogos existentes. Sincronización automática, lectura documental y pines pendientes | [contratos y etapas](docs/FILE_CATALOG_ARCHITECTURE.md) |
+| Carpetas y recursos compartidos (2026-09-20) | Búsqueda actual de directorios incluidos vacíos; listado SMB configurado en Synology con acceso SSH separado; protección de nombres literales explícitos ante sustituciones del historial | [contrato NAS](docs/NAS_CONTENIDO.md) |
+| Continuidad de listados e historial (2026-09-20) | «Muéstrame todas» retoma consultas recientes de directorios con páginas locales; historial visual paginado más allá de 100 mensajes. Reproducción real: 39 carpetas de Compartido y 1.726 mensajes recuperados | [evidencia y límites](docs/NAS_CONTENIDO.md) |
 | Web pública | Búsqueda y lectura con límites de red/contenido | [WEB_PUBLICA](docs/WEB_PUBLICA.md) |
 | Perfil HERA | Lectura, extracción de afirmaciones, guardado/corrección y relectura si se configura HERA | [memoria](hexos/agent/chat_backend/memory.py) |
 | Contexto largo | Reutilización nativa, umbral por ocupación KV, archivo y traspaso literal al reconstruir | [context.py](hexos/agent/chat_backend/context.py) |
@@ -68,6 +72,21 @@ Multichat, modelos especialistas y reflexión en segundo plano pertenecen a
 rutas históricas o alcance aparcado, no a una obligación pendiente de este producto.
 
 ## Evidencia y mantenimiento
+
+### Punto de partida para comparar con el 12B — 2026-09-21
+
+Se conserva la implementación actual con catálogo NAS modular, continuaciones de
+listados, historial visual paginado y primera vista móvil. Validación del punto
+de partida: 241 pruebas de backend, 78 de interfaz y comprobación TypeScript.
+Las pruebas conversacionales NAS de esta entrega se hicieron con el E4B; no
+certifican que ese modelo pueda coordinar de forma fiable todos los casos.
+
+Pendiente: repetir en la otra máquina con el 12B las mismas conversaciones y
+herramientas, registrando modelo, contexto, llamadas, nombres y filtros, cobertura,
+latencia y necesidad de aclaraciones. Separar los resultados resueltos por código
+sin inferencia de los que requieren interpretación del modelo. Este punto de
+partida no cambia el modelo de arranque ni incluye pesos, credenciales o bases
+locales de conversación.
 
 Última integración: 72 pruebas de interfaz, tipos, build/render, contratos Python,
 12B real con cancelación/continuación y herramienta, E4B real con imagen y sesión

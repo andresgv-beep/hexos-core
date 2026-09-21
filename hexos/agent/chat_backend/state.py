@@ -23,6 +23,14 @@ def default_web_search(query, limit=5):
     return search(query, limit=limit)
 
 
+def default_nas_files(workspace, *, operation, **kwargs):
+    from .. import nas_files
+    return {'browse': nas_files.browse, 'index': nas_files.index,
+            'search': nas_files.search, 'find': nas_files.find,
+            'locations': nas_files.locations, 'directories': nas_files.directories,
+            'shares': nas_files.shares, 'directory_page': nas_files.directory_page}[operation](workspace, **kwargs)
+
+
 def default_web_read(url):
     from ..web import read
     return read(url)
@@ -38,6 +46,7 @@ class AgentDependencies:
     nas_read: Callable[..., Any] = default_nas_read
     web_search: Callable[..., Any] = default_web_search
     web_read: Callable[..., Any] = default_web_read
+    nas_files: Callable[..., Any] = default_nas_files
 
 
 @dataclass
@@ -85,6 +94,7 @@ class TurnState:
     document: dict | None = None
     prompt_text: str = ''
     pointed_note: dict | None = None
+    listing_followup: bool = False
     native: bool = False
     budget: int = 0
     boundary: int = 0
