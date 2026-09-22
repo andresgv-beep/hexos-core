@@ -74,9 +74,14 @@ El 2026-09-21 se documentó un diseño acotado de
 [tareas internas con contextos aislados](docs/INTERNAL_TASKS_ARCHITECTURE.md),
 con [HandBrake como primer caso](docs/HANDBRAKE_TASKS_PLAN.md): lotes de 1–5
 películas, ejecución secuencial, supervisor sin LLM y prioridad del chat.
-**Solo documentación e inspección de la instalación; no hay todavía cola,
-worker, turnos internos ni reparto entre GPU implementados.** Primer hito:
-repositorio, transiciones y planificador con reloj y HandBrake simulados.
+**Actualización 2026-09-22:** [base de tareas multimedia](docs/MEDIA_JOBS_FOUNDATION.md)
+con SQLite, fichas secuenciales, vencimientos, recuperación y adaptadores simulados;
+consultas `media.jobs`/`media.job` conectadas a Helios. Contratos de contexto aislado
+probados con sesiones ficticias. 332 pruebas pasan; demo de cinco fichas completada.
+No hay aún adaptador de archivos/HandBrake real, daemon instalado, panel de tareas,
+inferencia interna conectada al chat ni reparto entre GPU. Los recibos del simulador
+no acreditan películas comprimidas. Siguiente hito: transporte remoto durable y
+verificador para una película real.
 
 ## Evidencia y mantenimiento
 

@@ -32,6 +32,10 @@ def spec(description, required=None, optional=None, effect='read', verify=None, 
 
 
 TOOLS = {
+    'media.jobs': spec('Consultar lotes de compresión registrados. No crea ni inicia tareas. '
+                       'simulation es una prueba, nunca una película realmente comprimida.'),
+    'media.job': spec('Consultar estado, progreso y destino de una ficha multimedia por id. '
+                      'No ejecutar ni reintentar conversiones; distingue simulation de live.', {'id':'str'}),
     'nas.file_open': spec('Abrir y traer una copia verificada de un archivo encontrado en el NAS (hasta 8 MiB). '
                          'scan_id y path deben proceder de nas.find o nas.search. El equipo se obtiene del catálogo. '
                          'Devuelve file_id para nas.file_read y abre visor con descarga en la interfaz. '

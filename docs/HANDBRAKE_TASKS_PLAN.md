@@ -1,6 +1,8 @@
 # Tareas de compresión: contrato propuesto
 
-Estado: diseño e inspección de lectura completados; ejecución e interfaz pendientes.
+Estado 2026-09-22: diseño e inspección completados; base de tareas implementada
+con simulador. Ejecución NAS e interfaz de control pendientes.
+[Implementación, pruebas y límites](MEDIA_JOBS_FOUNDATION.md).
 No se han copiado películas ni iniciado conversiones con este trabajo.
 
 Actualizado con las decisiones de la conversación del 2026-09-21.

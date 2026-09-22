@@ -1,6 +1,8 @@
 # Tareas internas y contextos aislados
 
-Decisiones de diseño del 2026-09-21. **Propuesto, no implementado.**
+Decisiones de diseño del 2026-09-21. Actualización 2026-09-22: **base modular
+implementada y probada con simulador**, contratos de inferencia sin conexión al
+runtime real. [Estado y límites de la entrega](MEDIA_JOBS_FOUNDATION.md).
 Primer caso: [compresión secuencial de películas](HANDBRAKE_TASKS_PLAN.md).
 No reactiva en bloque el antiguo plan de especialistas, ni implica multichat
 visible, voz disponible o inferencia simultánea en el runtime actual.
