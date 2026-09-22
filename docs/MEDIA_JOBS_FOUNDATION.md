@@ -1,9 +1,9 @@
 # Base ejecutable de tareas multimedia
 
 Entrega 2026-09-22, rama `codex/handbrake-task-foundation`, basada en `a07a486`.
-**Base con simulador y adaptador de encoder real probado con vídeo sintético.
-La cola completa y la inferencia interna aún no están conectadas a ejecución
-real desde el chat.** No incorpora la rama `frenos-y-silencios`.
+**Recorrido de archivos y encoder real probado con vídeo sintético en el NAS.
+El disparador de inferencia interna y el lanzamiento desde el chat aún no están
+conectados.** No incorpora la rama `frenos-y-silencios`.
 
 ## Qué funciona
 
@@ -44,6 +44,13 @@ real desde el chat.** No incorpora la rama `frenos-y-silencios`.
 | `hexos/agent/media_jobs/nas_encoder.py` | Transporte SSH y adaptador real opt-in |
 | `hexos/agent/media_jobs/remote/encoder_control.py` | Recibos, exclusión de lanzamiento y reconciliación remota |
 | `hexos/agent/media_jobs/remote/encoder_worker.py` | Proceso independiente, JSON de progreso y parada propia |
+| `hexos/agent/media_jobs/nas_files_adapter.py` | Configuración de archivos y actualización puntual del catálogo |
+| `hexos/agent/media_jobs/nas_files_transport.py` | Despliegue versionado y llamadas SSH cortas |
+| `hexos/agent/media_jobs/remote/file_control.py` | Intenciones, exclusión y cancelación de workers de archivos |
+| `hexos/agent/media_jobs/remote/file_worker.py` | Ejecución de una acción, progreso y recibo final |
+| `hexos/agent/media_jobs/remote/file_common.py` | Copia, hash, identidad y apertura sin seguir enlaces |
+| `hexos/agent/media_jobs/remote/file_operations.py` | Copiar, verificar, publicar y observar el destino |
+| `hexos/agent/media_jobs/remote/file_media.py` | FFprobe, reglas de pistas/duración y decodificación completa |
 | `hexos/agent/internal_tasks/requests.py` | Construcción y validación de decisiones |
 | `hexos/agent/internal_tasks/resources.py` | Slot de inferencia compartido con prioridad del chat |
 | `hexos/agent/internal_tasks/executor.py` | Sesión aislada inyectada por intervención |
@@ -131,17 +138,19 @@ competencia, cancelación durante arranque, huecos en evidencia, salida inválid
 reintentos limitados, trabajo ajeno impidiendo reinicio, conflicto de destinos,
 selección ajena al catálogo y propuesta interna obsoleta.
 
-La entrega posterior del encoder real se documenta en
-[`HANDBRAKE_ENCODER_VALIDATION.md`](HANDBRAKE_ENCODER_VALIDATION.md). La prueba
-sintética incluye transferencia y decodificación, pero no acredita el adaptador
-de copia de películas grandes, su publicación, aislamiento CUDA, cambio de modelo,
+El encoder real se documenta en
+[`HANDBRAKE_ENCODER_VALIDATION.md`](HANDBRAKE_ENCODER_VALIDATION.md). El recorrido
+posterior completo, con 313 pruebas locales y prueba sintética NAS, está en
+[`HANDBRAKE_FILES_VALIDATION.md`](HANDBRAKE_FILES_VALIDATION.md). No acredita aún
+copias de decenas de GB, despertar del e4b, aislamiento CUDA, cambio de modelo,
 calidad visual ni compatibilidad de reproducción en dispositivos del usuario.
 
 ## Siguiente entrega concreta
 
-El adaptador NAS/HandBrake ya tiene recibos y una prueba real con el preset completo
-`jellyfin/Fast 1080p30`. Implementar ahora el adaptador de archivos: copia durable,
-identidad remota, verificación y publicación sin sobrescritura. Conectar una
-película real cuando ese recorrido esté comprobado.
-Después, instalar el servicio de vencimientos y añadir API/panel de tareas.
-El runtime interno real y el reparto multi-GPU continúan como entregas posteriores.
+Conectar una cola persistente de despertares: incidencia o salida verificada abre
+un turno interno aislado. Añadir espera de decisión antes de publicar, validación
+de la propuesta y herramientas acotadas de continuación. Probar e4b en `text/0x0`
+con fichas nuevas por turno, sin mezclar el chat. El recorrido de backend actual
+publica automáticamente dentro de su arnés de pruebas: todavía no es ese circuito
+dirigido por el modelo. Instalar después el servicio de vencimientos y herramientas
+de creación/control de lotes. El reparto multi-GPU sigue siendo posterior.

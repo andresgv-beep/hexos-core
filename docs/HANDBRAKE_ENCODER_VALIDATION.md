@@ -85,6 +85,9 @@ no se ha importado la corrección independiente de la rama de Claude.
 
 ## Lo pendiente para usarlo desde Helios
 
+Actualización: el primer punto está implementado y probado con un vídeo sintético;
+ver [validación del recorrido de archivos](HANDBRAKE_FILES_VALIDATION.md).
+
 1. Adaptador de archivos con copia durable, espacio libre, identidad del origen,
    verificación de duración/pistas/decodificación y publicación sin sobrescribir.
 2. Servicio persistente de vencimientos y configuración explícita del recurso;

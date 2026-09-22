@@ -1,9 +1,9 @@
 # Tareas de compresión: contrato propuesto
 
-Estado 2026-09-22: diseño e inspección completados; base de tareas implementada
-con simulador. Ejecución NAS e interfaz de control pendientes.
+Estado 2026-09-22: base y recorrido NAS implementados y probados con un archivo
+sintético. Disparador del modelo, servicio permanente e interfaz pendientes.
 [Implementación, pruebas y límites](MEDIA_JOBS_FOUNDATION.md).
-No se han copiado películas ni iniciado conversiones con este trabajo.
+Se han convertido archivos sintéticos; no se han copiado películas de la biblioteca.
 
 Actualizado con las decisiones de la conversación del 2026-09-21.
 El contrato de contextos, recursos y separación de módulos vive en

@@ -65,6 +65,13 @@ class Runner:
             return dict(next_state, state='recovering' if stalled else 'running',
                         observation=observation, due=now if stalled else now+check_delay(sample.get('eta_seconds')))
         if state in ('recovering', 'cancel_requested'):
+            file_stop = None
+            if state == 'cancel_requested' and hasattr(self.files, 'stop') and self.files is not self.encoder:
+                file_stop = self.files.stop(job, key+':files-stop')
+                if file_stop.get('pending') is True:
+                    return dict(next_state, due=now+15, file_stop_receipt=file_stop)
+                if file_stop.get('stopped') is not True:
+                    raise SharedFailure('No consta parada de las operaciones de archivos')
             # stop debe reconciliar también un start cuyo resultado se perdió.
             stopped = self.encoder.stop(job, key+':stop')
             if stopped.get('pending') is True:
@@ -76,7 +83,7 @@ class Runner:
                 if stopped.get('stopped') is not True or stopped.get('healthy') is not True:
                     raise UncertainEffect('Reinicio o parada no comprobados')
             if state == 'cancel_requested':
-                return dict(next_state, state='cancelled', stop_receipt=stopped)
+                return dict(next_state, state='cancelled', stop_receipt=stopped, file_stop_receipt=file_stop)
             if job['attempt'] >= 1:
                 return dict(next_state, state='failed', error='Agotado el único reintento', stop_receipt=stopped)
             return dict(next_state, state='ready', attempt=job['attempt']+1,
@@ -97,6 +104,8 @@ class Runner:
             return dict(next_state, state='indexing', publication=receipt)
         if state == 'indexing':
             receipt = self.files.index(job, key)
+            if receipt.get('pending') is True:
+                return dict(next_state, due=now+120, index_progress=receipt)
             if receipt.get('indexed') is not True:
                 raise UncertainEffect('Salida publicada; falta actualizar catálogo')
             return dict(next_state, state='completed', index_receipt=receipt)

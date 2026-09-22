@@ -83,14 +83,22 @@ def locations(workspace, *, device=None, query=None, limit=20, offset=0):
     finally:
         db.close()
 
-def publish_snapshot(workspace, result, roots):
+def publish_snapshot(workspace, result, roots, *, scan_id=None):
     """Publica metadatos inmutables; conserva cobertura completa o parcial."""
     coverage = scan_coverage(result)
-    scan_id = uuid4().hex
+    scan_id = scan_id or uuid4().hex
     db = database(workspace)
     try:
         with db:
-            db.execute('INSERT INTO scans VALUES (?,?,?,?,?)',
+            existing = db.execute('SELECT * FROM scans WHERE id=?', (scan_id,)).fetchone()
+            expected = (scan_id, result['device'], result['observed_at'], json.dumps(roots), json.dumps(coverage))
+            if existing:
+                actual_items = {r['path']: dict(r) for r in db.execute('SELECT * FROM files WHERE scan_id=?', (scan_id,))}
+                expected_items = {i['path']: dict(scan_id=scan_id, **{k:i[k] for k in
+                    ('path','root','name','size_bytes','mtime_ns','filesystem_id','inode','media_kind')}) for i in result['items']}
+                if tuple(existing) != expected or actual_items != expected_items:
+                    raise ValueError('El identificador de observación pertenece a otros metadatos')
+            db.execute('INSERT OR IGNORE INTO scans VALUES (?,?,?,?,?)',
                        (scan_id, result['device'], result['observed_at'], json.dumps(roots), json.dumps(coverage)))
             directories = set(result.get('filesystems', {}))
             for item in result['items']:
@@ -101,7 +109,7 @@ def publish_snapshot(workspace, result, roots):
                            (scan_id, item['path'], item['root'], item['name'], item['size_bytes'],
                             item['mtime_ns'], item['filesystem_id'], item['inode'], item['media_kind']))
             remember_directories(db, result['device'], directories, result['observed_at'])
-            db.execute('INSERT INTO directory_imports VALUES (?)', (scan_id,))
+            db.execute('INSERT OR IGNORE INTO directory_imports VALUES (?)', (scan_id,))
         totals = [dict(row) for row in db.execute(
             'SELECT root, filesystem_id, COUNT(*) AS files, SUM(size_bytes) AS logical_bytes '
             'FROM files WHERE scan_id=? GROUP BY root, filesystem_id ORDER BY root', (scan_id,))]

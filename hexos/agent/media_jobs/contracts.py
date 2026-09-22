@@ -15,6 +15,10 @@ class UncertainEffect(Exception):
 
 
 class Files(Protocol):
+    def stop(self, job: dict, key: str) -> dict:
+        """Cancelar workers de archivos propios y confirmar que dejaron de escribir."""
+        ...
+
     def stage(self, job: dict, key: str) -> dict:
         """Revalidar origen/espacio, copiar completo fuera de watch; conservar original."""
         ...

@@ -212,6 +212,28 @@ class MediaJobsTest(unittest.TestCase):
             self.assertEqual(result['due'],self.clock()+15)
             restart.assert_not_called()
 
+    def test_cancel_waits_for_file_worker_before_completing(self):
+        from unittest.mock import Mock
+        self.until('copying');self.store.control(self.batch['id'],'cancel',self.clock())
+        files=Mock(mode='simulation')
+        files.stop.return_value=dict(pending=True,stopped=False)
+        self.runner.files=files
+        with patch.object(self.sim,'stop') as encoder_stop:
+            result=self.tick()
+            self.assertEqual(result['state'],'cancel_requested')
+            encoder_stop.assert_not_called()
+        files.stop.return_value=dict(stopped=True,effects=[])
+        self.clock.now=result['due']
+        self.assertEqual(self.tick()['state'],'cancelled')
+
+    def test_index_pending_keeps_published_task_open(self):
+        self.until('indexing')
+        with patch.object(self.sim,'index',return_value=dict(pending=True)):
+            result=self.tick()
+            self.assertEqual(result['state'],'indexing')
+            self.assertEqual(result['due'],self.clock()+120)
+        self.until('completed')
+
     def test_simulation_never_substitutes_for_live(self):
         self.runner.encoder=UnconfiguredHandBrake()
         self.assertEqual(self.tick()['state'],'blocked')
