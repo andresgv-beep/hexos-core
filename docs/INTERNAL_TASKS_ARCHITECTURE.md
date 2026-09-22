@@ -102,6 +102,12 @@ job_id; los detalles quedan disponibles bajo consulta.
 
 ## Una GPU ahora; especialistas después
 
+Acuerdo de pruebas: agente principal e intervenciones internas usan `text`
+(`0x0`), con reutilización de pesos y contextos separados. El enlace explícito
+vive en `internal_tasks/binding.py`; la fábrica de runtime debe respetarlo.
+El salto posterior a `cortex` (`0x7`) o `code` (`0x8`) puede usar otra GPU o
+alternancia descarga/carga en la misma. La cola de películas no cambia.
+
 Primero el 12B atiende chat y solicitudes internas aisladas, con un único dueño
 de la inferencia. No basta con insertar un reset en el runtime compartido: podría
 borrar el contexto del chat. Antes de habilitarlo hay que verificar sesiones

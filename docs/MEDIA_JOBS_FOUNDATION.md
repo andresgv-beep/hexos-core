@@ -95,6 +95,19 @@ actualizar el catálogo real antes de acreditar finalización.
 
 ## Contexto e inferencia: frontera actual
 
+Decisión para las pruebas: `HANDBRAKE_TRIAL_BINDING` en
+`internal_tasks/binding.py` fija dominio `text`, bloque HNF `0x0` y política
+`reuse_resident`. El ejecutor pasa ese enlace a la fábrica de sesiones; no lo
+elige el LLM ni procede del contenido de la ficha. Se reutilizarán los pesos
+del principal, con contexto interno fresco y exclusión de inferencia.
+
+Después de validar el recorrido, el adaptador podrá seleccionar `cortex` (`0x7`)
+o `code` (`0x8`). Dos políticas posibles, todavía no conectadas: residencia en
+paralelo si hay recursos, o descarga/carga serializada en la misma GPU. En este
+último caso, al volver al chat debe restaurar/reconstruir su contexto con sus
+pesos, tokenizer y execution hints correctos. No se cambia el bloque dentro del
+archivo HNF: se cambia el dominio que se selecciona para ejecutar.
+
 El ejecutor recibe una fábrica de sesiones frescas. No llama a reset sobre el
 runtime del usuario ni comparte sus mensajes. La fábrica real aún no existe:
 antes de conectarla debe demostrar aislamiento, liberación y cumplimiento de

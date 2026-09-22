@@ -39,7 +39,10 @@ class InternalTasksTest(unittest.TestCase):
     def test_fresh_session_per_request_and_cleanup_on_error(self):
         slot=InferenceSlot();opened=[];closed=[];requests=[]
         @contextmanager
-        def factory():
+        def factory(*, binding):
+            self_outer.assertEqual(binding.domain, 'text')
+            self_outer.assertEqual(binding.block_id, 0x0)
+            self_outer.assertEqual(binding.load_policy, 'reuse_resident')
             token=object();opened.append(token)
             class Session:
                 def generate(self,request,**budget):
