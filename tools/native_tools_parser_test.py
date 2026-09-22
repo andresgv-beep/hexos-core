@@ -1,4 +1,12 @@
 import unittest
+from pathlib import Path
+import sys
+
+# `native_tools_audit` es un hermano de este fichero, no parte del paquete
+# `hexos`, así que el import pelado solo resolvía ejecutando DESDE tools/. En un
+# barrido desde la raíz salía rojo estando sana, y una prueba que miente en rojo
+# es peor que ninguna: enseña a no mirar los fallos.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from native_tools_audit import parse_native
 
 
