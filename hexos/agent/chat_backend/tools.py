@@ -28,7 +28,7 @@ class ToolDispatcher:
 
     def dispatch(self, store, name, args, *, turn_id=None):
         catalog.validate(name, args)
-        if name in ('media.jobs', 'media.job'):
+        if name.startswith('media.'):
             from .media_tools import dispatch
             return dispatch(self.env.workspace, name, args)
         if turn_id and name in ('nas.find', 'nas.search', 'nas.directories'):

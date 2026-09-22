@@ -24,7 +24,10 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     for flag in ('workspace','device','config','preset-json','test-library-root','evidence-dir'):
         parser.add_argument('--'+flag,required=True)
+    parser.add_argument('--review-model', help='HNF text/0x0 para revisar realmente antes de publicar')
+    parser.add_argument('--runtime', help='helios_runtime NDJSON; requerido con --review-model')
     args=parser.parse_args()
+    if args.review_model and not args.runtime:parser.error('--review-model requiere --runtime')
     config=json.loads(Path(args.config).read_text())
     preset=json.loads(Path(args.preset_json).read_text())
     root=str(Path(args.test_library_root)/('smoke-'+uuid4().hex))
@@ -53,15 +56,32 @@ def main():
     clock=[time.time()]
     runner=Runner(store,files,encoder,lambda:clock[0])
     batch=store.create([dict(device=args.device,path=source,library_root=root,kind='movie',identity=observed)],
-                       freeze('user-rf19-smoke',preset['preset']),args.device+'/HandBrake',uuid4().hex,clock[0],mode='live')
+                       freeze('user-rf19-smoke',preset['preset']),args.device+'/HandBrake',uuid4().hex,clock[0],mode='live',
+                       require_review=bool(args.review_model))
     job_id=batch['jobs'][0]['id']
     (evidence_dir/'config.json').write_text(json.dumps(config,indent=2))
     deadline=time.monotonic()+120
+    transport=None
+    model_log=None
     try:
         while time.monotonic()<deadline:
             job=store.get(job_id)
             if job['state'] in ('completed','failed','blocked','cancelled'):break
             clock[0]=max(time.time(),job['due'])
+            if job['state']=='awaiting_review':
+                from hexos.agent.native_transport import NativeTransport
+                from hexos.agent.internal_tasks.native_session import decision
+                from hexos.agent.internal_tasks.queue import ReviewQueue
+                if transport is None:
+                    model_log=(evidence_dir/'model.log').open('w')
+                    transport=NativeTransport(args.runtime,args.review_model,4096,model_log)
+                queue=ReviewQueue(store)
+                request,token=queue.claim(clock[0])
+                answer=decision(transport,request)
+                queue.finish(request,token,clock[0],decision=answer)
+                (evidence_dir/'review.json').write_text(json.dumps(dict(request=request,decision=answer),ensure_ascii=False,indent=2))
+                print('REVIEW '+json.dumps(answer,ensure_ascii=False),flush=True)
+                continue
             result=runner.tick(job['resource'])
             print(json.dumps({k:result.get(k) for k in ('id','state','error','due')},ensure_ascii=False),flush=True)
             time.sleep(.5)
@@ -77,6 +97,8 @@ def main():
         (evidence_dir/'independent-check.json').write_text(json.dumps(check,indent=2))
         print('OK: copia → conversión → verificación → publicación → catálogo; original intacto.')
     finally:
+        if transport:transport.close()
+        if model_log:model_log.close()
         store.close()
 
 

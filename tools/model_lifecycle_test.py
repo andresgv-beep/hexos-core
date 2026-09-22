@@ -44,6 +44,32 @@ def wait_for(predicate, timeout=1):
 
 
 class ModelLifecycleTest(unittest.TestCase):
+    def test_internal_defers_for_chat_and_keeps_messages(self):
+        runtime=FakeRuntime();runtime.messages=[dict(role='user',content='Keep this')]
+        runtime.internal_decision=lambda request: {'action':'wait'}
+        lifecycle=ModelLifecycle(lambda:runtime,ctx=4096)
+        self.addCleanup(lifecycle.close)
+        lifecycle.acquire_turn()
+        self.assertEqual(lifecycle.internal_decision({})['status'],'deferred')
+        lifecycle.release_turn()
+        self.assertEqual(lifecycle.internal_decision({})['decision']['action'],'wait')
+        self.assertEqual(runtime.messages,[dict(role='user',content='Keep this')])
+
+    def test_chat_waits_for_current_internal_turn_instead_of_failing(self):
+        entered,release,chat_acquired=threading.Event(),threading.Event(),threading.Event()
+        runtime=FakeRuntime()
+        def internal(request):entered.set();release.wait(2);return {'action':'wait'}
+        runtime.internal_decision=internal
+        lifecycle=ModelLifecycle(lambda:runtime,ctx=4096)
+        self.addCleanup(lifecycle.close)
+        worker=threading.Thread(target=lambda:lifecycle.internal_decision({}));worker.start()
+        self.assertTrue(entered.wait(1))
+        def chat():lifecycle.acquire_turn();chat_acquired.set();lifecycle.release_turn()
+        foreground=threading.Thread(target=chat);foreground.start()
+        self.assertFalse(chat_acquired.wait(.03))
+        release.set();worker.join(1);foreground.join(1)
+        self.assertTrue(chat_acquired.is_set())
+
     def test_recupera_conversacion_archivada_tras_descargar(self):
         made = []
         lifecycle = ModelLifecycle(lambda: made.append(FakeRuntime()) or made[-1],

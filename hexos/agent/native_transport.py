@@ -89,6 +89,8 @@ class NativeTransport:
             self.proc.stdin.flush()
 
     def control(self, request, payload=b''):
+        if getattr(self, 'poisoned', False):
+            raise RuntimeError('Sesión interna no reconciliada; reiniciar el runtime antes de continuar')
         rid = uuid4().hex
         self.write(dict(request, request_id=rid), payload)
         while True:
@@ -108,6 +110,8 @@ class NativeTransport:
             self.write(dict(type='cancel', request_id='cancel-' + uuid4().hex, target=rid))
 
     def start(self, prompt, image=None, auxiliar=False):
+        if getattr(self, 'poisoned', False):
+            raise RuntimeError('Sesión interna no reconciliada; reiniciar el runtime antes de continuar')
         if self.cancelled.is_set():
             raise TurnCancelled('Generación detenida')
         session = 'aux' if auxiliar else '0'

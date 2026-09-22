@@ -4,9 +4,10 @@ from .policy import check_delay, observe_progress
 
 
 class Runner:
-    def __init__(self, store, files, encoder, clock, *, stall_seconds=1800):
+    def __init__(self, store, files, encoder, clock, *, stall_seconds=1800, config_digest=None):
         self.store, self.files, self.encoder, self.clock = store, files, encoder, clock
         self.stall_seconds = stall_seconds
+        self.config_digest = config_digest
 
     def tick(self, resource):
         claimed = self.store.claim(resource, self.clock())
@@ -17,6 +18,8 @@ class Runner:
         self.store.intention(job, token, key, self.clock())
         pause = False
         try:
+            if job.get('config_digest') and job['config_digest'] != self.config_digest:
+                raise SharedFailure('Configuración del recurso distinta de la fijada al encolar')
             if job['mode'] != getattr(self.encoder, 'mode', None) or job['mode'] != getattr(self.files, 'mode', None):
                 raise SharedFailure('El adaptador no admite el modo de esta tarea')
             changes = self._step(job, key)
@@ -24,7 +27,9 @@ class Runner:
             changes = dict(state='blocked', resume_state=job['state'], error=str(exc), due=self.clock()+120)
             pause = True
         except FileFailure as exc:
-            changes = dict(state='failed', error=str(exc), due=self.clock())
+            changes = dict(state='blocked' if job.get('require_review') else 'failed',
+                           resume_state=job['state'], review_kind='incident', error=str(exc), due=self.clock())
+            pause = bool(job.get('require_review'))
         except (UncertainEffect, OSError, ValueError) as exc:
             # Ni conexión perdida ni una respuesta mal formada prueban fallo o éxito.
             changes = dict(error=str(exc), due=self.clock()+120)
@@ -56,13 +61,16 @@ class Runner:
                 if type(sample.get('exit_code')) is not int:
                     raise UncertainEffect('Falta código final del encoder')
                 if sample['exit_code'] != 0:
-                    return dict(next_state, state='recovering', error='Encoder terminó con error')
+                    return dict(next_state, state='awaiting_review' if job.get('require_review') else 'recovering',
+                                review_kind='recovery', error='Encoder terminó con error', observation=sample)
                 return dict(next_state, state='verifying', completion=sample)
             if sample.get('status') != 'running':
                 raise UncertainEffect('Estado remoto desconocido')
             observation, stalled = observe_progress(job.get('observation'), sample, now,
                                                      stall_seconds=self.stall_seconds)
-            return dict(next_state, state='recovering' if stalled else 'running',
+            return dict(next_state, state=('awaiting_review' if job.get('require_review') else 'recovering') if stalled else 'running',
+                        review_kind='recovery' if stalled else None,
+                        error='Encoder sin avance comprobado en varias observaciones' if stalled else None,
                         observation=observation, due=now if stalled else now+check_delay(sample.get('eta_seconds')))
         if state in ('recovering', 'cancel_requested'):
             file_stop = None
@@ -94,7 +102,8 @@ class Runner:
                 return dict(next_state, due=now+120, verification_progress=receipt)
             if receipt.get('valid') is not True:
                 raise FileFailure('Salida rechazada por verificación: ' + str(receipt.get('reason', 'sin evidencia')))
-            return dict(next_state, state='publishing', validation=receipt)
+            return dict(next_state, state='awaiting_review' if job.get('require_review') else 'publishing',
+                        review_kind='publication', validation=receipt)
         if state == 'publishing':
             receipt = self.files.publish(job, key)
             if receipt.get('pending') is True:

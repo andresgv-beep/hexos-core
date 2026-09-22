@@ -10,6 +10,7 @@ from .agent import Agent
 from .model_lifecycle import ModelLifecycle
 from .runtime import Runtime
 from .server import make_handler
+from ..media_jobs.worker import MediaWorker
 
 
 def main():
@@ -61,6 +62,7 @@ def main():
                            Path(__file__).resolve().parent.parent / 'chat.html',
                            native_template=args.native_template)
     server = ThreadingHTTPServer(('127.0.0.1', args.port), Handler)
+    media_worker = MediaWorker(args.workspace, runtime, chat_busy=agent.lock.locked).start()
     print(f'HexOS agente: http://127.0.0.1:{args.port}', flush=True)
     try:
         server.serve_forever()
@@ -68,4 +70,5 @@ def main():
         pass
     finally:
         server.server_close()
+        media_worker.close()
         runtime.close()

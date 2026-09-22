@@ -1,9 +1,10 @@
 # Base ejecutable de tareas multimedia
 
 Entrega 2026-09-22, rama `codex/handbrake-task-foundation`, basada en `a07a486`.
-**Recorrido de archivos y encoder real probado con vídeo sintético en el NAS.
-El disparador de inferencia interna y el lanzamiento desde el chat aún no están
-conectados.** No incorpora la rama `frenos-y-silencios`.
+**Herramientas de chat, servicio de vencimientos y revisor interno conectados.
+Recorrido NAS sintético completado con decisión real del e4b antes de publicar.**
+La activación requiere `media_jobs.json` en el workspace de la instalación.
+No incorpora la rama `frenos-y-silencios`.
 
 ## Qué funciona
 
@@ -24,8 +25,8 @@ conectados.** No incorpora la rama `frenos-y-silencios`.
   aceptar respuestas de un trabajador expirado o de una ficha cancelada.
 - Contrato de intervención interna con sesión fresca, evidencia, revisión y
   acciones enumeradas; exclusión de inferencia y prioridad del chat en pruebas.
-- Herramientas de consulta `media.jobs` y `media.job` conectadas al catálogo y
-  al despachador de Helios. No crean ni arrancan conversiones.
+- Herramientas `media.options`, `media.prepare`, `media.start`, `media.control`,
+  `media.jobs` y `media.job` conectadas al despachador de Helios.
 
 ## Mapa del código
 
@@ -119,13 +120,13 @@ paralelo si hay recursos, o descarga/carga serializada en la misma GPU. En este
 pesos, tokenizer y execution hints correctos. No se cambia el bloque dentro del
 archivo HNF: se cambia el dominio que se selecciona para ejecutar.
 
-El ejecutor recibe una fábrica de sesiones frescas. No llama a reset sobre el
-runtime del usuario ni comparte sus mensajes. La fábrica real aún no existe:
-antes de conectarla debe demostrar aislamiento, liberación y cumplimiento de
-presupuestos (256 tokens/30 s en el contrato inicial, ajustables después de medir).
-El slot no interrumpe una inferencia ya iniciada. Las decisiones devueltas son
-propuestas; aún no hay un despachador de efectos autorizado para aplicarlas.
-Las solicitudes internas no disponen todavía de una cola persistente propia.
+El servicio real usa `ModelLifecycle.internal_decision` y sesiones NDJSON nuevas
+mediante `internal_tasks/native_session.py`. No resetea la sesión 0 ni comparte
+sus mensajes. Presupuesto: 2048 tokens de contexto, 256 de salida y 30 s de turno
+(más plazo acotado de cancelación/cierre). `internal_tasks/queue.py` conserva los
+despertares y aplica decisiones comprobando revisión, evidencia y precondiciones.
+`InternalExecutor` permanece como contrato genérico de fábrica para otros adaptadores.
+El slot da prioridad al chat pendiente; no interrumpe una inferencia ya iniciada.
 
 ## Validación de esta entrega
 
@@ -142,15 +143,15 @@ El encoder real se documenta en
 [`HANDBRAKE_ENCODER_VALIDATION.md`](HANDBRAKE_ENCODER_VALIDATION.md). El recorrido
 posterior completo, con 313 pruebas locales y prueba sintética NAS, está en
 [`HANDBRAKE_FILES_VALIDATION.md`](HANDBRAKE_FILES_VALIDATION.md). No acredita aún
-copias de decenas de GB, despertar del e4b, aislamiento CUDA, cambio de modelo,
+copias de decenas de GB, cambio de modelo,
 calidad visual ni compatibilidad de reproducción en dispositivos del usuario.
+La integración posterior del e4b, aislamiento de la sesión y entrada de chat se
+documenta en [HandBrake: chat y revisión](HANDBRAKE_CHAT_REVIEW.md), con 339 pruebas.
 
 ## Siguiente entrega concreta
 
-Conectar una cola persistente de despertares: incidencia o salida verificada abre
-un turno interno aislado. Añadir espera de decisión antes de publicar, validación
-de la propuesta y herramientas acotadas de continuación. Probar e4b en `text/0x0`
-con fichas nuevas por turno, sin mezclar el chat. El recorrido de backend actual
-publica automáticamente dentro de su arnés de pruebas: todavía no es ese circuito
-dirigido por el modelo. Instalar después el servicio de vencimientos y herramientas
-de creación/control de lotes. El reparto multi-GPU sigue siendo posterior.
+Activar la configuración en la instalación del 12b y probar una petición real del
+usuario con una película, antes del lote de cinco. Esa conversación natural con
+el 12b no se ha probado en esta máquina. Faltan panel/notificaciones proactivas,
+reconciliación operativa de workers inciertos y limpieza comprobada de temporales.
+El cambio de dominio y reparto multi-GPU siguen siendo posteriores.

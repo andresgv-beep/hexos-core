@@ -32,6 +32,23 @@ def spec(description, required=None, optional=None, effect='read', verify=None, 
 
 
 TOOLS = {
+    'media.options': spec('Consultar servicio de compresión, bibliotecas de películas y perfiles configurados. '
+                          'Primero busca archivos con nas.find; usa media.prepare y media.start para comprimir. '
+                          'Solo películas; originales conservados, salida MKV.'),
+    'media.prepare': spec('Preparar 1–5 películas desde un scan_id observado y un profile_id de media.options. '
+                          'Para las más pesadas usa count (1–5), root opcional de biblioteca y query opcional; '
+                          'el backend ordena todos los resultados. Para una película concreta usa paths exactos '
+                          'del catálogo, sin count/root/query. No copia ni convierte. Devuelve plan_id para media.start.',
+                          {'scan_id':'str','profile_id':'str'}, {'paths':'list','count':'int','root':'str','query':'str'}),
+    'media.start': spec('Encolar el plan_id devuelto por media.prepare cuando la persona ha pedido comprimir. '
+                        'No significa conversión terminada: HexOS copia, convierte y despierta al revisor interno. '
+                        'Repetir el mismo plan no duplica el lote.', {'plan_id':'str'}, effect='write_media',
+                        announces=(('encolar','encolad','encolo'),)),
+    'media.control': spec('Pausar, reanudar o cancelar un lote solicitado por la persona. '
+                          'operation: pause, resume o cancel. Pausar evita comenzar la siguiente película; '
+                          'cancelar espera la parada de los procesos propios y conserva los originales.',
+                          {'batch_id':'str','operation':'str'},effect='write_media',
+                          announces=(('cancelar','cancelad','cancelo'),('pausar','pausad','pauso'))),
     'media.jobs': spec('Consultar lotes de compresión registrados. No crea ni inicia tareas. '
                        'simulation es una prueba, nunca una película realmente comprimida.'),
     'media.job': spec('Consultar estado, progreso y destino de una ficha multimedia por id. '
@@ -286,6 +303,12 @@ HIDDEN_TOOLS = frozenset({'device.refresh', 'profile.remember', 'nas.index'})
 # necesita una declaración operativa corta: repetir todos esos detalles dentro de
 # cada schema duplicaba la política y ocupaba más de 16.000 caracteres por turno.
 NATIVE_DESCRIPTIONS = {
+    'media.options': 'Consultar bibliotecas, perfiles de compresión y disponibilidad del servicio.',
+    'media.prepare': 'Preparar desde scan_id y profile_id: paths exactos O count=1..5 más root/query opcionales para las más pesadas. Devuelve plan_id; aún no convierte.',
+    'media.start': 'Encolar plan_id de media_prepare si el usuario pidió comprimir. No duplica. queued no significa conversión terminada.',
+    'media.control': 'Controlar batch_id: operation=pause|resume|cancel. Conserva originales; la parada se confirma después.',
+    'media.jobs': 'Consultar lotes y revisiones internas pendientes; distingue simulation de live.',
+    'media.job': 'Consultar estado y progreso de una ficha id; completed acredita publicación y catálogo.',
     'nas.file_open': 'Abrir, mostrar o preparar descarga de un archivo del NAS (máximo 8 MiB). '
                      'Usa scan_id y path exacto de nas_find/nas_search. Devuelve file_id y abre visor. '
                      'Para leer el contenido continúa con nas_file_read; no improvises comandos SSH.',

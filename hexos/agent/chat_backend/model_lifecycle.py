@@ -5,6 +5,7 @@ from contextlib import contextmanager
 import threading
 import time
 from ..native_transport import TurnCancelled
+from ..internal_tasks.resources import InferenceSlot
 
 
 class ModelLifecycle:
@@ -39,6 +40,9 @@ class ModelLifecycle:
         self._harvest_pending = False
         self._pending_image = None
         self._on_update = None
+        self.inference_slot = InferenceSlot()
+        self._chat_slot = None
+        self._io_lock = threading.RLock()
         threading.Thread(target=self._idle_worker, daemon=True,
                          name='hexos-model-idle').start()
 
@@ -165,6 +169,18 @@ class ModelLifecycle:
             return self.status()
 
     def acquire_turn(self, stop=None):
+        if self._turn_acquired:
+            return
+        slot = self.inference_slot.chat()
+        slot.__enter__()
+        try:
+            self._acquire_turn(stop)
+            self._chat_slot = slot
+        except BaseException:
+            slot.__exit__(None, None, None)
+            raise
+
+    def _acquire_turn(self, stop=None):
         """Reserva el modelo para todo el turno y espera el ``ready`` real."""
         with self._condition:
             if self._turn_acquired:
@@ -206,6 +222,9 @@ class ModelLifecycle:
             self._busy -= 1
             self._last_activity = time.monotonic()
             self._condition.notify_all()
+        if self._chat_slot is not None:
+            slot, self._chat_slot = self._chat_slot, None
+            slot.__exit__(None, None, None)
 
     @contextmanager
     def _use(self):
@@ -238,8 +257,15 @@ class ModelLifecycle:
                 self._condition.notify_all()
 
     def _invoke(self, name, *args, **kwargs):
-        with self._use() as runtime:
+        with self._io_lock, self._use() as runtime:
             return getattr(runtime, name)(*args, **kwargs)
+
+    def internal_decision(self, request):
+        with self.inference_slot.internal() as acquired:
+            if not acquired:
+                return dict(status='deferred')
+            with self._io_lock, self._use() as runtime:
+                return dict(status='proposed', decision=runtime.internal_decision(request))
 
     def begin_request(self, callback):
         return self._invoke('begin_request', callback)

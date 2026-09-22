@@ -544,6 +544,12 @@ class NativeRuntime:
     def progressive(self):
         return bool(getattr(self, '_transport', None))
 
+    def internal_decision(self, request):
+        from .internal_tasks.native_session import decision
+        if not self._transport:
+            raise RuntimeError('Las revisiones internas requieren runtime NDJSON')
+        return decision(self._transport, request)
+
     def close(self):
         if self.proc.poll() is None:
             self.proc.terminate()

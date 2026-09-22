@@ -102,6 +102,10 @@ del catálogo. La publicación entre filesystems se prueba usando `/dev/shm` y `
 
 ## Siguiente integración: turno del e4b
 
+Actualización posterior: esta integración ya está implementada y probada.
+Ver [herramientas, activación y evidencia e4b](HANDBRAKE_CHAT_REVIEW.md).
+El texto siguiente conserva el límite de la entrega de archivos anterior.
+
 El Runner de prueba publica determinísticamente. Para el flujo acordado falta
 detenerse tras la verificación, registrar un despertar persistente y dar al e4b
 una ficha con herramientas de continuación. El backend deberá rechazar una

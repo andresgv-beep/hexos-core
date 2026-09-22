@@ -8,6 +8,7 @@ from uuid import uuid4
 from .files import movie
 from .profiles import validate
 from .policy import STATES, TERMINAL
+from ..internal_tasks.queue import ensure as ensure_reviews, enqueue
 
 
 def dump(value):
@@ -42,6 +43,7 @@ class JobStore:
                 key TEXT PRIMARY KEY, job_id TEXT NOT NULL, ts REAL NOT NULL);
             CREATE INDEX IF NOT EXISTS media_resource ON media_jobs(resource, state);
         ''')
+        ensure_reviews(self.db)
 
     def close(self):
         self.db.close()
@@ -56,7 +58,7 @@ class JobStore:
             self.db.rollback()
             raise
 
-    def create(self, sources, profile, resource, request_key, now, mode='simulation'):
+    def create(self, sources, profile, resource, request_key, now, mode='simulation', require_review=False, config_digest=None):
         if mode not in ('simulation', 'live'):
             raise ValueError('Modo inválido')
         if not isinstance(sources, list) or not 1 <= len(sources) <= 5:
@@ -73,7 +75,8 @@ class JobStore:
         if len(keys) != len(sources):
             raise ValueError('Película duplicada en el lote')
         profile = validate(profile)
-        fingerprint = dump(dict(sources=sources, profile=profile, resource=resource, mode=mode))
+        fingerprint = dump(dict(sources=sources, profile=profile, resource=resource, mode=mode,
+                                require_review=require_review, config_digest=config_digest))
         with self.transaction():
             existing = self.db.execute('SELECT * FROM media_batches WHERE request_key=?', (request_key,)).fetchone()
             if existing:
@@ -91,7 +94,8 @@ class JobStore:
             for position, source in enumerate(sources):
                 job = dict(id=uuid4().hex, batch_id=batch, resource=resource, position=position,
                            state='queued', revision=0, due=now, source=source, profile=profile,
-                           mode=mode, attempt=0, observation=None, error=None, created_at=now)
+                           mode=mode, require_review=require_review, config_digest=config_digest,
+                           attempt=0, observation=None, error=None, created_at=now)
                 self.db.execute('INSERT INTO media_jobs VALUES (?,?,?,?,?,?,?,?)',
                     (job['id'], batch, resource, position, 'queued', 0, now, dump(job)))
                 self.event(job['id'], now, 'created', dict(source=source, profile_hash=profile['sha256']))
@@ -136,7 +140,7 @@ class JobStore:
                                        'ON j.batch_id=b.id WHERE resource=? ORDER BY j.rowid', (resource,)):
                 if row['state'] in TERMINAL:
                     continue
-                if row['state'] == 'blocked' or (row['paused'] and row['state'] == 'queued') or row['due'] > now:
+                if row['state'] in ('blocked','awaiting_review') or (row['paused'] and row['state'] == 'queued') or row['due'] > now:
                     return None
                 token = uuid4().hex
                 self.db.execute('INSERT OR REPLACE INTO media_leases VALUES (?,?,?)',
@@ -166,6 +170,7 @@ class JobStore:
                 raise Conflict('La ficha cambió durante la operación')
             current.update(changes)
             self._save(current)
+            enqueue(self,current,now)
             if pause:
                 self.db.execute('UPDATE media_batches SET paused=1 WHERE id=?', (job['batch_id'],))
             self.event(job['id'], now, 'transition', changes)
@@ -188,5 +193,6 @@ class JobStore:
                     continue
                 job['due'] = now
                 self._save(job)
+                enqueue(self,job,now)
                 self.event(job['id'], now, operation, {})
         return self.batch(batch_id)

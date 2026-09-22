@@ -1,7 +1,8 @@
 # Tareas de compresión: contrato propuesto
 
-Estado 2026-09-22: base y recorrido NAS implementados y probados con un archivo
-sintético. Disparador del modelo, servicio permanente e interfaz pendientes.
+Estado 2026-09-22: recorrido NAS, herramientas de chat, servicio dentro de HexOS
+y disparador del modelo implementados. Prueba sintética con revisión real e4b.
+Panel y notificaciones proactivas pendientes; activación por configuración.
 [Implementación, pruebas y límites](MEDIA_JOBS_FOUNDATION.md).
 Se han convertido archivos sintéticos; no se han copiado películas de la biblioteca.
 

@@ -16,10 +16,16 @@ def build(job, evidence):
     allowed = ['wait', 'report_incident']
     if job['state'] == 'running':
         allowed.append('request_stop')
+    if job['state'] == 'awaiting_review':
+        if job.get('review_kind') == 'publication' and job.get('validation',{}).get('valid') is True:
+            allowed.append('publish')
+        elif job.get('review_kind') == 'recovery':
+            allowed.append('request_stop')
     result = dict(schema_version=1, request_id=uuid4().hex, job_id=job['id'],
                   expected_revision=job['revision'], state=job['state'],
                   profile_id=job['profile']['id'], source=job['source'],
                   recovery_attempts=job['attempt'], evidence=evidence,
+                  review_kind=job.get('review_kind'),
                   allowed_actions=allowed)
     raw = json.dumps(result, ensure_ascii=False, allow_nan=False)
     if len(raw) > 12000:
