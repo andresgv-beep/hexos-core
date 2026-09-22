@@ -67,6 +67,8 @@ class Runner:
         if state in ('recovering', 'cancel_requested'):
             # stop debe reconciliar también un start cuyo resultado se perdió.
             stopped = self.encoder.stop(job, key+':stop')
+            if stopped.get('pending') is True:
+                return dict(next_state, due=now+15, stop_receipt=stopped)
             if stopped.get('stopped') is not True:
                 if stopped.get('exclusive') is not True:
                     raise SharedFailure('No consta exclusividad para reiniciar el contenedor')

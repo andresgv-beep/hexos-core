@@ -204,6 +204,14 @@ class MediaJobsTest(unittest.TestCase):
             self.assertEqual(self.tick()['state'],'cancelled')
             restart.assert_called_once()
 
+    def test_pending_stop_waits_without_restart_or_losing_cancellation(self):
+        self.until('running'); self.store.control(self.batch['id'],'cancel',self.clock())
+        with patch.object(self.sim,'stop',return_value=dict(stopped=False,pending=True,exclusive=False)),patch.object(self.sim,'restart') as restart:
+            result=self.tick()
+            self.assertEqual(result['state'],'cancel_requested')
+            self.assertEqual(result['due'],self.clock()+15)
+            restart.assert_not_called()
+
     def test_simulation_never_substitutes_for_live(self):
         self.runner.encoder=UnconfiguredHandBrake()
         self.assertEqual(self.tick()['state'],'blocked')

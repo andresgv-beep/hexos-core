@@ -590,11 +590,12 @@ def execute(workspace, device, section, disk=None, container=None, action=None):
 
 
 def execute_remote(workspace, device, remote, section, disk=None, container=None, action=None,
-                   *, elevated=True, max_output=18000, payload_marker=None):
+                   *, elevated=True, max_output=18000, payload_marker=None, timeout_seconds=None):
     """Transporte compartido; solo los adaptadores internos construyen `remote`.
 
     No se expone como herramienta. El explorador usa el usuario SSH sin sudo.
     """
+    deadline = time.monotonic() + timeout_seconds if timeout_seconds is not None else None
     located = hosts.resolve(workspace, device)
     account = hosts.credentials(workspace, device)
     if not account:
@@ -618,12 +619,13 @@ def execute_remote(workspace, device, remote, section, disk=None, container=None
                 '-p', str(puerto), account['user'] + '@' + ruta['host'],
                 ("sudo -p '__HEXOS_SUDO__:' /bin/sh -c " if elevated else '/bin/sh -c ') + quoted]
         resultado = _ssh(argv, password, device, ruta, puerto, section, disk, container, action,
-                         max_output=max_output, payload_marker=payload_marker)
+                         max_output=max_output, payload_marker=payload_marker,
+                         timeout_seconds=max(0.01, deadline-time.monotonic()) if deadline else 45)
         intentos.append(dict(host=ruta['host'], port=puerto, pinned=ruta.get('pinned', False),
                              unreachable=resultado.pop('_unreachable')))
         # Solo se pasa a la siguiente si NO se llegó al equipo. Un error de dentro
         # es una respuesta suya, no una razón para llamar a otra puerta.
-        if not intentos[-1]['unreachable'] or indice == len(rutas) - 1:
+        if not intentos[-1]['unreachable'] or indice == len(rutas) - 1 or (deadline and time.monotonic() >= deadline):
             resultado['routes_tried'] = intentos
             if len(intentos) > 1:
                 resultado['note'] += (' Se intentó por ' + str(len(intentos)) + ' direcciones; '
@@ -633,12 +635,12 @@ def execute_remote(workspace, device, remote, section, disk=None, container=None
 
 
 def _ssh(argv, password, device, located, port, section, disk, container, action, *, max_output=18000,
-         payload_marker=None):
+         payload_marker=None, timeout_seconds=45):
     """Una conexión y su lectura. `_unreachable` dice si ni siquiera se llegó."""
     import pexpect
     proc = pexpect.spawn('/usr/bin/ssh', argv, encoding='utf-8', codec_errors='replace', timeout=40,
                          searchwindowsize=4096)
-    output = []; prompts = 0; timeout = False; deadline = time.monotonic() + 45
+    output = []; prompts = 0; timeout = False; deadline = time.monotonic() + timeout_seconds
     try:
         while True:
             event = proc.expect([r"(?i)password:", r'__HEXOS_SUDO__:', pexpect.EOF, pexpect.TIMEOUT],

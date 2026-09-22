@@ -1,8 +1,9 @@
 # Base ejecutable de tareas multimedia
 
 Entrega 2026-09-22, rama `codex/handbrake-task-foundation`, basada en `a07a486`.
-**Implementación de la base con simulador; sin conversiones reales ni inferencia
-interna conectada al chat.** No incorpora la rama `frenos-y-silencios`.
+**Base con simulador y adaptador de encoder real probado con vídeo sintético.
+La cola completa y la inferencia interna aún no están conectadas a ejecución
+real desde el chat.** No incorpora la rama `frenos-y-silencios`.
 
 ## Qué funciona
 
@@ -40,6 +41,9 @@ interna conectada al chat.** No incorpora la rama `frenos-y-silencios`.
 | `hexos/agent/media_jobs/service.py` | Tick sobre recursos, sin espera larga |
 | `hexos/agent/media_jobs/simulation.py` | Efectos y procesos ficticios persistentes |
 | `hexos/agent/media_jobs/handbrake.py` | Adaptador de producción explícitamente no configurado |
+| `hexos/agent/media_jobs/nas_encoder.py` | Transporte SSH y adaptador real opt-in |
+| `hexos/agent/media_jobs/remote/encoder_control.py` | Recibos, exclusión de lanzamiento y reconciliación remota |
+| `hexos/agent/media_jobs/remote/encoder_worker.py` | Proceso independiente, JSON de progreso y parada propia |
 | `hexos/agent/internal_tasks/requests.py` | Construcción y validación de decisiones |
 | `hexos/agent/internal_tasks/resources.py` | Slot de inferencia compartido con prioridad del chat |
 | `hexos/agent/internal_tasks/executor.py` | Sesión aislada inyectada por intervención |
@@ -127,13 +131,17 @@ competencia, cancelación durante arranque, huecos en evidencia, salida inválid
 reintentos limitados, trabajo ajeno impidiendo reinicio, conflicto de destinos,
 selección ajena al catálogo y propuesta interna obsoleta.
 
-No se han probado aquí un encoder real, copias al NAS, verificación multimedia,
-aislamiento CUDA, cambio de modelo, calidad visual ni compatibilidad de reproducción.
+La entrega posterior del encoder real se documenta en
+[`HANDBRAKE_ENCODER_VALIDATION.md`](HANDBRAKE_ENCODER_VALIDATION.md). La prueba
+sintética incluye transferencia y decodificación, pero no acredita el adaptador
+de copia de películas grandes, su publicación, aislamiento CUDA, cambio de modelo,
+calidad visual ni compatibilidad de reproducción en dispositivos del usuario.
 
 ## Siguiente entrega concreta
 
-Implementar y probar el adaptador NAS/HandBrake con recibos durables, importando
-el preset completo `jellyfin/Fast 1080p30` del NAS. Conectar una película real
-solo cuando copia, identidad remota, salida y verificador estén comprobados.
+El adaptador NAS/HandBrake ya tiene recibos y una prueba real con el preset completo
+`jellyfin/Fast 1080p30`. Implementar ahora el adaptador de archivos: copia durable,
+identidad remota, verificación y publicación sin sobrescritura. Conectar una
+película real cuando ese recorrido esté comprobado.
 Después, instalar el servicio de vencimientos y añadir API/panel de tareas.
 El runtime interno real y el reparto multi-GPU continúan como entregas posteriores.
