@@ -100,6 +100,16 @@ class EfectoDesconocidoTest(unittest.TestCase):
     def actuar(self, salida, **extra):
         from unittest.mock import patch
         with self.agent.store() as store:
+            # El turno que pidió el reinicio. En producción siempre existe —lo
+            # inserta la máquina del turno antes de llamar a ninguna herramienta—,
+            # y sin él un cambio de estado no está autorizado. Estas pruebas miran
+            # la contabilidad de efectos pendientes, no el permiso, así que el
+            # encargo se deja escrito para que el escenario sea el real.
+            store.db.execute('INSERT OR IGNORE INTO conversation VALUES (?,?,?,?,?)',
+                             ('u1', '2026-09-21T10:00:00', 'user',
+                              'reinicia el contenedor handbrake',
+                              'reinicia el contenedor handbrake'))
+            store.db.commit()
             with patch('hexos.agent.chat.nas_read', return_value=salida):
                 return self.agent.tool(store, 'nas.container',
                                        dict(device='synology', container='handbrake',

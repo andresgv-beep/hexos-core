@@ -13,6 +13,7 @@ from .state import Environment, SessionState, TurnState
 from .settings import MAX_TRACE_EVENTS
 from .ledger import completed_call, completed_registration
 from .file_requests import validate_file_request
+from .authorization import EFECTOS_QUE_EXIGEN_ORDEN, authorize_state_change
 
 if TYPE_CHECKING:
     from .agent import Agent
@@ -28,6 +29,12 @@ class ToolDispatcher:
 
     def dispatch(self, store, name, args, *, turn_id=None):
         catalog.validate(name, args)
+        # Cambiar el estado de un servicio lo autoriza la persona en su mensaje, no
+        # el modelo. Se decide por el EFECTO declarado en el catálogo y no por el
+        # nombre, para que una herramienta destructiva nueva no se cuele por no
+        # acordarse de añadirla a una lista de nombres.
+        if catalog.TOOLS.get(name, {}).get('effect') in EFECTOS_QUE_EXIGEN_ORDEN:
+            authorize_state_change(store, turn_id, name, args)
         if turn_id and name in ('nas.find', 'nas.search', 'nas.directories'):
             request = store.db.execute("SELECT text FROM conversation WHERE id=? AND role='user'",
                                        (turn_id,)).fetchone()
