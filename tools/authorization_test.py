@@ -37,16 +37,21 @@ def turno(mensaje, propuesta=None):
 
 class AutorizacionTest(unittest.TestCase):
 
-    def permite(self, mensaje, accion, container='plex', propuesta=None):
+    def pedir(self, mensaje, accion, container, propuesta, device, equipos):
         store, uid = turno(mensaje, propuesta)
-        authorize_state_change(store, uid, 'nas.container',
-                               dict(container=container, action=accion))
+        args = dict(container=container, action=accion)
+        if device:
+            args['device'] = device
+        authorize_state_change(store, uid, 'nas.container', args, dispositivos=equipos)
 
-    def bloquea(self, mensaje, accion, container='plex', propuesta=None):
-        store, uid = turno(mensaje, propuesta)
+    def permite(self, mensaje, accion, container='plex', propuesta=None,
+                device=None, equipos=()):
+        self.pedir(mensaje, accion, container, propuesta, device, equipos)
+
+    def bloquea(self, mensaje, accion, container='plex', propuesta=None,
+                device=None, equipos=()):
         with self.assertRaises(ValueError) as caja:
-            authorize_state_change(store, uid, 'nas.container',
-                                   dict(container=container, action=accion))
+            self.pedir(mensaje, accion, container, propuesta, device, equipos)
         return str(caja.exception)
 
     # ---- la orden escrita autoriza -------------------------------------
@@ -54,8 +59,8 @@ class AutorizacionTest(unittest.TestCase):
         self.permite('reinicia el contenedor plex', 'restart')
         self.permite('párame el plex, que está dando guerra', 'stop')
         self.permite('arranca plex', 'start')
-        self.permite('paralo ya', 'stop')
-        self.permite('levántalo otra vez', 'start')
+        self.permite('paralo ya', 'stop', propuesta='El contenedor plex está corriendo.')
+        self.permite('levántalo otra vez', 'start', propuesta='plex se ha caído.')
 
     def test_reiniciar_admite_descomponerse(self):
         # Quien pide un reinicio ya ha aceptado la parada, así que si el modelo
@@ -133,6 +138,79 @@ class AutorizacionTest(unittest.TestCase):
         # contarse como dos familias y los mensajes de error mentirían.
         self.assertEqual(_familias('reinicia plex'), {'restart'})
         self.assertEqual(_familias('inicia plex'), {'start'})
+
+
+class RevisionTest(AutorizacionTest):
+    """Los agujeros que encontró una revisión sin tocar el NAS.
+
+    Los cinco eran reales y están reproducidos aquí tal cual se reportaron, para
+    que no puedan volver sin que alguien lo note.
+    """
+
+    def test_una_orden_negada_no_es_una_orden(self):
+        # Reconocer el verbo no basta: «parar» está dentro de «no quiero parar».
+        self.bloquea('No quiero parar plex', 'stop')
+        self.bloquea('no lo pares todavía', 'stop')
+        self.bloquea('mejor no reinicies plex', 'restart')
+
+    def test_pero_una_negacion_al_final_no_tumba_la_orden(self):
+        # La negación cuenta si va DELANTE del verbo y en su misma oración. Si no,
+        # «párame plex, no el otro» —una orden buena— quedaría fuera.
+        self.permite('párame plex, no el otro', 'stop')
+        self.permite('para el contenedor plex, no el otro', 'stop')
+
+    def test_la_orden_vale_para_SU_contenedor(self):
+        # «Reinicia plex» autorizaba reiniciar HandBrake: la orden no se ataba a
+        # su objeto y el destino lo acababa eligiendo el modelo.
+        self.bloquea('Reinicia plex', 'restart', container='HandBrake')
+        self.permite('Reinicia plex', 'restart', container='plex')
+
+    def test_senalar_hereda_el_objeto_del_turno_anterior_y_nombrar_no(self):
+        # «Reinícialo» no nombra nada: el antecedente es lo que dijo Helios.
+        self.permite('Reinícialo', 'restart',
+                     propuesta='El contenedor plex lleva dos días caído.')
+        # Pero nombrar OTRA cosa no es señalar, así que no hay nada que heredar.
+        self.bloquea('Reinicia plex', 'restart', container='HandBrake',
+                     propuesta='HandBrake y plex están parados.')
+
+    def test_confirmar_una_propuesta_negada_no_autoriza(self):
+        # «No voy a parar plex. ¿Quieres que consulte su estado?» + «sí» detenía
+        # el contenedor: se buscaba el verbo en la propuesta sin mirar la negación.
+        self.bloquea('sí', 'stop',
+                     propuesta='No voy a parar plex. ¿Quieres que consulte su estado?')
+
+    def test_los_nombres_se_comparan_enteros_y_no_por_trozos(self):
+        # Aceptar `plex-test` permitía actuar sobre `plex`.
+        self.bloquea('sí', 'restart', container='plex',
+                     propuesta='¿Reinicio el contenedor plex-test?')
+        self.permite('sí', 'restart', container='plex-test',
+                     propuesta='¿Reinicio el contenedor plex-test?')
+        self.bloquea('reinicia plex-test', 'restart', container='plex')
+
+    def test_la_forma_acentuada_tambien_es_una_orden(self):
+        # El cotejo es por bytes: «arráncalo» no contiene «arranca». Una orden
+        # legítima se quedaba fuera por la tilde, que es como se escribe bien.
+        self.permite('Arráncalo y verifícalo', 'start', container='HandBrake',
+                     propuesta='¿Quieres que arranque el contenedor HandBrake?')
+        self.permite('Reinícialo', 'restart', propuesta='plex sigue caído.')
+        self.permite('Párame el plex', 'stop')
+
+    def test_con_varios_equipos_tiene_que_constar_en_cual(self):
+        # Una orden clarísima sobre el servidor que no era sigue siendo un
+        # servicio caído.
+        self.bloquea('reinicia plex', 'restart', device='nimos',
+                     equipos=('synology', 'nimos'))
+        self.permite('reinicia plex en nimos', 'restart', device='nimos',
+                     equipos=('synology', 'nimos'))
+
+    def test_con_un_solo_equipo_no_hay_donde_equivocarse(self):
+        self.permite('reinicia plex', 'restart', device='synology',
+                     equipos=('synology',))
+
+    def test_sin_contenedor_no_se_toca_nada(self):
+        store, uid = turno('reinicia lo que sea')
+        with self.assertRaises(ValueError):
+            authorize_state_change(store, uid, 'nas.container', dict(action='restart'))
 
 
 if __name__ == '__main__':

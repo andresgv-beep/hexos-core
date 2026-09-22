@@ -63,6 +63,26 @@ PARECE_PERSONAL = re.compile(
 SKIPS_QUE_SE_GUARDAN = 200
 
 
+def _anotar_paso(store, turn_id, trace, paso):
+    """Añade el paso a la traza del turno Y lo deja en tool_events.
+
+    En el resto del backend cada `trace.append` lleva su INSERT detrás —mírese
+    finalization.py—, porque la lista vive solo mientras dura el turno y
+    tool_events es lo que sobrevive para el siguiente. Aquí faltaba en las dos
+    ramas, la de éxito incluida: el cierre salía bien y el registro quedaba
+    vacío, así que un turno posterior no podía ver lo que había pasado.
+    """
+    if trace is not None:
+        trace.append(paso)
+    if turn_id:
+        try:
+            store.db.execute('INSERT INTO tool_events(turn_id,ts,body) VALUES (?,?,?)',
+                             (turn_id, now(), json.dumps(paso, ensure_ascii=False)))
+            store.db.commit()
+        except Exception:
+            pass      # dejar constancia no puede tumbar un turno
+
+
 def _anotar_descarte(store, turn_id, texto):
     """Deja constancia de un mensaje que el portón descartó. Nunca interrumpe."""
     try:
@@ -315,17 +335,17 @@ class MemoryService:
             # se ha guardado nada Y no se sabe si había algo que guardar. Antes
             # devolvía '' y el turno terminaba como si la persona no hubiera
             # contado nada, sin que constara en ningún sitio.
-            if trace is not None:
-                trace.append(dict(tool='profile.remember', arguments=dict(count=0),
-                                  effect='write', changes_state=False, ts=now(),
-                                  seconds=round(time.monotonic() - empezado, 3), failed=True,
-                                  verification='desconocida',
-                                  evidence='la extracción de hechos no llegó a completarse',
-                                  result=dict(saved=[], extracted=False,
-                                              error=type(fallo).__name__ + ': ' + str(fallo)[:200],
-                                              requested_by='hexos',
-                                              note='No se ha guardado nada y no se sabe si había '
-                                                   'algo que guardar. No afirmes haberlo anotado.')))
+            _anotar_paso(store, turn_id, trace, dict(
+                tool='profile.remember', arguments=dict(count=0),
+                effect='write', changes_state=False, ts=now(),
+                seconds=round(time.monotonic() - empezado, 3), failed=True,
+                verification='desconocida',
+                evidence='la extracción de hechos no llegó a completarse',
+                result=dict(saved=[], extracted=False,
+                            error=type(fallo).__name__ + ': ' + str(fallo)[:200],
+                            requested_by='hexos',
+                            note='No se ha guardado nada y no se sabe si había algo '
+                                 'que guardar. No afirmes haberlo anotado.')))
             return ''
         # Queda registrada como cualquier otra generación: sin esto su coste es invisible.
         generacion = getattr(self.env.runtime, 'last_extraction_generation', None)
@@ -354,15 +374,16 @@ class MemoryService:
         # Queda en la traza como cualquier otra escritura. Sin esto, el turno decía
         # «he anotado tu trato» con la traza vacía y el cierre lo marcaba como
         # afirmación sin respaldo: el hecho estaba en HERA, pero no constaba.
-        if guardados and trace is not None:
-            trace.append(dict(tool='profile.remember', arguments=dict(count=len(guardados)),
-                              effect='write', changes_state=True, ts=now(),
-                              seconds=round(time.monotonic() - empezado, 3), failed=False,
-                              verification='confirmada',
-                              evidence='releído del perfil: ' + ', '.join(guardados),
-                              result=dict(saved=guardados, requested_by='hexos',
-                                          note='Lo guardó HexOS al ver que la persona contaba algo '
-                                               'de sí misma; el modelo no lo pidió. Las palabras son '
-                                               'suyas y HERA conserva la frase como evidencia.')))
+        if guardados:
+            _anotar_paso(store, turn_id, trace, dict(
+                tool='profile.remember', arguments=dict(count=len(guardados)),
+                effect='write', changes_state=True, ts=now(),
+                seconds=round(time.monotonic() - empezado, 3), failed=False,
+                verification='confirmada',
+                evidence='releído del perfil: ' + ', '.join(guardados),
+                result=dict(saved=guardados, requested_by='hexos',
+                            note='Lo guardó HexOS al ver que la persona contaba algo de '
+                                 'sí misma; el modelo no lo pidió. Las palabras son suyas '
+                                 'y HERA conserva la frase como evidencia.')))
         # Decirlo siempre: si se equivoca, que se vea en el momento y no dentro de un mes.
         return '· ' + '. '.join(anotado) + '.' if anotado else ''

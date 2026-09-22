@@ -17,21 +17,24 @@ from hexos.agent.work import now
 
 
 class Runtime:
-    def __init__(self, revienta=False):
+    def __init__(self, revienta=False, hechos=()):
         self.revienta = revienta
+        self.hechos = list(hechos)
     def call(self, request): pass
     def generate(self, messages): return {'reply': '', 'work': None}
     def extract_facts(self, text):
         if self.revienta:
             raise RuntimeError('el extractor se cayó')
-        return []
+        return list(self.hechos)
 
 
 class Perfil:
+    def __init__(self):
+        self.confirmados = {}
     def read(self): return ''
-    def keys(self): return {}
-    def remember(self, key, value, text, evidence): pass
-    def correct(self, key, value, text, evidence): pass
+    def keys(self): return dict(self.confirmados)
+    def remember(self, key, value, text, evidence): self.confirmados[key] = value
+    def correct(self, key, value, text, evidence): self.confirmados[key] = value
 
 
 class Base(unittest.TestCase):
@@ -110,6 +113,43 @@ class ExtraerHechosTest(Base):
         self.assertIs(traza[0]['result']['extracted'], False)
         self.assertEqual(traza[0]['verification'], 'desconocida')
         self.assertEqual(agente.closure(traza, 'Hecho.')['reason'], 'incierto')
+
+
+class QuedaEnElRegistroTest(Base):
+    """Un paso que solo vive en memoria desaparece al acabar el turno.
+
+    En el resto del backend cada `trace.append` lleva su INSERT a tool_events
+    detrás. harvest_facts era la excepción en las DOS ramas, la de éxito
+    incluida: el cierre salía bien y el registro quedaba vacío, así que el turno
+    siguiente no podía ver lo ocurrido.
+    """
+
+    def eventos(self, agente, uid):
+        with agente.store() as store:
+            return [fila[0] for fila in store.db.execute(
+                'SELECT body FROM tool_events WHERE turn_id=?', (uid,)).fetchall()]
+
+    def test_el_fallo_de_extraccion_queda_persistido(self):
+        agente = self.agente(Runtime(revienta=True), Perfil())
+        uid = self.con_turno(agente, 'me llamo Andrés')
+        with agente.store() as store:
+            agente.harvest_facts(store, 'me llamo Andrés', uid, [])
+        cuerpos = self.eventos(agente, uid)
+        self.assertEqual(len(cuerpos), 1, 'antes solo existía en la lista en memoria')
+        self.assertIn('extracted', cuerpos[0])
+        self.assertIn('desconocida', cuerpos[0])
+
+    def test_lo_guardado_tambien_queda_persistido(self):
+        # Este hueco ya existía antes de tocar nada: un hecho guardado de verdad
+        # tampoco llegaba al registro durable.
+        agente = self.agente(Runtime(hechos=[dict(key='yo/nombre', value='Andrés')]), Perfil())
+        uid = self.con_turno(agente, 'me llamo Andrés')
+        with agente.store() as store:
+            aviso = agente.harvest_facts(store, 'me llamo Andrés', uid, [])
+        self.assertIn('Andrés', aviso)
+        cuerpos = self.eventos(agente, uid)
+        self.assertEqual(len(cuerpos), 1)
+        self.assertIn('confirmada', cuerpos[0])
 
 
 class PortonDeHechosTest(Base):

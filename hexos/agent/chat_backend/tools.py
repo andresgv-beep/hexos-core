@@ -34,7 +34,11 @@ class ToolDispatcher:
         # nombre, para que una herramienta destructiva nueva no se cuele por no
         # acordarse de añadirla a una lista de nombres.
         if catalog.TOOLS.get(name, {}).get('effect') in EFECTOS_QUE_EXIGEN_ORDEN:
-            authorize_state_change(store, turn_id, name, args)
+            # Los equipos registrados viajan para que el freno pueda exigir que
+            # conste EN CUÁL, cuando hay más de uno donde equivocarse. Van como
+            # dato y no como dependencia: el módulo sigue probándose sin taller.
+            authorize_state_change(store, turn_id, name, args,
+                                   dispositivos=list(hosts.cards(self.env.workspace)))
         if turn_id and name in ('nas.find', 'nas.search', 'nas.directories'):
             request = store.db.execute("SELECT text FROM conversation WHERE id=? AND role='user'",
                                        (turn_id,)).fetchone()
