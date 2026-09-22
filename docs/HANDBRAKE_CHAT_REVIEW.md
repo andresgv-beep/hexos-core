@@ -139,3 +139,38 @@ Pendientes: panel y avisos proactivos en la interfaz, limpieza de temporales,
 reconciliación asistida de workers inciertos, más perfiles/pistas/subtítulos y
 selección de especialistas. El reinicio automático del contenedor sigue deshabilitado
 hasta demostrar exclusividad; una decisión del modelo no elimina esa condición.
+
+
+## Prueba de conversación por rango (22 septiembre 2026)
+
+`tools.media_conversation_live` ejecuta el modelo real con Agent y el catálogo
+completos en un workspace aislado. Solo el NAS se sustituye por metadatos
+sintéticos; la cola es SQLite real, sin worker de conversión. No inicia SSH ni
+HandBrake. Los tamaños son 3, 8, 12, 18, 25, 35, 50 y 80 GB, en subcarpetas.
+
+Los dos mensajes son buscar MKV entre 8 y 50 GB en `/peliculas` de `synology 1`,
+y después comprimir las cinco más pesadas de esas con el perfil configurado.
+El resultado esperado es una cola de 50, 35, 25, 18 y 12 GB, sin acciones durante
+el primer turno. La prueba falla si el modelo no completa ese recorrido.
+
+Resultado e4b: **no superado**. En la ejecución con inventario sintético registrado
+pidió de nuevo el nombre del equipo pese a estar en el mensaje; después pidió
+scan_id y profile_id al usuario. No llamó herramientas ni creó tareas.
+Evidencia local: `/tmp/hexos-e4b-range-conversation-2`, conversación, generaciones
+y veredicto. Esto no invalida las decisiones internas aisladas anteriores, pero
+no acredita autonomía conversacional. Falta ejecutar esta prueba con el 12b.
+
+Se corrigió además una carencia independiente: `media.prepare` admite ahora
+min_bytes, max_bytes y extensions en la selección por count. El catálogo de
+nas.find contiene también archivos fuera del rango; scan_id no conserva filtros.
+El modelo debe pasar esos filtros o las rutas exactas. El backend valida límites
+y filtra antes de seleccionar las cinco más grandes. La regresión cubre también
+una primera página de solo dos resultados, para impedir que el top se limite a
+lo mostrado. No se afirma que un modelo que omita los filtros quede corregido
+por esta ampliación del contrato.
+
+```bash
+python3 -m tools.media_conversation_live --runtime /ruta/helios_runtime \
+  --model /ruta/modelo.hnf --template /ruta/chat_template.jinja \
+  --evidence-dir /tmp/prueba-conversacion-nueva
+```

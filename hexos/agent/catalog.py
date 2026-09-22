@@ -37,9 +37,10 @@ TOOLS = {
                           'Solo películas; originales conservados, salida MKV.'),
     'media.prepare': spec('Preparar 1–5 películas desde un scan_id observado y un profile_id de media.options. '
                           'Para las más pesadas usa count (1–5), root opcional de biblioteca y query opcional; '
-                          'el backend ordena todos los resultados. Para una película concreta usa paths exactos '
-                          'del catálogo, sin count/root/query. No copia ni convierte. Devuelve plan_id para media.start.',
-                          {'scan_id':'str','profile_id':'str'}, {'paths':'list','count':'int','root':'str','query':'str'}),
+                          'Conserva min_bytes/max_bytes/extensions de la búsqueda; el catálogo incluye archivos fuera del filtro. '
+                          'El backend filtra antes de ordenar. Para una película concreta usa paths exactos '
+                          'del catálogo, sin filtros ni count. No copia ni convierte. Devuelve plan_id para media.start.',
+                          {'scan_id':'str','profile_id':'str'}, {'paths':'list','count':'int','root':'str','query':'str','min_bytes':'int','max_bytes':'int','extensions':'list'}),
     'media.start': spec('Encolar el plan_id devuelto por media.prepare cuando la persona ha pedido comprimir. '
                         'No significa conversión terminada: HexOS copia, convierte y despierta al revisor interno. '
                         'Repetir el mismo plan no duplica el lote.', {'plan_id':'str'}, effect='write_media',
@@ -304,7 +305,7 @@ HIDDEN_TOOLS = frozenset({'device.refresh', 'profile.remember', 'nas.index'})
 # cada schema duplicaba la política y ocupaba más de 16.000 caracteres por turno.
 NATIVE_DESCRIPTIONS = {
     'media.options': 'Consultar bibliotecas, perfiles de compresión y disponibilidad del servicio.',
-    'media.prepare': 'Preparar desde scan_id y profile_id: paths exactos O count=1..5 más root/query opcionales para las más pesadas. Devuelve plan_id; aún no convierte.',
+    'media.prepare': 'Preparar scan_id/profile_id: paths exactos O count=1..5 con root/query/min_bytes/max_bytes/extensions. Conserva filtros previos: scan_id NO los guarda. Devuelve plan_id.',
     'media.start': 'Encolar plan_id de media_prepare si el usuario pidió comprimir. No duplica. queued no significa conversión terminada.',
     'media.control': 'Controlar batch_id: operation=pause|resume|cancel. Conserva originales; la parada se confirma después.',
     'media.jobs': 'Consultar lotes y revisiones internas pendientes; distingue simulation de live.',

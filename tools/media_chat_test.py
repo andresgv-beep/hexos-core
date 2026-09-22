@@ -48,6 +48,31 @@ class ChatMediaTest(unittest.TestCase):
         self.assertTrue(all(j['require_review'] for j in store.batch(first['batch_id'])['jobs']))
         store.close()
 
+    def test_range_is_applied_before_top_five(self):
+        plan=self.prepare(count=5,min_bytes=200,max_bytes=600,extensions=['.MKV'])
+        self.assertEqual([x['size_bytes'] for x in plan['files']],[600,500,400,300,200])
+        with self.assertRaises(ValueError):self.prepare(count=5,min_bytes=600,max_bytes=200)
+        with self.assertRaises(ValueError):self.prepare(count=5,min_bytes=True)
+        with self.assertRaises(ValueError):self.prepare(count=5,extensions=['mp4'])
+        with self.assertRaises(ValueError):self.prepare(paths=['/films/Sub 3/Film.mkv'],max_bytes=600)
+
+    def test_search_range_then_prepare_and_enqueue_five(self):
+        from hexos.agent.file_catalog.service import FileCatalog
+        from hexos.agent.file_catalog.sqlite_repository import SQLiteCatalog
+        page=FileCatalog(None,SQLiteCatalog(self.workspace)).search(
+            scan_id=self.scan,min_bytes=200,max_bytes=600,extensions=['mkv'],limit=2)
+        self.assertEqual(page['total_matches'],5)
+        self.assertIsNotNone(page['next_offset'])
+        plan=self.prepare(count=5,min_bytes=page['filters']['min_bytes'],
+                          max_bytes=page['filters']['max_bytes'],extensions=page['filters']['extensions'])
+        self.heartbeat()
+        batch=dispatch(self.workspace,'media.start',dict(plan_id=plan['plan_id']))
+        store=JobStore(self.workspace)
+        try:jobs=store.batch(batch['batch_id'])['jobs']
+        finally:store.close()
+        self.assertEqual([j['source']['identity']['size_bytes'] for j in jobs],[600,500,400,300,200])
+        self.assertTrue(all(j['state']=='queued' for j in jobs))
+
     def test_specific_observed_movie_only(self):
         plan=self.prepare(paths=['/films/Sub 3/Film.mkv'])
         self.assertEqual(plan['count'],1)

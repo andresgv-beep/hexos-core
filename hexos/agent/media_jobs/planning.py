@@ -5,6 +5,7 @@ from pathlib import Path
 import sqlite3
 import time
 
+from ..file_catalog.validation import filters_argument, extensions_argument
 from .selection import resolve
 from .files import movie
 from .store import JobStore
@@ -38,12 +39,15 @@ def prepare(workspace, config, args, *, now=None):
         if not scan or scan['device'] != config['device']:
             raise ValueError('El catálogo no pertenece al recurso configurado')
         paths = args.get('paths')
-        if paths is not None and any(k in args for k in ('count','root','query')):
-            raise ValueError('Usa paths exactos o selección por count/root/query, no ambos')
+        if paths is not None and any(k in args for k in ('count','root','query','min_bytes','max_bytes','extensions')):
+            raise ValueError('Usa paths exactos o count con filtros, no ambos')
         if paths is None:
             count = args.get('count', 1)
             if type(count) is not int or not 1 <= count <= 5:
                 raise ValueError('count debe estar entre 1 y 5')
+            minimum, maximum = args.get('min_bytes', 0), args.get('max_bytes')
+            filters_argument(minimum, maximum, args.get('query'), count)
+            extensions = extensions_argument(args.get('extensions'))
             if json.loads(scan['coverage']).get('complete') is not True:
                 raise ValueError('No se puede certificar el top de un recorrido parcial; acota y repite la búsqueda')
             roots = config['files']['libraries']
@@ -62,11 +66,15 @@ def prepare(workspace, config, args, *, now=None):
                 prefix = r.rstrip('/')+'/'
                 params.extend((len(prefix),prefix))
             query = args.get('query', '').casefold()
-            candidates = db.execute('SELECT path FROM files WHERE scan_id=? AND ('+clauses+') ORDER BY size_bytes DESC,path',
+            candidates = db.execute('SELECT path,size_bytes FROM files WHERE scan_id=? AND ('+clauses+') ORDER BY size_bytes DESC,path',
                                     [scan_id]+params)
             paths = []
             for row in candidates:
+                if row['size_bytes'] < minimum or (maximum is not None and row['size_bytes'] > maximum):
+                    continue
                 path = Path(row['path'])
+                if extensions and path.suffix.lower().lstrip('.') not in extensions:
+                    continue
                 if path.suffix.lower() not in {'.mkv','.mp4','.avi','.m4v','.mov','.ts'} or path.stem.endswith('.optimizada'):
                     continue
                 if query and query not in path.name.casefold():
