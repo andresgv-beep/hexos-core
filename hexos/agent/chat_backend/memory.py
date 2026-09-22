@@ -53,6 +53,29 @@ ES_LOCAL = re.compile(
     r'|\bdisco\b|\bsd[a-z]\b|\bhelios\b|\bhexos\b|\braid\b', re.I)
 
 
+# Deliberadamente ANCHO, y SOLO para auditar: nunca decide nada. Marca un
+# mensaje como «parecía personal» para poder revisar después qué se quedó fuera
+# del portón de arriba. «Mi cumpleaños es en marzo» no casa con AFIRMACION y no
+# se guarda nunca; sin esta muestra, nadie llega a enterarse jamás.
+PARECE_PERSONAL = re.compile(
+    r'\b(?:mi|mis|me|yo|soy|estoy|tengo|vivo|trabajo|prefiero|odio|quiero|suelo'
+    r'|uso|llevo|nac[íi]|cumplo|mi[ée]rcoles)\b', re.I)
+SKIPS_QUE_SE_GUARDAN = 200
+
+
+def _anotar_descarte(store, turn_id, texto):
+    """Deja constancia de un mensaje que el portón descartó. Nunca interrumpe."""
+    try:
+        store.db.execute('INSERT OR REPLACE INTO fact_gate_skips VALUES (?,?,?)',
+                         (turn_id, now(), texto[:500]))
+        store.db.execute('DELETE FROM fact_gate_skips WHERE turn_id NOT IN '
+                         '(SELECT turn_id FROM fact_gate_skips ORDER BY ts DESC LIMIT ?)',
+                         (SKIPS_QUE_SE_GUARDAN,))
+        store.db.commit()
+    except Exception:
+        pass      # auditar no puede tumbar un turno
+
+
 RECUERDO = re.compile(
     r'\b(te acuerdas|recuerdas|acordarte|te acordabas|me acuerdo'
     r'|qu[eé] te (?:dije|ped[ií]|cont[eé]|coment[eé]|pregunt[eé])'
@@ -226,8 +249,29 @@ class MemoryService:
                             hallazgos[fila['id']] = fila
                             aciertos[fila['id']] = aciertos.get(fila['id'], 0) + 1
                         break
-        except Exception:
-            return None
+        except Exception as fallo:
+            # NO HAY y NO PUDE MIRAR son dos respuestas distintas, y confundirlas
+            # es la peor forma de mentir que tiene un guardián: afirmar con
+            # seguridad que algo no existe cuando ni siquiera llegó a buscarlo.
+            #
+            # Devolver None dejaba el turno sin traza, así que Helios contestaba
+            # «no tengo registro de eso» con el mismo aplomo que si hubiera
+            # mirado. Ahora el intento fallido viaja como cualquier otro paso,
+            # marcado `desconocida`, y el cierre del turno lo recoge como
+            # `incierto` — que ya existe y ya dice lo correcto: «no saber no es
+            # haberlo hecho».
+            return dict(tool='history.recall', arguments=dict(terms=terminos, queries=consultas),
+                        effect='read', changes_state=False, ts=now(),
+                        seconds=round(time.monotonic() - empezado, 3), failed=True,
+                        verification='desconocida',
+                        evidence='la búsqueda en el archivo no llegó a completarse',
+                        result=dict(matches=[], searched=False,
+                                    error=type(fallo).__name__ + ': ' + str(fallo)[:200],
+                                    requested_by='hexos',
+                                    note='La búsqueda en el archivo FALLÓ: el pasado no se ha '
+                                         'mirado. No digas que no hay registro ni que no consta '
+                                         'nada, porque eso no se sabe. Di que no has podido '
+                                         'consultarlo.'))
         mejores = sorted(hallazgos.values(),
                          key=lambda fila: (aciertos[fila['id']], fila['ts']), reverse=True)[:6]
         mejores.sort(key=lambda fila: fila['ts'])
@@ -252,13 +296,36 @@ class MemoryService:
         if not self.env.profile or not hasattr(self.env.runtime, 'extract_facts'):
             return ''
         if not AFIRMACION.search(text or ''):
+            # El portón decide NO gastar una generación, y eso es correcto: un
+            # «vale» o un «revisa el NAS» no traen ningún dato suyo. Lo que estaba
+            # mal era que el descarte no dejara rastro en ninguna parte, así que
+            # un hueco del patrón —«mi cumpleaños es en marzo» no casa con nada—
+            # no se descubría nunca. Se guarda una muestra de los que parecían
+            # personales; con ella el patrón se ensancha midiendo.
+            if turn_id and PARECE_PERSONAL.search(text or ''):
+                _anotar_descarte(store, turn_id, text)
             return ''
         empezado = time.monotonic()
         try:
             candidatos = self.env.runtime.extract_facts(text)
         except TurnCancelled:
             raise
-        except Exception:
+        except Exception as fallo:
+            # Mismo principio que en recall_history: si la extracción revienta no
+            # se ha guardado nada Y no se sabe si había algo que guardar. Antes
+            # devolvía '' y el turno terminaba como si la persona no hubiera
+            # contado nada, sin que constara en ningún sitio.
+            if trace is not None:
+                trace.append(dict(tool='profile.remember', arguments=dict(count=0),
+                                  effect='write', changes_state=False, ts=now(),
+                                  seconds=round(time.monotonic() - empezado, 3), failed=True,
+                                  verification='desconocida',
+                                  evidence='la extracción de hechos no llegó a completarse',
+                                  result=dict(saved=[], extracted=False,
+                                              error=type(fallo).__name__ + ': ' + str(fallo)[:200],
+                                              requested_by='hexos',
+                                              note='No se ha guardado nada y no se sabe si había '
+                                                   'algo que guardar. No afirmes haberlo anotado.')))
             return ''
         # Queda registrada como cualquier otra generación: sin esto su coste es invisible.
         generacion = getattr(self.env.runtime, 'last_extraction_generation', None)

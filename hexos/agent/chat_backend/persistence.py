@@ -24,6 +24,13 @@ def initialize(store):
         CREATE TABLE IF NOT EXISTS generation_events (
             seq INTEGER PRIMARY KEY, turn_id TEXT NOT NULL, ts TEXT NOT NULL,
             body TEXT NOT NULL);
+        -- Mensajes que PARECÍAN contar algo personal y que el portón de hechos
+        -- descartó sin gastar una generación. No es una traza del turno: es el
+        -- material con el que ensanchar el patrón con evidencia en vez de a ojo,
+        -- porque un descarte no deja ni rastro en la conversación. Acotada a las
+        -- últimas filas: es una muestra, no un archivo.
+        CREATE TABLE IF NOT EXISTS fact_gate_skips (
+            turn_id TEXT PRIMARY KEY, ts TEXT NOT NULL, text TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS progress_events (
             id TEXT PRIMARY KEY, turn_id TEXT NOT NULL, ts TEXT NOT NULL, text TEXT NOT NULL);
     ''')

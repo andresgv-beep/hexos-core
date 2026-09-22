@@ -103,12 +103,24 @@ class RecallTest(unittest.TestCase):
         self.assertEqual(recuerdo['result']['matches'], [])
         self.assertIn('no demuestra', recuerdo['result']['note'])
 
-    def test_un_fallo_del_archivo_no_tumba_el_turno(self):
-        # Esto corre en cada turno que mire al pasado: si revienta, calla y sigue.
+    def test_un_fallo_del_archivo_no_tumba_el_turno_pero_tampoco_se_calla(self):
+        # Esto corre en cada turno que mire al pasado, así que NO puede lanzar: el
+        # turno tiene que terminar igual. Esa propiedad es la que da nombre a la
+        # prueba y sigue intacta.
+        #
+        # Lo que ha cambiado a propósito es la otra mitad. Antes, además de no
+        # tumbar el turno, CALLABA: devolvía None, el turno se quedaba sin traza y
+        # Helios contestaba «no tengo registro de eso» con el mismo aplomo que si
+        # hubiera mirado. Negar algo que no se ha comprobado es peor que no
+        # responder. Ahora el fallo viaja como dato y el cierre lo marca incierto.
         with self.agent.store() as store:
             store.db.execute('DROP TABLE conversation')
             store.db.commit()
-            self.assertIsNone(self.agent.recall_history(store, '¿te acuerdas del synology?', 'x'))
+            paso = self.agent.recall_history(store, '¿te acuerdas del synology?', 'x')
+        self.assertIsNotNone(paso, 'un fallo tiene que constar en alguna parte')
+        self.assertIs(paso['result']['searched'], False)
+        self.assertEqual(paso['verification'], 'desconocida')
+        self.assertEqual(self.agent.closure([paso], 'No he podido mirarlo.')['reason'], 'incierto')
 
 
 if __name__ == '__main__':
