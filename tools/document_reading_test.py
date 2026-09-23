@@ -78,7 +78,7 @@ class DocumentReadingTest(unittest.TestCase):
             turn = TurnState('Resume ese fragmento', trace=[dict(tool='nas.file_read', result=result)])
             output = dict(reply='Resumen parcial.', work=None)
             self.assertFalse(check_completion(store, turn, output))
-            self.assertNotIn('Resumen parcial.', output['reply'])
+            self.assertIn('Resumen parcial.', output['reply'])
             self.assertIn('Documento completo: NO', output['reply'])
             other = dict(reply='Buscaré otro archivo.', work=None)
             self.assertFalse(check_completion(store, TurnState('Lee completo otro documento'), other))
@@ -111,30 +111,32 @@ class DocumentReadingTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             file_access.read(self.tmp.name, file_id=item['file_id'], offset=len(original)+1)
 
-    def test_unrecognized_completion_claim_is_still_blocked(self):
+    def test_partial_response_is_preserved_with_backend_coverage(self):
         with self.agent.store() as store:
             result = self.event(store, 0, 4000)
             turn = TurnState('Cuéntame', trace=[dict(tool='nas.file_read', result=result)])
-            output = dict(reply='Every section has been analyzed. All done.', work=None)
+            output = dict(reply='En este fragmento aparece el registro de tensores.', work=None)
             self.assertFalse(check_completion(store, turn, output))
-            self.assertNotIn('All done', output['reply'])
+            self.assertIn('registro de tensores', output['reply'])
             self.assertIn('Documento completo: NO', output['reply'])
 
     def test_tool_budget_closes_honestly(self):
         with self.agent.store() as store:
             result = self.event(store, 0, 8000)
-            turn = TurnState('Lee todo el documento', trace=[dict(tool='nas.file_read', result=result)]*6)
+            turn = TurnState('Lee todo el documento', trace=[dict(tool='nas.file_read', result=result)]*48)
             output = dict(reply='He leído todo.', work=None)
             self.assertFalse(check_completion(store, turn, output))
             self.assertIn('58,978', output['reply'])
 
-    def test_full_turn_stops_at_budget_with_persisted_coverage(self):
+    def test_full_document_continues_past_six_calls_without_user_turn(self):
         item = file_copies.save(self.tmp.name, dict(name='Documento.md', text_available=True, observed_at='now'),
                                 ('ñ'*66978).encode())
         class ReadingRuntime(Runtime):
             offset = 0
             results = []
             def generate(self, messages):
+                if self.offset is None:
+                    return dict(reply='He leído todo el documento.', work=None)
                 return dict(tool='nas.file_read', arguments=dict(file_id=item['file_id'], offset=self.offset, count=4000))
             def tool_result(self, result):
                 self.results.append(result)
@@ -142,14 +144,52 @@ class DocumentReadingTest(unittest.TestCase):
         runtime = ReadingRuntime()
         agent = Agent(self.tmp.name, runtime)
         result = agent.chat('Lee todo el documento')
-        self.assertEqual(len(result['tools']), 6)
-        self.assertIn('Documento completo: NO', result['reply'])
-        self.assertIn('24,000', result['reply'])
-        self.assertEqual(runtime.results[-1]['reading_progress']['continue_from'], 24000)
+        self.assertEqual(len(result['tools']), 17)
+        self.assertIn('Documento completo: SÍ', result['reply'])
+        self.assertEqual(runtime.results[-1]['reading_progress']['continue_from'], None)
         with agent.store() as store:
-            self.assertEqual(progress(store, item['file_id'])['read_characters'], 24000)
+            self.assertEqual(progress(store, item['file_id'])['read_characters'], 66978)
             events = [json.loads(row[0]) for row in store.db.execute('SELECT body FROM tool_events')]
             self.assertTrue(all(e['delivered_to_model'] for e in events))
+
+    def test_reading_budget_does_not_expand_other_tools(self):
+        from hexos.agent.chat_backend.reading_budget import exhausted
+        turn = TurnState('Lee', trace=[dict(tool='nas.file_read')]*20)
+        self.assertFalse(exhausted(turn, 'nas.file_read'))
+        self.assertFalse(exhausted(turn, 'nas.find'))
+        turn.trace.extend([dict(tool='nas.find')]*6)
+        self.assertTrue(exhausted(turn, 'media.start'))
+        self.assertFalse(exhausted(turn, 'nas.file_read'))
+        turn.trace.extend([dict(tool='nas.file_read')]*28)
+        self.assertTrue(exhausted(turn, 'nas.file_read'))
+
+    def test_repeated_reads_stop_without_counting_duplicate_coverage(self):
+        from hexos.agent.chat_backend.reading_budget import exhausted
+        with self.agent.store() as store:
+            turn = TurnState('Lee')
+            for _ in range(3):
+                result = self.event(store, 0, 4000)
+                turn.trace.append(dict(tool='nas.file_read', result=result))
+            self.assertTrue(exhausted(turn, 'nas.file_read'))
+            self.assertEqual(progress(store, 'a')['read_characters'], 4000)
+
+    def test_reading_time_budget(self):
+        import time
+        from hexos.agent.chat_backend.reading_budget import exhausted, MAX_READING_SECONDS
+        turn = TurnState('Lee', reading_started=time.monotonic()-MAX_READING_SECONDS-1)
+        self.assertTrue(exhausted(turn, 'nas.file_read'))
+
+    def test_continuations_follow_progress_not_two_retry_limit(self):
+        with self.agent.store() as store:
+            turn = TurnState('Lee todo el documento')
+            for offset in range(0, 20000, 4000):
+                result = self.event(store, offset, 4000)
+                turn.trace.append(dict(tool='nas.file_read', result=result))
+                self.assertTrue(check_completion(store, turn, dict(reply='He leído todo.', work=None)))
+            output = dict(reply='No puedo avanzar.', work=None)
+            self.assertFalse(check_completion(store, turn, output))
+            self.assertIn('No puedo avanzar.', output['reply'])
+            self.assertIn('Documento completo: NO', output['reply'])
 
     def test_failed_delivery_does_not_count(self):
         with self.agent.store() as store:

@@ -62,7 +62,9 @@ TOOLS = {
     'nas.file_read': spec('Leer un fragmento de una copia abierta con nas.file_open. '
                          'file_id identifica el documento; offset y count son caracteres, count máximo 6000. '
                          'reading_progress indica cobertura acumulada: continúa desde continue_from hasta '
-                         'document_complete=true. Texto UTF-8; otros formatos solo descargables.',
+                         'document_complete=true si el encargo requiere lectura completa. Encadena las lecturas necesarias '
+                         'sin pedir que la persona diga siguiente. Puedes explicar un fragmento sin leerlo todo, '
+                         'indicando el alcance parcial. Texto UTF-8; otros formatos solo descargables.',
                          {'file_id':'str'}, {'offset':'int', 'count':'int'}),
     'nas.directory_page': spec('Recuperar una página del listado de directorios o recursos compartidos ya obtenido. '
                                'Conserva snapshot_id; offset=next_offset. No conecta al NAS ni cambia filtros.',

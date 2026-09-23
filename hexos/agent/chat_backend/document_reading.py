@@ -7,7 +7,7 @@ que todos los fragmentos sigan presentes en la ventana de contexto.
 import json
 import re
 
-from .settings import MAX_TRACE_EVENTS
+from .reading_budget import exhausted
 
 
 def coverage(total, intervals):
@@ -99,8 +99,8 @@ def check_completion(store, turn, output):
     pending = [p for p in states if not p['document_complete']]
     if pending:
         mark = tuple((p['file_id'], p['read_characters']) for p in pending)
-        if ((requested or claimed) and len(turn.trace) < MAX_TRACE_EVENTS and turn.document_read_mark != mark
-                and turn.document_read_retries < 2):
+        if ((requested or claimed) and not exhausted(turn, 'nas.file_read') and turn.document_read_mark != mark
+                and turn.document_read_retries < 48):
             turn.document_read_mark = mark
             turn.document_read_retries += 1
             turn.messages = [dict(role='user', content='COMPROBACIÓN DE LECTURA (registro del backend):\n'
@@ -108,10 +108,11 @@ def check_completion(store, turn, output):
                 'Continúa con nas.file_read usando file_id y continue_from, count=6000. '
                 'Si no puedes continuar, explica que es parcial. No afirmes que has leído todo.')]
             return True
-        # Válvula estructural: no publicar prosa del modelo con cobertura parcial,
-        # aunque el detector lingüístico no reconozca su afirmación. Los patrones
-        # solo deciden si ofrecer un reintento, nunca autorizan el cierre.
-        output['reply'] = 'La lectura completa sigue pendiente.\n\n' + '\n\n'.join(status(p) for p in states)
+        # La cobertura parcial no invalida observaciones sobre el fragmento.
+        # Retener evidencia y distinguirla de una afirmación de lectura total.
+        if claimed:
+            output['reply'] = 'No consta una lectura completa del documento.'
+        output['reply'] = output['reply'].rstrip() + '\n\n' + '\n\n'.join(status(p) for p in states)
         turn.document_read_corrected = True
     elif states:
         output['reply'] = output['reply'].rstrip() + '\n\n' + '\n\n'.join(status(p) for p in states)

@@ -14,6 +14,7 @@ from .tools import ToolExecutor
 from .listing_followups import listing_followup
 from .file_responses import file_listing_reply
 from .document_reading import check_completion
+from .reading_budget import exhausted, iterations, READ_TOOLS
 from .settings import MAX_TRACE_EVENTS
 
 if TYPE_CHECKING:
@@ -87,7 +88,9 @@ class TurnRunner:
                     reply = file_listing_reply(turn.text, turn.trace, continuation=True)
                     if reply is not None:
                         return self.finalizer.finish(store, turn, dict(reply=reply, work=None), None)
-                for _ in range(MAX_TURN_ITERATIONS):
+                iteration = 0
+                while iteration < iterations(turn):
+                    iteration += 1
                     self.agent.check_cancelled()
                     output = self.recovery.generate(store, turn)
                     self.agent.check_cancelled()
@@ -95,8 +98,8 @@ class TurnRunner:
                         continue
                     output, clarification = self.normalize_decision(output)
                     if 'tool' in output:
-                        if output['tool'] == 'nas.file_read' and len(turn.trace) >= MAX_TRACE_EVENTS:
-                            final = dict(reply='Se alcanzó el límite de herramientas de este turno.', work=None)
+                        if output['tool'] in READ_TOOLS and exhausted(turn, output['tool']):
+                            final = dict(reply='Lectura pausada por el límite de llamadas, tiempo o falta de avance. La cobertura queda registrada; no se ha programado una reanudación automática.', work=None)
                             check_completion(store, turn, final)
                             return self.finalizer.finish(store, turn, final, None)
                         self.executor.execute(store, turn, output)
