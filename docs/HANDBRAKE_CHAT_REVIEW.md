@@ -1,5 +1,26 @@
 # Chat, servicio y revisión interna
 
+## Integración y corrección de memoria — 23 septiembre 2026
+
+Integrados por avance directo 22ec1ae, 53576af, e26050e y 75a736a sobre la rama
+HandBrake. La retirada de reescrituras descrita a continuación es el comportamiento
+vigente; el apartado histórico de reintento/corrección de frases ya no se aplica.
+
+Se valida cada candidato de memoria contra el mensaje original registrado antes
+de agrupar claves. Un candidato inventado o demasiado largo ya no descarta otro
+válido para la misma clave. La validación es compartida con el guardado explícito;
+HERA conserva su comprobación final. Las pruebas incluyen candidatos inválidos
+junto a uno respaldado y dos fragmentos respaldados del mismo nombre.
+
+Actualizadas las cinco expectativas antiguas del bucle de chat: una afirmación o
+promesa textual no genera llamadas ni fuerza otro turno. El diagnóstico de falta
+de evidencia permanece. No se reinstalan las heurísticas retiradas.
+
+Validación local: 456 pruebas correctas de memoria, chat, contratos, NAS, tareas,
+encoder y sesiones internas. No es una nueva prueba de GPU o conversión real.
+La protección de filtros sigue detectando omisiones, no cambios explícitos del
+modelo; cerrar ese contrato requiere identificar la selección solicitada.
+
 ## Retirada de reescrituras por frases — 22 septiembre 2026
 
 Las generaciones 292–293 y 296–297 demostraron falsos positivos: «sacar el

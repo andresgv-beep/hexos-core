@@ -58,6 +58,21 @@ class FactExtractionTest(unittest.TestCase):
             dict(key='preferencia', value='té'), dict(key='yo/preferencia', value='café')])
         self.assertEqual(perfil.guardados, [])
 
+    def test_invalid_same_key_candidate_does_not_displace_supported_value(self):
+        for invalid in ('Andrés García', 'otra persona', 'Andrés ' + 'x'*201):
+            with self.subTest(invalid=invalid):
+                _, perfil, _ = self.cosechar('me llamo Andrés', [
+                    dict(key='nombre', value='Andrés'),
+                    dict(key='yo/nombre', value=invalid)])
+                self.assertEqual(perfil.guardados, [('yo/nombre', 'Andrés')])
+
+    def test_longest_supported_value_is_kept_once(self):
+        _, perfil, _ = self.cosechar('me llamo Andrés García', [
+            dict(key='nombre', value='Andrés'),
+            dict(key='yo/nombre', value='Andrés García')])
+        self.assertEqual(perfil.guardados, [('yo/nombre', 'Andrés García')])
+        self.assertEqual(perfil.corregidos, [])
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix='hexos-extraccion-test-')
 
