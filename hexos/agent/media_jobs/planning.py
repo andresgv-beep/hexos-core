@@ -62,8 +62,12 @@ def prepare(workspace, config, args, *, now=None):
         if not scan or scan['device'] != config['device']:
             raise ValueError('El catálogo no pertenece al recurso configurado')
         paths = args.get('paths')
-        if paths is not None and any(k in args for k in ('count','root','query','min_bytes','max_bytes','extensions')):
-            raise ValueError('Usa paths exactos o count con filtros, no ambos')
+        conflicting = [k for k in ('count','root','query','min_bytes','max_bytes','extensions') if k in args]
+        if paths is not None and conflicting:
+            raise ValueError('Con paths exactos elimina TODOS estos campos incompatibles: ' +
+                ', '.join(conflicting) + '. Conserva solo scan_id, profile_id y paths. '
+                'No basta con quitar count; los filtros también son incompatibles. '
+                'No se ha preparado ni iniciado nada.')
         if paths is None:
             count = args.get('count', 1)
             if type(count) is not int or not 1 <= count <= 5:

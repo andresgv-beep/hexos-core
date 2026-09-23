@@ -119,12 +119,14 @@ class RecoveryController:
             turn.retries.recovery_requests += 1
             turn.retries.recovery_errors.add(error_key)
             turn.messages = [dict(role='user', content=
-                'La operación solicitada no se completó. Puedes corregir los argumentos '
-                'de la consulta o usar otra herramienta local de lectura con el mismo objetivo, '
-                'sin pedir permiso para reintentar. No cambies el encargo. '
-                'Si falta información imprescindible o el error no es recuperable, explica '
-                'el bloqueo brevemente. No repitas el mismo error. Este reintento solo permite '
-                'corregir la lectura solicitada; no autoriza iniciar tareas ni otras escrituras.')]
+                'AVISO DE HEXOS (no es la persona): la herramienta devolvió un error. '
+                'Corrige sus argumentos conservando el objetivo, el alcance y las autorizaciones '
+                'de la petición original. Este aviso no concede permisos nuevos ni revoca los ya dados. '
+                'Una vez corregido el error, continúa los pasos pendientes que la persona ya solicitó; '
+                'si pidió solo preparar sin iniciar, conserva ese límite. '
+                'No pidas otra confirmación para la misma acción ya solicitada. '
+                'No repitas el mismo error. Si falta información imprescindible o persiste un '
+                'bloqueo real, explícalo sin afirmar que has terminado.')]
             return True
         # Un fragmento del buscador sirve para descubrir fuentes, no para sostener
         # una respuesta. Medido en vivo: buscó «nuevo iPhone» y convirtió rumores

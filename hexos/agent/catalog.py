@@ -310,7 +310,7 @@ EMPTY_STRING_FIELDS = frozenset({('nas.find', 'query'), ('nas.search', 'query'),
 # cada schema duplicaba la política y ocupaba más de 16.000 caracteres por turno.
 NATIVE_DESCRIPTIONS = {
     'media.options': 'Antes de comprimir consulta perfiles y bibliotecas aquí; no pidas al usuario sus IDs. No convierte.',
-    'media.prepare': 'Con scan_id de nas_find y profile_id de media_options: paths exactos O count=1..5 con root/query/min_bytes/max_bytes/extensions. Conserva filtros: scan_id NO los guarda. Devuelve plan_id sin iniciar.',
+    'media.prepare': 'Dos formas: SOLO scan_id/profile_id/paths; O scan_id/profile_id/count=1..5 con root/query/min_bytes/max_bytes/extensions. No mezcles. Conserva filtros previos con count. Devuelve plan_id sin iniciar.',
     'media.start': 'Aceptación del plan: llama con plan_id; confirma encolado solo tras éxito. Idempotente; no implica fin. Sin avisos automáticos al chat.',
     'media.control': 'Controlar batch_id: operation=pause|resume|cancel. Conserva originales; la parada se confirma después.',
     'media.jobs': 'Consultar lotes y revisiones internas pendientes; distingue simulation de live.',

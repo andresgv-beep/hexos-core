@@ -54,6 +54,29 @@ class TextMediaReplyTest(unittest.TestCase):
             self.assertEqual(result['diagnostics']['recovery_requests'],3)
             self.assertEqual(len(result['tools']),4)
 
+    def test_recovery_preserves_request_to_start_but_does_not_start_itself(self):
+        with tempfile.TemporaryDirectory() as workspace:
+            prepare=dict(tool='media.prepare',arguments=dict(scan_id='scan',profile_id='profile',paths=['/film.mkv']))
+            runtime=Runtime(prepare,'No he podido preparar.',prepare,
+                            dict(tool='media.start',arguments=dict(plan_id='plan')),'Encolado.')
+            with patch('hexos.agent.chat_backend.media_tools.dispatch',side_effect=[
+                dict(error='Argumentos incompatibles'),dict(plan_id='plan'),
+                dict(batch_id='batch',status='queued')]):
+                result=Agent(workspace,runtime).chat('Comprime esta película con el perfil configurado.')
+            self.assertEqual([x['tool'] for x in result['tools']],['media.prepare','media.prepare','media.start'])
+            self.assertIn('no concede permisos nuevos ni revoca los ya dados',runtime.inputs[2])
+            self.assertNotIn('no autoriza iniciar tareas',runtime.inputs[2])
+
+    def test_recovery_keeps_prepare_only_limit(self):
+        with tempfile.TemporaryDirectory() as workspace:
+            prepare=dict(tool='media.prepare',arguments=dict(scan_id='scan',profile_id='profile',paths=['/film.mkv']))
+            runtime=Runtime(prepare,'No he podido preparar.',prepare,'Preparado sin iniciar.')
+            with patch('hexos.agent.chat_backend.media_tools.dispatch',side_effect=[
+                dict(error='Argumentos incompatibles'),dict(plan_id='plan')]):
+                result=Agent(workspace,runtime).chat('Prepara esta película sin iniciar.')
+            self.assertEqual([x['tool'] for x in result['tools']],['media.prepare','media.prepare'])
+            self.assertIn('si pidió solo preparar sin iniciar, conserva ese límite',runtime.inputs[2])
+
     def test_null_error_does_not_reject_correct_progress_reply(self):
         with tempfile.TemporaryDirectory() as workspace:
             runtime = Runtime(dict(tool='media.job', arguments=dict(id='job')),

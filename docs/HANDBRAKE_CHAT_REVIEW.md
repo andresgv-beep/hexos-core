@@ -1,5 +1,27 @@
 # Chat, servicio y revisión interna
 
+## Corrección tras el diálogo de Joker — 23 septiembre 2026
+
+Traza local, work.sqlite del workspace HandBrake: generación 10 pide confirmación
+sin intervención de recuperación; generaciones 11 y 14 mezclan paths con filtros.
+La generación 14 recibe el aviso de HexOS que restringía el reintento a lecturas.
+Ese aviso sigue en el prompt de la generación 18, que prepara y vuelve a pedir
+iniciar. Esto demuestra la presencia del aviso, no una causalidad exclusiva.
+
+Se sustituye la prohibición ambigua por una regla explícita: el aviso no concede
+permisos nuevos ni revoca los ya dados; conservar petición, alcance y límites,
+y continuar sus pasos pendientes. Preparar sin iniciar sigue siendo preparar.
+No se dispara media.start desde texto ni se crean autorizaciones por heurísticas.
+
+El error de paths incompatibles enumera todos los campos presentes y explica
+que solo deben quedar scan_id/profile_id/paths. Así quitar count no oculta que
+también sobran min_bytes, max_bytes o extensions. No se corrigen argumentos a
+espaldas del modelo. La declaración compacta explicita las dos alternativas.
+
+Regresiones: llamadas incompatibles con y sin count, recuperación seguida de
+start solicitado y preparación sin start. Los guiones prueban el contrato y la
+ruta del Agent; no demuestran que el e4b haya cambiado su conducta en vivo.
+
 ## E4B en NAS real tras integración — 23 septiembre 2026
 
 Prueba de conversación `tools.media_prepare_live`, modelo e4b en text/0x0,
