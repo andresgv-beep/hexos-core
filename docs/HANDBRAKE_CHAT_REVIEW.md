@@ -1,5 +1,113 @@
 # Chat, servicio y revisión interna
 
+## Retirada de reescrituras por frases — 22 septiembre 2026
+
+Las generaciones 292–293 y 296–297 demostraron falsos positivos: «sacar el
+máximo provecho» se interpretó como note.show y una cita hipotética de Jarvis
+como una escritura real. Se retira del cierre la recuperación por anuncios,
+promesas y afirmaciones detectadas mediante patrones. También se retiran la
+sustitución por un borrador anterior al mencionar HexOS, los añadidos por
+negaciones y la corrección textual multimedia incorporada anteriormente.
+Los helpers históricos permanecen para compatibilidad/diagnóstico, pero no
+deciden regenerar o reescribir la respuesta por estas frases.
+
+Se conservan validación estructurada de llamadas, errores reales de herramientas,
+trazas, evidencia documental y persistencia. Esto no garantiza que el modelo
+no haga afirmaciones falsas: el texto no acredita una operación; la traza sí.
+No se añaden excepciones específicas para las metáforas ni para la persona.
+
+## Corrección tras conectar HERA — 22 septiembre 2026
+
+Las trazas reales mostraron que media.job devolvía `error: null` y el ejecutor
+y la recuperación lo interpretaban como fallo por presencia del campo. Ahora
+solo un error no vacío activa esa ruta; además la consulta separa `task_error`
+(incidencia de la tarea) del error de la herramienta. Para tareas live running,
+media.job observa el mismo run_id en el encoder, sin mutar la tarea ni ejecutar
+el supervisor. Declara observation_source y antigüedad; ante fallo de lectura
+conserva la observación guardada con advertencia. Verificar/publicar sigue
+correspondiendo al trabajador y al revisor interno.
+
+«He consultado el estado de los trabajos» ya no exige network.local: el anuncio
+de esa herramienta requiere objeto de red. La extracción de memoria agrupa las
+claves antes de guardar, descarta fragmentos sin referente y no elige por orden
+entre valores incompatibles. Se incluye el ejemplo real de no usar el nombre
+en cada turno sin interpretarlo como no usarlo nunca.
+
+194 pruebas automatizadas correctas. Se restauró mediante HERA la preferencia
+completa desde el mensaje original, manteniendo su historial. Helios reiniciado
+con HERA conectado; la interpretación conversacional del 12B queda pendiente
+de prueba por el usuario. No se enviaron mensajes de prueba a su conversación.
+
+## Ajuste de Text pendiente de reinicio — 22 septiembre 2026
+
+La sesión real mostró dos fallos adicionales: un saludo retomaba búsquedas
+antiguas y «Pongo en cola la conversión de La Monja… Te avisaré…» cerraba sin
+llamar a media.start. El aviso de recuperación agravaba el primero al ordenar
+ejecutar la promesa del propio modelo, aunque la persona solo hubiera saludado.
+
+Se aclara la política del saludo incluso con encargos pendientes, sin introducir
+un clasificador de permisos por palabras. La recuperación remite a la petición
+de la persona: el borrador no autoriza acciones. Una aceptación mantiene su
+significado de continuación del plan propuesto.
+
+Text recibe instrucciones de llamar a media.start al aceptar el plan y confirmar
+solo su resultado. Las formas de primera persona comprobadas («pongo en cola»,
+«he puesto en cola», «encolo», etc.) y promesas de avisos multimedia provocan un
+reintento acotado; si persisten, el cierre las corrige sin ejecutar herramientas.
+El registro debe contener media.start exitoso con batch_id y estado queued o
+already_queued; preparar, una escritura ajena o un start fallido no sirven.
+La corrección se aplica también tras recuperar un borrador anterior, se archiva
+y reinicia el contexto del chat para no conservar una respuesta distinta en KV.
+Estas reglas cubren formas concretas, no garantizan reconocer toda paráfrasis.
+
+Validación offline: 152 pruebas correctas de Text, conversación, trazas,
+contratos, multimedia y aislamiento de sesiones internas. Incluyen la respuesta
+real fallida, reintento agotado, persistencia, saludo con propuesta pendiente y
+aceptación con llamada start simulada. No prueban que el 12B haya cambiado su
+conducta: esa comprobación real queda pendiente tras cargar los cambios.
+
+Cambios solo en disco: no se reinició Helios, no se enviaron mensajes a la sesión
+real ni se modificó el trabajador, el revisor interno o la conversión en curso.
+No desplegar/reiniciar mientras pueda interferir con ese trabajo.
+
+## Corrección y prueba 12B — 22 septiembre 2026
+
+La prueba real posterior detectó un contrato inconsistente: `nas.find.query=""`
+era rechazado por el catálogo aunque el lector admite no filtrar por nombre.
+Ahora se acepta vacío solo en `query` de nas.find/nas.search/media.prepare;
+identificadores y rutas conservan la restricción de cadena no vacía. El esquema
+nativo expresa esa restricción y el reintento recibe el error y los argumentos
+concretos, en vez de un aviso genérico.
+
+El contexto incluye las bibliotecas configuradas como datos del operador, sin
+presets completos ni autorización nueva. Las instrucciones distinguen filtros
+de nombres de archivo, raíces observadas y consulta de perfiles con media.options.
+Si media.prepare por count omite filtros presentes en la última vista entregada
+de ese scan_id, se rechaza antes de seleccionar y se indican los campos que
+faltan. No se aplican silenciosamente: el modelo debe reenviarlos. Puede cambiar
+un filtro explícitamente; paths sigue siendo la alternativa de selección exacta.
+Si falta root y el escaneo no cubre todas las bibliotecas, el error muestra las
+bibliotecas cubiertas para corregir la llamada sin ampliar el encargo.
+
+Validación: 203 pruebas automatizadas, más 12B HQ42/HQ52 real con contexto 16384
+y NAS real, usando la configuración RF19/MKV del usuario en un workspace aislado.
+En la ejecución final consultó media.options, buscó MKV entre 8 y 50 GB decimales
+en `/volume1/multimedia 1/Multimedia/peliculas` (33 coincidencias, página inicial
+de 16) y preparó los cinco mayores del catálogo completo filtrado. Tamaños GB:
+39.287, 34.054, 27.183, 27.168, 26.346. La comprobación compara rutas y bytes por
+SQL independiente, no por el texto del modelo.
+
+Hubo dos llamadas de preparación rechazadas de forma recuperable: primero
+faltaban filtros y después root; el modelo corrigió ambas y terminó con el plan
+correcto. Cero llamadas media.start y cero lotes encolados. El arnés bloquea start
+y no inicia worker: no hubo copias, conversiones ni publicaciones. El historial
+habitual no se utilizó para introducir mensajes de prueba.
+
+Evidencia local: `/tmp/hexos-12b-fix-real-20260922-d/{conversation.json,verdict.json,work.sqlite}`.
+Reproducible con `python3 -m tools.media_prepare_live --help`.
+Esto valida este recorrido con dos peticiones concretas; no certifica todas las
+paráfrasis ni la conversión real, y no incorpora la rama frenos-y-silencios.
+
 2026-09-22. Rama `codex/handbrake-task-foundation`.
 
 ## Recorrido desde Helios

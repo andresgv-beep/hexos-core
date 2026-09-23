@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 from uuid import uuid4
 from .. import notes
 from ..work import KINDS, now, string, strings
-from .completion import FUGA_AVISO
 from .references import PEDIR_CERRAR, PEDIR_VER, NOTA_MENCIONADA
 from .recovery import RETRY
 from .state import TurnState
@@ -94,24 +93,6 @@ class TurnFinalizer:
                                '\n\n· No hacía falta preguntar: he ' +
                                ('cerrado' if cerrar else 'abierto') + ' «' +
                                turn.pointed_note.get('title', '') + '» en tu pantalla.')
-        # El aviso es maquinaria interna y la persona no tiene por qué leerlo.
-        # Pasó: tras un aviso contestó «Tomo nota de este aviso de HexOS»
-        # en vez de responderle a ella. Si la respuesta habla del aviso,
-        # se descarta y se conserva la de antes, que al menos iba dirigida
-        # a la persona; el reparo del cierre ya dirá lo que no se sostiene.
-        if not turn.document_read_corrected and turn.previous_reply is not None and FUGA_AVISO.search(output['reply']):
-            output['reply'] = turn.previous_reply
-        # Salió bien y lo cuenta como que no pudo: se dice lo que consta.
-        hechas = self.agent.denied_success(output['reply'], turn.trace)
-        if hechas:
-            detalle = ', '.join(dict.fromkeys(
-                paso['tool'] + (' (' + str((paso.get('result') or {}).get('saved')
-                                           or (paso.get('result') or {}).get('name')
-                                           or (paso.get('result') or {}).get('identified') or '') + ')'
-                                if isinstance(paso.get('result'), dict) else '')
-                for paso in hechas))
-            output['reply'] = (output['reply'].rstrip() +
-                               '\n\n· Aun así, esto sí quedó hecho: ' + detalle + '.')
         # Las fuentes visibles salen de la traza, no de la memoria del modelo.
         # Si ya citó una URL no se duplica; las que omita se añaden como registro
         # mecánico de lo que realmente leyó en este turno.

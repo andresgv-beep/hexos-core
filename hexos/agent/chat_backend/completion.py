@@ -19,6 +19,56 @@ FUGA_AVISO = re.compile(r'\baviso\s+de\s+hexos\b|\beste\s+aviso\b|\bhexos\b', re
 
 
 class ReplyPolicy:
+    # Contrato de salida de Text, no permisos ni decisiones del revisor interno.
+    # Acotado a afirmaciones en primera persona: una pregunta, una negación o
+    # una consulta histórica no equivalen a haber encolado algo en este turno.
+    QUEUED = re.compile(
+        r'^(?:(?:ahora|ya)\s+)?(?:pongo\s+en\s+cola|encolo|'
+        r'he\s+(?:puesto\s+en\s+cola|encolado)|hemos\s+(?:puesto\s+en\s+cola|encolado))\b', re.I)
+    NOTIFICATION = re.compile(
+        r'^(?:(?:y|además)\s+)?(?:te\s+(?:avisar[eé]|notificar[eé]|informar[eé])\b|'
+        r'te\s+mantendr[eé]\s+(?:informado|al\s+tanto)\b)', re.I)
+    MEDIA_WORDS = re.compile(r'\b(?:compresi[oó]n|conversi[oó]n|comprimir|pel[ií]cula|handbrake)\b', re.I)
+
+    @classmethod
+    def media_reply_correction(cls, reply, trace):
+        """Última salida veraz si el modelo ignora el único reintento.
+
+        No ejecuta nada. No infiere que la cola global esté vacía. Solo compara
+        la afirmación de una acción propia con el resultado de ESTE turno.
+        """
+        if not isinstance(reply, str):
+            return reply
+        if not (cls.MEDIA_WORDS.search(reply) or
+                any(step.get('tool', '').startswith('media.') for step in trace)):
+            return reply
+        started = any(step.get('tool') == 'media.start' and not step.get('failed')
+                      and isinstance(step.get('result'), dict)
+                      and not step['result'].get('error')
+                      and step['result'].get('batch_id')
+                      and step['result'].get('status') in ('queued', 'already_queued')
+                      for step in trace)
+        parts = re.split(r'(?<=[.!?])\s+|\n+', reply)
+        changed = False
+        for i, part in enumerate(parts):
+            plain = part.strip().replace('**', '')
+            if cls.QUEUED.search(plain) and not started:
+                parts[i] = 'No consta un encolado confirmado en este turno; anunciarlo no inicia la conversión.'
+                changed = True
+            elif cls.NOTIFICATION.search(plain):
+                parts[i] = 'No hay avisos automáticos al chat; puedes preguntarme por el progreso.'
+                changed = True
+        return ' '.join(parts) if changed else reply
+
+    @classmethod
+    def media_reply_issue(cls, reply, trace):
+        if cls.media_reply_correction(reply, trace) != reply:
+            return ('Distingue preparar, encolar y convertir usando resultados comprobados. '
+                    'No afirmes haber encolado sin éxito de media_start. No prometas avisos '
+                    'automáticos al chat: no están implementados. Corrige la respuesta o '
+                    'completa únicamente la acción solicitada por la persona.')
+        return None
+
     # Lo que el modelo dice haber hecho, en primera persona y en pasado. No es
     # comprensión del texto: es la forma de la frase con la que este modelo canta
     # una escritura. Si no hubo escritura en el turno, eso hay que decirlo.
@@ -90,6 +140,10 @@ class ReplyPolicy:
             if herramienta in llamadas:
                 continue
             encontrada = patron.search(reply)
+            if encontrada and herramienta == 'network.local':
+                objeto = reply[encontrada.end():].split('\n', 1)[0].split('.', 1)[0][:120]
+                if not re.search(r'\b(?:red|vecinos|direcciones|ips|equipos locales)\b', objeto, re.I):
+                    continue
             if encontrada and herramienta == 'note.show':
                 # Mostrar resultados en la respuesta no abre una nota en la UI.
                 # El verbo solo no identifica el objeto de la acción.

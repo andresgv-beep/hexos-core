@@ -525,8 +525,7 @@ class FugaDelAvisoTest(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         return Agent(tmp.name, self.Guionizado(salidas)).chat('recuerdalo')
 
-    def test_si_contesta_sobre_el_aviso_se_conserva_la_respuesta_anterior(self):
-        # Su turno real: tras el aviso respondió «Tomo nota de este aviso de HexOS».
+    def test_no_se_genera_aviso_para_reescribir_una_afirmacion(self):
         r = self.correr([
             {'reply': 'Lo he guardado para el futuro.', 'work': None},
             {'reply': 'Entendido. Tomo nota de este aviso de HexOS. En el futuro, si afirmo '
@@ -536,12 +535,12 @@ class FugaDelAvisoTest(unittest.TestCase):
         # Y el cierre sigue diciendo que eso no se sostiene.
         self.assertEqual(r['closure']['reason'], 'no_consta')
 
-    def test_una_respuesta_normal_tras_el_aviso_se_queda(self):
+    def test_no_se_consume_una_segunda_respuesta_por_heuristica(self):
         r = self.correr([
             {'reply': 'Lo he guardado.', 'work': None},
             {'reply': 'No hacía falta guardar nada; te lo cuento y ya está.', 'work': None},
         ])
-        self.assertEqual(r['reply'], 'No hacía falta guardar nada; te lo cuento y ya está.')
+        self.assertEqual(r['reply'], 'Lo he guardado.')
 
 
 if __name__ == '__main__':

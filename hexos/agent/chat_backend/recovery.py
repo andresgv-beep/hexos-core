@@ -164,36 +164,6 @@ class RecoveryController:
                 'Si no puedes con alguno, dilo nombrándolo y di por qué. '
                 'Queda un intento.')]
             return True
-        # «Dijo que lo hacía y no lo hizo», en tres vistas de lo mismo:
-        # anunció una herramienta concreta, prometió una acción inmediata,
-        # o cantó una escritura. Un solo aviso por turno: son el mismo
-        # fallo y avisar tres veces solo gasta generaciones.
-        aviso = None
-        anuncio = self.agent.announced_without_call(output['reply'], turn.trace)
-        if anuncio:
-            frase, herramienta = anuncio
-            nativo_nombre = herramienta.replace('.', '_')
-            aviso = ('tu respuesta dice ' + repr(frase) + ' y en este turno no se ha '
-                     'ejecutado ' + nativo_nombre + '. Decirlo no lo hace: para ella no ha '
-                     'cambiado nada. Llama a ' + nativo_nombre + ' AHORA con el id que '
-                     'corresponda; si no lo tienes, búscalo primero en el mismo turno.')
-        elif self.agent.unfulfilled_promise(output['reply'], turn.trace):
-            aviso = ('tu respuesta dice ' + repr(self.agent.unfulfilled_promise(output['reply'], turn.trace)) +
-                     ' y el turno iba a terminar ahí, sin haberlo hecho. Anunciarlo no lo hace, '
-                     'y la persona se queda esperando algo que no va a llegar. Ejecútalo AHORA '
-                     'con la herramienta que corresponda.')
-        elif self.agent.unsupported_claim(output['reply'], turn.trace):
-            aviso = ('en tu respuesta afirmas haber guardado o cambiado algo, pero en este '
-                     'turno no se ha ejecutado ninguna operación de escritura. Decirlo no lo '
-                     'guarda, y tu propia respuesta anterior no es prueba de que se hiciera. '
-                     'Si había que hacerlo, hazlo AHORA con la herramienta que corresponda.')
-        if aviso and not turn.retries.said_retries:
-            turn.retries.said_retries += 1
-            turn.previous_reply = output['reply']
-            turn.messages = [dict(role='user', content=
-                'AVISO DE HEXOS (no es la persona): ' + aviso +
-                ' Si no hacía falta, responde de nuevo sin anunciarlo. Queda un intento. '
-                'Este aviso es de la máquina: no lo menciones ni lo comentes. '
-                'Responde a la persona como si no existiera.')]
-            return True
+        # El texto libre no es una llamada estructurada. No inferir acciones,
+        # permisos ni promesas por verbos: también aparecen en hipótesis y citas.
         return False
