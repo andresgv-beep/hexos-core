@@ -32,7 +32,7 @@ class NasFiles:
         if source['library_root'] not in self.config['libraries']:
             raise SharedFailure('Biblioteca no autorizada por el operador')
         # No enviar revisión/due/progreso: la petición debe ser idéntica en cada tick.
-        fields = ('id','attempt','source','profile','staging','completion','validation','publication')
+        fields = ('id','attempt','source','profile','staging','completion','validation','publication','layout_version')
         request = dict(job={k:job[k] for k in fields if k in job}, operation=operation,
                        config=self.config, run_id=NasHandBrake.identity(job))
         return self.transport.call(dict(operation='stop' if stop else 'start', request=request,

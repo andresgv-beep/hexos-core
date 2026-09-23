@@ -8,6 +8,7 @@ import shlex
 from .. import nas_session
 from .contracts import SharedFailure, UncertainEffect
 from .profiles import validate
+from .remote.file_layout import layout
 
 
 class NasEncoderTransport:
@@ -51,9 +52,12 @@ class NasHandBrake:
             raise SharedFailure('El encoder no pertenece al dispositivo de origen')
         run_id = self.identity(job)
         source = job['staging']['container_path']
-        request = dict(run_id=run_id, input=source, output=f'/output/.hexos-media/{run_id}/encoded.mkv',
+        output = '/output/.hexos-media/'+layout(job, run_id)['output'] if job.get('layout_version',1)==2 else f'/output/.hexos-media/{run_id}/encoded.mkv'
+        request = dict(run_id=run_id, input=source, output=output,
                        preset_name=profile['preset']['PresetName'],
                        preset_export=dict(self.preset_version, PresetList=[profile['preset']]))
+        if job.get('layout_version',1)==2:
+            request['display'] = dict(job_id=job['id'],source=job['source']['path'],destination=job['source']['destination'])
         worker = (Path(__file__).parent/'remote/encoder_worker.py').read_bytes()
         return self.transport.call(dict(operation='start', run_id=run_id, request=request,
                                         worker=base64.b64encode(worker).decode()))

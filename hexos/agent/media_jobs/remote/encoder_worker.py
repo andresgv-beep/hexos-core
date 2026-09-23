@@ -52,6 +52,12 @@ def run(request_path):
     request = json.loads(request_path.read_text())
     root = request_path.parent
     state_path = root/'state.json'
+    def persist(value):
+        save(state_path,value)
+        if request.get('display'):
+            target_dir = Path(request['output']).parent
+            target_dir.mkdir(parents=True,exist_ok=True)
+            save(target_dir/'estado.json',dict(request['display'],**value))
     lock = (root/'run.lock').open('a')
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -65,39 +71,39 @@ def run(request_path):
     try:
         fcntl.flock(resource, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
-        save(state_path, dict(state, status='blocked', error='Otro trabajo HexOS ocupa el encoder'))
+        persist(dict(state, status='blocked', error='Otro trabajo HexOS ocupa el encoder'))
         return
     if (root/'cancel').exists():
-        save(state_path, dict(state, status='finished', exit_code=130))
+        persist(dict(state, status='finished', exit_code=130))
         return
     # No competir con otro CLI. El uso exclusivo frente a GUI queda como
     # precondición operativa del adaptador; no se deduce del estado running.
     for proc in Path('/proc').glob('[0-9]*/comm'):
         try:
             if proc.read_text().strip() == 'HandBrakeCLI':
-                save(state_path, dict(state, status='blocked', error='Hay otro HandBrakeCLI activo'))
+                persist(dict(state, status='blocked', error='Hay otro HandBrakeCLI activo'))
                 return
         except OSError:
             pass
     target = Path(request['output'])
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.exists():
-        save(state_path, dict(state, status='blocked', error='La salida ya existe sin recibo de esta ejecución'))
+        persist(dict(state, status='blocked', error='La salida ya existe sin recibo de esta ejecución'))
         return
     preset = root/'preset.json'
     save(preset, request['preset_export'])
     argv = ['HandBrakeCLI', '--json', '--preset-import-file', str(preset),
             '--preset', request['preset_name'], '--input', request['input'], '--output', str(target)]
     # El intento queda durable ANTES de iniciar el proceso externo.
-    save(state_path, state)
+    persist(state)
     try:
         proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                 text=True, errors='replace', start_new_session=True)
     except OSError as exc:
-        save(state_path, dict(state, status='finished', exit_code=127, error=str(exc)))
+        persist(dict(state, status='finished', exit_code=127, error=str(exc)))
         return
     state.update(status='running', pid=proc.pid)
-    save(state_path, state)
+    persist(state)
     chunks = queue.Queue(maxsize=256)
     def read_output():
         for line in proc.stdout:
@@ -108,7 +114,8 @@ def run(request_path):
     buffer = ''
     last_write = 0
     cancel_at = None
-    with (root/'encoder.log').open('a') as log:
+    log_path = target.parent/'handbrake.log' if request.get('display') else root/'encoder.log'
+    with log_path.open('a') as log:
         eof = False
         while not eof or proc.poll() is None:
             now = time.time()
@@ -140,14 +147,14 @@ def run(request_path):
                 except (OSError, ValueError, IndexError):
                     pass
                 state.update(output_bytes=target.stat().st_size if target.exists() else 0, observed_at=now)
-                save(state_path, state)
+                persist(state)
                 last_write = now
         result = proc.wait()
     state.update(status='finished', exit_code=result, observed_at=time.time(),
                  percent=100.0 if result == 0 else state['percent'],
                  output_bytes=target.stat().st_size if target.exists() else 0,
                  cancelled=cancel_at is not None, output=str(target))
-    save(state_path, state)
+    persist(state)
 
 
 if __name__ == '__main__':

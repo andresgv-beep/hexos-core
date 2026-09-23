@@ -95,7 +95,7 @@ class JobStore:
                 job = dict(id=uuid4().hex, batch_id=batch, resource=resource, position=position,
                            state='queued', revision=0, due=now, source=source, profile=profile,
                            mode=mode, require_review=require_review, config_digest=config_digest,
-                           attempt=0, observation=None, error=None, created_at=now)
+                           attempt=0, observation=None, error=None, created_at=now, layout_version=2)
                 self.db.execute('INSERT INTO media_jobs VALUES (?,?,?,?,?,?,?,?)',
                     (job['id'], batch, resource, position, 'queued', 0, now, dump(job)))
                 self.event(job['id'], now, 'created', dict(source=source, profile_hash=profile['sha256']))

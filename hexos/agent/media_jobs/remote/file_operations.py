@@ -4,7 +4,8 @@ import os
 from pathlib import Path
 
 from .file_common import (Rejected, copy_checked, directory,
-                          inspect, sha256, sync_directory)
+                          inspect, sha256, sync_directory, save)
+from .file_layout import layout
 from .file_media import probe, validate_media, decode
 
 
@@ -20,8 +21,9 @@ def paths(request):
     destination = path.with_name(path.stem+'.optimizada.mkv')
     if str(destination) != source['destination']:
         raise Rejected('Destino distinto del derivado del origen')
-    staged = Path(config['storage'])/'.hexos-media'/job['id']/('source'+path.suffix.lower())
-    output = Path(config['output'])/'.hexos-media'/request['run_id']/'encoded.mkv'
+    names = layout(job,request['run_id'])
+    staged = Path(config['storage'])/'.hexos-media'/names['input']
+    output = Path(config['output'])/'.hexos-media'/names['output']
     return path, destination, staged, output
 
 
@@ -37,8 +39,12 @@ def stage(request, root, checkpoint):
     metadata = probe(temporary, config, root, checkpoint)
     checkpoint()
     os.link(str(temporary), str(staged), follow_symlinks=False)
+    if job.get('layout_version',1)==2:
+        temporary.unlink()
     sync_directory(staged.parent)
-    return dict(copied=True, path=str(staged), container_path='/storage/.hexos-media/'+job['id']+'/'+staged.name,
+    if job.get('layout_version',1)==2:
+        save(staged.parent/'estado.json', dict(job_id=job['id'],source=str(source),destination=str(destination),status='copied'))
+    return dict(copied=True, path=str(staged), container_path='/storage/.hexos-media/'+layout(job,request['run_id'])['input'],
                 identity=inspect(staged), sha256=evidence['sha256'], probe=metadata)
 
 
@@ -59,6 +65,14 @@ def verify(request, root, checkpoint):
     digest = sha256(output, checkpoint)
     decode(output, config, root, checkpoint)
     inspect(output, before)
+    if job.get('layout_version',1)==2:
+        verified = Path(config['output'])/'.hexos-media'/layout(job,request['run_id'])['verified']
+        checkpoint()
+        os.link(str(output),str(verified),follow_symlinks=False)
+        output.unlink()
+        sync_directory(verified.parent)
+        save(verified.parent/'estado.json', dict(job_id=job['id'],source=str(source),
+             destination=job['source']['destination'],status='verified',file=str(verified),sha256=digest))
     return dict(valid=True, identity=before, sha256=digest, probe=metadata,
                 decoded=True, facts=facts, run_id=request['run_id'],
                 size_goal='smaller_than_source' if config.get('require_smaller', True) else 'not_enforced')
@@ -67,6 +81,8 @@ def verify(request, root, checkpoint):
 def publish(request, root, checkpoint):
     job = request['job']
     source, destination, _, output = paths(request)
+    if job.get('layout_version',1)==2:
+        output = Path(request['config']['output'])/'.hexos-media'/layout(job,request['run_id'])['verified']
     validated = job['validation']
     if validated.get('valid') is not True or validated.get('decoded') is not True or validated.get('run_id') != request['run_id']:
         raise Rejected('Falta validación de esta salida')
@@ -88,6 +104,9 @@ def publish(request, root, checkpoint):
             os.link(temporary.name, destination.name, src_dir_fd=parent, dst_dir_fd=parent, follow_symlinks=False)
             os.fsync(parent)
         observed = inspect(destination, evidence['identity'])
+        if job.get('layout_version',1)==2:
+            save(output.parent/'estado.json',dict(job_id=job['id'],source=str(source),
+                 destination=str(destination),status='published',original_preserved=True))
         return dict(published=True, path=str(destination), identity=observed,
                     sha256=evidence['sha256'], original_preserved=True)
     finally:

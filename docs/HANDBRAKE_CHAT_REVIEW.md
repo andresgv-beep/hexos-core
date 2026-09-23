@@ -1,5 +1,28 @@
 # Chat, servicio y revisión interna
 
+## Nombres legibles de archivos — 23 septiembre 2026
+
+Las tareas nuevas guardan layout_version=2. Tanto storage como output emplean
+carpetas con el título y el identificador de tarea; output distingue además el
+intento. La entrada conserva el título y extensión. La salida es
+`Título.parcial.mkv` hasta superar la verificación completa; entonces se publica
+localmente como `Título.optimizada.mkv` y se utiliza esa salida para copiar al
+destino de la biblioteca, sin reemplazar el original.
+
+Junto a la entrada queda estado.json con origen/destino. Junto a la salida,
+estado.json y handbrake.log. El estado del encoder «finished» no significa que
+la salida esté verificada: la verificación escribe «verified» y la publicación
+«published». El registro durable del servicio sigue siendo la fuente para la
+cancelación y coordinación; estos archivos facilitan inspección manual.
+
+Los títulos se acortan por bytes UTF-8 sin partir caracteres y los identificadores
+completos evitan colisiones entre películas con el mismo título. Las tareas sin
+versión mantienen source/encoded y sus peticiones remotas anteriores; no se
+renombran restos de pruebas ni trabajos previos. No hay limpieza automática.
+
+Validado localmente con archivos reales temporales, publicación y encoder de
+prueba: no se reinició HandBrake ni se convirtió otra película en el NAS.
+
 ## Corrección tras el diálogo de Joker — 23 septiembre 2026
 
 Traza local, work.sqlite del workspace HandBrake: generación 10 pide confirmación
