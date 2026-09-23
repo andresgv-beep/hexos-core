@@ -5,6 +5,35 @@ from ..media_jobs.store import JobStore
 from ..media_jobs.configuration import load
 from ..media_jobs import planning
 from ..internal_tasks.queue import ReviewQueue
+from ..media_jobs.nas_encoder import NasHandBrake, NasEncoderTransport
+from ..media_jobs.contracts import SharedFailure, UncertainEffect
+
+
+def job_snapshot(workspace, config, job):
+    result = {k:job.get(k) for k in ('id','batch_id','state','revision','mode','source','attempt','due',
+        'observation','publication','validation','review_kind','copy_progress','verification_progress')}
+    # Error de la tarea != fallo al consultar la ficha.
+    result['task_error'] = job.get('error')
+    result['observation_source'] = 'stored'
+    if job.get('mode') == 'live' and job.get('state') == 'running' and config:
+        try:
+            if job['source']['device'] != config['device'] or job.get('config_digest') != config['digest']:
+                raise ValueError('Configuración distinta de la tarea; no consultar otro destino')
+            encoder = NasHandBrake(NasEncoderTransport(workspace, config['device'], config['container']),
+                                   config['preset_version'])
+            sample = encoder.observe(job)
+            if sample.get('run_id') != job.get('run_id'):
+                raise ValueError('Observación de otra ejecución')
+            result['observation'] = sample
+            result['observation_source'] = 'live'
+        except (SharedFailure, UncertainEffect, OSError, ValueError) as exc:
+            result['observation_warning'] = str(exc)
+    result['note'] = ('state es el estado durable de la tarea; observation es la observación del encoder. '
+                      'Si observation_source=stored, no es una lectura actual: indica su antigüedad. '
+                      'La consulta no ejecuta, verifica, publica ni modifica la tarea.')
+    observed = (result.get('observation') or {}).get('observed_at')
+    result['observation_age_seconds'] = max(0, time.time()-observed) if isinstance(observed, (int,float)) else None
+    return result
 
 
 def context_reference(workspace):
@@ -53,8 +82,7 @@ def dispatch(workspace, name, args):
                         note='queued no es completed; simulation no acredita una conversión real.')
         if name=='media.job':
             job=store.get(args['id'])
-            return {k:job.get(k) for k in ('id','batch_id','state','revision','mode','source','attempt','due',
-                'observation','error','publication','validation','review_kind','copy_progress','verification_progress')}
+            return job_snapshot(workspace, config, job)
         if name=='media.control':
             return planning.summary(store.control(args['batch_id'],args['operation'],time.time()))
         raise ValueError('Herramienta multimedia desconocida')

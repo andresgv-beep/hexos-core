@@ -54,7 +54,7 @@ class VerificationService:
         repetir nada.
         """
         modo = catalog.TOOLS.get(name, {}).get('verify', 'none')
-        if modo == 'none' or (isinstance(result, dict) and 'error' in result):
+        if modo == 'none' or (isinstance(result, dict) and result.get('error')):
             return ('no_requerida' if modo == 'none' else 'no_cumplida'), None
         if modo == 'local':
             return 'confirmada', 'escritura local que devuelve lo escrito'

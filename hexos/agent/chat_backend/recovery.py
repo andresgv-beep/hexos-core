@@ -112,7 +112,7 @@ class RecoveryController:
         recoverable = {name for name, definition in catalog.TOOLS.items()
                        if definition['effect'] in ('read', 'result')}
         if (turn.trace and isinstance(turn.trace[-1]['result'], dict) and
-                'error' in turn.trace[-1]['result'] and turn.trace[-1]['tool'] in recoverable and
+                turn.trace[-1]['result'].get('error') and turn.trace[-1]['tool'] in recoverable and
                 turn.retries.recovery_requests == 0):
             turn.retries.recovery_requests += 1
             turn.messages = [dict(role='user', content=

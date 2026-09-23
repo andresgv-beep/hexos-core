@@ -261,7 +261,7 @@ class ToolExecutor:
         from .document_reading import enrich
         result = enrich(store, output['tool'], result)
         comprobacion, evidencia = self.agent.verify(store, output['tool'], output['arguments'], result)
-        activity.update(status='failed' if isinstance(result, dict) and 'error' in result else 'done',
+        activity.update(status='failed' if isinstance(result, dict) and result.get('error') else 'done',
                         verification=comprobacion,
                         seconds=round(time.monotonic() - started, 3))
         turn.trace.append(dict(tool=output['tool'], arguments=output['arguments'],
@@ -270,7 +270,7 @@ class ToolExecutor:
                           # distintas, y hasta ahora se decían con el mismo campo.
                           verification=comprobacion, evidence=evidencia,
                           ts=now(), seconds=round(time.monotonic() - started, 3),
-                          failed='error' in result if isinstance(result, dict) else False,
+                          failed=bool(result.get('error')) if isinstance(result, dict) else False,
                           delivered_to_model=False,
                           result=result))
         event_row = store.db.execute('INSERT INTO tool_events(turn_id,ts,body) VALUES (?,?,?)',
