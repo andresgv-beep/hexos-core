@@ -10,7 +10,7 @@ from ..continuity import history_tool
 from ..progress import announcement
 from ..work import now
 from .state import Environment, SessionState, TurnState
-from .settings import MAX_TRACE_EVENTS
+from .reading_budget import exhausted, READ_TOOLS
 from .ledger import completed_call, completed_registration
 from .file_requests import validate_file_request
 
@@ -220,8 +220,10 @@ class ToolExecutor:
                     json.dumps(reused, ensure_ascii=False))]
             self.agent.state = 'thinking'
             return
-        if len(turn.trace) >= MAX_TRACE_EVENTS:
-            raise RuntimeError('Se alcanzó el límite de seis herramientas; no se ejecutó la siguiente solicitud')
+        if exhausted(turn, output["tool"]):
+            raise RuntimeError("Se alcanzó el presupuesto de herramientas; no se ejecutó la siguiente solicitud")
+        if output["tool"] in READ_TOOLS and turn.reading_started is None:
+            turn.reading_started = time.monotonic()
         activity = dict(tool=output['tool'], status='running', effect=effect, seconds=None)
         self.agent.active_tools = [*self.agent.active_tools, activity]
         started = time.monotonic()
