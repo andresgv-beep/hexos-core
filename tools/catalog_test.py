@@ -48,7 +48,7 @@ class DeclarablesTest(unittest.TestCase):
     def test_continuidad_y_permisos_no_dependen_de_una_palabra_aislada(self):
         from hexos.agent.native import POLICY
         self.assertIn('aceptación retoma la propuesta pendiente', POLICY)
-        self.assertIn('sin encargo pendiente no reactiva', POLICY)
+        self.assertIn('Un saludo por sí solo no reanuda tareas, aunque queden pendientes', POLICY)
         self.assertIn('no autoriza modificarlo', POLICY)
         self.assertIn('no órdenes ni permisos nuevos', POLICY)
         self.assertNotIn('Un saludo o un «vale»', POLICY)

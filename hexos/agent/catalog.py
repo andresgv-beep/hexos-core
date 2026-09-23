@@ -299,14 +299,19 @@ TOOLS = {
 # API compatible, sin ofrecer al modelo dos puertas para la misma búsqueda.
 HIDDEN_TOOLS = frozenset({'device.refresh', 'profile.remember', 'nas.index'})
 
+# These filters use the empty string to mean no filename filter, exactly as
+# their file-catalog implementations do. Identifiers and paths remain nonempty.
+EMPTY_STRING_FIELDS = frozenset({('nas.find', 'query'), ('nas.search', 'query'),
+                                ('media.prepare', 'query')})
+
 
 # El catálogo completo conserva reglas, validación y mensajes de error. Gemma solo
 # necesita una declaración operativa corta: repetir todos esos detalles dentro de
 # cada schema duplicaba la política y ocupaba más de 16.000 caracteres por turno.
 NATIVE_DESCRIPTIONS = {
-    'media.options': 'Consultar bibliotecas, perfiles de compresión y disponibilidad del servicio.',
-    'media.prepare': 'Preparar scan_id/profile_id: paths exactos O count=1..5 con root/query/min_bytes/max_bytes/extensions. Conserva filtros previos: scan_id NO los guarda. Devuelve plan_id.',
-    'media.start': 'Encolar plan_id de media_prepare si el usuario pidió comprimir. No duplica. queued no significa conversión terminada.',
+    'media.options': 'Antes de comprimir consulta perfiles y bibliotecas aquí; no pidas al usuario sus IDs. No convierte.',
+    'media.prepare': 'Con scan_id de nas_find y profile_id de media_options: paths exactos O count=1..5 con root/query/min_bytes/max_bytes/extensions. Conserva filtros: scan_id NO los guarda. Devuelve plan_id sin iniciar.',
+    'media.start': 'Aceptación del plan: llama con plan_id; confirma encolado solo tras éxito. Idempotente; no implica fin. Sin avisos automáticos al chat.',
     'media.control': 'Controlar batch_id: operation=pause|resume|cancel. Conserva originales; la parada se confirma después.',
     'media.jobs': 'Consultar lotes y revisiones internas pendientes; distingue simulation de live.',
     'media.job': 'Consultar estado y progreso de una ficha id; completed acredita publicación y catálogo.',
@@ -333,12 +338,11 @@ NATIVE_DESCRIPTIONS = {
                      'Antes de buscar en una biblioteca consulta aquí y pasa sus rutas como roots de nas_find. '
                      'Sin query lista todas las rutas recordadas. Para buscar carpetas ahora usa nas_directories; '
                      'para listar compartidas usa nas_shares. Cero rutas guardadas no demuestra ausencia.',
-    'nas.find': 'Buscar archivos recursivamente en device: extensions=["mkv","mp4","avi","mp3"] opcional; '
-                'min_bytes=0, omite max_bytes para no poner máximo (0 solo archivos vacíos), query filtra nombre. '
-                'roots omitido o ["/"]: descubre todos los volúmenes de datos Synology. '
-                'Solo ARCHIVOS: para buscar carpetas usa nas_directories. Conserva query literal, sin añadir letras. '
-                'Omite ocultos/@ salvo include_hidden=true. limit limita la página. '
-                'Devuelve scan_id para nas_search con los mismos filtros y offset. complete=false: búsqueda parcial.',
+    'nas.find': 'Buscar archivos recursivos. Películas: extensions=["mkv","mp4","avi"]. '
+                'query filtra nombre de ARCHIVO; vacío/omitido no filtra. Carpeta: resuelve con nas_locations/directories '
+                'y pasa ruta observada en roots; no cambies biblioteca si no hay resultados. '
+                'roots omitido/["/"]: todos los volúmenes. GB=1000000000 bytes; límites inclusivos, max_bytes omitido sin máximo. '
+                'Ocultos solo con include_hidden=true. limit pagina; continúa con nas_search, scan_id y filtros. complete=false: parcial.',
     'nas.browse': 'Listar una carpeta NAS por SSH: path absoluto (defecto /), device, offset y limit. '
                   'Sigue next_offset para completar el listado. Para explorar el interior usa el path '
                   'de un directory devuelto. Para buscar archivos recursivamente usa nas_find; credenciales por interfaz.',
@@ -419,7 +423,9 @@ def validate(name, args):
                          ' Esquema: ' + json.dumps(definition, ensure_ascii=False))
     for key, value in args.items():
         kind = (definition['required'] | definition['optional'])[key]
-        if (kind == 'str' and (not isinstance(value, str) or not value.strip())) or (
+        if kind == 'str' and isinstance(value, str) and not value.strip() and (name, key) not in EMPTY_STRING_FIELDS:
+            raise ValueError(f'{name}.{key}: se requiere una cadena no vacía; omite el campo si es opcional')
+        if (kind == 'str' and not isinstance(value, str)) or (
                 kind == 'int' and type(value) is not int) or (kind == 'bool' and type(value) is not bool) or (
                 kind == 'list' and (not isinstance(value, list) or
                                     any(not isinstance(item, str) for item in value))):

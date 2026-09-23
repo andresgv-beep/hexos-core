@@ -56,6 +56,37 @@ class ChatMediaTest(unittest.TestCase):
         with self.assertRaises(ValueError):self.prepare(count=5,extensions=['mp4'])
         with self.assertRaises(ValueError):self.prepare(paths=['/films/Sub 3/Film.mkv'],max_bytes=600)
 
+    def test_prepare_does_not_silently_drop_delivered_search_filters(self):
+        import sqlite3
+        db=sqlite3.connect(self.workspace/'work.sqlite')
+        db.execute('CREATE TABLE tool_events(seq INTEGER PRIMARY KEY, body TEXT)')
+        db.execute('INSERT INTO tool_events(body) VALUES (?)',(json.dumps(dict(
+            tool='nas.find',failed=False,result=dict(scan_id=self.scan,
+            filters=dict(min_bytes=200,max_bytes=600,extensions=['mkv'])))),))
+        db.commit();db.close()
+        with self.assertRaisesRegex(ValueError, '"min_bytes": 200'):
+            self.prepare(count=5)
+        plan=self.prepare(count=5,min_bytes=200,max_bytes=600,extensions=['mkv'],query='')
+        self.assertEqual([f['size_bytes'] for f in plan['files']],[600,500,400,300,200])
+
+    def test_missing_root_names_the_covered_library_without_expanding_scope(self):
+        self.config['files']['libraries'].append('/other-library')
+        (self.workspace/'media_jobs.json').write_text(json.dumps(self.config))
+        with self.assertRaisesRegex(ValueError, 'root.*\\["/films"\\]'):
+            self.prepare(count=3)
+        self.assertEqual(self.prepare(count=3,root='/films')['count'],3)
+
+    def test_context_exposes_configured_libraries_without_preset_or_permission(self):
+        from hexos.agent.chat_backend.media_tools import context_reference
+        reference=context_reference(self.workspace)
+        self.assertIn('/films',reference)
+        self.assertIn('media_options',reference)
+        self.assertIn('no un escaneo ni una orden',reference)
+        self.assertNotIn('AudioList',reference)
+        self.assertNotIn('fixture-rf19',reference)
+        (self.workspace/'media_jobs.json').unlink()
+        self.assertEqual(context_reference(self.workspace),'')
+
     def test_search_range_then_prepare_and_enqueue_five(self):
         from hexos.agent.file_catalog.service import FileCatalog
         from hexos.agent.file_catalog.sqlite_repository import SQLiteCatalog

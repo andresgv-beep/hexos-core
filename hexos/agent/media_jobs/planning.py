@@ -31,6 +31,29 @@ def prepare(workspace, config, args, *, now=None):
     if args['profile_id'] not in profiles:
         raise ValueError('Perfil no configurado; consulta media.options')
     scan_id = args['scan_id']
+    # A scan includes unfiltered files. The last delivered view is evidence of
+    # the selection, not an implicit filter stored in the scan itself. When a
+    # caller forgets its filters, return an actionable correction before LIMIT.
+    history = Path(workspace)/'work.sqlite'
+    if args.get('paths') is None and history.exists():
+        observed = sqlite3.connect(history.resolve().as_uri()+'?mode=ro', uri=True)
+        try:
+            exists = observed.execute("SELECT 1 FROM sqlite_master WHERE name='tool_events'").fetchone()
+            row = observed.execute("""SELECT body FROM tool_events
+                WHERE json_extract(body,'$.tool') IN ('nas.find','nas.search')
+                AND json_extract(body,'$.result.scan_id')=?
+                AND coalesce(json_extract(body,'$.failed'),0)=0
+                ORDER BY seq DESC LIMIT 1""", (scan_id,)).fetchone() if exists else None
+        finally:
+            observed.close()
+        if row:
+            previous = json.loads(row[0])['result'].get('filters', {})
+            missing = {k:previous[k] for k in ('min_bytes','max_bytes','extensions','query','root')
+                       if k not in args and previous.get(k) not in (None, '', [], 0)}
+            if missing:
+                raise ValueError('Faltan filtros de la selección observada. Repite media.prepare con los mismos '
+                    'argumentos y añade ' + json.dumps(missing, ensure_ascii=False) +
+                    '. scan_id contiene también archivos fuera de esos filtros; no pidas IDs al usuario.')
     database = Path(workspace)/'nas_files.sqlite'
     db = sqlite3.connect(database.resolve().as_uri()+'?mode=ro', uri=True)
     db.row_factory = sqlite3.Row
@@ -58,7 +81,12 @@ def prepare(workspace, config, args, *, now=None):
                 roots = [root]
             scanned = json.loads(scan['roots'])
             if any(not any(r == s or r.startswith(s.rstrip('/')+'/') for s in scanned) for r in roots):
-                raise ValueError('La búsqueda no cubre todas las bibliotecas seleccionadas')
+                covered = [r for r in config['files']['libraries']
+                           if any(r == s or r.startswith(s.rstrip('/')+'/') for s in scanned)]
+                raise ValueError('La búsqueda no cubre todas las bibliotecas seleccionadas. '
+                    'Conserva el alcance pedido: repite media.prepare con root igual a la biblioteca '
+                    'solicitada que sí está cubierta: ' + json.dumps(covered, ensure_ascii=False) +
+                    '. Conserva count, scan_id, profile_id y filtros. No cambies el perfil ni amplíes la búsqueda.')
             # Las raíces de la consulta se fijan antes de LIMIT, no página a página.
             clauses = ' OR '.join('substr(path,1,?)=?' for _ in roots)
             params = []

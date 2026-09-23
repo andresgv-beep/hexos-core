@@ -101,6 +101,8 @@ class RecoveryController:
                 self.agent.runtime, 'repair_instruction', 'Formato de decisión inválido. '
                 'Devuelve solo un objeto JSON válido: reply y work:null para la respuesta, '
                 'o tool y arguments para una herramienta. No repitas operaciones ya completadas.')
+            if not getattr(exc, 'repair', None):
+                repair = ('AVISO DE HEXOS (no es la persona). Error concreto: ' + str(exc) + '\n' + repair)
             turn.messages = [dict(role='user', content=repair)]
             return RETRY
         return output
