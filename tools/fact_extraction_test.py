@@ -44,6 +44,20 @@ class Perfil:
 
 
 class FactExtractionTest(unittest.TestCase):
+    def test_real_preference_is_not_overwritten_by_referentless_fragment(self):
+        value = 'no hace falta que me llames andres en cada turno'
+        aviso, perfil, _ = self.cosechar(value + ', no me gusta', [
+            dict(key='yo/preferencia', value=value),
+            dict(key='yo/preferencia', value='no me gusta')])
+        self.assertEqual(perfil.confirmados['yo/preferencia'], value)
+        self.assertEqual(len(perfil.guardados), 1)
+        self.assertEqual(perfil.corregidos, [])
+
+    def test_conflicting_candidates_do_not_choose_last_value(self):
+        _, perfil, _ = self.cosechar('prefiero té y café', [
+            dict(key='preferencia', value='té'), dict(key='yo/preferencia', value='café')])
+        self.assertEqual(perfil.guardados, [])
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix='hexos-extraccion-test-')
 

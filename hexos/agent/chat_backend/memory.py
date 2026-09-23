@@ -268,6 +268,26 @@ class MemoryService:
             store.db.commit()
         anotado = []
         guardados = []
+        # Una extracción no es una secuencia de correcciones de la persona.
+        # Dos candidatos para la misma clave no deben pisarse por orden de salida.
+        grupos = {}
+        for hecho in candidatos:
+            if not isinstance(hecho, dict):
+                continue
+            key, value = hecho.get('key'), hecho.get('value')
+            if not isinstance(key, str) or not isinstance(value, str):
+                continue
+            key = key.strip().casefold()
+            key = key if '/' in key else 'yo/' + key
+            if value.strip().casefold() in ('no me gusta', 'me gusta', 'eso', 'así', 'asi'):
+                continue  # Sin referente no constituye una preferencia recuperable.
+            grupos.setdefault(key, []).append(dict(key=key, value=value.strip()))
+        candidatos = []
+        for hechos in grupos.values():
+            completo = max(hechos, key=lambda h: len(h['value']))
+            if all(h['value'].casefold() in completo['value'].casefold() for h in hechos):
+                candidatos.append(completo)
+            # Valores incompatibles: no elegir una corrección arbitraria.
         for hecho in candidatos:
             try:
                 resultado = self.remember_fact(store, hecho, turn_id)
