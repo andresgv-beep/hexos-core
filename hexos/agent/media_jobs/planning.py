@@ -85,7 +85,9 @@ def prepare(workspace, config, args, *, now=None):
                            if any(r == s or r.startswith(s.rstrip('/')+'/') for s in scanned)]
                 raise ValueError('La búsqueda no cubre todas las bibliotecas seleccionadas. '
                     'Conserva el alcance pedido: repite media.prepare con root igual a la biblioteca '
-                    'solicitada que sí está cubierta: ' + json.dumps(covered, ensure_ascii=False) +
+                    'solicitada que sí está cubierta. root es una cadena, no una lista. '
+                    'Bibliotecas cubiertas: ' + json.dumps(covered, ensure_ascii=False) +
+                    ('. Ejemplo de argumento: ' + json.dumps(dict(root=covered[0]), ensure_ascii=False) if len(covered)==1 else '') +
                     '. Conserva count, scan_id, profile_id y filtros. No cambies el perfil ni amplíes la búsqueda.')
             # Las raíces de la consulta se fijan antes de LIMIT, no página a página.
             clauses = ' OR '.join('substr(path,1,?)=?' for _ in roots)

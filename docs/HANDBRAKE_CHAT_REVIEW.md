@@ -1,5 +1,29 @@
 # Chat, servicio y revisión interna
 
+## E4B en NAS real tras integración — 23 septiembre 2026
+
+Prueba de conversación `tools.media_prepare_live`, modelo e4b en text/0x0,
+contexto 16384: consulta perfiles y busca en la biblioteca correcta, pero **no
+supera la preparación**. Interpreta GB como GiB, confunde los 16 resultados de
+página con el total y mezcla paths con count/filtros. Las recuperaciones no han
+conseguido completar un plan. No hubo media.start ni conversión de películas.
+Evidencias: `/tmp/hexos-e4b-real-20260923-{a,b,c}`; conversación y work.sqlite.
+
+Se corrigen dos obstáculos acotados: hasta tres recuperaciones de errores de
+lectura distintos por turno, sin repetir el mismo error, y ejemplo de root como
+cadena en el error de cobertura. No se deducen acciones de promesas de Text.
+La prueba c sigue fallando; estas correcciones no acreditan autonomía.
+
+Recorrido interno separado con vídeo sintético: completed,
+`e5cde301b2f04a1ebde506ccb60cb794`; e4b decide publish, HexOS verifica, publica e
+indexa. Original intacto mediante comprobación independiente. Evidencias en
+`/tmp/hexos-e4b-cycle-20260923`. El arnés adelanta el reloj de las consultas y no
+valida horas de ejecución, ahorro de espacio ni selección desde conversación.
+
+459 pruebas automatizadas correctas. UI y backend locales se ejecutan desde este
+checkout, con workspace separado y modelo e4b; no activan un especialista Cortex
+ni conectan un perfil HERA automáticamente. La máquina del 12b no se ha tocado.
+
 ## Integración y corrección de memoria — 23 septiembre 2026
 
 Integrados por avance directo 22ec1ae, 53576af, e26050e y 75a736a sobre la rama

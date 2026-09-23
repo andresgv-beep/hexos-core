@@ -111,16 +111,20 @@ class RecoveryController:
         """True pide otra generación; no ejecuta acciones por su cuenta."""
         recoverable = {name for name, definition in catalog.TOOLS.items()
                        if definition['effect'] in ('read', 'result')}
+        last = turn.trace[-1] if turn.trace else {}
+        error_key = (last.get('tool'), str((last.get('result') or {}).get('error'))) if isinstance(last.get('result'), dict) else None
         if (turn.trace and isinstance(turn.trace[-1]['result'], dict) and
                 turn.trace[-1]['result'].get('error') and turn.trace[-1]['tool'] in recoverable and
-                turn.retries.recovery_requests == 0):
+                turn.retries.recovery_requests < 3 and error_key not in turn.retries.recovery_errors):
             turn.retries.recovery_requests += 1
+            turn.retries.recovery_errors.add(error_key)
             turn.messages = [dict(role='user', content=
                 'La operación solicitada no se completó. Puedes corregir los argumentos '
                 'de la consulta o usar otra herramienta local de lectura con el mismo objetivo, '
                 'sin pedir permiso para reintentar. No cambies el encargo. '
                 'Si falta información imprescindible o el error no es recuperable, explica '
-                'el bloqueo brevemente. Queda un intento de recuperación.')]
+                'el bloqueo brevemente. No repitas el mismo error. Este reintento solo permite '
+                'corregir la lectura solicitada; no autoriza iniciar tareas ni otras escrituras.')]
             return True
         # Un fragmento del buscador sirve para descubrir fuentes, no para sostener
         # una respuesta. Medido en vivo: buscó «nuevo iPhone» y convirtió rumores
