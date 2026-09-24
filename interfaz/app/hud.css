@@ -139,3 +139,41 @@ body { background: var(--hud-bg); color: var(--hud-text); }
 .viewer-row:hover, .viewer-list li.marked { background: var(--hud-raised); }
 .hud-layout .icon-button { color: var(--hud-muted); }
 .hud-layout .icon-button:hover { color: var(--hud-bright); background: var(--hud-raised); }
+/* Concept: content occupies the right column, with activity below it. */
+.hud-content-dock { flex: 1; min-height: 260px; display: flex; flex-direction: column; border: 1px solid var(--hud-frame); background: var(--hud-code); border-radius: 0 20px 0 20px; overflow: hidden; }
+.hud-content-tabs { display: flex; flex-shrink: 0; min-height: 44px; border-bottom: 1px solid var(--hud-track); padding-left: 8px; }
+.hud-content-tabs button { padding: 0 14px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--hud-muted); font: 600 11px "Trebuchet MS",sans-serif; letter-spacing: .14em; text-transform: uppercase; }
+.hud-content-tabs button[aria-pressed="true"] { background: var(--hud-raised); color: var(--hud-bright); border-bottom-color: var(--hud-pink); }
+.hud-content-tabs .hud-expand { margin-left: auto; padding: 0 12px; }
+.hud-content-body { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+.hud-content-body > iframe { flex: 1; min-height: 300px; width: 100%; border: 0; background: white; }
+.hud-content-empty { padding: 22px; color: var(--hud-muted); font-size: 14px; line-height: 1.6; }
+.hud-content-body > .reply-code { margin: 0; border: 0; border-radius: 0; flex: 1; }
+.hud-content-dock footer { padding: 10px 16px; border-top: 1px solid var(--hud-track); }
+.hud-content-dock footer button, .hud-content-empty button { display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px; border: 1px solid var(--hud-frame); background: var(--hud-raised); color: var(--hud-text); font-size: 12px; }
+.hud-content .hud-activity { flex-shrink: 0; max-height: 24vh; overflow-y: auto; }
+.nas-file-viewer.embedded { background: transparent; border: 0; border-radius: 0; box-shadow: none; display: flex; flex-direction: column; min-height: 100%; }
+.nas-file-viewer.embedded .history-heading { padding: 12px 16px; }
+.nas-file-viewer.embedded .history-heading h2 { font-size: 13px; }
+.nas-file-viewer.embedded .history-messages { padding: 16px; overflow: visible; }
+.nas-file-viewer.embedded :is(p,label,select) { font-size: 12px; overflow-wrap: anywhere; }
+.nas-file-viewer.embedded select { max-width: 100%; width: 100%; padding: 8px; margin-top: 6px; }
+.nas-file-viewer.embedded .nas-file-text { padding: 12px 0; font: 12px/1.65 monospace; overflow-x: auto; }
+.nas-file-viewer.embedded .history-footer { margin-top: auto; font-size: 11px; padding: 12px 16px; }
+.hud-content .history-code-open { width: auto; }
+.hud-chat { background-color: var(--hud-chat); }
+.hud-layout .send-button { width: auto; min-width: 38px; padding: 0 12px; background: var(--hud-raised); color: var(--hud-bright); border: 1px solid var(--hud-accent); }
+@media (max-width: 1100px) and (min-width: 701px) { .hud-content-dock { min-height: 320px; } .hud-content-tabs button { padding: 0 8px; letter-spacing: .06em; } }
+.hud-auto { padding: 10px 15px; background: var(--hud-pink); color: var(--hud-onPink); border: 0; font: bold 11px monospace; letter-spacing: .1em; }
+.hud-auto[aria-pressed="true"] { background: var(--hud-accent); }
+.hud-notes-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.hud-notes-heading button { border: 0; background: transparent; color: var(--hud-accent); font: 11px monospace; cursor: pointer; }
+.hud-send-label { font: 11px monospace; letter-spacing: .12em; }
+.hud-content-dock { border-radius: 0; clip-path: polygon(0 0,calc(100% - 18px) 0,100% 18px,100% 100%,18px 100%,0 calc(100% - 18px)); }
+.hud-content-body .reply-code { display: flex; flex-direction: column; }
+.hud-content-body .reply-code > header { order: 1; margin-top: auto; padding: 14px; flex-wrap: wrap; gap: 8px; }
+.hud-content-body .reply-code > pre { flex: 1; }
+.reply-code-actions a { color: var(--hud-text); font-size: 11px; text-decoration: none; border: 1px solid var(--hud-frame); padding: 6px 8px; }
+@media (max-width: 700px) { .hud-send-label { display: none; } .hud-auto { padding: 8px; } }
+.hud-nas-pane { flex: 1; min-height: 0; }
+.hud-nas-pane[hidden] { display: none; }

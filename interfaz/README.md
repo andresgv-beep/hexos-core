@@ -25,9 +25,18 @@ notas, adjuntos, credenciales de equipos y control de pensamiento. La ventana
 Código/Interfaz permite revisar código con color y una vista previa HTML aislada;
 no es un entorno general de ejecución de proyectos React.
 
-La esfera usa Three.js/React Three Fiber, hasta 30 fps, DPR 2 y bloom mediante
-EffectComposer. Se anima cuando está visible y no se solicita movimiento reducido.
-Esto sustituye la documentación antigua de 24 fps, DPR 1 y ausencia de bloom.
+El escritorio sigue el concepto HUD: sistema y núcleo a la izquierda, conversación
+al centro y `ContentDock` a la derecha con Código / Interfaz / NAS. El visor NAS
+comparte componente y API entre el panel y la ventana ampliada. Cambiar de pestaña
+conserva su lectura; ampliar abre el mismo archivo en un visor independiente.
+Las ventanas son internas a la aplicación, no ventanas del sistema operativo.
+
+`themes.css` contiene las cuatro paletas; `hud.css` organiza paneles y controles.
+El selector persiste el tema y lo comparte con los visores. AUTO permanece en la
+cabecera y usa el control existente del agente. La esfera ya no se monta.
+El panel inferior muestra actividad de herramientas real; todavía no hay gráfica
+de tokens por segundo conectada.
+
 No hay micrófono ni síntesis de voz conectados.
 
 ## Comprobaciones

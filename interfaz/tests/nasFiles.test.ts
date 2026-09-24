@@ -38,3 +38,12 @@ test('viewer has a persistent files entry and renders no remote executable frame
   assert.match(html,/Selecciona un archivo/);
   assert.doesNotMatch(html,/<iframe|<script/);
 });
+
+test('embedded NAS viewer exposes expansion without nesting a modal', () => {
+  const html = renderToStaticMarkup(createElement(NasFileViewer, { embedded: true, onClose() {}, onExpand() {} }));
+  assert.doesNotMatch(html, /<dialog/);
+  assert.match(html, /Ampliar visor NAS/);
+  assert.match(html, /Archivos del NAS/);
+  const modal = renderToStaticMarkup(createElement(NasFileViewer, { onClose() {} }));
+  assert.match(modal, /<dialog/);
+});

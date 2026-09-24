@@ -14,7 +14,7 @@ export function ThemeSelector() {
   useEffect(() => {
     const apply = (value: string | null) => {
       const id = valid(value);
-      document.documentElement.dataset.theme = id;
+      document.documentElement.setAttribute("data-theme", id);
       setSelected(id);
     };
     try { apply(localStorage.getItem(key)); } catch { apply("hud"); }
@@ -24,7 +24,7 @@ export function ThemeSelector() {
   }, []);
   function choose(id: string) {
     setSelected(id);
-    document.documentElement.dataset.theme = id;
+    document.documentElement.setAttribute("data-theme", id);
     try { localStorage.setItem(key, id); } catch { /* Preferencia opcional; el tema sigue funcionando. */ }
   }
   return <div className="hud-theme-picker" role="group" aria-label="Tema de la interfaz">

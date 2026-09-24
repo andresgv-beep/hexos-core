@@ -31,11 +31,12 @@ function InlinePart({ part }: { part: Inline }) {
   return part.text;
 }
 
-export function ReplyCode({ code, language, children, copy = true, onImprove, onPreview }: {
+export function ReplyCode({ code, language, children, copy = true, download = false, onImprove, onPreview }: {
   code: string;
   language?: string;
   children?: ReactNode;
   copy?: boolean;
+  download?: boolean;
   onImprove?: (code: string, language?: string) => void;
   onPreview?: (code: string, language?: string) => void;
 }) {
@@ -57,6 +58,8 @@ export function ReplyCode({ code, language, children, copy = true, onImprove, on
         {onPreview && <button type="button" onClick={() => onPreview(code, language)}>
           {["html", "htm"].includes((language ?? "").toLowerCase()) ? "Ver" : "Crear vista"}
         </button>}
+        {download && <a download={`helios.${({ html: "html", javascript: "js", typescript: "ts", python: "py", css: "css", json: "json", cpp: "cpp", cuda: "cu", markdown: "md" } as Record<string,string>)[language ?? ""] ?? "txt"}`}
+          href={`data:text/plain;charset=utf-8,${encodeURIComponent(code)}`}>Descargar</a>}
         {copy && <button type="button" onClick={copiar} aria-label="Copiar código">
           {copiado ? <Check size={14} /> : <Copy size={14} />}
           {copiado ? "Copiado" : "Copiar"}

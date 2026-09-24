@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
-import { ArrowUp, Code2, MessageSquare, Square, X } from "lucide-react";
+import { ChevronsRight, Code2, MessageSquare, Square } from "lucide-react";
 import { AttachmentButton, ChatAttachments, type Attachment } from "./ChatAttachments";
 import { ChatHistory } from "./ChatHistory";
 import { NasFileViewer } from "./NasFileViewer";
 import { MobileWorkspace } from "./MobileWorkspace";
 import { createClientId } from "@/lib/helios/ids";
 import { SystemMonitor } from "./SystemMonitor";
+import { ContentDock } from "./ContentDock";
 import { ThemeSelector } from "./ThemeSelector";
 import { ToolActivityPanel } from "./ToolActivityPanel";
 import { ConversationStream, type Turn } from "./ConversationStream";
@@ -127,6 +128,8 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const [fileViewer, setFileViewer] = useState<{ id?: string } | null>(null);
   const [codeArtifact, setCodeArtifact] = useState<ReplyArtifact | null>(null);
   const [codeOpen, setCodeOpen] = useState(false);
+  const [codeFloating, setCodeFloating] = useState(false);
+  const [fileFloating, setFileFloating] = useState<{ id?: string } | null>(null);
   const [codeHistory, setCodeHistory] = useState<ReplyArtifact[]>([]);
   const [previous, setPrevious] = useState<HistoryMessage[]>([]);
   const [historyError, setHistoryError] = useState("");
@@ -604,13 +607,17 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       <strong className="hud-brand">HELIOS</strong><span className="hud-header-line" aria-hidden="true" />
       <span className="hud-state">{connection === "ready" ? (sending ? "EN CURSO" : "EN LÍNEA") : "SIN CONEXIÓN"}</span>
       <ThemeSelector />
+      {thinking !== null && <button className="hud-auto" type="button" aria-pressed={thinking}
+        disabled={thinkingBusy} onClick={() => void toggleThinking()}>
+        AUTO · {thinkingBusy ? "…" : thinking ? "ON" : "OFF"}
+      </button>}
       <button ref={historyButton} className="history-code-open" onClick={() => setHistoryOpen(true)}>Historial</button>
     </header>
     <div className="hud-grid">
       <aside className="hud-sidebar" aria-label="Sistema y núcleo">
-        <SystemMonitor autoEnabled={thinking} autoBusy={thinkingBusy} onToggleAuto={() => void toggleThinking()}
-          coreTotal={coreTotal} coreOpen={coreOpen} onToggleCore={() => setCoreOpen(open => !open)} />
-        <section className="hud-panel hud-notes"><h2>NOTAS ANCLADAS</h2>
+        <SystemMonitor autoEnabled={null} onToggleAuto={() => void toggleThinking()} />
+        <section className="hud-panel hud-notes"><div className="hud-notes-heading"><h2>NÚCLEO</h2>
+          <button type="button" onClick={() => setCoreOpen(true)} aria-label="Abrir el núcleo">{coreTotal === null ? "Abrir" : `${coreTotal} notas`}</button></div>
           <CoreShelf reload={coreReload} onOpenNote={abrirNota} onTotal={setCoreTotal} />
         </section>
       </aside>
@@ -636,7 +643,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         {sending ? <button className="send-button" type="button" onClick={() => void stopGeneration()}
           disabled={!canStop || stopping || !transport.cancel} aria-label={stopping ? "Deteniendo generación" : "Detener generación"}>
           <Square size={18} /></button>
-          : <button className="send-button" type="submit" disabled={(!draft.trim() && !attachments.length) || historyLoading || attachments.some(file => file.status !== "ready")} aria-label="Enviar mensaje"><ArrowUp size={21} /></button>}
+          : <button className="send-button" type="submit" disabled={(!draft.trim() && !attachments.length) || historyLoading || attachments.some(file => file.status !== "ready")} aria-label="Enviar mensaje"><span className="hud-send-label">ENVIAR</span><ChevronsRight size={21} /></button>}
       </form>
       {contextCut && <p className="connection-note" role="status">
         Se llenó la memoria de trabajo y he empezado de cero con {contextCut.messages} mensajes recogidos.
@@ -647,14 +654,10 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     </section>
       </section>
       <aside className="hud-sidebar hud-content" aria-label="Contenido y actividad">
-        <section className="hud-panel"><h2>CONTENIDO</h2>
-          <p>Abre documentos del NAS y conserva las ventanas de trabajo a mano.</p>
-          <button className="history-code-open" onClick={() => setFileViewer({})}>Archivos del NAS</button>
-          {(codeArtifact || historicalArtifacts.length > 0) && <button className="history-code-open" onClick={() => {
-            if (codeArtifact) setCodeOpen(true);
-            else openHistoricalArtifact(historicalArtifacts[historicalArtifacts.length - 1]);
-          }}>Abrir implementación</button>}
-        </section>
+        {!mobile && <ContentDock artifact={codeArtifact ?? historicalArtifacts[historicalArtifacts.length - 1] ?? null}
+          fileRequest={fileViewer} busy={sending} canUndo={Boolean(codeHistory.length || fallbackArtifact)} onUndo={undoCodeArtifact}
+          onExpandCode={() => { if (!codeArtifact && historicalArtifacts.length) openHistoricalArtifact(historicalArtifacts[historicalArtifacts.length - 1]); setCodeFloating(true); setCodeOpen(true); }}
+          onExpandFile={id => setFileFloating({ id })} onImprove={improveCode} onPreview={previewCode} />}
         <ToolActivityPanel tools={turnTools} />
       </aside>
     </div>
@@ -667,14 +670,15 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     </section>
     <CoreViewer open={coreOpen} reload={coreReload} onClose={() => setCoreOpen(false)} onOpenNote={abrirNota} />
     <span className="sr-only" role="status">{announcement}</span>
-    {fileViewer && <NasFileViewer key={fileViewer.id ?? 'library'} initialId={fileViewer.id} onClose={() => setFileViewer(null)} />}
+    {(mobile ? fileViewer : fileFloating) && <NasFileViewer key={(mobile ? fileViewer : fileFloating)?.id ?? 'library'}
+      initialId={(mobile ? fileViewer : fileFloating)?.id} onClose={() => mobile ? setFileViewer(null) : setFileFloating(null)} />}
     {historyOpen && <ChatHistory previous={previous} messages={turns} historyError={historyError} onClose={closeHistory}
       hasEarlier={historyNext !== null} olderLoading={olderLoading} onLoadEarlier={loadOlderHistory}
       onOpenArtifact={openHistoricalArtifact}
       onImproveCode={improveCode} onPreviewCode={previewCode} />}
-    {!mobile && codeOpen && codeArtifact && <CodeWorkspace artifact={codeArtifact} busy={sending}
+    {!mobile && codeFloating && codeOpen && codeArtifact && <CodeWorkspace artifact={codeArtifact} busy={sending}
       canUndo={Boolean(codeHistory.length || fallbackArtifact)} onUndo={undoCodeArtifact}
-      onClose={() => { setCodeOpen(false); inputRef.current?.focus(); }} onImprove={improveCode} onCreatePreview={previewCode} />}
+      onClose={() => { setCodeFloating(false); inputRef.current?.focus(); }} onImprove={improveCode} onCreatePreview={previewCode} />}
     {access && <div className="access-backdrop">
       <div className="access-panel" role="dialog" aria-modal="true" aria-labelledby="access-title">
         <h2 id="access-title" className="panel-title">

@@ -1,9 +1,12 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import { Download, X } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
+import { Download, Maximize2, X } from "lucide-react";
 
 import { listFileCopies, readFilePage, type NasFileCopy } from "@/lib/helios/files";
-export function NasFileViewer({ initialId, onClose }: { initialId?: string; onClose: () => void }) {
+export function NasFileViewer({ initialId, onClose, embedded = false, onExpand }: {
+  initialId?: string; onClose: () => void; embedded?: boolean; onExpand?: (id?: string) => void;
+}) {
+  const titleId = useId();
   const dialog = useRef<HTMLDialogElement>(null);
   const [copies, setCopies] = useState<NasFileCopy[]>([]);
   const [selected, setSelected] = useState(initialId ?? "");
@@ -12,7 +15,13 @@ export function NasFileViewer({ initialId, onClose }: { initialId?: string; onCl
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const active = copies.find(item => item.file_id === selected);
-  useEffect(() => { const element = dialog.current; element?.showModal(); return () => element?.close(); }, []);
+  const readKey = `${selected}:${Boolean(active?.text_available)}`;
+  const [readTarget, setReadTarget] = useState(readKey);
+  if (readTarget !== readKey) {
+    setReadTarget(readKey); setText(""); setNext(null); setError("");
+    setBusy(Boolean(active?.text_available));
+  }
+  useEffect(() => { const element = dialog.current; if (!embedded) element?.showModal(); return () => element?.close(); }, [embedded]);
   useEffect(() => {
     const controller = new AbortController();
     listFileCopies(controller.signal).then(setCopies)
@@ -20,10 +29,8 @@ export function NasFileViewer({ initialId, onClose }: { initialId?: string; onCl
     return () => controller.abort();
   }, []);
   useEffect(() => {
-    setText(""); setNext(null); setError("");
     if (!active?.text_available) return;
     const controller = new AbortController();
-    setBusy(true);
     readFilePage(selected, 0, controller.signal).then(data => {
       setText(data.text); setNext(data.next_offset);
     }).catch(error => { if (!controller.signal.aborted) setError(String(error.message)); })
@@ -39,10 +46,10 @@ export function NasFileViewer({ initialId, onClose }: { initialId?: string; onCl
     } catch (error) { setError(error instanceof Error ? error.message : String(error)); }
     finally { setBusy(false); }
   }
-  return <dialog ref={dialog} className="chat-history nas-file-viewer" aria-labelledby="file-title"
-    onCancel={event => { event.preventDefault(); onClose(); }}>
-    <header className="history-heading"><h2 id="file-title">Archivos del NAS</h2>
-      <button className="icon-button" onClick={onClose} aria-label="Cerrar visor de archivos"><X /></button></header>
+  const content = <>
+    <header className="history-heading"><h2 id={titleId}>Archivos del NAS</h2>
+      {embedded && <button className="icon-button" onClick={() => onExpand?.(selected || undefined)} aria-label="Ampliar visor NAS"><Maximize2 /></button>}
+      {!embedded && <button className="icon-button" onClick={onClose} aria-label="Cerrar visor de archivos"><X /></button>}</header>
     <div className="history-messages">
       <label>Copias recientes <select value={selected} disabled={busy} onChange={event => setSelected(event.target.value)}>
         <option value="">Selecciona un archivo</option>
@@ -61,5 +68,8 @@ export function NasFileViewer({ initialId, onClose }: { initialId?: string; onCl
       {error && <p role="alert">{error}</p>}
     </div>
     <footer className="history-footer">Se muestra una copia guardada; el archivo del NAS puede cambiar después.</footer>
-  </dialog>;
+  </>;
+  return embedded ? <section className="nas-file-viewer embedded" aria-labelledby={titleId}>{content}</section>
+    : <dialog ref={dialog} className="chat-history nas-file-viewer" aria-labelledby={titleId}
+      onCancel={event => { event.preventDefault(); onClose(); }}>{content}</dialog>;
 }
