@@ -615,7 +615,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     </header>
     <div className="hud-grid">
       <aside className="hud-sidebar" aria-label="Sistema y núcleo">
-        <SystemMonitor autoEnabled={null} onToggleAuto={() => void toggleThinking()} />
+        <SystemMonitor hud autoEnabled={null} onToggleAuto={() => void toggleThinking()} />
         <section className="hud-panel hud-notes"><div className="hud-notes-heading"><h2>NÚCLEO</h2>
           <button type="button" onClick={() => setCoreOpen(true)} aria-label="Abrir el núcleo">{coreTotal === null ? "Abrir" : `${coreTotal} notas`}</button></div>
           <CoreShelf reload={coreReload} onOpenNote={abrirNota} onTotal={setCoreTotal} />

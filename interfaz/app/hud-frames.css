@@ -1,0 +1,64 @@
+/* Geometry from HUD.dc.html. Shared by docked panels and enlarged windows. */
+.hud-panel, .hud-layout .system-monitor {
+  --frame-shape: polygon(18px 0,calc(100% - 108px) 0,calc(100% - 96px) 12px,100% 12px,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 18px);
+  --frame-inner: polygon(17px 0,calc(100% - 107px) 0,calc(100% - 96px) 10.5px,100% 10.5px,100% calc(100% - 15px),calc(100% - 15px) 100%,0 100%,0 17px);
+  --frame-color: var(--hud-accent); --frame-surface: var(--hud-panelA);
+}
+.hud-chat {
+  --frame-shape: polygon(20px 0,calc(100% - 200px) 0,calc(100% - 186px) 14px,100% 14px,100% calc(100% - 20px),calc(100% - 20px) 100%,0 100%,0 20px);
+  --frame-inner: polygon(19px 0,calc(100% - 199px) 0,calc(100% - 186px) 12.5px,100% 12.5px,100% calc(100% - 19px),calc(100% - 19px) 100%,0 100%,0 19px);
+  --frame-surface: var(--hud-chat);
+}
+.hud-notes { --frame-color: var(--hud-frame); --frame-surface: var(--hud-panelB); }
+.hud-content-dock, .code-workspace, .chat-history, .window-glass {
+  --frame-shape: polygon(0 0,calc(100% - 22px) 0,100% 22px,100% 100%,22px 100%,0 calc(100% - 22px));
+  --frame-inner: polygon(0 0,calc(100% - 21px) 0,100% 21px,100% 100%,21px 100%,0 calc(100% - 21px));
+  --frame-color: var(--hud-frame); --frame-surface: var(--hud-code);
+}
+.hud-activity { --frame-shape: polygon(16px 0,100% 0,100% 100%,0 100%,0 16px); --frame-inner: polygon(15px 0,100% 0,100% 100%,0 100%,0 15px); --frame-color: var(--hud-frame); --frame-surface: var(--hud-panelB); }
+:is(.hud-panel,.hud-layout .system-monitor,.hud-content-dock,.code-workspace,.chat-history,.window-glass) {
+  isolation: isolate; border: 0; border-radius: 0; background: none; backdrop-filter: none;
+  clip-path: var(--frame-shape); box-shadow: none;
+}
+.hud-content-dock, .window-glass { position: relative; }
+:is(.hud-panel,.hud-layout .system-monitor,.hud-content-dock,.code-workspace,.chat-history,.window-glass)::before,
+:is(.hud-panel,.hud-layout .system-monitor,.hud-content-dock,.code-workspace,.chat-history,.window-glass)::after {
+  content: ''; position: absolute; pointer-events: none; width: auto; height: auto;
+  inset: 0; z-index: -2; background: var(--frame-color); clip-path: var(--frame-shape);
+}
+:is(.hud-panel,.hud-layout .system-monitor,.hud-content-dock,.code-workspace,.chat-history,.window-glass)::after {
+  inset: 1.5px; z-index: -1; background: var(--frame-surface); clip-path: var(--frame-inner);
+}
+.hud-chat, .hud-notes { padding-top: 28px; }
+.hud-panel-heading { border: 0; padding-bottom: 0; }
+.hud-layout .monitor-title { padding-top: 10px; height: 56px; border-bottom: 0; }
+.hud-content-tabs { padding-left: 8px; padding-right: 20px; min-height: 46px; }
+.hud-content-tabs button[aria-pressed="true"], .code-workspace-heading nav button.active { background: var(--hud-bright); color: var(--hud-bg); border-bottom: 2px solid var(--hud-pink); box-shadow: none; }
+:is(.window-heading,.history-heading,.code-workspace-heading) { background: transparent; border-bottom: 1px solid var(--hud-track); padding-right: 24px; min-height: 48px; }
+:is(.window-drag,.viewer-title,.history-heading h2,.code-workspace-heading strong) { font-family: 'Chakra Petch','Trebuchet MS',sans-serif; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--hud-label); }
+.code-workspace-heading nav { background: transparent; border-radius: 0; padding: 0; }
+.code-workspace-heading nav button { border-radius: 0; color: var(--hud-muted); min-height: 38px; }
+.code-workspace-close, .window-heading .icon-button { border-radius: 0; color: var(--hud-muted); }
+.code-workspace-heading small { color: var(--hud-dim); }
+.viewer-list li, .history-entry, .viewer-search input { border-radius: 0; }
+.window-dot { background: var(--hud-pink); box-shadow: none; }
+.hud-layout .stream-question { clip-path: polygon(10px 0,100% 0,100% 100%,0 100%,0 10px); }
+.hud-layout .stream-body { clip-path: polygon(0 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%); }
+.hud-auto { clip-path: polygon(10px 0,100% 0,100% 100%,0 100%,0 10px); }
+.hud-layout .send-button { height: 38px; clip-path: polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px); }
+.hud-layout .composer { background: var(--hud-input); }
+.hud-gauge-row { display: flex; justify-content: space-between; gap: 6px; margin: 4px 0 14px; }
+.hud-gauge { flex: 1; min-width: 0; text-align: center; }
+.hud-gauge-dial { position: relative; max-width: 78px; margin: auto; }
+.hud-gauge-dial svg { display: block; width: 100%; }
+.hud-gauge-dial strong { position: absolute; inset: 0; display: grid; place-items: center; color: var(--hud-bright); font: 12px monospace; }
+.hud-gauge > span { font: 11px 'Trebuchet MS',sans-serif; letter-spacing: .16em; color: var(--hud-muted); }
+.hud-ram-label { display: flex; justify-content: space-between; font: 11px monospace; color: var(--hud-muted); }
+.hud-ram-segments { display: flex; gap: 3px; margin: 6px 0; }
+.hud-ram-segments i { flex: 1; height: 10px; background: var(--hud-track); }
+.hud-ram-segments i[data-filled="true"] { background: var(--hud-accent); }
+.hud-gpu-detail { font: 11px/1.5 monospace; color: var(--hud-muted); margin: 6px 0 0; }
+.code-workspace-body > .reply-code > header { order: 1; padding: 14px 24px; }
+@media (max-width: 700px) { .hud-layout.mobile-layout .hud-chat { clip-path: none; } .hud-layout.mobile-layout .hud-chat::before,.hud-layout.mobile-layout .hud-chat::after { display: none; } }
+:is(.hud-content-dock,.code-workspace,.chat-history,.window-glass) { padding: 1.5px; }
+@media print { .window-glass { clip-path: none; } .window-glass::before,.window-glass::after { display: none; } }

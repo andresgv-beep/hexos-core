@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "./themes.css";
 import "./hud.css";
+import "./hud-frames.css";
 
 export const metadata: Metadata = {
   title: "Helios · Espacio de trabajo",

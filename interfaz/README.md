@@ -32,6 +32,8 @@ conserva su lectura; ampliar abre el mismo archivo en un visor independiente.
 Las ventanas son internas a la aplicación, no ventanas del sistema operativo.
 
 `themes.css` contiene las cuatro paletas; `hud.css` organiza paneles y controles.
+`hud-frames.css` reproduce los marcos recortados del concepto en paneles y ventanas;
+`SystemGauges` presenta la telemetría existente en indicadores circulares.
 El selector persiste el tema y lo comparte con los visores. AUTO permanece en la
 cabecera y usa el control existente del agente. La esfera ya no se monta.
 El panel inferior muestra actividad de herramientas real; todavía no hay gráfica
