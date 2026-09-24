@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 from uuid import uuid4
-from ..native_transport import TurnCancelled
+from ..native_transport import TurnCancelled, GenerationInterrupted
 from ..work import now
 from ..work import string
 from .finalization import TurnFinalizer
@@ -116,6 +116,26 @@ class TurnRunner:
                     return self.finalizer.finish(store, turn, output, job)
                 raise RuntimeError('Se alcanzó el límite de consultas del turno; lo hecho hasta '
                                    'aquí queda en la traza y no se ha comprobado lo que faltaba')
+        except GenerationInterrupted as exc:
+            partial = exc.text
+            # Close only the display fence so the status is not mistaken for
+            # generated source code. The raw completion remains in the trace.
+            if partial.count('```') % 2:
+                partial += '\n```'
+            reason = ('se llenó la ventana de contexto' if exc.reason == 'context_full'
+                      else 'se alcanzó el límite de continuación' if exc.reason == 'output_limit'
+                      else 'falló la continuación del motor')
+            reply = (partial + '\n\n' if partial else '') + (
+                '[Respuesta incompleta: ' + reason + '. Lo generado queda guardado; '
+                'no se ha dado la implementación por terminada. Puedes pedirme que continúe.]')
+            if turn and turn.uid:
+                with self.agent.store() as store:
+                    store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
+                        (uuid4().hex, now(), 'assistant', reply, reply))
+                    store.db.commit()
+            self.agent.runtime.call({'type': 'reset'})
+            return dict(reply=reply, tools=turn.trace if turn else [], incomplete=True,
+                        interruption_reason=exc.reason)
         except TurnCancelled:
             snapshot = self.agent.generation_snapshot() or {}
             partial = snapshot.get('text', '').strip()

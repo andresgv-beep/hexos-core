@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from .. import catalog
 from ..context import native_messages
 from ..decisions import InvalidDecision, validate_reply
+from ..native_transport import GenerationInterrupted
 from ..work import now
 from .settings import PROMPT
 from .state import TurnState
@@ -48,6 +49,10 @@ class RecoveryController:
                     store.db.execute('INSERT INTO generation_events(turn_id,ts,body) VALUES (?,?,?)',
                         (turn.uid, now(), json.dumps(generation, ensure_ascii=False)))
                     store.db.commit()
+        except GenerationInterrupted:
+            # Do not discard generated code and replay the whole request when
+            # context fills during output. TurnRunner archives the partial.
+            raise
         except RuntimeError as exc:
             # El motor dice que no cabe. Antes moría aquí y el turno se
             # quedaba colgado: la ventana mide la conversación, pero el

@@ -11,6 +11,14 @@ class TurnCancelled(RuntimeError):
     pass
 
 
+class GenerationInterrupted(RuntimeError):
+    """An unfinished completion, never an executable tool decision."""
+    def __init__(self, text, reason):
+        super().__init__(reason)
+        self.text = text
+        self.reason = reason
+
+
 def visible_preview(text, open_thought=False):
     """Provisional text only: never expose thought/tool channels, even split tokens."""
     text = text.lstrip()

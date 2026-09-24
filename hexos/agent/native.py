@@ -9,7 +9,7 @@ import re
 import subprocess
 import threading
 
-from .native_transport import NativeTransport, TurnCancelled, visible_preview
+from .native_transport import NativeTransport, TurnCancelled, GenerationInterrupted, visible_preview
 from . import catalog
 from .decisions import InvalidDecision, validate_reply
 
@@ -219,15 +219,17 @@ class NativeRuntime:
     def event(self):
         if getattr(self, '_transport', None):
             completion = ''
+            self._stream_completion = ''
             def update(event):
                 nonlocal completion
                 if self._aux_generation:
                     return
                 if event['type'] == 'text_delta':
                     completion += event['text']
+                    self._stream_completion = completion
                     self.notify(dict(phase='generating', text=visible_preview(
                         getattr(self, '_completion_prefix', '') + completion,
-                        self._last_prompt.endswith('<|channel>thought\n'))))
+                        getattr(self, '_completion_open_thought', False))))
                 elif event['type'] in ('prefill_progress', 'prefill'):
                     self.notify(dict(phase='prefill', processed=event.get('processed_tokens', event.get('tokens', 0)),
                                      total=event.get('total_tokens', 0)))
@@ -273,7 +275,9 @@ class NativeRuntime:
             self._aux_generation = auxiliar
             self._last_prompt = prompt
             if not auxiliar:
-                self.notify(dict(phase='prefill', text='', processed=0, total=0))
+                self.notify(dict(phase='prefill', text=visible_preview(
+                    getattr(self, '_completion_prefix', ''),
+                    getattr(self, '_completion_open_thought', False)), processed=0, total=0))
             self._transport.start(prompt, image, auxiliar)
             return data
         marca = '*' if auxiliar else ''
@@ -385,16 +389,51 @@ class NativeRuntime:
                                     add_generation_prompt=True,enable_thinking=getattr(self, 'thinking', False) and not required_read)
         prompt += prefix
         self._completion_prefix = prefix
-        data = self.send(prompt, image)
-        header,completion=self.event()
+        self._completion_open_thought = prompt.endswith('<|channel>thought\n')
+        completion = ''
+        segments = []
+        # Resume the SAME assistant prefix, not a new user instruction. No
+        # tools are parsed or queued until the entire completion terminates.
+        for chunk in range(4):
+            self._completion_prefix = prefix + completion
+            self._stream_completion = ''
+            try:
+                data = self.send(prompt + completion, image)
+                header, fragment = self.event()
+            except TurnCancelled:
+                raise
+            except RuntimeError as exc:
+                completion += self._stream_completion
+                if not completion:
+                    raise
+                self.last_generation = dict(raw=prefix + completion, finish_reason='error',
+                    segments=list(segments), error=str(exc), prompt=prompt)
+                raise GenerationInterrupted(visible_preview(prefix + completion,
+                    self._completion_open_thought), str(exc)) from exc
+            completion += fragment
+            segments.append(dict(finish_reason=header[4], tokens=int(header[2]),
+                                 ms=int(header[1])))
+            self.last_generation = dict(raw=prefix + completion, finish_reason=header[4],
+                segments=list(segments), tokens=sum(s['tokens'] for s in segments),
+                ms=sum(s['ms'] for s in segments), prompt=prompt,
+                prompt_sha256=hashlib.sha256(prompt.encode()).hexdigest())
+            if header[4] != 'max_tokens':
+                break
+            if not fragment or chunk == 3:
+                raise GenerationInterrupted(visible_preview(prefix + completion,
+                    self._completion_open_thought), 'output_limit')
+        if header[4] == 'context_full':
+            raise GenerationInterrupted(visible_preview(prefix + completion,
+                self._completion_open_thought), 'context_full')
         raw = prefix + completion
         self.last_raw=raw
         self.last_header=header
         self.last_generation = dict(raw=raw, completion=completion, completion_prefix=prefix, finish_reason=header[4],
-            stopped_on_token=header[3]=='1', tokens=int(header[2]), ms=int(header[1]),
+            segments=segments, continuations=len(segments)-1,
+            stopped_on_token=header[3]=='1', tokens=sum(s['tokens'] for s in segments), ms=sum(s['ms'] for s in segments),
             prefill_tokens=int(header[5]) if len(header)>6 else None,
             prefill_reused=int(header[6]) if len(header)>6 else None,
-            prompt=prompt, prompt_sha256=hashlib.sha256(data).hexdigest())
+            prompt=prompt, prompt_sha256=hashlib.sha256(prompt.encode()).hexdigest())
         # Cuánto ocupa el KV después de esta generación. Es el número del motor, no
         # una estimación: lo que decide si el turno siguiente cabe. Sin esto el
         # corte automático miraba caracteres de conversación, que no incluyen el
