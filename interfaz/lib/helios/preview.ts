@@ -30,8 +30,8 @@ export function codeRevisionPrompt(request: string, artifact: ReplyArtifact): st
   const language = artifact.language || "el lenguaje apropiado";
   return `Estás trabajando directamente sobre la implementación abierta en la ventana de código. ` +
     `Aplica esta petición del usuario: ${JSON.stringify(request)}. ` +
-    "Razona sobre el cambio antes de escribir y realiza la modificación mínima necesaria. " +
-    "Conserva exactamente la estructura, secciones, textos, datos, estilos e interacciones que no estén afectados por la petición. " +
+    "Determina el alcance solicitado: una corrección puntual debe ser localizada; un rediseño puede cambiar la estructura, distribución y estilo. " +
+    "No reduzcas un rediseño estructural a cambios cosméticos. Conserva la funcionalidad, los datos y las interacciones no afectados, sin imponer la estructura visual anterior. " +
     "Antes de responder, comprueba que ninguna función o parte visible anterior haya desaparecido. " +
     "No le indiques al usuario dónde pegar nada, no devuelvas un parche ni omitas partes. " +
     `Responde con una explicación breve y después con la versión completa actualizada en un único bloque de código ${language}.\n\n` +

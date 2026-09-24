@@ -15,10 +15,10 @@ Consulta [arranque y recuperación](docs/LOCAL_BASELINE.md).
 |---|---|
 | Chat 12B / Héctor | Inferencia real comprobada. Historial persistente, streaming y cancelación. La descarga del modelo por inactividad es normal, no una caída. |
 | Respuestas largas | Continuación del mismo prefijo hasta cuatro bloques de 3.072 tokens, limitada también por contexto. Probada con el 12B forzando un corte. Si no termina, conserva el parcial y avisa. No garantiza implementaciones ilimitadas. |
-| Interfaz | Esfera nueva NebulaOrb, visor de código, preview HTML y deshacer ya implementados. Pruebas de interfaz, tipos y build/render pasan. La respuesta incompleta no reemplaza automáticamente el código abierto. |
+| Interfaz | Esfera nueva NebulaOrb, visor de código, preview HTML, deshacer, redimensionado y maximizar/restaurar. La respuesta incompleta no reemplaza automáticamente el código abierto. El prompt permite cambiar estructura ante un rediseño, sin imponer retoques mínimos. |
 | Edición del código | Existe edición desde el chat, pero el prompt exige devolver la versión COMPLETA. No existe aún aplicación incremental de parches sobre archivos persistentes. |
 | Resaltado progresivo | Se eliminó la alternancia entre texto plano y resaltado al alcanzar cada fragmento. Regresión estructural cubierta; pendiente confirmar percepción visual en uso prolongado. |
-| HERA | Conector explícito en el arranque. Validación de citas antes de agrupar candidatos y protección ante preferencias ambiguas integradas. Pruebas locales pasan; no demuestra que el 12B extraiga todas las preferencias correctamente. No hay nombre personal hardcodeado en el prompt. |
+| HERA | Conector explícito en el arranque. Citas validadas antes de agrupar candidatos. Una extracción automática con valor distinto no sustituye otro si el mensaje no contiene el valor anterior; la herramienta explícita conserva correcciones. El extractor pide atributos específicos y distingue ediciones locales de preferencias duraderas. No garantiza extracción semántica infalible. No hay nombre personal hardcodeado en el prompt. |
 | NAS y preparación multimedia | Búsqueda con raíz/tamaño/extensión y preparación de planes. Hay pruebas reales anteriores de selección correcta del 12B, con contexto; no certifican autonomía en frío. Preparado NO significa iniciado. |
 | HandBrake | Transporte real, copia, conversión, seguimiento, verificación y publicación implementados. Ciclo sintético real histórico completo; película real convertida y validada técnicamente, pero NO publicada. |
 | Revisión interna de La Monja | **Pendiente/bloqueada**: `awaiting_review`, revisión 15, validación y decodificación registradas como correctas, publicación ausente. No se ha reintentado ni publicado durante esta consolidación. |
@@ -50,7 +50,7 @@ npm run build
 
 La batería Python utiliza una lista explícita de pruebas locales: no importa
 los scripts opt-in que envían mensajes a un servidor vivo. Resultado de la
-consolidación: **663 pruebas Python, 84 de interfaz, tipos y build/render**.
+base actual: **665 pruebas Python, 85 de interfaz, tipos y build/render**.
 Los ensayos reales históricos están en
 `docs/HANDBRAKE_CHAT_REVIEW.md`; no se presentan como repetidos hoy.
 

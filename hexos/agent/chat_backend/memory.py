@@ -124,7 +124,7 @@ class MemoryService:
     def __init__(self, env: Environment):
         self.env = env
 
-    def remember_fact(self, store, args, turn_id):
+    def remember_fact(self, store, args, turn_id, *, automatic=False):
         """Guarda en el perfil un dato que la persona acaba de decir de sí misma.
 
         La evidencia es su mensaje de este turno, no una cita que aporte el modelo,
@@ -159,6 +159,10 @@ class MemoryService:
             return dict(saved=False, unchanged=True, key=clave, value=value,
                         note='Ya estaba guardado con ese mismo valor; no se ha tocado nada.')
         else:
+            if automatic and anterior.casefold() not in quote.casefold():
+                raise ValueError('Conflicto de memoria: una extracción automática no puede '
+                                 'reemplazar otro hecho sin una referencia literal al valor anterior. '
+                                 'Usa una clave específica para un asunto distinto.')
             self.env.profile.correct(clave, value, texto, quote[:1000])
         return dict(saved=True, corrected=anterior is not None, previous=anterior,
                     key=clave, value=value, source='user_statement',
@@ -295,7 +299,7 @@ class MemoryService:
             # Valores incompatibles: no elegir una corrección arbitraria.
         for hecho in candidatos:
             try:
-                resultado = self.remember_fact(store, hecho, turn_id)
+                resultado = self.remember_fact(store, hecho, turn_id, automatic=True)
             except (ValueError, TypeError):
                 continue      # no estaba en su mensaje, o HERA lo rechazó
             if not resultado.get('saved'):

@@ -6,6 +6,15 @@ import { ConversationStream, type Turn } from "../components/ConversationStream"
 import { ReplyMarkdown } from "../components/ReplyMarkdown";
 import { CodeWorkspace } from "../components/CodeWorkspace";
 
+test("el espacio de código ofrece maximizar sin cambiar el artefacto", () => {
+  const html = renderToStaticMarkup(createElement(CodeWorkspace, {
+    artifact: { reply: '', code: '<main>Actual</main>', language: 'html' },
+    busy: false, canUndo: false, onUndo() {}, onClose() {}, onImprove() {}, onCreatePreview() {},
+  }));
+  assert.match(html, /Maximizar implementación/);
+  assert.match(html, /Actual/);
+});
+
 function render(turn: Partial<Turn>) {
   return renderToStaticMarkup(createElement(ConversationStream, {
     turn: { id: 1, text: "Mi pregunta", ...turn },

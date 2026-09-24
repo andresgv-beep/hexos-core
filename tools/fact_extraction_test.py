@@ -44,6 +44,21 @@ class Perfil:
 
 
 class FactExtractionTest(unittest.TestCase):
+    def test_automatic_visual_preference_cannot_replace_treatment(self):
+        previous = 'no me gusta que me sirvas como un mayordomo'
+        _, profile, _ = self.cosechar('no me gusta la linea lila que recorre cada card',
+            [dict(key='yo/yo', value='no me gusta la linea lila que recorre cada card')],
+            confirmados={'yo/yo': previous})
+        self.assertEqual(profile.confirmados['yo/yo'], previous)
+        self.assertEqual(profile.corregidos, [])
+
+    def test_distinct_scoped_preferences_can_coexist(self):
+        _, profile, _ = self.cosechar('prefiero interfaces sin animaciones',
+            [dict(key='yo/animacion_visual', value='prefiero interfaces sin animaciones')],
+            confirmados={'yo/trato': 'prefiero un trato directo'})
+        self.assertEqual(len(profile.confirmados), 2)
+        self.assertEqual(profile.corregidos, [])
+
     def test_real_preference_is_not_overwritten_by_referentless_fragment(self):
         value = 'no hace falta que me llames andres en cada turno'
         aviso, perfil, _ = self.cosechar(value + ', no me gusta', [

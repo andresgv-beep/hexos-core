@@ -513,6 +513,8 @@ class NativeRuntime:
             'sujeto/atributo y el valor debe aparecer TAL CUAL en el mensaje.\n'
             'Cada elemento contiene únicamente key y value, ambos cadenas. '
             'Usa yo como sujeto de los datos de la persona. '
+            'El atributo debe identificar el asunto concreto; no acumules asuntos distintos bajo una clave genérica de preferencia. '
+            'Las peticiones de editar el artefacto actual no son por sí solas preferencias personales duraderas. '
             'Conserva el alcance, las condiciones y la negación del enunciado. '
             'No dupliques claves ni extraigas fragmentos sin referente. '
             'Si no hay datos personales explícitos y recuperables, devuelve [].\n'

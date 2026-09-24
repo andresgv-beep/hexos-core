@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
-import { Code2, GripHorizontal, MonitorUp, RotateCcw, Sparkles, X } from "lucide-react";
+import { Code2, GripHorizontal, MonitorUp, RotateCcw, Sparkles, X, Maximize2, Minimize2 } from "lucide-react";
 import { ReplyCode } from "./ReplyMarkdown";
 import { previewDocument, type ReplyArtifact } from "@/lib/helios/preview";
 
@@ -21,6 +21,7 @@ export function CodeWorkspace({ artifact, busy, canUndo, onUndo, onClose, onImpr
     { artifactKey, mode: defaultMode });
   const mode = fixedMode ?? (view.artifactKey === artifactKey ? view.mode : defaultMode);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [maximized, setMaximized] = useState(false);
   const panel = useRef<HTMLElement>(null);
   const drag = useRef<{ pointer: number; x: number; y: number; originX: number; originY: number } | null>(null);
   function move(x: number, y: number) {
@@ -35,7 +36,7 @@ export function CodeWorkspace({ artifact, busy, canUndo, onUndo, onClose, onImpr
     });
   }
   function beginMove(event: PointerEvent<HTMLButtonElement>) {
-    if (event.button !== 0 || window.matchMedia("(max-width: 700px)").matches) return;
+    if (maximized || event.button !== 0 || window.matchMedia("(max-width: 700px)").matches) return;
     drag.current = { pointer: event.pointerId, x: event.clientX, y: event.clientY,
       originX: offset.x, originY: offset.y };
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -45,13 +46,13 @@ export function CodeWorkspace({ artifact, busy, canUndo, onUndo, onClose, onImpr
       ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1],
     };
     const delta = direction[event.key];
-    if (!delta || window.matchMedia("(max-width: 700px)").matches) return;
+    if (maximized || !delta || window.matchMedia("(max-width: 700px)").matches) return;
     event.preventDefault();
     const step = event.shiftKey ? 40 : 12;
     move(offset.x + delta[0] * step, offset.y + delta[1] * step);
   }
-  return <section ref={panel} className="code-workspace" aria-label="Espacio de trabajo de código"
-    style={{ transform: `translate3d(${offset.x}px, ${offset.y}px, 0)` }}>
+  return <section ref={panel} className={`code-workspace${maximized ? " maximized" : ""}`} aria-label="Espacio de trabajo de código"
+    style={{ transform: maximized ? undefined : `translate3d(${offset.x}px, ${offset.y}px, 0)` }}>
     <header className="code-workspace-heading">
       <button type="button" className="code-workspace-drag" aria-label="Mover espacio de código con las flechas"
         title="Arrastra para mover" onPointerDown={beginMove} onPointerMove={event => {
@@ -75,6 +76,11 @@ export function CodeWorkspace({ artifact, busy, canUndo, onUndo, onClose, onImpr
           <MonitorUp size={14} /> Interfaz
         </button>
       </nav>}
+      {!fixedMode && <button type="button" className="code-workspace-close"
+        aria-label={maximized ? "Restaurar tamaño" : "Maximizar implementación"}
+        onClick={() => setMaximized(value => !value)}>
+        {maximized ? <Minimize2 size={19} /> : <Maximize2 size={19} />}
+      </button>}
       <button type="button" className="code-workspace-close" onClick={onClose} aria-label="Cerrar espacio de código"><X size={19} /></button>
     </header>
     <div className="code-workspace-body">

@@ -33,7 +33,8 @@ test("una petición con código abierto exige editar la versión completa", () =
   assert.match(prompt, /export const App/);
   assert.match(prompt, /versión completa actualizada/);
   assert.match(prompt, /No le indiques al usuario dónde pegar nada/);
-  assert.match(prompt, /modificación mínima necesaria/);
+  assert.match(prompt, /un rediseño puede cambiar la estructura/);
+  assert.doesNotMatch(prompt, /Conserva exactamente la estructura|modificación mínima necesaria/);
   assert.match(prompt, /tsx/);
 });
 

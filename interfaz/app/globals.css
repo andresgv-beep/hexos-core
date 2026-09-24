@@ -409,6 +409,13 @@ input[type="range"] { width: 100%; accent-color: #8dc9f2; cursor: pointer; heigh
   overflow: hidden; border: 1px solid #79d1ff70; border-radius: 18px;
   background: #06111af7; box-shadow: 0 24px 90px #000c, 0 0 35px #39bfff20;
   backdrop-filter: blur(12px);
+  bottom: auto; height: calc(100dvh - 210px); resize: both;
+  min-width: min(420px, calc(100vw - 24px)); min-height: 220px;
+  max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px);
+}
+.code-workspace.maximized {
+  top: 12px; right: 12px; z-index: 35; resize: none;
+  width: calc(100vw - 24px) !important; height: calc(100dvh - 24px) !important;
 }
 .code-workspace-heading {
   min-height: 56px; display: flex; align-items: center; gap: 11px; padding: 0 12px 0 18px;
@@ -449,7 +456,7 @@ input[type="range"] { width: 100%; accent-color: #8dc9f2; cursor: pointer; heigh
 @media (max-width: 700px) {
   .reply-code header { align-items: flex-start; gap: 6px; padding: 8px; }
   .reply-code-actions { flex-wrap: wrap; justify-content: flex-end; }
-  .code-workspace { inset: 70px 8px 126px; width: auto; border-radius: 13px; }
+  .code-workspace { inset: 70px 8px 126px; width: auto; height: auto; resize: none; min-width: 0; min-height: 0; border-radius: 13px; }
   .code-workspace-heading { padding-left: 12px; }
   .code-workspace-drag > span, .code-workspace-drag > svg:last-child { display: none; }
   .code-workspace-drag { cursor: default; touch-action: auto; }
