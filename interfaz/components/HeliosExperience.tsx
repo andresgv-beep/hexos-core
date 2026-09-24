@@ -8,6 +8,7 @@ import { NasFileViewer } from "./NasFileViewer";
 import { MobileWorkspace } from "./MobileWorkspace";
 import { createClientId } from "@/lib/helios/ids";
 import { SystemMonitor } from "./SystemMonitor";
+import { ThemeSelector } from "./ThemeSelector";
 import { ToolActivityPanel } from "./ToolActivityPanel";
 import { ConversationStream, type Turn } from "./ConversationStream";
 import { NoteWindow, type NoteWindowState } from "./NoteWindow";
@@ -602,6 +603,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     <header className="hud-header">
       <strong className="hud-brand">HELIOS</strong><span className="hud-header-line" aria-hidden="true" />
       <span className="hud-state">{connection === "ready" ? (sending ? "EN CURSO" : "EN LÍNEA") : "SIN CONEXIÓN"}</span>
+      <ThemeSelector />
       <button ref={historyButton} className="history-code-open" onClick={() => setHistoryOpen(true)}>Historial</button>
     </header>
     <div className="hud-grid">
@@ -619,13 +621,6 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
             onImproveCode={improveCode} onPreviewCode={previewCode} />
           {!turns.length && <div className="hud-welcome"><h2>Hablemos, socio.</h2><p>Escribe a Helios o abre el historial para retomar una conversación.</p></div>}
         </div>
-    <section className="floating-workspace" aria-label="Notas e informes abiertos">
-      {windows.filter(item => !item.minimized).map(item => <NoteWindow key={item.id} state={item}
-        onAbsorbed={finishAbsorption} front={front === item.id} onFocus={setFront}
-        onMove={(id, x, y) => setWindows(items => items.map(w => w.id === id ? { ...w, x, y } : w))}
-        onMinimize={id => { setWindows(items => items.map(w => w.id === id ? { ...w, absorbing: true } : w)); inputRef.current?.focus(); }}
-        onClose={id => { setWindows(items => items.filter(w => w.id !== id)); inputRef.current?.focus(); }} />)}
-    </section>
     <section className="conversation" aria-label="Chat con Helios">
       {!mobile && !codeOpen && (codeArtifact || historicalArtifacts.length > 0) &&
         <button type="button" className="history-code-open" onClick={() => {
@@ -663,6 +658,13 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         <ToolActivityPanel tools={turnTools} />
       </aside>
     </div>
+    <section className="floating-workspace" aria-label="Notas e informes abiertos">
+      {windows.filter(item => !item.minimized).map(item => <NoteWindow key={item.id} state={item}
+        onAbsorbed={finishAbsorption} front={front === item.id} onFocus={setFront}
+        onMove={(id, x, y) => setWindows(items => items.map(w => w.id === id ? { ...w, x, y } : w))}
+        onMinimize={id => { setWindows(items => items.map(w => w.id === id ? { ...w, absorbing: true } : w)); inputRef.current?.focus(); }}
+        onClose={id => { setWindows(items => items.filter(w => w.id !== id)); inputRef.current?.focus(); }} />)}
+    </section>
     <CoreViewer open={coreOpen} reload={coreReload} onClose={() => setCoreOpen(false)} onOpenNote={abrirNota} />
     <span className="sr-only" role="status">{announcement}</span>
     {fileViewer && <NasFileViewer key={fileViewer.id ?? 'library'} initialId={fileViewer.id} onClose={() => setFileViewer(null)} />}

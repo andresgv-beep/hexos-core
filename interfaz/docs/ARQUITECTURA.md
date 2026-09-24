@@ -96,3 +96,12 @@ Tipos, pruebas de contratos/componentes y build/render están en `package.json`.
 La validación de cancelación/texto progresivo se hizo también en navegador real;
 la evidencia está en [integración progresiva](../../docs/PROGRESSIVE_NATIVE_RUNTIME.md).
 No hay telemetría emocional ni voz real inferibles del movimiento de la esfera.
+
+### Temas HUD
+
+`app/themes.css` declara las cuatro paletas del concepto en variables `--hud-*`
+sobre `html`, para que también las hereden los diálogos y los portales.
+`ThemeSelector` solo gestiona una preferencia local (`helios.hud.theme`), valida
+el valor almacenado y sincroniza cambios entre pestañas. No usa el modelo, notas
+ni preferencias de HERA. `hud.css` consume las variables sin duplicar componentes.
+Los colores de error/advertencia pueden mantener su significado propio.
