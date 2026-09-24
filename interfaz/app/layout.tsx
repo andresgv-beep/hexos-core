@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./hud.css";
 
 export const metadata: Metadata = {
-  title: "Helios · Una presencia viva",
-  description: "Un espacio para conversar. Una esfera orgánica de luz que acompaña cada momento.",
+  title: "Helios · Espacio de trabajo",
+  description: "Conversación, documentos y herramientas en un mismo espacio de trabajo.",
 };
 
 export default function RootLayout({

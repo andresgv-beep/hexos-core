@@ -1,3 +1,20 @@
+## Organización HUD (2026-09-24)
+
+Primera etapa sobre main fd15f38: distribución en tres columnas, sin montar
+NebulaOrb ni sus ajustes. `app/hud.css` contiene la distribución; los estilos
+compartidos de ventanas siguen en globals.css. `ToolActivityPanel` presenta la
+actividad del transporte existente sin posiciones orbitales.
+
+Sistema y favoritos quedan a la izquierda; turno actual y compositor en el
+centro; accesos a contenido y actividad a la derecha. El historial tiene botón
+explícito. NAS, código, notas y credenciales conservan sus visores y acciones.
+Móvil conserva MobileWorkspace y su compositor compartido. No se modifica el
+backend ni se fabrica telemetría. Acoplar el contenido al lateral y separar
+ventanas del navegador quedan para una etapa posterior.
+
+La documentación siguiente describe la base anterior; la sección de esfera
+solo se aplica al componente antiguo, que ya no se monta en el producto.
+
 # Arquitectura actual de la interfaz
 
 Revisión documental del 2026-09-19, contrastada con `HeliosExperience.tsx`,

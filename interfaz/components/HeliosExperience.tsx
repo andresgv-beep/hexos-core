@@ -1,15 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
-import { ArrowUp, Code2, MessageSquare, SlidersHorizontal, Square, X } from "lucide-react";
-import { NebulaOrb } from "./orb/NebulaOrb";
+import { ArrowUp, Code2, MessageSquare, Square, X } from "lucide-react";
 import { AttachmentButton, ChatAttachments, type Attachment } from "./ChatAttachments";
 import { ChatHistory } from "./ChatHistory";
 import { NasFileViewer } from "./NasFileViewer";
 import { MobileWorkspace } from "./MobileWorkspace";
 import { createClientId } from "@/lib/helios/ids";
 import { SystemMonitor } from "./SystemMonitor";
-import { ToolSatellites } from "./ToolSatellites";
+import { ToolActivityPanel } from "./ToolActivityPanel";
 import { ConversationStream, type Turn } from "./ConversationStream";
 import { NoteWindow, type NoteWindowState } from "./NoteWindow";
 import { CoreShelf } from "./CoreShelf";
@@ -32,8 +31,6 @@ function sameArtifact(left: ReplyArtifact, right: ReplyArtifact) {
 }
 
 export function HeliosExperience({ transport = localTransport }: { transport?: HeliosTransport }) {
-  const [brightness, setBrightness] = useState(1.8);
-  const [settings, setSettings] = useState(false);
   const [draft, setDraft] = useState("");
   // null = el motor no tiene canal de pensamiento; entonces no se ofrece el botón.
   const [thinking, setThinking] = useState<boolean | null>(null);
@@ -187,26 +184,18 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     setCodeArtifact(prior);
     setAnnouncement("He recuperado la versión anterior de la implementación");
   }
-  const orbHovered = useRef(false);
-  const orbButton = useRef<HTMLButtonElement>(null);
-  const orbStage = useRef<HTMLDivElement>(null);
-  const syncOrbExpansion = useCallback((scale: number) => {
-    orbStage.current?.style.setProperty("--orb-expansion", String(scale / .96));
-  }, []);
+  const historyButton = useRef<HTMLButtonElement>(null);
   const finishAbsorption = useCallback((id: string) => {
     setWindows(items => items.filter(item => item.id !== id));
   }, []);
   const [front, setFront] = useState("");
   const abrirNota = useCallback((note: NoteDetail) => {
-    // Buscar abre el menú y señala; leer lo cierra. Tener los dos a la vez
-    // obligaba a la nota a pelear por el centro y tapaba el orbe entero.
+    // Al abrir la nota, cierra el selector para dejar libre la ventana.
     setCoreOpen(false);
     setWindows(items => {
       // La misma nota no se abre dos veces: se trae al frente la que ya está.
       if (items.some(item => item.id === note.id)) return items;
-      // A la derecha y a media altura: el visor se cierra al abrir una nota, así
-      // que ese lado queda libre y la nota se lee sin taparle la cara al orbe ni
-      // la columna de la conversación. Varias abiertas se escalonan hacia dentro.
+      // Las ventanas conservan su colocación y se escalonan hacia dentro.
       const abiertas = items.length;
       return [...items, { id: note.id, note, slot: 0,
                           x: abiertas * -26, y: abiertas * 26, minimized: false }];
@@ -230,9 +219,6 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const [coreReload, setCoreReload] = useState(0);
   const nextId = useRef(0);
   const request = useRef<AbortController | null>(null);
-  const settingsRef = useRef<HTMLButtonElement>(null);
-  const closeRef = useRef<HTMLButtonElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const lastWarmup = useRef(0);
   const [revealing, setRevealing] = useState(false);
@@ -341,27 +327,11 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     return () => { disposed = true; clearTimeout(timeout); clearTimeout(timer); controller.abort(); };
   }, [transport]);
   useEffect(() => {
-    if (!settings) return;
-    closeRef.current?.focus();
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { setSettings(false); settingsRef.current?.focus(); }
-      if (event.key !== "Tab") return;
-      const focusable = panelRef.current?.querySelectorAll<HTMLElement>('button, input');
-      if (!focusable?.length) return;
-      const first = focusable[0], last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
-    };
-    document.addEventListener("keydown", handleKey);
-    return () => document.removeEventListener("keydown", handleKey);
-  }, [settings]);
-  useEffect(() => {
     // Reflow moved cards when the available screen changes.
     const resetPositions = () => setWindows(items => items.map(item => ({ ...item, x: 0, y: 0 })));
     window.addEventListener("resize", resetPositions);
     return () => window.removeEventListener("resize", resetPositions);
   }, []);
-  function closeSettings() { setSettings(false); settingsRef.current?.focus(); }
   async function guardarAcceso() {
     if (!access || accessSaving) return;
     setAccessSaving(true);
@@ -620,43 +590,43 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   }
   function closeHistory() {
     setHistoryOpen(false);
-    orbButton.current?.focus();
+    historyButton.current?.focus();
   }
-  return <main className={`helios-app phase-${phase}${mobile ? ' mobile-layout' : ''}`} style={{ "--phase-color": active.color } as CSSProperties}>
+  return <main className={`helios-app hud-layout phase-${phase}${mobile ? ' mobile-layout' : ''}`} style={{ "--phase-color": active.color } as CSSProperties}>
     {mobile && <MobileWorkspace previous={previous} turns={turns} notes={windows.map(w => w.note)}
       artifact={codeArtifact ?? historicalArtifacts[historicalArtifacts.length - 1] ?? null}
       busy={sending} error={historyError} onBrowseNotes={() => setCoreOpen(true)}
       hasEarlier={historyNext !== null} olderLoading={olderLoading} onLoadEarlier={loadOlderHistory}
       onOpenFiles={() => setFileViewer({})}
       onImprove={improveCode} onPreview={previewCode} />}
-    <div className="ambient-light" aria-hidden="true" />
-    <header className="topbar">
-      <button className="history-code-open" onClick={() => setFileViewer({})}>Archivos del NAS</button>
-      <button ref={settingsRef} className={`icon-button ${settings ? "selected" : ""}`} aria-label="Ajustar luminosidad" aria-expanded={settings} onClick={() => setSettings(true)}><SlidersHorizontal size={19} /></button>
+    <header className="hud-header">
+      <strong className="hud-brand">HELIOS</strong><span className="hud-header-line" aria-hidden="true" />
+      <span className="hud-state">{connection === "ready" ? (sending ? "EN CURSO" : "EN LÍNEA") : "SIN CONEXIÓN"}</span>
+      <button ref={historyButton} className="history-code-open" onClick={() => setHistoryOpen(true)}>Historial</button>
     </header>
-    <SystemMonitor autoEnabled={thinking} autoBusy={thinkingBusy} onToggleAuto={() => void toggleThinking()}
-      coreTotal={coreTotal} coreOpen={coreOpen} onToggleCore={() => setCoreOpen(open => !open)} />
-    <CoreViewer open={coreOpen} reload={coreReload} onClose={() => setCoreOpen(false)} onOpenNote={abrirNota} />
-    <ConversationStream turn={turns[turns.length - 1] ?? null} onReplyComplete={() => setRevealing(false)}
-      onImproveCode={improveCode} onPreviewCode={previewCode} />
-    <section className="presence" aria-label="Presencia de Helios">
-      <div ref={orbStage} className="orb-stage nebula-stage">
-        <div className="orb-halo" aria-hidden="true" />
-        <NebulaOrb signal={{ phase, energy: active.energy }} brightness={brightness} motion onExpansion={syncOrbExpansion} hovered={orbHovered} />
-        <ToolSatellites tools={turnTools} />
-        <button ref={orbButton} className="orb-history-trigger" aria-label="Abrir todo el chat" title="Abrir conversación" aria-haspopup="dialog" onClick={() => setHistoryOpen(true)}
-          onPointerEnter={() => { orbHovered.current = true; }} onPointerLeave={() => { orbHovered.current = false; }} onFocus={() => { orbHovered.current = true; }} onBlur={() => { orbHovered.current = false; }} />
-      </div>
-    </section>
+    <div className="hud-grid">
+      <aside className="hud-sidebar" aria-label="Sistema y núcleo">
+        <SystemMonitor autoEnabled={thinking} autoBusy={thinkingBusy} onToggleAuto={() => void toggleThinking()}
+          coreTotal={coreTotal} coreOpen={coreOpen} onToggleCore={() => setCoreOpen(open => !open)} />
+        <section className="hud-panel hud-notes"><h2>NOTAS ANCLADAS</h2>
+          <CoreShelf reload={coreReload} onOpenNote={abrirNota} onTotal={setCoreTotal} />
+        </section>
+      </aside>
+      <section className="hud-panel hud-chat" aria-label="Conversación">
+        <div className="hud-panel-heading"><h1>CANAL · HELIOS</h1><span>{sending ? "Trabajando…" : "Conversación"}</span></div>
+        <div className="hud-chat-scroll">
+          <ConversationStream turn={turns[turns.length - 1] ?? null} onReplyComplete={() => setRevealing(false)}
+            onImproveCode={improveCode} onPreviewCode={previewCode} />
+          {!turns.length && <div className="hud-welcome"><h2>Hablemos, socio.</h2><p>Escribe a Helios o abre el historial para retomar una conversación.</p></div>}
+        </div>
     <section className="floating-workspace" aria-label="Notas e informes abiertos">
       {windows.filter(item => !item.minimized).map(item => <NoteWindow key={item.id} state={item}
-        orbTarget={orbButton} onAbsorbed={finishAbsorption} front={front === item.id} onFocus={setFront}
+        onAbsorbed={finishAbsorption} front={front === item.id} onFocus={setFront}
         onMove={(id, x, y) => setWindows(items => items.map(w => w.id === id ? { ...w, x, y } : w))}
         onMinimize={id => { setWindows(items => items.map(w => w.id === id ? { ...w, absorbing: true } : w)); inputRef.current?.focus(); }}
         onClose={id => { setWindows(items => items.filter(w => w.id !== id)); inputRef.current?.focus(); }} />)}
     </section>
     <section className="conversation" aria-label="Chat con Helios">
-    <CoreShelf reload={coreReload} onOpenNote={abrirNota} onTotal={setCoreTotal} />
       {!mobile && !codeOpen && (codeArtifact || historicalArtifacts.length > 0) &&
         <button type="button" className="history-code-open" onClick={() => {
           if (codeArtifact) setCodeOpen(true);
@@ -680,6 +650,20 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       </p>}
       {connection !== "ready" && <p id="connection-note" className="connection-note" role="status">{connection === "checking" ? "Conectando con Helios…" : "Sin conexión con Helios. Puedes volver a intentar el envío."}</p>}
     </section>
+      </section>
+      <aside className="hud-sidebar hud-content" aria-label="Contenido y actividad">
+        <section className="hud-panel"><h2>CONTENIDO</h2>
+          <p>Abre documentos del NAS y conserva las ventanas de trabajo a mano.</p>
+          <button className="history-code-open" onClick={() => setFileViewer({})}>Archivos del NAS</button>
+          {(codeArtifact || historicalArtifacts.length > 0) && <button className="history-code-open" onClick={() => {
+            if (codeArtifact) setCodeOpen(true);
+            else openHistoricalArtifact(historicalArtifacts[historicalArtifacts.length - 1]);
+          }}>Abrir implementación</button>}
+        </section>
+        <ToolActivityPanel tools={turnTools} />
+      </aside>
+    </div>
+    <CoreViewer open={coreOpen} reload={coreReload} onClose={() => setCoreOpen(false)} onOpenNote={abrirNota} />
     <span className="sr-only" role="status">{announcement}</span>
     {fileViewer && <NasFileViewer key={fileViewer.id ?? 'library'} initialId={fileViewer.id} onClose={() => setFileViewer(null)} />}
     {historyOpen && <ChatHistory previous={previous} messages={turns} historyError={historyError} onClose={closeHistory}
@@ -746,9 +730,5 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         </div>
       </div>
     </div>}
-    {settings && <div className="settings-backdrop"><button className="settings-dismiss" tabIndex={-1} aria-label="Cerrar ajustes" onClick={closeSettings} /><div ref={panelRef} className="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-      <div className="panel-heading"><h2 id="settings-title">Luminosidad</h2><button ref={closeRef} className="icon-button" onClick={closeSettings} aria-label="Cerrar ajustes"><X size={20} /></button></div>
-      <label className="slider-label" htmlFor="brightness">Luz de la esfera<span>{Math.round(brightness * 100)}%</span></label><input id="brightness" type="range" min=".35" max="2" step=".01" value={brightness} onChange={event => setBrightness(Number(event.target.value))} />
-    </div></div>}
   </main>;
 }
