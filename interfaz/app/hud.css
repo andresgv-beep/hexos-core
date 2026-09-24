@@ -209,3 +209,23 @@ body { background: var(--hud-bg); color: var(--hud-text); }
 .window-content .note-body .helios-answer p { font-size: inherit; line-height: inherit; color: inherit; margin: 0 0 .7em; }
 .window-content .note-body .helios-answer strong { color: var(--hud-bright); }
 .window-content p.note-meta { font-size: 11px; line-height: 1.5; color: var(--hud-muted); margin: 0 0 14px; }
+/* Tools share a compact icon rail instead of one full-height card per call. */
+.hud-content .hud-activity { padding: 18px 14px 14px; max-height: none; }
+.hud-activity-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+.hud-activity-heading h2 { margin: 0; }
+.hud-activity-heading > span { color: var(--hud-muted); font: 10px monospace; }
+.hud-activity .hud-tool-icons { display: grid; grid-template-columns: repeat(auto-fit,minmax(44px,1fr)); gap: 6px; }
+.hud-activity .hud-tool-icons li { border: 0; background: none; padding: 0; margin: 0; min-width: 0; }
+.hud-tool-icons button { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; width: 100%; min-height: 62px; padding: 8px 2px 5px; border: 1px solid var(--hud-frame); background: var(--hud-chat); color: var(--hud-muted); cursor: pointer; }
+.hud-tool-icons button[aria-pressed="true"], .hud-tool-icons button:hover { background: var(--hud-raised); border-color: var(--hud-accent); color: var(--hud-bright); }
+.hud-tool-icons button:focus-visible { outline: 2px solid var(--hud-pink); outline-offset: 2px; }
+.hud-activity .hud-tool-icons button > span { font: 9px monospace; color: inherit; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.hud-tool-status { position: absolute; right: 3px; top: 3px; color: var(--hud-accent); }
+.hud-tool-icons li[data-status="failed"] .hud-tool-status { color: var(--hud-pink); }
+.hud-tool-icons li[data-status="running"] button { border-color: var(--hud-pink); }
+.hud-tool-icons li[data-status="running"] .hud-tool-status { color: var(--hud-pink); animation: hud-tool-spin 1.5s linear infinite; }
+.hud-tool-detail { display: flex; justify-content: space-between; gap: 10px; margin-top: 10px; font: 11px/1.5 monospace; color: var(--hud-muted); }
+.hud-tool-detail strong { color: var(--hud-text); font-weight: 400; overflow-wrap: anywhere; }
+.hud-tool-detail > span { flex-shrink: 0; }
+@keyframes hud-tool-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .hud-tool-icons li[data-status="running"] .hud-tool-status { animation: none; } }
