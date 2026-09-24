@@ -14,7 +14,7 @@ Consulta [arranque y recuperación](docs/LOCAL_BASELINE.md).
 | Parte | Estado y límites |
 |---|---|
 | Chat 12B / Héctor | Inferencia real comprobada. Historial persistente, streaming y cancelación. La descarga del modelo por inactividad es normal, no una caída. |
-| Respuestas largas | Continuación del mismo prefijo hasta cuatro bloques de 3.072 tokens, limitada también por contexto. Probada con el 12B forzando un corte. Si no termina, conserva el parcial y avisa. No garantiza implementaciones ilimitadas. |
+| Respuestas largas | Hasta cuatro bloques de 3.072 tokens. Ante contexto lleno durante texto visible, reconstruye una vez con el encargo, resultados del turno y prefijo exacto, sin catálogo ni historial anterior y sin ejecutar herramientas. Si lo imprescindible no cabe, conserva el parcial y avisa. No garantiza implementaciones ilimitadas. |
 | Interfaz | Esfera nueva NebulaOrb, visor de código, preview HTML, deshacer, redimensionado y maximizar/restaurar. La respuesta incompleta no reemplaza automáticamente el código abierto. El prompt permite cambiar estructura ante un rediseño, sin imponer retoques mínimos. |
 | Edición del código | Existe edición desde el chat, pero el prompt exige devolver la versión COMPLETA. No existe aún aplicación incremental de parches sobre archivos persistentes. |
 | Resaltado progresivo | Se eliminó la alternancia entre texto plano y resaltado al alcanzar cada fragmento. Regresión estructural cubierta; pendiente confirmar percepción visual en uso prolongado. |
@@ -50,7 +50,7 @@ npm run build
 
 La batería Python utiliza una lista explícita de pruebas locales: no importa
 los scripts opt-in que envían mensajes a un servidor vivo. Resultado de la
-base actual: **665 pruebas Python, 85 de interfaz, tipos y build/render**.
+base actual: **667 pruebas Python, 85 de interfaz, tipos y build/render**.
 Los ensayos reales históricos están en
 `docs/HANDBRAKE_CHAT_REVIEW.md`; no se presentan como repetidos hoy.
 

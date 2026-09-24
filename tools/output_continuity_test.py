@@ -72,6 +72,31 @@ class ContinuityTest(unittest.TestCase):
             rt.generate([])
         self.assertEqual(rt.send.call_count, 2)
 
+    def test_context_rollover_preserves_prefix_request_and_evidence(self):
+        rt = self.runtime(iter([('context_full', '```html\n<main>'), ('eos', 'Hola</main>\n```')]))
+        rt._transport = SimpleNamespace(control=Mock())
+        rt.output_checkpoint = dict(request='Rediseña sin quitar funciones', evidence=[{'result': 'observado'}])
+        rt.template.render = Mock(return_value='COMPACT')
+        result = rt.generate([])
+        self.assertEqual(result['reply'], '```html\n<main>Hola</main>\n```')
+        self.assertEqual(rt.send.call_args_list[1].args[0], 'COMPACT```html\n<main>')
+        self.assertEqual(rt.template.render.call_args.kwargs['tools'], [])
+        self.assertIn('observado', rt.messages[1]['content'])
+        self.assertIn('Rediseña sin quitar funciones', rt.messages[1]['content'])
+        self.assertEqual(rt.last_generation['context_rollovers'], 1)
+        rt._transport.control.assert_called_once_with(dict(type='reset', session='0'))
+
+    def test_rollover_is_bounded_and_does_not_execute_a_new_call(self):
+        for reason, ending in [('context_full', 'fin'), ('stop', '<|tool_call>call:nas_file_read{}<tool_call|>')]:
+            rt = self.runtime(iter([('context_full', 'texto'), (reason, ending)]))
+            rt._transport = SimpleNamespace(control=Mock())
+            rt.output_checkpoint = dict(request='Encargo', evidence=[])
+            with self.assertRaises(GenerationInterrupted):
+                rt.generate([])
+            self.assertFalse(rt.pending)
+            self.assertIsNone(rt.current)
+            self.assertEqual(rt.send.call_count, 2)
+
     def test_partial_is_archived_and_chat_unlocks(self):
         class Runtime:
             native = False

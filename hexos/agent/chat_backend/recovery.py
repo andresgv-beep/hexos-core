@@ -40,6 +40,9 @@ class RecoveryController:
                 turn.retries.web_read_guided = self.agent.runtime.require_read('web.read')
         try:
             try:
+                if turn.native:
+                    self.agent.runtime.output_checkpoint = dict(request=turn.prompt_text,
+                        evidence=turn.trace)
                 output = self.agent.runtime.generate(turn.messages)
                 if isinstance(output, dict) and 'reply' in output:
                     validate_reply(output['reply'])

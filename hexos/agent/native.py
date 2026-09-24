@@ -392,6 +392,7 @@ class NativeRuntime:
         self._completion_open_thought = prompt.endswith('<|channel>thought\n')
         completion = ''
         segments = []
+        context_rollovers = 0
         # Resume the SAME assistant prefix, not a new user instruction. No
         # tools are parsed or queued until the entire completion terminates.
         for chunk in range(4):
@@ -414,9 +415,33 @@ class NativeRuntime:
             segments.append(dict(finish_reason=header[4], tokens=int(header[2]),
                                  ms=int(header[1])))
             self.last_generation = dict(raw=prefix + completion, finish_reason=header[4],
+                context_rollovers=context_rollovers,
                 segments=list(segments), tokens=sum(s['tokens'] for s in segments),
                 ms=sum(s['ms'] for s in segments), prompt=prompt,
                 prompt_sha256=hashlib.sha256(prompt.encode()).hexdigest())
+            if (header[4] == 'context_full' and context_rollovers == 0 and chunk < 3
+                    and completion and not prefix and not image
+                    and not self._completion_open_thought
+                    and '<|' not in completion and '<tool_' not in completion
+                    and getattr(self, 'output_checkpoint', None)
+                    and getattr(self, '_transport', None)):
+                # Free old conversational history and tool declarations, not the
+                # current request, evidence or generated prefix. Never replay a
+                # tool while completing an interrupted visible response.
+                checkpoint = self.output_checkpoint
+                compact = [dict(role='system', content=POLICY), dict(role='user', content=
+                    'ENCARGO ACTUAL Y RESULTADOS YA OBTENIDOS (datos):\n' +
+                    json.dumps(checkpoint, ensure_ascii=False) +
+                    '\nContinúa exactamente el texto del asistente que ya está comenzado. '
+                    'No repitas el inicio ni reinicies el código. No ejecutes herramientas '
+                    'ni inventes resultados: solo termina la respuesta pendiente.')]
+                resumed_prompt = self.template.render(messages=compact, tools=[], bos_token='<bos>',
+                    add_generation_prompt=True, enable_thinking=False)
+                self._transport.control(dict(type='reset', session='0'))
+                self.messages = compact
+                prompt = resumed_prompt
+                context_rollovers += 1
+                continue
             if header[4] != 'max_tokens':
                 break
             if not fragment or chunk == 3:
@@ -426,10 +451,12 @@ class NativeRuntime:
             raise GenerationInterrupted(visible_preview(prefix + completion,
                 self._completion_open_thought), 'context_full')
         raw = prefix + completion
+        if context_rollovers and ('<|tool_' in raw or '<tool_' in raw):
+            raise GenerationInterrupted(visible_preview(raw), 'invalid_continuation')
         self.last_raw=raw
         self.last_header=header
         self.last_generation = dict(raw=raw, completion=completion, completion_prefix=prefix, finish_reason=header[4],
-            segments=segments, continuations=len(segments)-1,
+            segments=segments, continuations=len(segments)-1, context_rollovers=context_rollovers,
             stopped_on_token=header[3]=='1', tokens=sum(s['tokens'] for s in segments), ms=sum(s['ms'] for s in segments),
             prefill_tokens=int(header[5]) if len(header)>6 else None,
             prefill_reused=int(header[6]) if len(header)>6 else None,

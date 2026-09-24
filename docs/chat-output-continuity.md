@@ -11,7 +11,14 @@ La salida en streaming es acumulativa entre bloques. Las llamadas a herramientas
 solo se interpretan tras un final válido y siguen pasando por el parser y la
 validación habituales. Una llamada incompleta no es una acción ejecutable.
 
-Si se llena el contexto, no hay avance, se agotan los cuatro bloques o falla
+Si se llena el contexto durante texto visible, se intenta una reconstrucción
+automática: se conserva íntegro el encargo, los resultados del turno y el prefijo
+generado, retirando historial anterior y catálogo. Esa continuación no puede
+ejecutar herramientas. No se aplica a imágenes, pensamiento abierto o llamadas
+incompletas. Se permite una reconstrucción y se mantiene el máximo de cuatro
+bloques. Si el material imprescindible sigue sin caber, se conserva el parcial.
+
+Si no hay avance, se agotan los cuatro bloques o falla
 una continuación, se archiva la parte visible y se devuelve `incomplete: true`.
 La interfaz recibe un aviso de que la implementación no está terminada, fuera
 del bloque de código. El texto bruto queda en generation_events. Se reinicia
