@@ -1,5 +1,95 @@
 # Chat, servicio y revisión interna
 
+## Nombres legibles de archivos — 23 septiembre 2026
+
+Las tareas nuevas guardan layout_version=2. Tanto storage como output emplean
+carpetas con el título y el identificador de tarea; output distingue además el
+intento. La entrada conserva el título y extensión. La salida es
+`Título.parcial.mkv` hasta superar la verificación completa; entonces se publica
+localmente como `Título.optimizada.mkv` y se utiliza esa salida para copiar al
+destino de la biblioteca, sin reemplazar el original.
+
+Junto a la entrada queda estado.json con origen/destino. Junto a la salida,
+estado.json y handbrake.log. El estado del encoder «finished» no significa que
+la salida esté verificada: la verificación escribe «verified» y la publicación
+«published». El registro durable del servicio sigue siendo la fuente para la
+cancelación y coordinación; estos archivos facilitan inspección manual.
+
+Los títulos se acortan por bytes UTF-8 sin partir caracteres y los identificadores
+completos evitan colisiones entre películas con el mismo título. Las tareas sin
+versión mantienen source/encoded y sus peticiones remotas anteriores; no se
+renombran restos de pruebas ni trabajos previos. No hay limpieza automática.
+
+Validado localmente con archivos reales temporales, publicación y encoder de
+prueba: no se reinició HandBrake ni se convirtió otra película en el NAS.
+
+## Corrección tras el diálogo de Joker — 23 septiembre 2026
+
+Traza local, work.sqlite del workspace HandBrake: generación 10 pide confirmación
+sin intervención de recuperación; generaciones 11 y 14 mezclan paths con filtros.
+La generación 14 recibe el aviso de HexOS que restringía el reintento a lecturas.
+Ese aviso sigue en el prompt de la generación 18, que prepara y vuelve a pedir
+iniciar. Esto demuestra la presencia del aviso, no una causalidad exclusiva.
+
+Se sustituye la prohibición ambigua por una regla explícita: el aviso no concede
+permisos nuevos ni revoca los ya dados; conservar petición, alcance y límites,
+y continuar sus pasos pendientes. Preparar sin iniciar sigue siendo preparar.
+No se dispara media.start desde texto ni se crean autorizaciones por heurísticas.
+
+El error de paths incompatibles enumera todos los campos presentes y explica
+que solo deben quedar scan_id/profile_id/paths. Así quitar count no oculta que
+también sobran min_bytes, max_bytes o extensions. No se corrigen argumentos a
+espaldas del modelo. La declaración compacta explicita las dos alternativas.
+
+Regresiones: llamadas incompatibles con y sin count, recuperación seguida de
+start solicitado y preparación sin start. Los guiones prueban el contrato y la
+ruta del Agent; no demuestran que el e4b haya cambiado su conducta en vivo.
+
+## E4B en NAS real tras integración — 23 septiembre 2026
+
+Prueba de conversación `tools.media_prepare_live`, modelo e4b en text/0x0,
+contexto 16384: consulta perfiles y busca en la biblioteca correcta, pero **no
+supera la preparación**. Interpreta GB como GiB, confunde los 16 resultados de
+página con el total y mezcla paths con count/filtros. Las recuperaciones no han
+conseguido completar un plan. No hubo media.start ni conversión de películas.
+Evidencias: `/tmp/hexos-e4b-real-20260923-{a,b,c}`; conversación y work.sqlite.
+
+Se corrigen dos obstáculos acotados: hasta tres recuperaciones de errores de
+lectura distintos por turno, sin repetir el mismo error, y ejemplo de root como
+cadena en el error de cobertura. No se deducen acciones de promesas de Text.
+La prueba c sigue fallando; estas correcciones no acreditan autonomía.
+
+Recorrido interno separado con vídeo sintético: completed,
+`e5cde301b2f04a1ebde506ccb60cb794`; e4b decide publish, HexOS verifica, publica e
+indexa. Original intacto mediante comprobación independiente. Evidencias en
+`/tmp/hexos-e4b-cycle-20260923`. El arnés adelanta el reloj de las consultas y no
+valida horas de ejecución, ahorro de espacio ni selección desde conversación.
+
+459 pruebas automatizadas correctas. UI y backend locales se ejecutan desde este
+checkout, con workspace separado y modelo e4b; no activan un especialista Cortex
+ni conectan un perfil HERA automáticamente. La máquina del 12b no se ha tocado.
+
+## Integración y corrección de memoria — 23 septiembre 2026
+
+Integrados por avance directo 22ec1ae, 53576af, e26050e y 75a736a sobre la rama
+HandBrake. La retirada de reescrituras descrita a continuación es el comportamiento
+vigente; el apartado histórico de reintento/corrección de frases ya no se aplica.
+
+Se valida cada candidato de memoria contra el mensaje original registrado antes
+de agrupar claves. Un candidato inventado o demasiado largo ya no descarta otro
+válido para la misma clave. La validación es compartida con el guardado explícito;
+HERA conserva su comprobación final. Las pruebas incluyen candidatos inválidos
+junto a uno respaldado y dos fragmentos respaldados del mismo nombre.
+
+Actualizadas las cinco expectativas antiguas del bucle de chat: una afirmación o
+promesa textual no genera llamadas ni fuerza otro turno. El diagnóstico de falta
+de evidencia permanece. No se reinstalan las heurísticas retiradas.
+
+Validación local: 456 pruebas correctas de memoria, chat, contratos, NAS, tareas,
+encoder y sesiones internas. No es una nueva prueba de GPU o conversión real.
+La protección de filtros sigue detectando omisiones, no cambios explícitos del
+modelo; cerrar ese contrato requiere identificar la selección solicitada.
+
 ## Retirada de reescrituras por frases — 22 septiembre 2026
 
 Las generaciones 292–293 y 296–297 demostraron falsos positivos: «sacar el

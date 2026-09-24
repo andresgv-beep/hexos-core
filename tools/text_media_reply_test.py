@@ -24,6 +24,59 @@ class Runtime:
 
 
 class TextMediaReplyTest(unittest.TestCase):
+    def test_distinct_read_errors_allow_recovery_without_phrase_matching(self):
+        with tempfile.TemporaryDirectory() as workspace:
+            call=dict(tool='media.prepare', arguments=dict(scan_id='scan',profile_id='profile',count=5))
+            runtime=Runtime(call, 'No puedo continuar.', call, 'No puedo continuar.', call, 'Plan preparado.')
+            with patch('hexos.agent.chat_backend.media_tools.dispatch', side_effect=[
+                dict(error='Faltan filtros'), dict(error='Falta root'), dict(plan_id='plan',count=5)]):
+                result=Agent(workspace,runtime).chat('Prepara cinco películas sin iniciar.')
+            self.assertEqual(result['diagnostics']['recovery_requests'],2)
+            self.assertEqual(len(result['tools']),3)
+            self.assertEqual(result['reply'],'Plan preparado.')
+
+    def test_same_error_is_not_retried_forever(self):
+        with tempfile.TemporaryDirectory() as workspace:
+            call=dict(tool='media.prepare',arguments=dict(scan_id='scan',profile_id='profile'))
+            runtime=Runtime(call,'Bloqueado.',call,'Bloqueado.')
+            with patch('hexos.agent.chat_backend.media_tools.dispatch',return_value=dict(error='Falta root')):
+                result=Agent(workspace,runtime).chat('Prepara la película sin iniciar.')
+            self.assertEqual(result['diagnostics']['recovery_requests'],1)
+            self.assertEqual(len(result['tools']),2)
+
+    def test_recovery_stops_after_three_distinct_errors(self):
+        with tempfile.TemporaryDirectory() as workspace:
+            call=dict(tool='media.prepare',arguments=dict(scan_id='scan',profile_id='profile'))
+            runtime=Runtime(*[item for _ in range(4) for item in (call,'Bloqueado.')])
+            with patch('hexos.agent.chat_backend.media_tools.dispatch',side_effect=[
+                dict(error='error '+str(i)) for i in range(4)]):
+                result=Agent(workspace,runtime).chat('Prepara la película sin iniciar.')
+            self.assertEqual(result['diagnostics']['recovery_requests'],3)
+            self.assertEqual(len(result['tools']),4)
+
+    def test_recovery_preserves_request_to_start_but_does_not_start_itself(self):
+        with tempfile.TemporaryDirectory() as workspace:
+            prepare=dict(tool='media.prepare',arguments=dict(scan_id='scan',profile_id='profile',paths=['/film.mkv']))
+            runtime=Runtime(prepare,'No he podido preparar.',prepare,
+                            dict(tool='media.start',arguments=dict(plan_id='plan')),'Encolado.')
+            with patch('hexos.agent.chat_backend.media_tools.dispatch',side_effect=[
+                dict(error='Argumentos incompatibles'),dict(plan_id='plan'),
+                dict(batch_id='batch',status='queued')]):
+                result=Agent(workspace,runtime).chat('Comprime esta película con el perfil configurado.')
+            self.assertEqual([x['tool'] for x in result['tools']],['media.prepare','media.prepare','media.start'])
+            self.assertIn('no concede permisos nuevos ni revoca los ya dados',runtime.inputs[2])
+            self.assertNotIn('no autoriza iniciar tareas',runtime.inputs[2])
+
+    def test_recovery_keeps_prepare_only_limit(self):
+        with tempfile.TemporaryDirectory() as workspace:
+            prepare=dict(tool='media.prepare',arguments=dict(scan_id='scan',profile_id='profile',paths=['/film.mkv']))
+            runtime=Runtime(prepare,'No he podido preparar.',prepare,'Preparado sin iniciar.')
+            with patch('hexos.agent.chat_backend.media_tools.dispatch',side_effect=[
+                dict(error='Argumentos incompatibles'),dict(plan_id='plan')]):
+                result=Agent(workspace,runtime).chat('Prepara esta película sin iniciar.')
+            self.assertEqual([x['tool'] for x in result['tools']],['media.prepare','media.prepare'])
+            self.assertIn('si pidió solo preparar sin iniciar, conserva ese límite',runtime.inputs[2])
+
     def test_null_error_does_not_reject_correct_progress_reply(self):
         with tempfile.TemporaryDirectory() as workspace:
             runtime = Runtime(dict(tool='media.job', arguments=dict(id='job')),

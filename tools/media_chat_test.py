@@ -104,6 +104,16 @@ class ChatMediaTest(unittest.TestCase):
         self.assertEqual([j['source']['identity']['size_bytes'] for j in jobs],[600,500,400,300,200])
         self.assertTrue(all(j['state']=='queued' for j in jobs))
 
+    def test_exact_paths_error_names_every_incompatible_field(self):
+        for filters in (dict(count=1,extensions=['mkv'],min_bytes=0,max_bytes=800),
+                        dict(extensions=['mkv'],min_bytes=0,max_bytes=800)):
+            with self.assertRaises(ValueError) as caught:
+                self.prepare(paths=['/films/Sub 3/Film.mkv'],**filters)
+            for key in filters:
+                self.assertIn(key,str(caught.exception))
+            self.assertIn('solo scan_id, profile_id y paths',str(caught.exception))
+        self.assertEqual(self.prepare(paths=['/films/Sub 3/Film.mkv'])['count'],1)
+
     def test_specific_observed_movie_only(self):
         plan=self.prepare(paths=['/films/Sub 3/Film.mkv'])
         self.assertEqual(plan['count'],1)

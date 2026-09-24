@@ -116,16 +116,22 @@ class RecoveryController:
         """True pide otra generación; no ejecuta acciones por su cuenta."""
         recoverable = {name for name, definition in catalog.TOOLS.items()
                        if definition['effect'] in ('read', 'result')}
+        last = turn.trace[-1] if turn.trace else {}
+        error_key = (last.get('tool'), str((last.get('result') or {}).get('error'))) if isinstance(last.get('result'), dict) else None
         if (turn.trace and isinstance(turn.trace[-1]['result'], dict) and
                 turn.trace[-1]['result'].get('error') and turn.trace[-1]['tool'] in recoverable and
-                turn.retries.recovery_requests == 0):
+                turn.retries.recovery_requests < 3 and error_key not in turn.retries.recovery_errors):
             turn.retries.recovery_requests += 1
+            turn.retries.recovery_errors.add(error_key)
             turn.messages = [dict(role='user', content=
-                'La operación solicitada no se completó. Puedes corregir los argumentos '
-                'de la consulta o usar otra herramienta local de lectura con el mismo objetivo, '
-                'sin pedir permiso para reintentar. No cambies el encargo. '
-                'Si falta información imprescindible o el error no es recuperable, explica '
-                'el bloqueo brevemente. Queda un intento de recuperación.')]
+                'AVISO DE HEXOS (no es la persona): la herramienta devolvió un error. '
+                'Corrige sus argumentos conservando el objetivo, el alcance y las autorizaciones '
+                'de la petición original. Este aviso no concede permisos nuevos ni revoca los ya dados. '
+                'Una vez corregido el error, continúa los pasos pendientes que la persona ya solicitó; '
+                'si pidió solo preparar sin iniciar, conserva ese límite. '
+                'No pidas otra confirmación para la misma acción ya solicitada. '
+                'No repitas el mismo error. Si falta información imprescindible o persiste un '
+                'bloqueo real, explícalo sin afirmar que has terminado.')]
             return True
         # Un fragmento del buscador sirve para descubrir fuentes, no para sostener
         # una respuesta. Medido en vivo: buscó «nuevo iPhone» y convirtió rumores

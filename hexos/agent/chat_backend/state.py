@@ -75,6 +75,7 @@ class SessionState:
 class RetryState:
     schema_retries: int = 0
     recovery_requests: int = 0
+    recovery_errors: set = field(default_factory=set)
     said_retries: int = 0
     coverage_retries: int = 0
     coverage_mark: int = -1

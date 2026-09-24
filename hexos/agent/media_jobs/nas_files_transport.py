@@ -33,7 +33,7 @@ def bundle():
     buffer = io.BytesIO()
     root = Path(__file__).parent/'remote'
     with zipfile.ZipFile(buffer, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
-        for name in ('__init__.py','file_common.py','file_control.py','file_worker.py','file_operations.py','file_media.py'):
+        for name in ('__init__.py','file_common.py','file_control.py','file_worker.py','file_operations.py','file_media.py','file_layout.py'):
             info = zipfile.ZipInfo('remote/'+name)
             info.compress_type = zipfile.ZIP_DEFLATED
             archive.writestr(info, (root/name).read_bytes())

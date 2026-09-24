@@ -108,6 +108,18 @@ def frase_del_hecho(clave, valor):
     return 'De su ' + sujeto + ', ' + atributo + ': ' + valor
 
 
+def validated_fact(args, quote):
+    """Validación sin escritura, compartida por extracción y guardado explícito."""
+    key = string(args.get('key'), 'key', 60).strip().casefold()
+    value = string(args.get('value'), 'value', 200).strip()
+    if not re.fullmatch(r'[a-záéíóúñü0-9_ -]{1,30}(/[a-záéíóúñü0-9_ -]{1,30})?', key):
+        raise ValueError('key debe ser una etiqueta simple como nombre, o sujeto/atributo como gato/nombre')
+    if value.casefold() not in quote.casefold():
+        raise ValueError('Ese valor no aparece en el mensaje de la persona. Guarda solo lo que '
+                         'acaba de decir, con sus palabras; no lo que deduzcas ni recuerdes de antes.')
+    return (key if '/' in key else 'yo/' + key), value
+
+
 class MemoryService:
     def __init__(self, env: Environment):
         self.env = env
@@ -120,22 +132,12 @@ class MemoryService:
         """
         if not self.env.profile:
             raise ValueError('Esta sesión no tiene perfil HERA; el dato no se ha guardado en ninguna parte')
-        key = string(args.get('key'), 'key', 60).strip().casefold()
-        value = string(args.get('value'), 'value', 200).strip()
-        # Una sola barra: es el separador sujeto/atributo de HERA, no una ruta.
-        if not re.fullmatch(r'[a-záéíóúñü0-9_ -]{1,30}(/[a-záéíóúñü0-9_ -]{1,30})?', key):
-            raise ValueError('key debe ser una etiqueta simple como nombre, o sujeto/atributo como gato/nombre')
         row = store.db.execute("SELECT text FROM conversation WHERE id=? AND role='user'",
                                (turn_id,)).fetchone() if turn_id else None
         if not row:
             raise ValueError('No hay mensaje de este turno del que tomar la evidencia')
         quote = row['text']
-        if value.casefold() not in quote.casefold():
-            raise ValueError('Ese valor no aparece en el mensaje de la persona. Guarda solo lo que '
-                             'acaba de decir, con sus palabras; no lo que deduzcas ni recuerdes de antes.')
-        # HERA deriva el sujeto de la clave: sin «yo/» lo tomaría por otra persona
-        # y exigiría que esa palabra apareciese en la frase.
-        clave = key if '/' in key else 'yo/' + key
+        clave, value = validated_fact(args, quote)
         # El perfil que lee el modelo es esta frase, literal: HERA imprime `texto`
         # tal cual. Sin el sujeto, hermana/nombre y ordenador/nombre se leen los dos
         # como «Su nombre es…» y el perfil se contradice solo.
@@ -270,18 +272,21 @@ class MemoryService:
         guardados = []
         # Una extracción no es una secuencia de correcciones de la persona.
         # Dos candidatos para la misma clave no deben pisarse por orden de salida.
+        row = store.db.execute("SELECT text FROM conversation WHERE id=? AND role='user'",
+                               (turn_id,)).fetchone() if turn_id else None
+        if not row:
+            return ''
         grupos = {}
         for hecho in candidatos:
             if not isinstance(hecho, dict):
                 continue
-            key, value = hecho.get('key'), hecho.get('value')
-            if not isinstance(key, str) or not isinstance(value, str):
+            try:
+                key, value = validated_fact(hecho, row['text'])
+            except (ValueError, TypeError):
+                continue  # Un candidato inválido no debe desplazar a uno respaldado.
+            if value.casefold() in ('no me gusta', 'me gusta', 'eso', 'así', 'asi'):
                 continue
-            key = key.strip().casefold()
-            key = key if '/' in key else 'yo/' + key
-            if value.strip().casefold() in ('no me gusta', 'me gusta', 'eso', 'así', 'asi'):
-                continue  # Sin referente no constituye una preferencia recuperable.
-            grupos.setdefault(key, []).append(dict(key=key, value=value.strip()))
+            grupos.setdefault(key, []).append(dict(key=key, value=value))
         candidatos = []
         for hechos in grupos.values():
             completo = max(hechos, key=lambda h: len(h['value']))

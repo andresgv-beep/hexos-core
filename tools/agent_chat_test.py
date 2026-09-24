@@ -109,7 +109,7 @@ if __name__ == '__main__':
 
 
 class AfirmacionSinEscrituraTest(unittest.TestCase):
-    """Si canta una escritura que no hizo, HexOS le devuelve el turno para que la haga."""
+    """Una afirmación sin llamada no escribe ni fuerza otra generación."""
 
     class Guionizado:
         """Runtime que responde una lista de salidas, en orden."""
@@ -131,18 +131,17 @@ class AfirmacionSinEscrituraTest(unittest.TestCase):
         agent = Agent(tmp.name, runtime)
         return agent, runtime, agent.chat('apunta el estado del NAS')
 
-    def test_se_le_devuelve_el_turno_y_entonces_guarda(self):
+    def test_afirmacion_sin_llamada_no_crea_nota(self):
         agent, runtime, result = self.correr([
             {'reply': 'He recopilado el estado y lo he guardado en una nota.', 'work': None},
             {'tool': 'note.save', 'arguments': {'title': 'Estado del NAS', 'body': 'Todo correcto.'}},
             {'reply': 'Hecho, la nota queda guardada.', 'work': None},
         ])
-        self.assertEqual([t['tool'] for t in result['tools']], ['note.save'])
-        self.assertEqual(result['closure']['reason'], 'comprobado')
-        # Y el aviso que se le mandó dice de dónde viene, para que no lo lea como a la persona.
-        self.assertIn('AVISO DE HEXOS', runtime.recibido[1][0]['content'])
+        self.assertEqual(result['tools'], [])
+        self.assertEqual(result['closure']['reason'], 'no_consta')
+        self.assertEqual(len(runtime.recibido), 1)
         with agent.store() as store:
-            self.assertEqual(notes_count(store), 1)
+            self.assertEqual(notes_count(store), 0)
 
     def test_si_no_había_nada_que_guardar_se_queda_en_la_respuesta(self):
         _, _, result = self.correr([
@@ -150,16 +149,16 @@ class AfirmacionSinEscrituraTest(unittest.TestCase):
             {'reply': 'Te cuento el estado; no he guardado nada en este turno.', 'work': None},
         ])
         self.assertEqual(result['tools'], [])
-        self.assertEqual(result['reply'], 'Te cuento el estado; no he guardado nada en este turno.')
+        self.assertEqual(result['reply'], 'Ya lo había guardado antes.')
 
-    def test_solo_se_le_devuelve_una_vez(self):
+    def test_no_se_regenera_por_una_afirmacion(self):
         _, runtime, result = self.correr([
             {'reply': 'Lo he guardado.', 'work': None},
             {'reply': 'Lo he guardado, de verdad.', 'work': None},
         ])
-        # No se insiste en bucle: se cierra diciendo que no consta.
+        # El diagnóstico conserva la falta de evidencia sin reescribir Text.
         self.assertEqual(result['closure']['reason'], 'no_consta')
-        self.assertEqual(len(runtime.recibido), 2)
+        self.assertEqual(len(runtime.recibido), 1)
 
     def test_una_respuesta_que_no_afirma_nada_no_gasta_turnos(self):
         _, runtime, result = self.correr([
@@ -173,7 +172,7 @@ def notes_count(store):
 
 
 class PromesaEnElBucleTest(unittest.TestCase):
-    """Si promete y el turno acaba, se le devuelve una vez para que lo haga."""
+    """Una promesa en texto no autoriza ni provoca una acción."""
 
     class Guionizado:
         def __init__(self, salidas):
@@ -189,23 +188,23 @@ class PromesaEnElBucleTest(unittest.TestCase):
         agent = Agent(tmp.name, runtime)
         return runtime, agent.chat('revisa los contenedores')
 
-    def test_se_le_devuelve_el_turno_y_entonces_lo_hace(self):
+    def test_promesa_no_ejecuta_herramientas_ni_regenera(self):
         runtime, result = self.correr([
             {'reply': 'Ahora voy a revisar los contenedores. Dame un momento.', 'work': None},
             {'tool': 'note.save', 'arguments': {'title': 'Contenedores', 'body': 'Todos en marcha.'}},
             {'reply': 'Listo: todos en marcha.', 'work': None},
         ])
-        self.assertEqual([t['tool'] for t in result['tools']], ['note.save'])
-        self.assertIn('AVISO DE HEXOS', runtime.recibido[1][0]['content'])
-        self.assertIn('sin haberlo hecho', runtime.recibido[1][0]['content'])
+        self.assertEqual(result['tools'], [])
+        self.assertEqual(result['reply'], 'Ahora voy a revisar los contenedores. Dame un momento.')
+        self.assertEqual(len(runtime.recibido), 1)
 
-    def test_solo_se_insiste_una_vez(self):
+    def test_no_se_insiste_por_una_promesa(self):
         runtime, result = self.correr([
             {'reply': 'Voy a revisar el NAS.', 'work': None},
             {'reply': 'Voy a revisar el NAS, en serio.', 'work': None},
         ])
-        self.assertEqual(result['reply'], 'Voy a revisar el NAS, en serio.')
-        self.assertEqual(len(runtime.recibido), 2)
+        self.assertEqual(result['reply'], 'Voy a revisar el NAS.')
+        self.assertEqual(len(runtime.recibido), 1)
 
     def test_una_respuesta_que_no_promete_nada_no_gasta_turnos(self):
         runtime, _ = self.correr([{'reply': 'Hay tres contenedores en marcha.', 'work': None}])
