@@ -1,5 +1,7 @@
 "use client";
 
+import { HudAccents } from "./HudAccents";
+
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { ChevronsRight, Code2, MessageSquare, Square } from "lucide-react";
 import { AttachmentButton, ChatAttachments, type Attachment } from "./ChatAttachments";
@@ -616,12 +618,12 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     <div className="hud-grid">
       <aside className="hud-sidebar" aria-label="Sistema y núcleo">
         <SystemMonitor hud autoEnabled={null} onToggleAuto={() => void toggleThinking()} />
-        <section className="hud-panel hud-notes"><div className="hud-notes-heading"><h2>NÚCLEO</h2>
+        <section className="hud-panel hud-notes"><HudAccents /><div className="hud-notes-heading"><h2>NÚCLEO</h2>
           <button type="button" onClick={() => setCoreOpen(true)} aria-label="Abrir el núcleo">{coreTotal === null ? "Abrir" : `${coreTotal} notas`}</button></div>
           <CoreShelf reload={coreReload} onOpenNote={abrirNota} onTotal={setCoreTotal} />
         </section>
       </aside>
-      <section className="hud-panel hud-chat" aria-label="Conversación">
+      <section className="hud-panel hud-chat" aria-label="Conversación"><HudAccents />
         <div className="hud-panel-heading"><h1>CANAL · HELIOS</h1><span>{sending ? "Trabajando…" : "Conversación"}</span></div>
         <div className="hud-chat-scroll">
           <ConversationStream turn={turns[turns.length - 1] ?? null} onReplyComplete={() => setRevealing(false)}

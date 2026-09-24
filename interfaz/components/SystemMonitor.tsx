@@ -1,5 +1,7 @@
 "use client";
 
+import { HudAccents } from "./HudAccents";
+
 import { useEffect, useState } from "react";
 import { Activity, Boxes, Brain, Cpu, MemoryStick, Microchip } from "lucide-react";
 import { SystemGauges } from "./SystemGauges";
@@ -68,6 +70,7 @@ export function SystemMonitor({ autoEnabled, autoBusy = false, onToggleAuto, cor
   const ram = telemetry ? percent(telemetry.ram.usedMb, telemetry.ram.totalMb) : 0;
   const vram = telemetry ? percent(telemetry.vram.usedMb, telemetry.vram.totalMb) : 0;
   return <aside className="system-monitor" aria-label="Consumo del sistema">
+    {hud && <HudAccents />}
     <div className="monitor-title">
       <Activity size={17} /><span>SISTEMA</span><span className={`monitor-status ${online ? "online" : ""}`} />
     </div>
