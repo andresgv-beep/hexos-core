@@ -229,3 +229,21 @@ body { background: var(--hud-bg); color: var(--hud-text); }
 .hud-tool-detail > span { flex-shrink: 0; }
 @keyframes hud-tool-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .hud-tool-icons li[data-status="running"] .hud-tool-status { animation: none; } }
+
+.inference-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 20px;
+  padding: 8px 4px 0;
+  color: var(--hud-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.inference-context { display: flex; align-items: center; gap: 8px; }
+.inference-track { width: 72px; height: 4px; background: var(--hud-panelA); overflow: hidden; }
+.inference-track > span { display: block; height: 100%; background: var(--hud-accent); transition: width .3s; }
+.inference-context[data-full="true"] { color: var(--hud-pink); }
+.inference-context[data-full="true"] .inference-track > span { background: var(--hud-pink); }
+.inference-footer strong { color: var(--hud-text); font-weight: 500; }

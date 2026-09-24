@@ -1,6 +1,8 @@
 "use client";
 
 import { ContinuousChat } from "./ContinuousChat";
+import { InferenceFooter } from "./InferenceFooter";
+import { type InferenceMetrics } from "@/lib/helios/metrics";
 import { HudAccents } from "./HudAccents";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
@@ -36,6 +38,7 @@ function sameArtifact(left: ReplyArtifact, right: ReplyArtifact) {
 }
 
 export function HeliosExperience({ transport = localTransport }: { transport?: HeliosTransport }) {
+  const [metrics, setMetrics] = useState<InferenceMetrics>();
   const [draft, setDraft] = useState("");
   // null = el motor no tiene canal de pensamiento; entonces no se ofrece el botón.
   const [thinking, setThinking] = useState<boolean | null>(null);
@@ -298,6 +301,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       if (disposed) return;
       setConnection("ready");
       setThinking(estado.thinking);
+      setMetrics(estado.metrics);
       // Lo que Helios dice que va a hacer, mientras lo hace. Sin esto la ventana
       // se quedaba en «pensando…» y lo anunciado —que lo escribe el modelo, no
       // nosotros— se perdía; el chat viejo sí lo enseñaba.
@@ -641,6 +645,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
           <Square size={18} /></button>
           : <button className="send-button" type="submit" disabled={(!draft.trim() && !attachments.length) || historyLoading || attachments.some(file => file.status !== "ready")} aria-label="Enviar mensaje"><span className="hud-send-label">ENVIAR</span><ChevronsRight size={21} /></button>}
       </form>
+      <InferenceFooter metrics={connection === "ready" ? metrics : undefined} />
       {contextCut && <p className="connection-note" role="status">
         Se llenó la memoria de trabajo y he empezado de cero con {contextCut.messages} mensajes recogidos.
         No se ha borrado nada: Helios los sigue encontrando si le preguntas por ellos.{" "}

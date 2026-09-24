@@ -237,6 +237,8 @@ class NativeRuntime:
             stats, times = result['usage'], result['timings']
             if not self._aux_generation:
                 self.kv_position = result['model_state']['cache_position']
+                self.notify(dict(decode_sample=dict(tokens=stats['generated_tokens'],
+                                                    milliseconds=times.get('decode_ms'))))
             raw = result['visible_text']
             reason = result['finish_reason']
             if reason == 'cancelled' or self._transport.cancelled.is_set():

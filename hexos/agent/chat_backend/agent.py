@@ -214,6 +214,13 @@ class Agent:
         with self.live_lock:
             return self.live.snapshot() if self.live else None
 
+    def metrics_snapshot(self):
+        with self.live_lock:
+            snapshot = self.live.snapshot() if self.live else getattr(self, '_last_metrics', {})
+        return dict(context_used=getattr(self.runtime, 'kv_position', None),
+                    context_capacity=getattr(self.runtime, 'ctx', None),
+                    tokens_per_second=snapshot.get('tokens_per_second'))
+
     def cancel_generation(self, request_id):
         with self.live_lock:
             if not self.live or self.live.request_id != request_id or not self.live.data['cancellable']:
@@ -231,6 +238,8 @@ class Agent:
         with self.live_lock:
             if hasattr(self.runtime, 'on_update'):
                 self.runtime.on_update = None
+            if self.live:
+                self._last_metrics = self.live.snapshot()
             self.live = None
         if self.runtime_turn_acquired:
             self.runtime.release_turn()

@@ -1,3 +1,4 @@
+import { parseInferenceMetrics, type InferenceMetrics } from "./metrics";
 import { phaseFromHexos, type HeliosPhase } from "./state";
 import { notesDismissed, notesTouched, parseToolActivities, type ToolActivity } from "./tools";
 
@@ -74,7 +75,7 @@ function parseChatReply(data: unknown): ChatReply {
 export interface HeliosTransport {
   /** `thinking` es null cuando el motor no tiene canal de pensamiento. */
   status(signal?: AbortSignal): Promise<{ phase: HeliosPhase; mode: string; thinking: boolean | null;
-    tools: ToolActivity[]; credentialRequest: CredentialRequest | null; progress: Progress; generation?: Generation }>;
+    tools: ToolActivity[]; credentialRequest: CredentialRequest | null; progress: Progress; generation?: Generation; metrics?: InferenceMetrics }>;
   /** Guarda el acceso de un equipo. `host` fija su dirección: sin ella se busca
    *  entre los vecinos de la red, que solo sirve estando en la misma. */
   saveAccess(input: { device: string; user: string; password: string; host?: string; port?: number },
@@ -129,7 +130,7 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
         : null;
       return { phase: phaseFromHexos(data.state), mode: data.mode, thinking,
                tools: parseToolActivities(data.active_tools, "running"), credentialRequest,
-               progress: parseProgress(data.progress), generation };
+               progress: parseProgress(data.progress), generation, metrics: parseInferenceMetrics(data.metrics) };
     },
     async saveAccess({ device, user, password, host, port }, signal) {
       if (!device.trim() || !user.trim()) throw new Error("Faltan el equipo y el usuario");

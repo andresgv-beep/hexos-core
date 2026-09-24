@@ -43,6 +43,7 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                                              if hasattr(agent.runtime, 'status') else
                                              {'state':'ready', 'ready':True}),
                                    'generation': agent.generation_snapshot(),
+                                   'metrics': agent.metrics_snapshot(),
                                    'mode':'native-experimental' if native_template else 'json'})
             elif self.path == '/api/core':
                 # El panel se pinta sin gastar un turno del modelo, pero del MISMO
