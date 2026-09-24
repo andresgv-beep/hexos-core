@@ -70,5 +70,4 @@
 .hud-frame-accents > b { position: absolute; top: 0; right: 0; width: 104px; height: 10px; background: var(--hud-pink); clip-path: polygon(0 0,100% 0,100% 100%,10px 100%); }
 .hud-chat > .hud-frame-accents > i { width: 15px; height: 15px; }
 .hud-chat > .hud-frame-accents > b { width: 196px; height: 12px; }
-.hud-chat > .hud-frame-accents::after { content: ''; position: absolute; left: 0; bottom: 60px; width: 4px; height: 90px; background: var(--hud-pink); }
 @media (max-width: 700px) { .mobile-layout .hud-chat > .hud-frame-accents { display: none; } }

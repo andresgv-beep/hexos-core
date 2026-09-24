@@ -31,6 +31,12 @@ comparte componente y API entre el panel y la ventana ampliada. Cambiar de pesta
 conserva su lectura; ampliar abre el mismo archivo en un visor independiente.
 Las ventanas son internas a la aplicación, no ventanas del sistema operativo.
 
+`ContinuousChat` conserva el historial y todos los turnos de la sesión, incluso
+cuando se renueva el contexto del modelo. Permite cargar mensajes anteriores y
+seguir la generación sin arrastrar al final a quien está leyendo más arriba.
+Las barras de scroll usan el acento secundario del tema en el lado derecho;
+la antigua franja decorativa fija del chat se ha retirado.
+
 `themes.css` contiene las cuatro paletas; `hud.css` organiza paneles y controles.
 `hud-frames.css` reproduce los marcos recortados del concepto en paneles y ventanas;
 `SystemGauges` presenta la telemetría existente en indicadores circulares.

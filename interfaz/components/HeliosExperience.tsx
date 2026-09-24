@@ -1,5 +1,6 @@
 "use client";
 
+import { ContinuousChat } from "./ContinuousChat";
 import { HudAccents } from "./HudAccents";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
@@ -13,7 +14,7 @@ import { SystemMonitor } from "./SystemMonitor";
 import { ContentDock } from "./ContentDock";
 import { ThemeSelector } from "./ThemeSelector";
 import { ToolActivityPanel } from "./ToolActivityPanel";
-import { ConversationStream, type Turn } from "./ConversationStream";
+import { type Turn } from "./ConversationStream";
 import { NoteWindow, type NoteWindowState } from "./NoteWindow";
 import { CoreShelf } from "./CoreShelf";
 import { CoreViewer } from "./CoreViewer";
@@ -486,13 +487,8 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
           setCoreReload(n => n + 1);
         }
         if (result.contextCut) {
-          // HexOS ha cortado el contexto por lleno. Las ventanas anteriores ya no
-          // están en la memoria de trabajo del modelo, así que dejarlas en pantalla
-          // haría creer que sigue viéndolas. Se recogen; el archivo no se toca y
-          // Helios puede recuperarlo buscando.
-          // Menos la del turno actual: es la que va a mostrar esta respuesta.
-          setTurns(items => items.filter(item => item.id === id));
-          setPrevious([]);
+          // La ventana de contexto del modelo no determina el historial visible.
+          // Conservamos mensajes y paginación; el aviso explica la renovación.
           setContextCut(result.contextCut);
         }
         // Si lo comprobado no sostiene la respuesta, se dice junto a ella. No se
@@ -625,11 +621,9 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       </aside>
       <section className="hud-panel hud-chat" aria-label="Conversación"><HudAccents />
         <div className="hud-panel-heading"><h1>CANAL · HELIOS</h1><span>{sending ? "Trabajando…" : "Conversación"}</span></div>
-        <div className="hud-chat-scroll">
-          <ConversationStream turn={turns[turns.length - 1] ?? null} onReplyComplete={() => setRevealing(false)}
-            onImproveCode={improveCode} onPreviewCode={previewCode} />
-          {!turns.length && <div className="hud-welcome"><h2>Hablemos, socio.</h2><p>Escribe a Helios o abre el historial para retomar una conversación.</p></div>}
-        </div>
+        <ContinuousChat previous={previous} turns={turns} historyError={historyError}
+          hasEarlier={historyNext !== null} olderLoading={olderLoading} onLoadEarlier={loadOlderHistory}
+          onReplyComplete={() => setRevealing(false)} onImproveCode={improveCode} onPreviewCode={previewCode} />
     <section className="conversation" aria-label="Chat con Helios">
       {!mobile && !codeOpen && (codeArtifact || historicalArtifacts.length > 0) &&
         <button type="button" className="history-code-open" onClick={() => {

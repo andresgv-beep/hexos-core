@@ -48,8 +48,8 @@ export function ConversationStream({ turn, onReplyComplete, onImproveCode, onPre
   </section>;
 }
 
-export function TurnoVisible({ turn, saliendo, onReplyComplete, onImproveCode, onPreviewCode }:
-  { turn: Turn; saliendo?: boolean; onReplyComplete?: (id: number) => void } & CodeActions) {
+export function TurnoVisible({ turn, saliendo, settled = false, onReplyComplete, onImproveCode, onPreviewCode }:
+  { turn: Turn; saliendo?: boolean; settled?: boolean; onReplyComplete?: (id: number) => void } & CodeActions) {
   return <article className={`stream-turn${saliendo ? " leaving" : ""}`} aria-hidden={saliendo || undefined}>
     <p className="stream-question"><span className="message-author">TÚ</span>{turn.text}</p>
     <div className="stream-body">
@@ -59,7 +59,7 @@ export function TurnoVisible({ turn, saliendo, onReplyComplete, onImproveCode, o
       {turn.pending && <p className="reply-status" role="status">
         {turn.generationStatus || (turn.progress?.length ? "Helios está en ello…" : "Helios está pensando…")}
       </p>}
-      {(turn.preview || turn.reply) && (saliendo
+      {(turn.preview || turn.reply) && (saliendo || settled
         ? <ReplyMarkdown text={turn.reply || turn.preview || ""} onImproveCode={onImproveCode} onPreviewCode={onPreviewCode} />
         : <div className={turn.pending ? "reply-preview" : undefined}
             aria-label={turn.pending ? "Respuesta en generación" : undefined}>

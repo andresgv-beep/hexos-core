@@ -177,3 +177,17 @@ body { background: var(--hud-bg); color: var(--hud-text); }
 @media (max-width: 700px) { .hud-send-label { display: none; } .hud-auto { padding: 8px; } }
 .hud-nas-pane { flex: 1; min-height: 0; }
 .hud-nas-pane[hidden] { display: none; }
+/* Real scroll position replaces the decorative pink stripe. */
+:is(.hud-chat-scroll,.hud-sidebar,.hud-content-body,.hud-activity,.viewer-list,.history-messages,.window-content,.reply-code pre,.mobile-page) {
+  scrollbar-width: thin; scrollbar-color: var(--hud-pink) var(--hud-track);
+}
+:is(.hud-chat-scroll,.hud-sidebar,.hud-content-body,.hud-activity,.viewer-list,.history-messages,.window-content,.reply-code pre,.mobile-page)::-webkit-scrollbar { width: 5px; height: 5px; }
+:is(.hud-chat-scroll,.hud-sidebar,.hud-content-body,.hud-activity,.viewer-list,.history-messages,.window-content,.reply-code pre,.mobile-page)::-webkit-scrollbar-thumb { background: var(--hud-pink); border-radius: 0; }
+:is(.hud-chat-scroll,.hud-sidebar,.hud-content-body,.hud-activity,.viewer-list,.history-messages,.window-content,.reply-code pre,.mobile-page)::-webkit-scrollbar-track { background: var(--hud-track); }
+.hud-chat-scroll { scrollbar-gutter: stable; overflow-anchor: none; padding-right: 12px; }
+.hud-chat-messages > .stream-turn { margin-bottom: 28px; animation: none; }
+.hud-saved-message { margin: 0 0 20px; padding: 16px; background: var(--hud-heliosBubble); border-left: 2px solid var(--hud-accent); }
+.hud-saved-message.user { margin-left: 12%; background: var(--hud-userBubble); border-left: 0; border-right: 2px solid var(--hud-pink); }
+.hud-saved-message.user .message-author { color: var(--hud-pink); }
+.hud-notes { min-height: 140px; }
+.hud-notes > .core-shelf { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--hud-pink) var(--hud-track); }
