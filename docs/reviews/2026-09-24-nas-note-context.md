@@ -27,3 +27,12 @@ No se ha modificado la nota ni el perfil de HERA.
 4. Corregir la nota mediante una nueva revisión únicamente con contenido respaldado, sin borrar su histórico ni inventar el estado actual del NAS.
 
 Esta auditoría no demuestra un fallo del parser de Markdown ni de los límites de almacenamiento. El visor tenía además un fallo de presentación independiente: mostraba Markdown como texto plano.
+
+## Corrección aplicada
+
+- Perfil retirado de la inyección automática, tanto nativa como JSON. Nueva lectura `profile.recall(query)` devuelve hasta diez hechos coincidentes; no existe volcado implícito ni comodín global.
+- `nas.read` distingue `scope=all` sin `container` y `scope=name` con un filtro. El `container=all` ambiguo se rechaza antes del transporte y explica cómo corregirlo. Un contenedor realmente llamado all sigue siendo consultable con scope=name.
+- Los resultados identifican el alcance; una lista filtrada vacía advierte que no demuestra ausencia global.
+- 131 pruebas de contexto, perfil, NAS, adaptador nativo y notas superadas.
+- Prueba aislada con Gemma 4 E4B real y perfil ficticio: la primera solicitud creó una nota técnica de NAS con los resultados suministrados y sin hechos del perfil. Sin SSH ni escritura en el almacén real durante esa prueba. Es una prueba puntual, no una garantía universal del modelo.
+- Nota afectada corregida a revisión 2, preservando revisión 1. Renovado el contexto activo sin borrar conversación ni HERA para evitar reutilizar el borrador contaminado.

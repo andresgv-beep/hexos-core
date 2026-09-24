@@ -28,6 +28,13 @@ class ToolDispatcher:
 
     def dispatch(self, store, name, args, *, turn_id=None):
         catalog.validate(name, args)
+        container_scope = None
+        if name == 'nas.read':
+            from .container_scope import resolve
+            args, container_scope = resolve(args)
+        if name == 'profile.recall':
+            from .profile_context import recall
+            return recall(self.env.profile, args['query'])
         if name.startswith('media.'):
             from .media_tools import dispatch
             return dispatch(self.env.workspace, name, args)
@@ -80,6 +87,10 @@ class ToolDispatcher:
                                                              operation=name.split('.')[1], **args)
                 else:
                     salida = self.env.dependencies.nas_read(self.env.workspace, **extra, **args)
+                if container_scope is not None:
+                    salida = dict(salida, scope=container_scope)
+                    if not container_scope['covers_all_containers'] and not salida.get('containers'):
+                        salida['scope_note'] = 'Sin coincidencias con este filtro; no demuestra ausencia de contenedores en el equipo.'
                 if objetivo:
                     estado = (salida.get('container_state') or {}).get('status')
                     if name == 'nas.container' and salida.get('outcome') == 'desconocido':

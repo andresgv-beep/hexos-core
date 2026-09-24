@@ -126,8 +126,8 @@ TOOLS = {
                      'El recuento de miembros de un array no identifica un disco averiado; md0/md1 son particiones de sistema DSM con 12 ranuras fijas y no son la avería. '
                      'Ante cortes consulta storage, kernel y SMART del disco afectado; son lecturas, no inician tests ni reparaciones. '
                      'Para COMPROBAR el estado de un contenedor usa esta herramienta con section=containers, añadiendo container '
-                     'si quieres solo uno: mira sin tocar. Comprobar nunca es motivo para arrancar, parar ni reiniciar nada.',
-                     {'section':'str'},{'disk':'str','device':'str','container':'str'}),
+                     'si quieres filtrar por nombre. Para todos usa scope=all sin container; para un nombre usa scope=name y container. Mira sin tocar. Comprobar nunca es motivo para arrancar, parar ni reiniciar nada.',
+                     {'section':'str'},{'disk':'str','device':'str','container':'str','scope':'str'}),
     'nas.container': spec('CAMBIA el estado de un contenedor: action es start, stop o restart. '
                           'NO sirve para comprobar ni verificar: para eso usa nas.read con section=containers y container, '
                           'que no toca nada. Si te piden comprobar, mirar, verificar o confirmar, esta herramienta es la equivocada. '
@@ -208,6 +208,7 @@ TOOLS = {
                           'cuál es el NAS. STALE no confirma conexión actual. Sin argumentos.',
                           effect='write_inventory',
                           announces=(('mirar','mirad','miro'), ('consultar','consultad','consulto'))),
+    'profile.recall': spec('Consultar un dato personal confirmado en HERA por palabra o etiqueta (nombre, oficio, preferencia). No consulta el NAS. Usa una consulta concreta solo cuando ese dato sea pertinente al encargo.', {'query':'str'}),
     'profile.remember': spec('Guardar en el perfil un dato que la persona acaba de decir sobre sí misma o sobre su '
                              'entorno: su nombre, dónde vive, cómo llama a sus equipos, qué prefiere. '
                              'key es la etiqueta (nombre, ciudad, preferencia); value, el dato con SUS palabras. '
@@ -215,7 +216,7 @@ TOOLS = {
                              'El valor debe aparecer en ese mensaje, así que no guardes lo que deduzcas, lo que '
                              'recuerdes de antes ni lo que tú hayas dicho. Úsalo cuando te cuenten algo que valga '
                              'la pena recordar en próximas conversaciones, sin pedir permiso ni anunciarlo. '
-                             'Para consultar lo ya guardado no hace falta herramienta: el perfil llega en tu contexto.',
+                             'Para consultar un dato guardado usa profile.recall.',
                              {'key':'str','value':'str'}, effect='write_profile', verify='read',
                              announces=(('recordar','recordad','recuerdo'), ('memorizar','memorizad','memorizo'))),
     'core.overview': spec('Qué guarda Helios en su propio equipo: cuántas notas, informes, trabajos, '
@@ -355,7 +356,7 @@ NATIVE_DESCRIPTIONS = {
                   '(0 solo vacíos); inclusivos. '
                   'GB=1000000000 bytes. extensions=["mkv","mp3"], kind=all|video, query literal, root opcional. '
                   'Tamaño descendente; limit y offset/next_offset paginan. Catálogo fechado, no lectura actual.',
-    'nas.read': ('Leer por SSH un equipo guardado. section: diagnosis para salud, space para uso, '
+    'nas.read': ('Contenedores: scope=all sin container para todos; scope=name con container para filtrar. Leer por SSH un equipo guardado. section: diagnosis para salud, space para uso, '
                  'containers para estado, system, storage, kernel, messages o smart. device identifica '
                  'el equipo; smart admite disk y containers admite container. Resuelve la dirección '
                  'del inventario; si faltan credenciales, la interfaz las solicita, nunca el chat. '

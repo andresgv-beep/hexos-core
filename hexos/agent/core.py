@@ -51,7 +51,7 @@ def overview(store, profile=None):
                  for n in vigentes if n['favorite']]
     return dict(sections=secciones, favorites=favoritos, total_favorites=len(favoritos),
                 note='Lo que Helios guarda en su propio equipo. No incluye archivos del NAS: '
-                     'todavía no sabe listar ficheros de un servidor.')
+                     'Para archivos remotos usa las herramientas NAS.')
 
 
 def dispatch(store, name, args, profile=None):
