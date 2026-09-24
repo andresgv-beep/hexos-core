@@ -63,7 +63,8 @@
 :is(.hud-content-dock,.code-workspace,.chat-history,.window-glass) { padding: 1.5px; }
 @media print { .window-glass { clip-path: none; } .window-glass::before,.window-glass::after { display: none; } }
 /* The original pink tabs sit OUTSIDE the bevel, not inside its clipping mask. */
-.hud-chat, .hud-notes, .hud-layout .system-monitor { clip-path: none; }
+/* Match the two-class specificity of the shared :is() frame rule above. */
+.hud-layout .hud-chat, .hud-layout .hud-notes, .hud-layout .system-monitor { clip-path: none; }
 .hud-frame-accents { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
 .hud-frame-accents > i { position: absolute; top: 0; left: 0; width: 13px; height: 13px; background: var(--hud-pink); clip-path: polygon(0 0,100% 0,0 100%); }
 .hud-frame-accents > b { position: absolute; top: 0; right: 0; width: 104px; height: 10px; background: var(--hud-pink); clip-path: polygon(0 0,100% 0,100% 100%,10px 100%); }
