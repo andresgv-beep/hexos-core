@@ -191,3 +191,16 @@ body { background: var(--hud-bg); color: var(--hud-text); }
 .hud-saved-message.user .message-author { color: var(--hud-pink); }
 .hud-notes { min-height: 140px; }
 .hud-notes > .core-shelf { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--hud-pink) var(--hud-track); }
+/* Conversation typography is independent of compact panel labels. */
+.hud-chat { --chat-font-size: 18px; }
+.hud-layout .hud-chat .stream-question,
+.hud-chat .helios-answer,
+.hud-chat .helios-answer :is(p,ul,ol),
+.hud-chat .hud-saved-message {
+  font-size: var(--chat-font-size); line-height: 1.7; color: var(--hud-text);
+}
+.hud-chat .helios-answer strong { color: var(--hud-bright); }
+.hud-chat .helios-answer code { font-size: .94em; }
+.hud-chat .reply-progress li, .hud-chat .reply-status { font-size: 16px; line-height: 1.65; }
+.hud-layout .hud-chat .composer input { font-size: 17px; }
+@media (max-width: 700px) { .hud-chat { --chat-font-size: 17px; } }
