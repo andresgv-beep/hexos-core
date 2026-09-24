@@ -22,6 +22,14 @@ export function NoteWindow({ state, front, orbTarget, onAbsorbed, onMove, onMini
   onFocus: (id: string) => void;
 }) {
   const { note } = state;
+  return <FloatingWindow placement={state} label={note.favorite ? `★ ${note.title}` : note.title}
+    title={`Nota: ${note.title}`} front={front} orbTarget={orbTarget} onAbsorbed={onAbsorbed}
+    onMove={onMove} onMinimize={onMinimize} onClose={onClose} onFocus={onFocus}>
+    <NoteContent note={note} />
+  </FloatingWindow>;
+}
+
+export function NoteContent({ note }: { note: NoteDetail }) {
   function descargar() {
     const blob = new Blob([noteAsMarkdown(note)], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -31,9 +39,7 @@ export function NoteWindow({ state, front, orbTarget, onAbsorbed, onMove, onMini
     enlace.click();
     URL.revokeObjectURL(url);
   }
-  return <FloatingWindow placement={state} label={note.favorite ? `★ ${note.title}` : note.title}
-    title={`Nota: ${note.title}`} front={front} orbTarget={orbTarget} onAbsorbed={onAbsorbed}
-    onMove={onMove} onMinimize={onMinimize} onClose={onClose} onFocus={onFocus}>
+  return <>
     <p className="note-meta">
       {note.state}{note.tags.length ? ` · ${note.tags.join(", ")}` : ""}
       {note.revisions.length > 1 ? ` · ${note.revisions.length} versiones guardadas` : ""}
@@ -43,5 +49,5 @@ export function NoteWindow({ state, front, orbTarget, onAbsorbed, onMove, onMini
       <button type="button" onClick={descargar}><Download size={15} aria-hidden="true" /> Descargar .md</button>
       <button type="button" onClick={() => window.print()}><Printer size={15} aria-hidden="true" /> Imprimir o PDF</button>
     </div>
-  </FloatingWindow>;
+  </>;
 }

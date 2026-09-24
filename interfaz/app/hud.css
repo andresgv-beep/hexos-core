@@ -247,3 +247,23 @@ body { background: var(--hud-bg); color: var(--hud-text); }
 .inference-context[data-full="true"] { color: var(--hud-pink); }
 .inference-context[data-full="true"] .inference-track > span { background: var(--hud-pink); }
 .inference-footer strong { color: var(--hud-text); font-weight: 500; }
+
+.hud-notes .viewer-embedded {
+  position: static; inset: auto; z-index: auto; width: 100%; max-width: 100%;
+  flex: 1; min-height: 0; transform: none;
+}
+.hud-notes .viewer-embedded .viewer-glass {
+  height: 100%; min-height: 0; border: 0; background: transparent;
+  box-shadow: none; clip-path: none;
+}
+.hud-note-detail { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+.hud-note-detail > header { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; }
+.hud-note-detail h3 { flex: 1; min-width: 0; font-size: 14px; overflow-wrap: anywhere; color: var(--hud-text); }
+.hud-note-detail select { width: 100%; margin-bottom: 10px; background: var(--hud-panelA); color: var(--hud-text); }
+.hud-note-scroll { flex: 1; min-height: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--hud-pink) var(--hud-track); }
+.hud-note-scroll .note-body { font-size: 15px; white-space: normal; overflow-wrap: anywhere; color: var(--hud-text); }
+.hud-note-scroll .note-actions { flex-wrap: wrap; }
+.hud-note-favorites { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--hud-pink) var(--hud-track); }
+.hud-notes .viewer-embedded .viewer-row { grid-template-columns: auto minmax(0, 1fr); }
+.hud-notes .viewer-embedded .viewer-date { grid-column: 2; }
+.hud-notes .viewer-embedded .viewer-list { scrollbar-color: var(--hud-pink) var(--hud-track); }

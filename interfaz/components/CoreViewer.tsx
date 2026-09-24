@@ -22,13 +22,14 @@ function cuando(iso: string) {
 
 /** El núcleo abierto: una ventana sobre la derecha con todo lo que Helios guarda.
  *  Sustituye al modal, que tapaba la esfera entera para mirar sus propias notas. */
-export function CoreViewer({ client = defaultClient, open, marked, reload, width = 490, onClose, onOpenNote }: {
+export function CoreViewer({ client = defaultClient, open, marked, reload, width = 490, embedded = false, onClose, onOpenNote }: {
   client?: CoreClient;
   open: boolean;
   /** La nota que Helios está señalando ahora. Pasajero, nunca un estado guardado. */
   marked?: string | null;
   reload: number;
   width?: number;
+  embedded?: boolean;
   onClose: () => void;
   onOpenNote: (note: NoteDetail) => void;
 }) {
@@ -82,7 +83,7 @@ export function CoreViewer({ client = defaultClient, open, marked, reload, width
   }, [notes, query]);
 
   if (!open) return null;
-  return <aside className="viewer-dock" style={{ width: `${width}px` }} aria-label="Núcleo de Helios">
+  return <aside className={embedded ? "viewer-dock viewer-embedded" : "viewer-dock"} style={embedded ? undefined : { width: `${width}px` }} aria-label="Núcleo de Helios">
     <div className="window-glass viewer-glass">
       <header className="window-heading">
         <span className="window-dot" />

@@ -6,7 +6,7 @@ import { type InferenceMetrics } from "@/lib/helios/metrics";
 import { HudAccents } from "./HudAccents";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
-import { ChevronsRight, Code2, MessageSquare, Square } from "lucide-react";
+import { ChevronsRight, Code2, MessageSquare, Square, Maximize2, ArrowLeft } from "lucide-react";
 import { AttachmentButton, ChatAttachments, type Attachment } from "./ChatAttachments";
 import { ChatHistory } from "./ChatHistory";
 import { NasFileViewer } from "./NasFileViewer";
@@ -17,7 +17,7 @@ import { ContentDock } from "./ContentDock";
 import { ThemeSelector } from "./ThemeSelector";
 import { ToolActivityPanel } from "./ToolActivityPanel";
 import { type Turn } from "./ConversationStream";
-import { NoteWindow, type NoteWindowState } from "./NoteWindow";
+import { NoteWindow, NoteContent, type NoteWindowState } from "./NoteWindow";
 import { CoreShelf } from "./CoreShelf";
 import { CoreViewer } from "./CoreViewer";
 import { CodeWorkspace } from "./CodeWorkspace";
@@ -129,6 +129,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     update(); media.addEventListener('change', update);
     return () => media.removeEventListener('change', update);
   }, []);
+  const [floatingNote, setFloatingNote] = useState<string | null>(null);
   const [windows, setWindows] = useState<NoteWindowState[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [fileViewer, setFileViewer] = useState<{ id?: string } | null>(null);
@@ -204,14 +205,16 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     setCoreOpen(false);
     setWindows(items => {
       // La misma nota no se abre dos veces: se trae al frente la que ya está.
-      if (items.some(item => item.id === note.id)) return items;
+      if (items.some(item => item.id === note.id)) return items.map(item => item.id === note.id ? { ...item, note } : item);
       // Las ventanas conservan su colocación y se escalonan hacia dentro.
       const abiertas = items.length;
       return [...items, { id: note.id, note, slot: 0,
                           x: abiertas * -26, y: abiertas * 26, minimized: false }];
     });
     setFront(note.id);
+    setFloatingNote(null);
   }, []);
+  const dockedNote = windows.find(item => item.id === front) ?? windows[windows.length - 1];
   const [sending, setSending] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [canStop, setCanStop] = useState(false);
@@ -620,7 +623,21 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         <SystemMonitor hud autoEnabled={null} onToggleAuto={() => void toggleThinking()} />
         <section className="hud-panel hud-notes"><HudAccents /><div className="hud-notes-heading"><h2>NÚCLEO</h2>
           <button type="button" onClick={() => setCoreOpen(true)} aria-label="Abrir el núcleo">{coreTotal === null ? "Abrir" : `${coreTotal} notas`}</button></div>
-          <CoreShelf reload={coreReload} onOpenNote={abrirNota} onTotal={setCoreTotal} />
+          <div className="hud-note-favorites" hidden={coreOpen || Boolean(dockedNote)}>
+            <CoreShelf reload={coreReload} onOpenNote={abrirNota} onTotal={setCoreTotal} />
+          </div>
+          {!mobile && coreOpen ? <CoreViewer embedded open reload={coreReload} onClose={() => setCoreOpen(false)} onOpenNote={abrirNota} />
+            : dockedNote && <div className="hud-note-detail">
+              <header>
+                <button type="button" className="icon-button" aria-label="Volver a las notas" onClick={() => setCoreOpen(true)}><ArrowLeft size={16} /></button>
+                <h3>{dockedNote.note.title}</h3>
+                <button type="button" className="icon-button" aria-label="Ampliar nota" onClick={() => setFloatingNote(dockedNote.id)}><Maximize2 size={16} /></button>
+              </header>
+              {windows.length > 1 && <select aria-label="Notas abiertas" value={dockedNote.id} onChange={event => setFront(event.target.value)}>
+                {windows.map(item => <option key={item.id} value={item.id}>{item.note.title}</option>)}
+              </select>}
+              <div className="hud-note-scroll"><NoteContent note={dockedNote.note} /></div>
+            </div>}
         </section>
       </aside>
       <section className="hud-panel hud-chat" aria-label="Conversación"><HudAccents />
@@ -663,13 +680,13 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       </aside>
     </div>
     <section className="floating-workspace" aria-label="Notas e informes abiertos">
-      {windows.filter(item => !item.minimized).map(item => <NoteWindow key={item.id} state={item}
+      {windows.filter(item => !item.minimized && (mobile || item.id === floatingNote)).map(item => <NoteWindow key={item.id} state={item}
         onAbsorbed={finishAbsorption} front={front === item.id} onFocus={setFront}
         onMove={(id, x, y) => setWindows(items => items.map(w => w.id === id ? { ...w, x, y } : w))}
-        onMinimize={id => { setWindows(items => items.map(w => w.id === id ? { ...w, absorbing: true } : w)); inputRef.current?.focus(); }}
-        onClose={id => { setWindows(items => items.filter(w => w.id !== id)); inputRef.current?.focus(); }} />)}
+        onMinimize={id => { if (mobile) setWindows(items => items.map(w => w.id === id ? { ...w, absorbing: true } : w)); else setFloatingNote(null); inputRef.current?.focus(); }}
+        onClose={id => { if (mobile) setWindows(items => items.filter(w => w.id !== id)); setFloatingNote(null); inputRef.current?.focus(); }} />)}
     </section>
-    <CoreViewer open={coreOpen} reload={coreReload} onClose={() => setCoreOpen(false)} onOpenNote={abrirNota} />
+    <CoreViewer open={mobile && coreOpen} reload={coreReload} onClose={() => setCoreOpen(false)} onOpenNote={abrirNota} />
     <span className="sr-only" role="status">{announcement}</span>
     {(mobile ? fileViewer : fileFloating) && <NasFileViewer key={(mobile ? fileViewer : fileFloating)?.id ?? 'library'}
       initialId={(mobile ? fileViewer : fileFloating)?.id} onClose={() => mobile ? setFileViewer(null) : setFileFloating(null)} />}
