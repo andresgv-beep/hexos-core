@@ -17,6 +17,7 @@ from .work import now, string, strings
 
 ESTADOS = ('pendiente', 'hecha', 'descartada')
 TITULO, CUERPO = 200, 20000
+EXTRACTO = 2000
 
 
 def initialize(store):
@@ -72,7 +73,7 @@ def listing(store, query='', state=None, favorite=None, limit=50):
         if query and query.casefold() not in (nota['title'] + ' ' + nota['body'] +
                                               ' ' + ' '.join(nota['tags'])).casefold():
             continue
-        filas.append(dict(nota, body=nota['body'][:300], truncated=len(nota['body']) > 300))
+        filas.append(dict(nota, body=nota['body'][:EXTRACTO], truncated=len(nota['body']) > EXTRACTO))
         if len(filas) >= limit:
             break
     return filas

@@ -21,6 +21,16 @@ class NotasTest(unittest.TestCase):
     def crear(self, title='Cambiar el cable de sda', body='El disco pierde el enlace.'):
         return notes.dispatch(self.store, 'note.save', dict(title=title, body=body), 'turno-1')
 
+    def test_extracto_admite_2000_caracteres_y_conserva_texto_completo(self):
+        for length in (1999, 2000, 2001):
+            with self.subTest(length=length):
+                body = 'ñ' * length
+                note = self.crear(title=str(length), body=body)
+                row = notes.listing(self.store, query=str(length))[0]
+                self.assertEqual(row['body'], body[:2000])
+                self.assertEqual(row['truncated'], length > 2000)
+                self.assertEqual(notes.get(self.store, note['id'])['body'], body)
+
     def test_una_nota_nueva_nace_pendiente_y_se_relee(self):
         n = self.crear()
         self.assertTrue(n['created'])
