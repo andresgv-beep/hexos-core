@@ -177,11 +177,13 @@ class Tests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             runtime = runtime_with_outputs()
             events = iter([(['0','1','1','0','eos'], 'history_recent()'),
-                           (['0','1','1','0','max_tokens'], 'history_recent{}<tool_call|>')])
+                           (['0','1','1','0','max_tokens'], 'history_recent{}<tool_call|>'),
+                           (['0','1','0','0','context_full'], '')])
             runtime.event = lambda: next(events)
             agent = Agent(tmp, runtime)
-            with self.assertRaisesRegex(RuntimeError, 'incompleta'):
-                agent.chat('Consulta el historial.')
+            result = agent.chat('Consulta el historial.')
+            self.assertTrue(result['incomplete'])
+            self.assertNotIn('history_recent', result['reply'])
             with agent.store() as store:
                 self.assertEqual(store.db.execute('SELECT COUNT(*) FROM tool_events').fetchone()[0], 0)
 

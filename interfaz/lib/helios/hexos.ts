@@ -6,7 +6,7 @@ import { notesDismissed, notesTouched, parseToolActivities, type ToolActivity } 
 export interface ContextCut { at: string; messages: number; characters: number }
 /** Cómo se cierra el turno según lo COMPROBADO, no según lo que diga la respuesta. */
 export interface Closure { reason: string; note: string; unverified: { tool: string; verification?: string; evidence?: string }[] }
-export interface ChatReply { reply: string; tools: ToolActivity[]; notes: string[]; closeNotes: string[] | "todas" | null; fileIds?: string[]; document?: unknown; contextCut?: ContextCut; closure?: Closure; cancelled?: boolean }
+export interface ChatReply { reply: string; tools: ToolActivity[]; notes: string[]; closeNotes: string[] | "todas" | null; fileIds?: string[]; document?: unknown; contextCut?: ContextCut; closure?: Closure; cancelled?: boolean; incomplete?: boolean }
 export interface Generation { requestId: string; phase: string; text: string; processed: number; total: number; cancellable: boolean; cancelling: boolean }
 export interface HistoryMessage { role: "user" | "assistant"; text: string }
 export interface HistoryPage { messages: HistoryMessage[]; nextBefore: number | null }
@@ -68,7 +68,8 @@ function parseChatReply(data: unknown): ChatReply {
              .map(item => isRecord(item.result) ? item.result.file_id : null)
              .filter((id): id is string => typeof id === 'string' && /^[a-f0-9]{32}$/.test(id)),
            notes: notesTouched(data.tools), closeNotes: notesDismissed(data.tools),
-           document: data.document, contextCut, closure, cancelled: data.cancelled === true };
+           document: data.document, contextCut, closure, cancelled: data.cancelled === true,
+           incomplete: data.incomplete === true };
 }
 export interface HeliosTransport {
   /** `thinking` es null cuando el motor no tiene canal de pensamiento. */

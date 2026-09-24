@@ -526,7 +526,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
           ? { note: cierre.note, tools: cierre.unverified.map(u => u.tool) }
           : undefined;
         let visibleReply = result.reply;
-        if (!result.cancelled && options?.previewSource) {
+        if (!result.cancelled && !result.incomplete && options?.previewSource) {
           const html = extractHtmlPreview(result.reply);
           if (html) {
             applyCodeArtifact({ reply: "", code: options.previewSource.code,
@@ -537,7 +537,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
             visibleReply = extractReplyArtifact(result.reply)?.reply || "He preparado la interfaz en la ventana de trabajo.";
           }
           else setAnnouncement("Helios respondió, pero no entregó un bloque HTML que se pueda visualizar");
-        } else if (!result.cancelled) {
+        } else if (!result.cancelled && !result.incomplete) {
           const artifact = extractReplyArtifact(result.reply);
           if (artifact) {
             reparo = undefined;

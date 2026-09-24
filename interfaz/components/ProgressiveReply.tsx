@@ -95,12 +95,8 @@ export function ProgressiveReply({ text, live = false, onComplete, onImproveCode
         if (bloque.kind === "code") {
           const codigo = bloque.lines.map(linea => linea.parts.map(parte => parte.text).join("")).join("\n");
           return <ReplyCode key={bloque.index} code={codigo} language={bloque.language} copy={complete}
-            onImprove={complete ? onImproveCode : undefined} onPreview={complete ? onPreviewCode : undefined}>
-            {!complete && bloque.lines.map((linea, i) => <Fragment key={linea.index}>
-              {i > 0 && "\n"}
-              {linea.parts.map((parte, j) => <Palabra key={j} token={parte} />)}
-            </Fragment>)}
-          </ReplyCode>;
+            onImprove={complete && !live ? onImproveCode : undefined}
+            onPreview={complete && !live ? onPreviewCode : undefined} />;
         }
         const lineas = bloque.lines.map(linea =>
           <Fragment key={linea.index}>{linea.parts.map((parte, i) =>

@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Both services run the exact same immutable checkout. No Git mutations here.
+set -euo pipefail
+mode=${1:?Uso: run-local-release backend|ui /ruta/release.env}
+config=${2:?Falta el archivo local de configuración}
+source "$config"
+: "${HEXOS_CHECKOUT:?}" "${HEXOS_RELEASE:?}" "${HEXOS_WORKSPACE:?}"
+actual=$(git -C "$HEXOS_CHECKOUT" rev-parse HEAD)
+if [[ "$actual" != "$HEXOS_RELEASE" ]] || [[ -n "$(git -C "$HEXOS_CHECKOUT" status --porcelain)" ]]; then
+  echo 'El checkout de servicio no coincide con la versión limpia configurada. No se arranca una mezcla de versiones.' >&2
+  exit 1
+fi
+cd "$HEXOS_CHECKOUT"
+case "$mode" in
+  backend)
+    export HELIOS_HOME="$HEXOS_WORKSPACE/.helios"
+    exec python3 -u -m hexos.agent.chat --workspace "$HEXOS_WORKSPACE" \
+      --hera "$HEXOS_CHECKOUT/hera/bin/hera" --memory-home "${HEXOS_MEMORY_HOME:?}" \
+      --runtime "${HEXOS_RUNTIME:?}" --model "${HEXOS_MODEL:?}" \
+      --native-template "${HEXOS_TEMPLATE:?}" --ctx "${HEXOS_CTX:-16384}" --port 8080
+    ;;
+  ui)
+    cd interfaz
+    if [[ ! -f components/orb/NebulaOrb.tsx || -f components/orb/HeliosOrb.tsx ]]; then
+      echo 'Esta versión no contiene exclusivamente la esfera nueva.' >&2
+      exit 1
+    fi
+    exec npm run dev -- --host 127.0.0.1 --port 3000 --strictPort
+    ;;
+  *) echo 'Modo inválido: backend o ui' >&2; exit 2 ;;
+esac

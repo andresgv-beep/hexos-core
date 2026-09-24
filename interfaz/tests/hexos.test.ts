@@ -47,6 +47,12 @@ test('aborting an identified HTTP wait also requests server cancellation', async
 function fixture(data: unknown, status = 200) {
   return (async () => Response.json(data, { status })) as typeof fetch;
 }
+test('an incomplete backend response remains explicitly incomplete in the UI', async () => {
+  const result = await createHexosTransport('/api', fixture({
+    reply: 'Código parcial', tools: [], incomplete: true,
+  })).send('Genera código');
+  assert.equal(result.incomplete, true);
+});
 test('the first keystroke can warm the model without waiting for ready', async () => {
   const seen: { url: string; body: unknown }[] = [];
   const fetcher = (async (url, init) => {

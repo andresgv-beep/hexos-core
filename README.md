@@ -1,10 +1,11 @@
 # HELIOS / Hexos
 
 Agente local con una conversación persistente, herramientas y una interfaz React.
-**Estado revisado el 2026-09-19 sobre `76a75c0`.** La inferencia real la ejecuta
+**Base local consolidada el 2026-09-24; referencia de trabajo: `main`.** La inferencia real la ejecuta
 Héctor, en el repositorio hermano `Hector-engine`.
 
 - [Estado de implementación y límites](IMPLEMENTATION_STATUS.md).
+- [Instalación local, versión en servicio y vuelta atrás](docs/LOCAL_BASELINE.md).
 - [Índice documental: contratos, planes e historia](docs/INDICE.md).
 - [Generación progresiva y cancelación](docs/PROGRESSIVE_NATIVE_RUNTIME.md).
 
