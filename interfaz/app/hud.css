@@ -91,7 +91,7 @@ body { background: var(--hud-bg); color: var(--hud-text); }
 .hud-layout .stream-question { color: var(--hud-userText); }
 .hud-layout :is(.metric-track,.metric-bar) { background-color: var(--hud-track); }
 .hud-layout .metric-fill { background: var(--hud-accent); }
-.hud-notes { flex: 1; }
+.hud-notes { display: flex; flex-direction: column; flex: 1 1 0; min-width: 0; overflow: hidden; }
 .hud-content .history-code-open { display: flex; width: 100%; justify-content: center; }
 /* Dialogs can be portalled outside the app; consume root variables. */
 :is(.chat-history,.nas-file-viewer,.core-viewer,.code-workspace,.window-glass,.access-panel) {
@@ -252,10 +252,11 @@ body { background: var(--hud-bg); color: var(--hud-text); }
   position: static; inset: auto; z-index: auto; width: 100%; max-width: 100%;
   flex: 1; min-height: 0; transform: none;
 }
-.hud-notes .viewer-embedded .viewer-glass {
-  height: 100%; min-height: 0; border: 0; background: transparent;
-  box-shadow: none; clip-path: none;
-}
+.viewer-inline-body { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
+.hud-notes .viewer-embedded .viewer-search { padding: 0 0 12px; flex-shrink: 0; }
+.hud-notes .viewer-embedded .viewer-list { padding: 6px 0; }
+.hud-notes-heading { flex-shrink: 0; }
+
 .hud-note-detail { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
 .hud-note-detail > header { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; }
 .hud-note-detail h3 { flex: 1; min-width: 0; font-size: 14px; overflow-wrap: anywhere; color: var(--hud-text); }

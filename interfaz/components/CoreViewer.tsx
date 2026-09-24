@@ -84,12 +84,12 @@ export function CoreViewer({ client = defaultClient, open, marked, reload, width
 
   if (!open) return null;
   return <aside className={embedded ? "viewer-dock viewer-embedded" : "viewer-dock"} style={embedded ? undefined : { width: `${width}px` }} aria-label="Núcleo de Helios">
-    <div className="window-glass viewer-glass">
-      <header className="window-heading">
+    <div className={embedded ? "viewer-inline-body" : "window-glass viewer-glass"}>
+      {!embedded && <header className="window-heading">
         <span className="window-dot" />
         <span className="viewer-title">NÚCLEO · {notes.length} NOTAS</span>
         <button className="icon-button" onClick={onClose} aria-label="Cerrar el núcleo"><X size={16} /></button>
-      </header>
+      </header>}
       <div className="viewer-search">
         <Search size={14} aria-hidden="true" />
         <input value={query} onChange={event => setQuery(event.target.value)}
