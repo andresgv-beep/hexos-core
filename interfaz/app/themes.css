@@ -24,30 +24,31 @@
   --hud-accent: #4a9cf0;
   --hud-pink: #e85ccb;
 }
-:root[data-theme="phosphor"] {
-  --hud-bg: #090c0a;
-  --hud-panelA: #122018;
-  --hud-panelB: #0f1b14;
-  --hud-chat: #0e1812;
-  --hud-code: #0b140f;
-  --hud-input: #08100b;
-  --hud-raised: #163022;
-  --hud-frame: #2b6a45;
-  --hud-track: #1a3a27;
-  --hud-tick: #3f8a5c;
-  --hud-line: #24503a;
-  --hud-userBubble: #231f14;
-  --hud-heliosBubble: #14291d;
-  --hud-label: #bfe8cc;
-  --hud-muted: #93bba0;
-  --hud-dim: #739a80;
-  --hud-text: #dcf5e3;
-  --hud-bright: #f0fff4;
-  --hud-userText: #fbefd6;
-  --hud-codeHi: #9dffc0;
-  --hud-onPink: #1a1002;
-  --hud-accent: #3dff88;
-  --hud-pink: #ffb547;
+/* Legacy selector also adopts Slate for already-open tabs. */
+:root[data-theme="phosphor"], :root[data-theme="slate"] {
+  --hud-bg: #101113;
+  --hud-panelA: #202226;
+  --hud-panelB: #1b1d20;
+  --hud-chat: #181a1d;
+  --hud-code: #141619;
+  --hud-input: #111315;
+  --hud-raised: #303338;
+  --hud-frame: #555b63;
+  --hud-track: #34383e;
+  --hud-tick: #747b84;
+  --hud-line: #454a51;
+  --hud-userBubble: #2b2e33;
+  --hud-heliosBubble: #23262a;
+  --hud-label: #d1d5da;
+  --hud-muted: #b0b6bf;
+  --hud-dim: #969ea8;
+  --hud-text: #e4e7eb;
+  --hud-bright: #f5f6f8;
+  --hud-userText: #f0f1f3;
+  --hud-codeHi: #e0e5ec;
+  --hud-onPink: #151719;
+  --hud-accent: #9ca5b1;
+  --hud-pink: #d2d7de;
 }
 :root[data-theme="amber"] {
   --hud-bg: #110e0b;
@@ -99,3 +100,6 @@
   --hud-accent: #a87cff;
   --hud-pink: #3fe0e6;
 }
+/* Keep inline code and code toolbars neutral in the monochrome palette. */
+:root:is([data-theme="slate"],[data-theme="phosphor"]) .helios-answer code { background: var(--hud-raised); color: var(--hud-codeHi); }
+:root:is([data-theme="slate"],[data-theme="phosphor"]) .reply-code header { background: var(--hud-input); color: var(--hud-label); border-color: var(--hud-frame); }

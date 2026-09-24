@@ -3,12 +3,12 @@ import { useEffect, useState, type CSSProperties } from "react";
 
 const themes = [
   { id: "hud", label: "HUD azul y rosa", accent: "#4a9cf0", secondary: "#e85ccb" },
-  { id: "phosphor", label: "Fósforo", accent: "#3dff88", secondary: "#ffb547" },
+  { id: "slate", label: "Pizarra", accent: "#555b63", secondary: "#d2d7de" },
   { id: "amber", label: "Ámbar", accent: "#e5a46a", secondary: "#4fd1e6" },
   { id: "purple", label: "Púrpura", accent: "#a87cff", secondary: "#3fe0e6" },
 ];
 const key = "helios.hud.theme";
-function valid(value: string | null) { return themes.some(theme => theme.id === value) ? value! : "hud"; }
+function valid(value: string | null) { if (value === "phosphor") return "slate"; return themes.some(theme => theme.id === value) ? value! : "hud"; }
 export function ThemeSelector() {
   const [selected, setSelected] = useState("hud");
   useEffect(() => {
@@ -17,7 +17,7 @@ export function ThemeSelector() {
       document.documentElement.setAttribute("data-theme", id);
       setSelected(id);
     };
-    try { apply(localStorage.getItem(key)); } catch { apply("hud"); }
+    try { const saved = localStorage.getItem(key); apply(saved); if (saved === "phosphor") localStorage.setItem(key, "slate"); } catch { apply("hud"); }
     const sync = (event: StorageEvent) => { if (event.key === key || event.key === null) apply(event.newValue); };
     window.addEventListener("storage", sync);
     return () => window.removeEventListener("storage", sync);
