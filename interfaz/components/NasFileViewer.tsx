@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useId, useRef, useState } from "react";
+import { CodeText } from "./CodeText";
+import { codeLanguageForFilename } from "@/lib/helios/highlight";
 import { Download, Maximize2, X } from "lucide-react";
 
 import { listFileCopies, readFilePage, type NasFileCopy } from "@/lib/helios/files";
@@ -60,7 +62,7 @@ export function NasFileViewer({ initialId, onClose, embedded = false, onExpand }
         <p>{active.path}<br />{active.size_bytes.toLocaleString()} bytes · Copia del {active.observed_at}</p>
         <a className="history-code-open" href={`/api/helios/files/${active.file_id}/download`} download>
           <Download size={16} /> Descargar {active.name}</a>
-        {active.text_available ? <pre className="nas-file-text">{text}</pre>
+        {active.text_available ? <pre className="nas-file-text"><code>{codeLanguageForFilename(active.name) ? <CodeText source={text} language={codeLanguageForFilename(active.name)} /> : text}</code></pre>
           : <p>Este formato está disponible para descarga. Todavía no tiene vista de texto.</p>}
         {next !== null && <button className="history-code-open" disabled={busy} onClick={() => void more()}>Cargar siguiente fragmento</button>}
       </>}

@@ -2,6 +2,7 @@ export type SyntaxKind = "comment" | "string" | "number" | "keyword" | "literal"
 export interface SyntaxToken { text: string; kind?: SyntaxKind }
 
 const JAVASCRIPT = new Set("as async await break case catch class const continue debugger default delete do else export extends finally for from function get if implements import in instanceof interface let new of package private protected public readonly return set static super switch throw try type typeof undefined var void while with yield".split(" "));
+const CPP = new Set("alignas alignof auto bool break case catch char class const constexpr consteval constinit continue decltype default delete do double else enum explicit extern float for friend if inline int long mutable namespace new noexcept operator private protected public register reinterpret_cast return short signed sizeof static static_cast struct switch template this thread_local throw try typedef typename union unsigned using virtual void volatile while __global__ __device__ __host__ __shared__ __constant__ __forceinline__".split(" "));
 const PYTHON = new Set("and as assert async await break class continue def del elif else except False finally for from global if import in is lambda None nonlocal not or pass raise return True try while with yield".split(" "));
 const SHELL = new Set("case do done elif else esac export fi for function if in local readonly select then time until while".split(" "));
 const CSS = new Set("@charset @container @font-face @import @keyframes @layer @media @page @property @supports from to".split(" "));
@@ -11,6 +12,7 @@ const TOKEN = /\/\*[\s\S]*?\*\/|<!--[\s\S]*?-->|\/\/[^\n]*|"(?:\\.|[^"\\])*"|'(?
 
 function languageFamily(language = "") {
   const value = language.toLowerCase();
+  if (["c", "h", "cc", "cpp", "cxx", "hpp", "hxx", "cu", "cuh", "cuda", "c++"].includes(value)) return "cpp";
   if (["py", "python"].includes(value)) return "python";
   if (["sh", "shell", "bash", "zsh"].includes(value)) return "shell";
   if (["css", "scss", "sass", "less"].includes(value)) return "css";
@@ -26,7 +28,13 @@ export function highlightCode(source: string, language?: string): SyntaxToken[] 
   let inTag = false;
   let expectTag = false;
 
-  const nextVisible = (index: number) => raw.slice(index + 1).find(token => !/^\s+$/.test(token));
+  const following: (string | undefined)[] = new Array(raw.length);
+  let next: string | undefined;
+  for (let i = raw.length - 1; i >= 0; i -= 1) {
+    following[i] = next;
+    if (!/^\s+$/.test(raw[i])) next = raw[i];
+  }
+  const nextVisible = (index: number) => following[index];
   for (let index = 0; index < raw.length; index += 1) {
     const text = raw[index];
     let kind: SyntaxKind | undefined;
@@ -45,7 +53,7 @@ export function highlightCode(source: string, language?: string): SyntaxToken[] 
       inTag = false;
       kind = "tag";
     } else if (/^[A-Za-z_$]/.test(text)) {
-      const keywords = family === "python" ? PYTHON : family === "shell" ? SHELL : family === "css" ? CSS : JAVASCRIPT;
+      const keywords = family === "cpp" ? CPP : family === "python" ? PYTHON : family === "shell" ? SHELL : family === "css" ? CSS : JAVASCRIPT;
       if (inTag && expectTag) { kind = "tag"; expectTag = false; }
       else if (inTag && nextVisible(index) === "=") kind = "attribute";
       else if (keywords.has(text)) kind = "keyword";
@@ -59,4 +67,11 @@ export function highlightCode(source: string, language?: string): SyntaxToken[] 
     result.push(kind ? { text, kind } : { text });
   }
   return result;
+}
+
+/** Only known source extensions get syntax colors; prose remains plain text. */
+export function codeLanguageForFilename(name: string): string | undefined {
+  const extension = name.split('.').pop()?.toLowerCase();
+  const supported = new Set(['c','h','cc','cpp','cxx','hpp','hxx','cu','cuh','js','jsx','ts','tsx','json','py','sh','bash','css','scss','html','xml','svg']);
+  return extension && supported.has(extension) ? extension : undefined;
 }

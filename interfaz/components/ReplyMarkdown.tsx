@@ -3,7 +3,7 @@
 import { type ReactNode, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { parseReply, type Inline } from "@/lib/helios/markdown";
-import { highlightCode } from "@/lib/helios/highlight";
+import { CodeText } from "./CodeText";
 
 export interface CodeActions {
   onImproveCode?: (code: string, language?: string) => void;
@@ -47,8 +47,7 @@ export function ReplyCode({ code, language, children, copy = true, download = fa
     window.setTimeout(() => setCopiado(false), 1600);
   }
   const contenido = children === undefined || children === null || children === false
-    ? highlightCode(code, language).map((token, index) =>
-      <span key={index} className={token.kind ? `syntax-${token.kind}` : undefined}>{token.text}</span>)
+    ? <CodeText source={code} language={language} />
     : children;
   return <section className="reply-code" aria-label={`Bloque de código${language ? ` ${language}` : ""}`}>
     <header>

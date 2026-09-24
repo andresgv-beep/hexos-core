@@ -103,3 +103,34 @@
 /* Keep inline code and code toolbars neutral in the monochrome palette. */
 :root:is([data-theme="slate"],[data-theme="phosphor"]) .helios-answer code { background: var(--hud-raised); color: var(--hud-codeHi); }
 :root:is([data-theme="slate"],[data-theme="phosphor"]) .reply-code header { background: var(--hud-input); color: var(--hud-label); border-color: var(--hud-frame); }
+/* Syntax colors are semantic, with a palette tuned for each HUD theme. */
+:root {
+  --syntax-comment: #9baec3; --syntax-string: #9ed8c4; --syntax-number: #f1c58b;
+  --syntax-keyword: #f190d6; --syntax-literal: #c8b1f5; --syntax-tag: #7fd4ea;
+  --syntax-attribute: #e9ce8f; --syntax-function: #8bbfff; --syntax-property: #9cd9db; --syntax-operator: #b9c8da;
+}
+:root:is([data-theme="slate"],[data-theme="phosphor"]) {
+  --syntax-comment: #a3a8b2; --syntax-string: #b7ccad; --syntax-number: #dbc39f;
+  --syntax-keyword: #c8b5d9; --syntax-literal: #c5bbdf; --syntax-tag: #a7cad4;
+  --syntax-attribute: #d4c59f; --syntax-function: #a9c2de; --syntax-property: #b0ccc8; --syntax-operator: #c2c7cf;
+}
+:root[data-theme="amber"] {
+  --syntax-comment: #bbaa95; --syntax-string: #c4d49f; --syntax-number: #ffd19e;
+  --syntax-keyword: #f0b586; --syntax-literal: #d5b9e2; --syntax-tag: #8cdee5;
+  --syntax-attribute: #ead399; --syntax-function: #99d4e8; --syntax-property: #b4d6c4; --syntax-operator: #d4c4b1;
+}
+:root[data-theme="purple"] {
+  --syntax-comment: #ada3c3; --syntax-string: #a7dfc5; --syntax-number: #f0c29c;
+  --syntax-keyword: #d6afff; --syntax-literal: #f0acd6; --syntax-tag: #8ce4e6;
+  --syntax-attribute: #e5d39c; --syntax-function: #a6c8ff; --syntax-property: #abe1d9; --syntax-operator: #c9bfdc;
+}
+.syntax-comment { color: var(--syntax-comment); }
+.syntax-string { color: var(--syntax-string); }
+.syntax-number { color: var(--syntax-number); }
+.syntax-keyword { color: var(--syntax-keyword); }
+.syntax-literal { color: var(--syntax-literal); }
+.syntax-tag { color: var(--syntax-tag); }
+.syntax-attribute { color: var(--syntax-attribute); }
+.syntax-function { color: var(--syntax-function); }
+.syntax-property { color: var(--syntax-property); }
+.syntax-operator { color: var(--syntax-operator); }

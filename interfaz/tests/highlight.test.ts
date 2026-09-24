@@ -17,3 +17,12 @@ test("comentarios, cadenas y números reciben colores distintos", () => {
   assert.ok(tokens.some(token => token.text === "12" && token.kind === "number"));
   assert.ok(tokens.some(token => token.text === "'Helios'" && token.kind === "string"));
 });
+
+test('CUDA keywords are highlighted without changing the original source', () => {
+  const source = '__global__ void kernel(float* p) { // comentario\n p[0] = 1; }';
+  const tokens = highlightCode(source, 'cu');
+  assert.equal(tokens.map(t => t.text).join(''), source);
+  assert.ok(tokens.some(t => t.text === '__global__' && t.kind === 'keyword'));
+  assert.ok(tokens.some(t => t.text === 'float' && t.kind === 'keyword'));
+  assert.ok(tokens.some(t => t.text === 'kernel' && t.kind === 'function'));
+});
