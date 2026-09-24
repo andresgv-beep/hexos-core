@@ -1,6 +1,7 @@
 "use client";
 
 import { type RefObject } from "react";
+import { ReplyMarkdown } from "./ReplyMarkdown";
 import { Download, Printer } from "lucide-react";
 import { FloatingWindow, type WindowPlacement } from "./FloatingWindow";
 import { noteAsMarkdown, noteFilename, type NoteDetail } from "@/lib/helios/core";
@@ -37,7 +38,7 @@ export function NoteWindow({ state, front, orbTarget, onAbsorbed, onMove, onMini
       {note.state}{note.tags.length ? ` · ${note.tags.join(", ")}` : ""}
       {note.revisions.length > 1 ? ` · ${note.revisions.length} versiones guardadas` : ""}
     </p>
-    <div className="note-body">{note.body}</div>
+    <div className="note-body"><ReplyMarkdown text={note.body} /></div>
     <div className="note-actions">
       <button type="button" onClick={descargar}><Download size={15} aria-hidden="true" /> Descargar .md</button>
       <button type="button" onClick={() => window.print()}><Printer size={15} aria-hidden="true" /> Imprimir o PDF</button>

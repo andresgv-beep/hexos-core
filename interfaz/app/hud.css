@@ -204,3 +204,8 @@ body { background: var(--hud-bg); color: var(--hud-text); }
 .hud-chat .reply-progress li, .hud-chat .reply-status { font-size: 16px; line-height: 1.65; }
 .hud-layout .hud-chat .composer input { font-size: 17px; }
 @media (max-width: 700px) { .hud-chat { --chat-font-size: 17px; } }
+/* Notes share the chat renderer; Markdown source remains intact for export. */
+.window-content .note-body { white-space: normal; font-size: 17px; line-height: 1.7; color: var(--hud-text); }
+.window-content .note-body .helios-answer p { font-size: inherit; line-height: inherit; color: inherit; margin: 0 0 .7em; }
+.window-content .note-body .helios-answer strong { color: var(--hud-bright); }
+.window-content p.note-meta { font-size: 11px; line-height: 1.5; color: var(--hud-muted); margin: 0 0 14px; }
