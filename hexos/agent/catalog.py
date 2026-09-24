@@ -316,7 +316,7 @@ NATIVE_DESCRIPTIONS = {
     'media.start': 'Aceptación del plan: llama con plan_id; confirma encolado solo tras éxito. Idempotente; no implica fin. Sin avisos automáticos al chat.',
     'media.control': 'Controlar batch_id: operation=pause|resume|cancel. Conserva originales; la parada se confirma después.',
     'media.jobs': 'Consultar lotes y revisiones internas pendientes; distingue simulation de live.',
-    'media.job': 'Consultar estado y progreso de una ficha id; completed acredita publicación y catálogo.',
+    'media.job': 'Ficha id: recibos históricos y presencia actual por SSH; revisión no es conversión.',
     'nas.file_open': 'Abrir, mostrar o preparar descarga de un archivo del NAS (máximo 8 MiB). '
                      'Usa scan_id y path exacto de nas_find/nas_search. Devuelve file_id y abre visor. '
                      'Para leer el contenido continúa con nas_file_read; no improvises comandos SSH.',

@@ -21,7 +21,7 @@ Consulta [arranque y recuperación](docs/LOCAL_BASELINE.md).
 | HERA | Conector explícito en el arranque. Citas validadas antes de agrupar candidatos. Una extracción automática con valor distinto no sustituye otro si el mensaje no contiene el valor anterior; la herramienta explícita conserva correcciones. El extractor pide atributos específicos y distingue ediciones locales de preferencias duraderas. No garantiza extracción semántica infalible. No hay nombre personal hardcodeado en el prompt. |
 | NAS y preparación multimedia | Búsqueda con raíz/tamaño/extensión y preparación de planes. Hay pruebas reales anteriores de selección correcta del 12B, con contexto; no certifican autonomía en frío. Preparado NO significa iniciado. |
 | HandBrake | Transporte real, copia, conversión, seguimiento, verificación y publicación implementados. Ciclo sintético real histórico completo; película real convertida y validada técnicamente, pero NO publicada. |
-| Revisión interna de La Monja | **Pendiente/bloqueada**: `awaiting_review`, revisión 15, validación y decodificación registradas como correctas, publicación ausente. No se ha reintentado ni publicado durante esta consolidación. |
+| Revisión interna de La Monja | **Inconsistencia confirmada por SSH el 24/09**: recibos históricos de conversión y validación, pero salida temporal y destino final ausentes. Original presente. Montajes correctos, carpetas de staging/output vacías. No se conoce quién retiró los archivos. No se ha relanzado ni publicado. |
 | Text / Cortex | Sesiones y contextos separados. Hoy las revisiones reutilizan los pesos de Text `0x0`; no hay modelo Cortex en otra GPU. |
 | Lectura documental | Rangos acumulados, cobertura y continuidad acotada integrados. No convierte una lectura parcial en una lectura completa. |
 
@@ -50,7 +50,7 @@ npm run build
 
 La batería Python utiliza una lista explícita de pruebas locales: no importa
 los scripts opt-in que envían mensajes a un servidor vivo. Resultado de la
-base actual: **667 pruebas Python, 85 de interfaz, tipos y build/render**.
+base actual: **671 pruebas Python, 85 de interfaz, tipos y build/render**.
 Los ensayos reales históricos están en
 `docs/HANDBRAKE_CHAT_REVIEW.md`; no se presentan como repetidos hoy.
 

@@ -3,9 +3,54 @@ import unittest
 from unittest.mock import patch
 from hexos.agent.chat_backend.media_tools import job_snapshot
 from hexos.agent.media_jobs.contracts import UncertainEffect
+from hexos.agent.media_jobs import presence
+import base64
+import json
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
 
 
 class SnapshotTest(unittest.TestCase):
+    def test_historical_validation_does_not_hide_missing_file(self):
+        self.job.update(state='awaiting_review', completion={'exit_code':0}, validation={'valid':True})
+        before = copy.deepcopy(self.job)
+        with patch.object(presence, 'observe', return_value=dict(source='live_ssh_stat',
+                files={'encoded': {'status':'missing'}})):
+            result = job_snapshot('/unused', self.config, self.job)
+        self.assertEqual(result['file_presence']['files']['encoded']['status'], 'missing')
+        self.assertTrue(result['validation']['valid'])
+        self.assertEqual(result['completion']['exit_code'], 0)
+        self.assertEqual(self.job, before)
+
+    def test_unreachable_presence_is_unknown_not_missing(self):
+        self.job.update(state='awaiting_review', completion={'exit_code':0})
+        with patch.object(presence, 'observe', side_effect=ValueError('offline')):
+            result=job_snapshot('/unused',self.config,self.job)
+        self.assertEqual(result['file_presence']['source'], 'unavailable')
+        self.assertNotIn('files',result['file_presence'])
+
+    def test_presence_rejects_changed_config_before_ssh(self):
+        with patch.object(presence.nas_session, 'execute_remote') as remote:
+            with self.assertRaises(ValueError):
+                presence.observe('/unused', dict(self.config,digest='different'), self.job)
+            remote.assert_not_called()
+
+    def test_remote_probe_is_read_only_and_distinguishes_symlinks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); original=root/'original.mkv'; original.write_bytes(b'video')
+            alias=root/'alias.mkv'; alias.symlink_to(original)
+            paths=dict(source=str(original), encoded=str(root/'missing.mkv'), alias=str(alias))
+            payload=base64.b64encode(json.dumps(paths).encode()).decode()
+            out=subprocess.run([sys.executable,'-c',presence.REMOTE,payload],capture_output=True,text=True,check=True)
+            result=json.loads(out.stdout.split('__HEXOS_PRESENCE__',1)[1])['files']
+            self.assertEqual(result['source']['status'],'present')
+            self.assertEqual(result['encoded']['status'],'missing')
+            self.assertEqual(result['alias']['status'],'not_regular')
+            self.assertEqual(original.read_bytes(),b'video')
+            self.assertFalse((root/'missing.mkv').exists())
+
     def setUp(self):
         self.job = dict(id='job', mode='live', state='running', run_id='run',
                         source=dict(device='nas'), config_digest='digest', error=None,
