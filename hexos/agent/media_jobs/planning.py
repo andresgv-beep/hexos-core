@@ -43,6 +43,7 @@ def prepare(workspace, config, args, *, now=None):
                 WHERE json_extract(body,'$.tool') IN ('nas.find','nas.search')
                 AND json_extract(body,'$.result.scan_id')=?
                 AND coalesce(json_extract(body,'$.failed'),0)=0
+                AND coalesce(json_extract(body,'$.result.total_matches'),1)>0
                 ORDER BY seq DESC LIMIT 1""", (scan_id,)).fetchone() if exists else None
         finally:
             observed.close()
@@ -53,7 +54,9 @@ def prepare(workspace, config, args, *, now=None):
             if missing:
                 raise ValueError('Faltan filtros de la selección observada. Repite media.prepare con los mismos '
                     'argumentos y añade ' + json.dumps(missing, ensure_ascii=False) +
-                    '. scan_id contiene también archivos fuera de esos filtros; no pidas IDs al usuario.')
+                    '. scan_id contiene también archivos fuera de esos filtros; no pidas IDs al usuario. '
+                    'Si la persona eligió películas concretas de ese resultado, no uses filtros: '
+                    'llama solo con scan_id, profile_id y paths con sus rutas exactas.')
     database = Path(workspace)/'nas_files.sqlite'
     db = sqlite3.connect(database.resolve().as_uri()+'?mode=ro', uri=True)
     db.row_factory = sqlite3.Row
@@ -79,7 +82,10 @@ def prepare(workspace, config, args, *, now=None):
             filters_argument(minimum, maximum, args.get('query'), count)
             extensions = extensions_argument(args.get('extensions'))
             if json.loads(scan['coverage']).get('complete') is not True:
-                raise ValueError('No se puede certificar el top de un recorrido parcial; acota y repite la búsqueda')
+                raise ValueError('No se puede certificar el top de un recorrido parcial. Si la persona eligió '
+                    'películas concretas del resultado de nas.find, repite media.prepare solo con scan_id, '
+                    'profile_id y paths con sus rutas exactas. Si pidió las más grandes, acota la búsqueda '
+                    'con root para que el recorrido sea completo.')
             roots = config['files']['libraries']
             root = args.get('root')
             if root is not None:

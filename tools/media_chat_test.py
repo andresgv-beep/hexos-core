@@ -81,6 +81,21 @@ class ChatMediaTest(unittest.TestCase):
         plan=self.prepare(count=5,min_bytes=200,max_bytes=600,extensions=['mkv'],query='')
         self.assertEqual([f['size_bytes'] for f in plan['files']],[600,500,400,300,200])
 
+    def test_empty_search_is_not_the_observed_selection(self):
+        # Parque Jurásico 2: tras elegirla de una lista, una búsqueda por nombre sin
+        # resultados pasaba a exigir su query y ningún prepare por filtros funcionaba.
+        import sqlite3
+        db=sqlite3.connect(self.workspace/'work.sqlite')
+        db.execute('CREATE TABLE tool_events(seq INTEGER PRIMARY KEY, body TEXT)')
+        for filters,total in ((dict(min_bytes=200,max_bytes=600),5),(dict(query='no existe'),0)):
+            db.execute('INSERT INTO tool_events(body) VALUES (?)',(json.dumps(dict(
+                tool='nas.search',failed=False,result=dict(scan_id=self.scan,total_matches=total,filters=filters))),))
+        db.commit();db.close()
+        with self.assertRaises(ValueError) as caught:self.prepare(count=5)
+        self.assertIn('"min_bytes": 200',str(caught.exception))
+        self.assertNotIn('no existe',str(caught.exception))
+        self.assertIn('solo con scan_id, profile_id y paths',str(caught.exception))
+
     def test_missing_root_names_the_covered_library_without_expanding_scope(self):
         self.config['files']['libraries'].append('/other-library')
         (self.workspace/'media_jobs.json').write_text(json.dumps(self.config))
@@ -131,7 +146,8 @@ class ChatMediaTest(unittest.TestCase):
     def test_partial_scan_cannot_claim_global_top(self):
         db=__import__('sqlite3').connect(self.workspace/'nas_files.sqlite')
         db.execute('UPDATE scans SET coverage=?',(json.dumps(dict(complete=False)),));db.commit();db.close()
-        with self.assertRaises(ValueError):self.prepare(count=5)
+        with self.assertRaises(ValueError) as caught:self.prepare(count=5)
+        self.assertIn('solo con scan_id, profile_id y paths',str(caught.exception))
         self.assertEqual(self.prepare(paths=['/films/Sub 3/Film.mkv'])['count'],1)
 
     def test_changed_configuration_invalidates_plan(self):
