@@ -11,6 +11,7 @@ import threading
 
 from .native_transport import NativeTransport, TurnCancelled, GenerationInterrupted, visible_preview
 from . import catalog
+from . import qwen_protocol
 from .decisions import InvalidDecision, validate_reply
 
 # Contrato estable del chat nativo. Los detalles de cada operación viven en su
@@ -157,7 +158,9 @@ class NativeRuntime:
         env=Environment()
         def fail(message):raise ValueError(message)
         env.globals['raise_exception']=fail
-        self.template=env.from_string(Path(template).read_text())
+        source = Path(template).read_text()
+        self.qwen = '<|im_start|>' in source and '<tool_call>' in source
+        self.template=env.from_string(source)
         self.thinking = thinking
         offered = catalog.model_tools()
         self.names={name.replace('.','_'):name for name in offered}
@@ -183,6 +186,7 @@ class NativeRuntime:
         if Path(binary).name != 'helios_formatted':
             try:
                 self._transport = NativeTransport(binary, model, ctx, self.log)
+                self._transport.stop_tokens = [] if self.qwen else ['<|tool_response>']
                 self.proc = self._transport.proc
             except Exception:
                 self.log.close()
@@ -368,6 +372,10 @@ class NativeRuntime:
         repairing = getattr(self, 'repair_call', False)
         prefix = ('<|tool_call>call:' + required_read if required_read else
                   '<|tool_call>call:' if repairing else '')
+        if getattr(self, 'qwen', False) and prefix:
+            prefix = '<tool_call>\n'
+            if required_read:
+                prefix += '{"name": ' + json.dumps(required_read) + ', "arguments": '
         self.repair_call = False
         # Recuperar el protocolo no concede una autorización de escritura.
         tools = [t for t in self.tools if catalog.TOOLS[self.names[t['function']['name']]]['effect']=='read'] if repairing else self.tools
@@ -387,6 +395,8 @@ class NativeRuntime:
                 if message['role'] == 'user':
                     message['content'] = '<|image|>\n' + message['content']
                     break
+        if getattr(self, 'qwen', False):
+            rendered = qwen_protocol.render_messages(rendered)
         prompt=self.template.render(messages=rendered,tools=tools,bos_token='<bos>',
                                     add_generation_prompt=True,enable_thinking=getattr(self, 'thinking', False) and not required_read)
         prompt += prefix
@@ -470,16 +480,25 @@ class NativeRuntime:
         if len(header) > 6 and not getattr(self, '_transport', None):
             self.kv_position = int(header[6]) + int(header[5]) + int(header[2])
         if header[4]=='error':raise RuntimeError(raw)
-        raw, reasoning = split_thinking(raw, prompt.endswith('<|channel>thought\n'))
+        try:
+            raw, reasoning = (qwen_protocol.split_thought(raw, prompt.endswith('<think>\n'))
+                              if getattr(self, 'qwen', False) else
+                              split_thinking(raw, prompt.endswith('<|channel>thought\n')))
+        except ValueError as exc:
+            raise NativeSyntax(str(exc)) from exc
         self.last_generation['visible_output'] = raw
-        if (header[4]=='eos' or (header[4]=='stop' and header[3]=='1')) and '<|tool_call>' in raw:
+        marker = '<tool_call>' if getattr(self, 'qwen', False) else '<|tool_call>'
+        if (header[4]=='eos' or (header[4]=='stop' and header[3]=='1')) and marker in raw:
             # Gemma puede anunciar la consulta antes del bloque nativo. Solo se
             # ejecuta el bloque delimitado, nunca el texto del preámbulo.
-            start=raw.index('<|tool_call>')
+            start=raw.index(marker)
             preamble=raw[:start].strip()
             if re.search(r'<\|[^>]*>|<[^>]*\|>',preamble):
                 raise NativeSyntax('marcadores inesperados antes de llamada')
-            calls=calls_from_text(raw[start:])
+            try:
+                calls = qwen_protocol.calls(raw[start:]) if getattr(self, 'qwen', False) else calls_from_text(raw[start:])
+            except (ValueError, RecursionError) as exc:
+                raise NativeSyntax(str(exc)) from exc
             if not calls:raise NativeSyntax('cesión sin llamada')
             if required_read and (len(calls) != 1 or calls[0]['name'] != required_read):
                 raise NativeSyntax('se esperaba únicamente la lectura requerida')
@@ -509,7 +528,7 @@ class NativeRuntime:
             self.current=self.pending.popleft()
             return {'tool':self.names[self.current['name']], 'arguments':self.current['arguments']}
         if header[4]!='eos':raise RuntimeError('generación nativa incompleta: '+header[4])
-        if '<|tool_' in raw or '<|channel>' in raw:raise NativeSyntax('marcadores inesperados en respuesta')
+        if '<|tool_' in raw or '<|channel>' in raw or '<tool_call' in raw or '</tool_call>' in raw:raise NativeSyntax('marcadores inesperados en respuesta')
         try:
             validate_reply(raw)
         except InvalidDecision as exc:

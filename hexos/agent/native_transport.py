@@ -22,6 +22,13 @@ class GenerationInterrupted(RuntimeError):
 def visible_preview(text, open_thought=False):
     """Provisional text only: never expose thought/tool channels, even split tokens."""
     text = text.lstrip()
+    if text.startswith('<think>'):
+        end = text.find('</think>')
+        if end < 0:
+            return ''
+        text = text[end + len('</think>'):].lstrip()
+    elif '<think>'.startswith(text):
+        return ''
     thought = '<|channel>thought\n'
     if open_thought:
         text = thought + text
@@ -147,7 +154,7 @@ class NativeTransport:
             messages=[dict(role='user', content=prompt)], attachment_ids=attachments,
             generation=dict(temperature=0, max_visible_tokens=3072, max_thinking_tokens=0,
                 preformatted=True, reuse_prefix=True, close_turn=False,
-                stop_tokens=['<|tool_response>'], prefill_progress=True)))
+                stop_tokens=getattr(self, 'stop_tokens', ['<|tool_response>']), prefill_progress=True)))
 
     def finish(self, update=None):
         rid, session, attachments = self.pending
