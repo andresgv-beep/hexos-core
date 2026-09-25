@@ -79,6 +79,7 @@ def dispatch(workspace, name, args):
             checked = 0
             for batch, summary in zip(batches, summaries):
                 for job, brief in zip(batch['jobs'], summary['jobs']):
+                    brief['queue'] = store.queue_status(job['id'])
                     brief.update(completion_recorded=bool(job.get('completion')),
                                  validation_recorded=bool(job.get('validation')),
                                  publication_recorded=bool(job.get('publication')),
@@ -95,7 +96,7 @@ def dispatch(workspace, name, args):
                         'no demuestra fallo del vídeo o del disco. Consulta media.job para completion, validation y rutas actuales.')
         if name=='media.job':
             job=store.get(args['id'])
-            return job_snapshot(workspace, config, job)
+            return dict(job_snapshot(workspace, config, job), queue=store.queue_status(job['id']))
         if name=='media.control':
             return planning.summary(store.control(args['batch_id'],args['operation'],time.time()))
         raise ValueError('Herramienta multimedia desconocida')

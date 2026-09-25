@@ -31,6 +31,18 @@ class ChatMediaTest(unittest.TestCase):
         store.db.execute('INSERT INTO media_service VALUES (?,?,?)',(config['resource'],time.time(),json.dumps(dict(ready=True,config_digest=config['digest']))))
         store.close()
 
+    def test_batch_id_cannot_be_reused_as_plan_or_scan(self):
+        self.heartbeat()
+        plan=self.prepare(count=1)
+        batch=dispatch(self.workspace,'media.start',dict(plan_id=plan['plan_id']))['batch_id']
+        with self.assertRaisesRegex(ValueError, 'batch_id'):
+            dispatch(self.workspace,'media.start',dict(plan_id=batch))
+        with self.assertRaisesRegex(ValueError, 'scan_id inexistente'):
+            dispatch(self.workspace,'media.prepare',dict(scan_id=batch,profile_id='fixture-rf19'))
+        store=JobStore(self.workspace)
+        try: self.assertEqual(len(store.listing()),1)
+        finally: store.close()
+
     def prepare(self,**kwargs):
         return dispatch(self.workspace,'media.prepare',dict(scan_id=self.scan,profile_id='fixture-rf19',**kwargs))
 

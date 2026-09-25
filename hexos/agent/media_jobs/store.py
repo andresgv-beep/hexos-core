@@ -129,6 +129,23 @@ class JobStore:
         self.db.execute('UPDATE media_jobs SET state=?,revision=?,due=?,body=? WHERE id=?',
                         (job['state'], job['revision'], job['due'], dump(job), job['id']))
 
+    def queue_status(self, job_id):
+        """Explica la espera sin adquirir leases ni ejecutar transiciones."""
+        job = self.get(job_id)
+        if job['state'] in TERMINAL:
+            return dict(waiting_for_job_id=None, state=job['state'])
+        for row in self.db.execute('SELECT j.id,j.state,b.paused FROM media_jobs j JOIN media_batches b '
+                                   'ON j.batch_id=b.id WHERE j.resource=? ORDER BY j.rowid', (job['resource'],)):
+            if row['state'] in TERMINAL:
+                continue
+            if row['id'] != job_id:
+                return dict(waiting_for_job_id=row['id'], waiting_for_state=row['state'],
+                            note='Ya encolado. Espera a la tarea anterior del recurso; no preparar ni iniciar otro plan.')
+            return dict(waiting_for_job_id=None, state=row['state'], paused=bool(row['paused']),
+                        note='La revisión pendiente o el bloqueo deben resolverse antes de avanzar.'
+                        if row['state'] in ('blocked', 'awaiting_review') else 'Consultar el estado de esta tarea; no duplicarla.')
+        return dict(waiting_for_job_id=None, state=job['state'])
+
     def claim(self, resource, now, lease_seconds=30):
         with self.transaction():
             lease = self.db.execute('SELECT * FROM media_leases WHERE resource=?', (resource,)).fetchone()

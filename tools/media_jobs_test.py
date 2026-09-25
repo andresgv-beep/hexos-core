@@ -64,6 +64,18 @@ class MediaJobsTest(unittest.TestCase):
         try: self.assertEqual(reopened.get(self.job_id),job)
         finally: reopened.close()
 
+    def test_queue_reports_review_blocker_without_mutation(self):
+        first = self.store.get(self.job_id)
+        first['state'] = 'awaiting_review'
+        self.store._save(first)
+        second = self.store.create([source(2)],profile(),'encoder','second',self.clock())['jobs'][0]
+        status = self.store.queue_status(second['id'])
+        self.assertEqual(status['waiting_for_job_id'], self.job_id)
+        self.assertEqual(status['waiting_for_state'], 'awaiting_review')
+        self.assertIsNone(self.tick())
+        self.assertEqual(self.store.get(second['id']), second)
+        self.assertEqual(self.store.queue_status(self.job_id)['state'], 'awaiting_review')
+
     def test_five_movies_are_staged_sequentially(self):
         self.store.control(self.batch['id'],'cancel',self.clock())
         batch=self.store.create([source(i) for i in range(2,7)],profile(),'encoder','five',self.clock())

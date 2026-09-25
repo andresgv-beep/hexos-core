@@ -59,7 +59,10 @@ def prepare(workspace, config, args, *, now=None):
     db.row_factory = sqlite3.Row
     try:
         scan = db.execute('SELECT * FROM scans WHERE id=?',(scan_id,)).fetchone()
-        if not scan or scan['device'] != config['device']:
+        if not scan:
+            raise ValueError('scan_id inexistente: debe proceder de nas.find, no de un lote o tarea. '
+                             'Si la película ya está encolada, consulta media.jobs; no prepares otro plan.')
+        if scan['device'] != config['device']:
             raise ValueError('El catálogo no pertenece al recurso configurado')
         paths = args.get('paths')
         conflicting = [k for k in ('count','root','query','min_bytes','max_bytes','extensions') if k in args]
@@ -145,6 +148,9 @@ def start(workspace, config, plan_id, *, now=None):
         ensure(store.db)
         row = store.db.execute('SELECT * FROM media_plans WHERE id=?',(plan_id,)).fetchone()
         if not row:
+            if store.db.execute('SELECT 1 FROM media_batches WHERE id=?', (plan_id,)).fetchone():
+                raise ValueError('Has usado un batch_id, no un plan_id. Ese lote ya existe: consulta media.jobs '
+                                 'para conocer su bloqueo; no vuelvas a prepararlo ni a iniciarlo.')
             raise ValueError('Plan no preparado; usa media.prepare')
         plan = json.loads(row['body'])
         old = store.db.execute('SELECT id FROM media_batches WHERE request_key=?',('plan:'+plan_id,)).fetchone()
