@@ -2,7 +2,7 @@
 import json
 import queue
 import unittest
-from hexos.agent.internal_tasks.native_session import decision
+from hexos.agent.internal_tasks.native_session import decision, parse_decision
 
 
 class FakeTransport:
@@ -39,6 +39,15 @@ class NativeInternalTest(unittest.TestCase):
         transport.write=emit
         with self.assertRaises(ValueError):decision(transport,dict(request_id='r',job_id='j',expected_revision=1))
         self.assertEqual(transport.writes[-1]['type'],'session_close')
+
+    def test_gemma_empty_thought_and_fence_are_accepted(self):
+        # Salida real de Gemma 4 12B en la revisión que dejaba la cola en attention.
+        raw='<|channel>thought\n<channel|>```json\n{"action": "publish", "evidence_ids": ["job-19"]}\n```'
+        self.assertEqual(parse_decision(raw),{'action':'publish','evidence_ids':['job-19']})
+
+    def test_unparseable_decision_keeps_raw_text_in_error(self):
+        with self.assertRaises(ValueError) as caught:parse_decision('Aquí tienes la decisión: publicar')
+        self.assertIn('Aquí tienes', str(caught.exception))
 
     def test_transport_with_unfinished_chat_is_not_used(self):
         transport=FakeTransport();transport.pending=('chat','0',[])

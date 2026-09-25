@@ -41,6 +41,14 @@ class ReviewsTest(unittest.TestCase):
         self.assertEqual(self.store.get(self.id)['state'],'publishing')
         with self.assertRaises(ValueError):self.queue.finish(request,token,self.clock(),decision=answer)
 
+    def test_publication_evidence_shows_completion_not_stale_progress(self):
+        self.until_review()
+        request,_=self.queue.claim(self.clock())
+        evidence=request['evidence'][0]
+        self.assertIsNone(evidence['observation'])
+        self.assertEqual(evidence['completion']['status'],'finished')
+        self.assertTrue(evidence['verified'])
+
     def test_cancel_invalidates_inflight_review(self):
         self.until_review();request,token=self.queue.claim(self.clock())
         self.store.control(self.batch['id'],'cancel',self.clock())

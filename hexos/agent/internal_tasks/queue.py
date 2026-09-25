@@ -15,8 +15,14 @@ def enqueue(store, job, now):
     from .requests import build
     if not job.get('require_review') or job['state'] not in ('awaiting_review','blocked'):
         return
+    publication = job.get('review_kind') == 'publication'
+    completion = job.get('completion') or {}
+    # En publicación la última observación es de cuando convertía (p. ej. 73 %);
+    # con ella el revisor respondía wait para siempre.
     evidence = [dict(id='job-'+str(job['revision']), kind=job.get('review_kind','incident'),
-                     error=job.get('error'), observation=job.get('observation'),
+                     error=job.get('error'), observation=None if publication else job.get('observation'),
+                     completion={k: completion.get(k) for k in ('status','percent','exit_code','output_bytes')}
+                                if completion else None,
                      verified=job.get('validation',{}).get('valid') is True,
                      decoded=job.get('validation',{}).get('decoded') is True,
                      output_hash=job.get('validation',{}).get('sha256'))]

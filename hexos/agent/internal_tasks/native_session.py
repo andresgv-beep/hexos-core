@@ -1,6 +1,7 @@
 """Turno NDJSON en sesión efímera: mismos pesos text/0x0, KV y mensajes propios."""
 import json
 import queue
+import re
 import time
 from uuid import uuid4
 from .binding import HANDBRAKE_TRIAL_BINDING
@@ -13,6 +14,21 @@ solicita request_stop si está permitido o report_incident.
 Devuelve SOLO JSON con request_id, job_id, expected_revision, action, reason y
  evidence_ids (lista de ids presentes en evidence). Copia exactamente los identificadores.
 No inventes rutas, comandos, verificaciones ni acciones. No hables al usuario.'''
+
+
+EMPTY_THOUGHT = re.compile(r'^<\|channel>thought\n\s*<channel\|>')
+
+
+def parse_decision(visible_text):
+    # Gemma 4 abre un canal thought vacío aunque el pensamiento esté desactivado.
+    raw = EMPTY_THOUGHT.sub('', visible_text.strip(), count=1).strip()
+    fenced = re.fullmatch(r'```(?:json)?\s*(.*?)\s*```', raw, re.S)
+    if fenced:
+        raw = fenced.group(1)
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f'Decisión interna sin JSON válido ({exc}): {visible_text[:300]!r}') from exc
 
 
 def decision(transport, request, *, max_tokens=256, timeout_seconds=30):
@@ -54,9 +70,7 @@ def decision(transport, request, *, max_tokens=256, timeout_seconds=30):
         active=None
         if result['finish_reason'] not in ('eos','stop'):
             raise ValueError('Decisión interna incompleta: '+result['finish_reason'])
-        raw=result['visible_text'].strip()
-        if raw.startswith('```json') and raw.endswith('```'):raw=raw[7:-3].strip()
-        return json.loads(raw)
+        return parse_decision(result['visible_text'])
     finally:
         if active:
             transport.write(dict(type='cancel',request_id=uuid4().hex,target=active))
