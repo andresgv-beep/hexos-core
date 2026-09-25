@@ -76,16 +76,11 @@ class ChatMediaTest(unittest.TestCase):
             self.prepare(count=3)
         self.assertEqual(self.prepare(count=3,root='/films')['count'],3)
 
-    def test_context_exposes_configured_libraries_without_preset_or_permission(self):
-        from hexos.agent.chat_backend.media_tools import context_reference
-        reference=context_reference(self.workspace)
-        self.assertIn('/films',reference)
-        self.assertIn('media_options',reference)
-        self.assertIn('no un escaneo ni una orden',reference)
-        self.assertNotIn('AudioList',reference)
-        self.assertNotIn('fixture-rf19',reference)
+    def test_options_exposes_libraries_on_demand(self):
+        options = dispatch(self.workspace, 'media.options', {})
+        self.assertEqual(options['libraries'], ['/films'])
         (self.workspace/'media_jobs.json').unlink()
-        self.assertEqual(context_reference(self.workspace),'')
+        self.assertEqual(dispatch(self.workspace, 'media.options', {})['libraries'], [])
 
     def test_search_range_then_prepare_and_enqueue_five(self):
         from hexos.agent.file_catalog.service import FileCatalog

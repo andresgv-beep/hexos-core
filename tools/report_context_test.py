@@ -2,6 +2,7 @@
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -40,6 +41,32 @@ class ReportContextTest(unittest.TestCase):
                 self.assertNotIn('SecretoMascota', text)
                 self.assertNotIn('electricista', text)
                 self.assertIn('profile_recall', text)
+
+    def test_continuing_turns_do_not_accumulate_static_context(self):
+        runtime = self.agent.runtime
+        runtime.messages = []
+        with self.agent.store() as store, patch(
+                'hexos.agent.chat_backend.media_tools.load',
+                side_effect=AssertionError('Unrelated chat must not load media config')):
+            first = TurnState(text='hola socio')
+            self.agent.context.prepare(store, first)
+            self.assertIn('profile_recall', json.dumps(first.messages))
+            runtime.messages = list(first.messages)
+            for text in ('recetas de pollo', 'busca', 'busca en la web'):
+                turn = TurnState(text=text)
+                self.agent.context.prepare(store, turn)
+                self.assertEqual(turn.messages, [dict(role='user', content=text)])
+                runtime.messages.extend(turn.messages)
+            combined = json.dumps(runtime.messages, ensure_ascii=False)
+            self.assertEqual(combined.count('MEMORIA PERSONAL:'), 1)
+            self.assertNotIn('BIBLIOTECAS DE PELÍCULAS', combined)
+            # Reload restores the capability hint once, without losing dialogue.
+            runtime.messages = []
+            rebuilt = TurnState(text='seguimos')
+            self.agent.context.prepare(store, rebuilt)
+            content = json.dumps(rebuilt.messages, ensure_ascii=False)
+            self.assertEqual(content.count('MEMORIA PERSONAL:'), 1)
+            self.assertIn('recetas de pollo', content)
 
     def test_recall_only_delivers_matching_facts(self):
         self.assertIn('profile.recall', catalog.model_tools())

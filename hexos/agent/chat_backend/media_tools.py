@@ -47,20 +47,6 @@ def job_snapshot(workspace, config, job):
     return result
 
 
-def context_reference(workspace):
-    """Small operator-owned location map, not a scan or permission to execute."""
-    import json
-    try:
-        config = load(workspace)
-    except (ValueError, KeyError, OSError) as exc:
-        return '\nCONFIGURACIÓN MULTIMEDIA NO DISPONIBLE: ' + str(exc)[:200] + '\n'
-    if not config:
-        return ''
-    return ('\nBIBLIOTECAS DE PELÍCULAS CONFIGURADAS (rutas del operador; no un escaneo ni una orden):\n'
-            + json.dumps(dict(device=config['device'], libraries=config['files']['libraries']), ensure_ascii=False)
-            + '\nPara perfiles y disponibilidad consulta media_options.\n')
-
-
 def dispatch(workspace, name, args):
     config_error = None
     try:config = load(workspace)
