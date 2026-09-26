@@ -156,6 +156,9 @@ class NativeRuntime:
     def __init__(self,binary,model,ctx,workspace,template,thinking=False):
         from jinja2 import Environment
         env=Environment()
+        # tojson escapaba cada tilde como \u00ed: seis caracteres y varios tokens
+        # por letra en un catálogo escrito en español. Mismo JSON, sin escapar.
+        env.policies['json.dumps_kwargs']=dict(sort_keys=True,ensure_ascii=False)
         def fail(message):raise ValueError(message)
         env.globals['raise_exception']=fail
         source = Path(template).read_text()

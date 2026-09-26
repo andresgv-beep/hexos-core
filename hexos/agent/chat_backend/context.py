@@ -18,8 +18,13 @@ if TYPE_CHECKING:
 
 HANDOFF_KEY = 'context_handoff'
 HANDOFF_MESSAGES = 4
-HANDOFF_CHARS = 2_400
+HANDOFF_CHARS = 6_000
 HANDOFF_EACH = 900
+# La última respuesta de Helios va entera: suele ser la lista a la que se
+# refiere lo siguiente («la 10», «esa»). Cortada a 900, una lista de once
+# películas perdía de la quinta en adelante y el modelo buscaba a ciegas.
+HANDOFF_LAST = 4_000
+HANDOFF_LISTING = 4_000
 
 
 class ContextManager:
@@ -41,7 +46,8 @@ class ContextManager:
         """
         selected, used = [], 0
         for row in reversed(history):
-            text = self._excerpt(row['text'], HANDOFF_EACH)
+            last_reply = not selected and row['role'] == 'assistant'
+            text = self._excerpt(row['text'], HANDOFF_LAST if last_reply else HANDOFF_EACH)
             if selected and used + len(text) > HANDOFF_CHARS:
                 break
             selected.append(dict(id=row['id'], role=row['role'], text=text,
@@ -64,12 +70,46 @@ class ContextManager:
                 operation = dict(note='La última operación quedó archivada pero no se pudo leer aquí.')
         handoff = dict(version=1, boundary=boundary, created_at=now(),
                        dialogue=list(reversed(selected)),
-                       active=procedures.state(store), last_operation=operation)
+                       active=procedures.state(store), last_operation=operation,
+                       last_listing=self._last_listing(store))
         store.db.execute("INSERT INTO agent_state VALUES (?,?) "
                          'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
                          (HANDOFF_KEY, json.dumps(handoff, ensure_ascii=False)))
         store.db.commit()
         return handoff
+
+    @staticmethod
+    def _last_listing(store):
+        """Rutas y scan_id de la última búsqueda con resultados.
+
+        El JSON crudo empieza por titular, cobertura y errores: 900 caracteres
+        no llegaban ni al primer archivo. Tras el corte hacen falta las rutas
+        exactas y el scan_id, que es lo que piden media.prepare y nas.file_open.
+        """
+        for (body,) in store.db.execute('SELECT body FROM tool_events ORDER BY seq DESC LIMIT 20'):
+            try:
+                event = json.loads(body)
+            except (TypeError, ValueError):
+                continue
+            result = event.get('result')
+            items = result.get('items') if isinstance(result, dict) else None
+            if not items or not isinstance(items, list):
+                continue
+            lines, used = [], 0
+            for item in items:
+                if not isinstance(item, dict) or not item.get('path'):
+                    continue
+                size = item.get('size_bytes')
+                line = item['path'] + (' (%.2f GB)' % (size/1e9) if isinstance(size, int) else '')
+                if used + len(line) > HANDOFF_LISTING:
+                    lines.append('[… más en el archivo; repite la lectura si hacen falta]')
+                    break
+                lines.append(line)
+                used += len(line)
+            if lines:
+                return dict(tool=event.get('tool'), arguments=event.get('arguments'),
+                            scan_id=result.get('scan_id'), device=result.get('device'), items=lines)
+        return None
 
     @staticmethod
     def load_handoff(store):
@@ -93,6 +133,12 @@ class ContextManager:
         for row in handoff.get('dialogue', []):
             lines.append((row.get('role') or 'desconocido') + ' [' + (row.get('id') or '?') + ']: ' +
                          (row.get('text') or ''))
+        listing = handoff.get('last_listing')
+        if listing:
+            lines.append('ÚLTIMO LISTADO DE ARCHIVOS (' + str(listing.get('tool')) + ', scan_id=' +
+                         str(listing.get('scan_id')) + ', equipo=' + str(listing.get('device')) +
+                         '; rutas exactas, en el orden en que se mostraron):\n' +
+                         '\n'.join(str(n) + '. ' + line for n, line in enumerate(listing['items'], 1)))
         if handoff.get('last_operation'):
             lines.append('ÚLTIMA OPERACIÓN ARCHIVADA: ' +
                          json.dumps(handoff['last_operation'], ensure_ascii=False))
@@ -311,7 +357,13 @@ class ContextManager:
     # cada turno va más lento que el anterior, porque en decodificación cada token
     # nuevo mira todo lo que hay detrás. Medido: 31 tok/s con 2-5k de KV, 27,7 con
     # 5-9k, 24,8 con 9-20k y 17,1 por encima de 20k.
-    KV_OPERATIVO = 12000
+    #
+    # Medido otra vez con flash decode (Qwen3-8B, 26-09-2026): 51 tok/s plano entre
+    # 9,6k y 11,3k. Con 12.000 y el prefijo de Qwen (7.600 tokens de instrucciones
+    # y herramientas) quedaban 3.800 para conversar: una búsqueda en el NAS y su
+    # respuesta ya cortaban, y tras el corte el modelo buscaba a ciegas. Con 16k
+    # de ventana sigue mandando el 70 %: Gemma no cambia.
+    KV_OPERATIVO = 18000
 
     def kv_operating_limit(self, ctx):
         """El tope de arrastre, nunca por encima de lo que cabe de verdad.

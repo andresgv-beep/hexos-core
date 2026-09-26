@@ -1,6 +1,7 @@
 """La conversación se acumula desde el corte y se corta entera cuando ya no cabe."""
 from pathlib import Path
 import sys
+import json
 import tempfile
 import unittest
 from uuid import uuid4
@@ -223,6 +224,28 @@ class ContinuidadTrasCorteTest(unittest.TestCase):
         self.assertIn('Atlas', text)
         self.assertIn('no pierdas', text.casefold())
 
+    def test_tras_el_corte_sobreviven_la_lista_entera_y_sus_rutas(self):
+        # Caso real: once películas, pide «la 10» y el traspaso solo traía cuatro.
+        paths = ['/volume1/peliculas/Peli %02d/peli%02d.mkv' % (n, n) for n in range(1, 12)]
+        paths[9] = '/volume1/multimedia 1/Multimedia/peliculas/El Señor de los Anillos Las dos Torres/El Señor de los Anillos Las dos Torres P2.mkv'
+        listing = '\n'.join('#### Película %d\n- Nombre: `%s`\n- Tamaño: ~2%d GB\n- Ruta: `%s`\n---' % (n, p.rsplit('/', 1)[1], n, p.rsplit('/', 1)[0])
+                            for n, p in enumerate(paths, 1))
+        self.assertGreater(len(listing), 900)
+        with self.agent.store() as store:
+            user = uuid4().hex
+            store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', (user, now(), 'user', 'busca', 'busca'))
+            store.db.execute('INSERT INTO tool_events(turn_id,ts,body) VALUES (?,?,?)', (user, now(), json.dumps(dict(
+                tool='nas.find', arguments={}, result=dict(headline='x'*800, coverage=dict(errors=['y'*400]),
+                scan_id='scan-42', device='synology 1',
+                items=[dict(path=p, size_bytes=21_854_794_113) for p in paths])))))
+            store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)', (uuid4().hex, now(), 'assistant', listing, listing))
+            store.db.commit()
+            self.agent.window(store, 'nuevo', True, 40)
+            text = self.agent.context.handoff_text(self.agent.context.load_handoff(store))
+        self.assertIn('Película 11', text)
+        self.assertIn('scan_id=scan-42', text)
+        self.assertIn('10. ' + paths[9] + ' (21.85 GB)', text)
+
     def test_el_primer_turno_nuevo_recibe_el_traspaso_y_luego_lo_confirma(self):
         self.poblar()
         with self.agent.store() as store:
@@ -360,8 +383,14 @@ class TopeOperativoTest(unittest.TestCase):
         return ContextManager.kv_operating_limit(ContextManager, ctx)
 
     def test_con_una_ventana_grande_el_tope_no_se_va_con_ella(self):
-        self.assertEqual(self.limite(131072), 12000)
-        self.assertEqual(self.limite(32768), 12000)
+        self.assertEqual(self.limite(131072), 18000)
+        self.assertEqual(self.limite(32768), 18000)
+
+    def test_qwen_con_24k_y_gemma_con_16k(self):
+        # Qwen arranca con ~7.600 tokens de prefijo: con 24k le quedan ~9.600
+        # para conversar. Gemma, con 16k, sigue donde estaba.
+        self.assertEqual(self.limite(24576), int(24576 * 0.7))
+        self.assertEqual(self.limite(16384), int(16384 * 0.7))
 
     def test_con_una_ventana_pequeña_manda_la_ventana(self):
         # Con 8k no se puede arrastrar 12k: ahí el límite real es lo que cabe.
