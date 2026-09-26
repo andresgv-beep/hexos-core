@@ -35,7 +35,10 @@ def command(section, disk=None, container=None, action=None):
         'system': 'date; uname -a; uptime; cat /etc.defaults/VERSION',
         'storage': 'cat /proc/mdstat; for d in /sys/block/sd* /sys/block/nvme*n*; do echo DEVICE=$(basename "$d"); readlink -f "$d/device"; done',
         # El recuento recorre el buffer entero: la cola de 65 líneas puede haber dejado fuera la tormenta.
-        'kernel': "echo LINK_EVENT_TALLY; dmesg | grep -Ei 'hard resetting link|device unplugged|DevExch|PHYRdyChg"
+        # Los reinicios de enlace de los primeros segundos son la detección de discos al arrancar.
+        'kernel': "echo LINK_EVENT_TALLY; dmesg | awk '{ if (match($0, /^\\[ *[0-9.]+\\]/) && substr($0, 2, RLENGTH - 2) + 0 < 60"
+                  " && $0 ~ /hard resetting link|slow to respond/) next; print }'"
+                  " | grep -Ei 'hard resetting link|device unplugged|DevExch|PHYRdyChg"
                   "|COMRESET failed|slow to respond|limiting SATA link speed' | grep -oE 'ata[0-9]+' | sort | uniq -c;"
                   " echo LINK_EVENT_TALLY_END;"
                   " dmesg | grep -Ei 'ata[0-9]|sata|reset|I/O error|failed command|link (up|down)|sd[a-z]|nvme' | tail -n 65",
@@ -94,6 +97,10 @@ LINK_EVENTS = [('unplugged', r'device unplugged'),
                ('speed_limited', r'limiting SATA link speed'),
                ('io_errors', r'I/O error|failed command'),
                ('disabled', r'disabling port|device disabled|failed to (?:recover|resume) link')]
+# Un reinicio del enlace mientras el kernel detecta los discos al arrancar es rutina,
+# no evidencia de avería: se muestra aparte y no puntúa.
+BOOT_GRACE_SECONDS = 60
+BOOT_NOISE = {'hard_resets', 'slow_to_respond'}
 ERROR_PATTERN = (r'SError|hard resetting link|slow to respond|link down|failed command|I/O error'
                  r'|connection status changed|device unplugged|COMRESET failed|limiting SATA link speed'
                  r'|disabling port|device disabled|exception Emask')
@@ -121,8 +128,13 @@ def link_report(kernel_output):
         mode = re.search(r'configured for (UDMA/\d+|MWDMA\d+|PIO\d+)', line)
         if mode:
             entry['transfer_mode'] = mode.group(1)
+        stamp = re.match(r'\s*\[\s*(\d+(?:\.\d+)?)\]', line)
+        at_boot = stamp is not None and float(stamp.group(1)) < BOOT_GRACE_SECONDS
         for name, pattern in LINK_EVENTS:
             if re.search(pattern, line, re.I):
+                if at_boot and name in BOOT_NOISE:
+                    entry['boot_link_events'] = entry.get('boot_link_events', 0) + 1
+                    continue
                 entry['events'][name] = entry['events'].get(name, 0) + 1
     return links
 
@@ -138,6 +150,14 @@ def sata_speeds(summary):
     return (match.group(1) + ' Gb/s', match.group(2) + ' Gb/s') if match else (None, None)
 
 
+def is_downshift(limit, capability):
+    """El nibble SPD de SControl a 6.0 Gbps es el máximo SATA, no una limitación."""
+    if not limit:
+        return False
+    ceiling = float(capability.split()[0]) if capability else 6.0
+    return float(limit.split()[0]) < ceiling
+
+
 def rank_disk_evidence(links, maps, records, attributes):
     """Ordena por evidencia ligada a un disco físico. El recuento RAID nunca entra aquí."""
     suspects = []
@@ -148,7 +168,8 @@ def rank_disk_evidence(links, maps, records, attributes):
         summary = record.get('summary', '') if record else ''
         capability, current = sata_speeds(summary)
         counters = next((dict(item['attributes']) for item in attributes if item['disk'] == disk), {})
-        downshift = bool(state['kernel_speed_limit']) or (capability and current and capability != current)
+        downshift = is_downshift(state['kernel_speed_limit'], capability) or bool(
+            capability and current and capability != current)
         physical = events.get('unplugged', 0) + events.get('phy_changes', 0) + events.get('comreset_failed', 0)
         if not any(events.values()):
             continue
@@ -191,7 +212,7 @@ def suspect_headline(suspect, links):
         marks.append(str(resets) + (' reinicio del enlace' if resets == 1 else ' reinicios del enlace'))
     if suspect.get('events_in_whole_buffer'):
         marks.append(str(suspect['events_in_whole_buffer']) + ' eventos de enlace en todo el buffer del kernel')
-    if suspect['kernel_speed_limit']:
+    if is_downshift(suspect['kernel_speed_limit'], suspect['drive_supports']):
         marks.append('el kernel limitó el enlace a ' + suspect['kernel_speed_limit'] +
                      (' y el disco quedó en ' + suspect['transfer_mode'] if suspect['transfer_mode'] else ''))
     elif suspect['drive_supports'] and suspect['drive_reports_current'] and \

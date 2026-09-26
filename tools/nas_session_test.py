@@ -153,6 +153,45 @@ class NasSessionTest(unittest.TestCase):
         self.assertIn('SATA link up 1.5 Gbps',result['kernel']['output'])
         self.assertEqual(result['facts']['link_state']['ata1']['kernel_speed_limit'],'1.5 Gbps')
 
+    def test_boot_link_reset_and_full_speed_cap_are_not_a_fault(self):
+        # Caso real: un reinicio a los 7,5 s del arranque y SControl 330 (tope = máximo SATA)
+        # en un disco de 6.0 Gb/s sin errores CRC ni de superficie. No es una avería.
+        kernel=('[    7.586694] ata3.00: hard resetting link\n'
+                '[    8.120000] ata3: SATA link up 6.0 Gbps (SStatus 133 SControl 330)\n'
+                '[    8.200000] ata3.00: configured for UDMA/133\n')
+        smart=[dict(disk='sdc',exit_code=0,summary='Device Model:     ST6000VN006-2ZM186\n'
+                    'Serial Number:    ZVX043S3\n'
+                    'SATA Version is:  SATA 3.3, 6.0 Gb/s (current: 6.0 Gb/s)\n'
+                    '199 UDMA_CRC_Error_Count 0x003e 200 200 000 Old_age Always - 0\n')]
+        storage='DEVICE=sdc\n/sys/devices/pci0000:00/ata3/host2\n'
+        result=present_result(dict(storage=dict(output=storage),kernel=dict(output=kernel),smart=smart),'diagnosis')
+        self.assertNotIn('primary_suspect',result)
+        self.assertIn('Sin eventos de enlace',result['headline'])
+        state=result['facts']['link_state']['ata3']
+        self.assertEqual((state['events'],state['boot_link_events']),({},1))
+        self.assertEqual(state['kernel_speed_limit'],'6.0 Gbps')
+
+    def test_link_reset_after_boot_still_counts(self):
+        kernel='[ 5231.412000] ata1: hard resetting link\n'
+        storage='DEVICE=sda\n/sys/devices/pci0000:00/ata1/host0\n'
+        result=present_result(dict(storage=dict(output=storage),kernel=dict(output=kernel),smart=[]),'diagnosis')
+        self.assertEqual(result['primary_suspect']['disk'],'sda')
+        self.assertEqual(result['primary_suspect']['events'],{'hard_resets':1})
+
+    def test_speed_cap_equal_to_drive_capability_is_not_a_downshift(self):
+        kernel=('[ 900.0] ata2: hard resetting link\n'
+                '[ 901.0] ata2: SATA link up 6.0 Gbps (SStatus 133 SControl 330)\n')
+        smart=[dict(disk='sdb',exit_code=0,summary='SATA Version is:  SATA 3.3, 6.0 Gb/s (current: 6.0 Gb/s)\n')]
+        storage='DEVICE=sdb\n/sys/devices/pci0000:00/ata2/host1\n'
+        result=present_result(dict(storage=dict(output=storage),kernel=dict(output=kernel),smart=smart),'diagnosis')
+        self.assertEqual(result['primary_suspect']['confidence'],'baja')
+        self.assertNotIn('limitó',result['headline'])
+
+    def test_kernel_tally_skips_boot_link_resets(self):
+        remote=command('kernel')
+        self.assertIn('< 60',remote)
+        self.assertIn('hard resetting link|slow to respond/) next',remote)
+
     def test_smart_without_disk_collects_diagnosis(self):
         with patch('hexos.agent.nas_session.hosts.credentials',return_value=dict(user='u',password='p',port=22)), \
              patch('hexos.agent.nas_session.execute',return_value=dict(error='fixture')) as run:
