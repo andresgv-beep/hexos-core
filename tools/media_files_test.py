@@ -183,6 +183,29 @@ class FilesTest(unittest.TestCase):
             with self.subTest(change=change),self.assertRaises(Rejected):validate_media(probe(),result,preset())
         self.assertEqual(validate_media(probe(),probe(),preset())['audio_tracks'],1)
 
+    def test_spanish_subtitles_pass_and_others_are_rejected(self):
+        wanted=dict(preset(),SubtitleTrackSelectionBehavior='all',SubtitleLanguageList=['spa'],
+                    SubtitleAddForeignAudioSearch=True,SubtitleBurnBehavior='foreign',
+                    SubtitleBurnBDSub=False,SubtitleBurnDVDSub=False)
+        track=lambda lang:dict(codec_type='subtitle',codec_name='hdmv_pgs_subtitle',tags=dict(language=lang))
+        source=probe();source['streams']+=[track('spa'),track('spa'),track('eng')]
+        output=probe();output['streams']+=[track('spa'),track('spa')]
+        self.assertEqual(validate_media(source,output,wanted)['subtitle_tracks'],2)
+        self.assertEqual(validate_media(source,probe(),wanted)['subtitle_tracks'],0)
+        english=probe();english['streams'].append(track('eng'))
+        extra=probe();extra['streams']+=[track('spa')]*3
+        for name,result in (('idioma',english),('de más',extra)):
+            with self.subTest(name),self.assertRaises(Rejected):validate_media(source,result,wanted)
+        with self.assertRaises(Rejected):validate_media(source,output,preset())
+
+    def test_subtitle_profile_must_not_burn_full_tracks(self):
+        base=dict(preset(),SubtitleTrackSelectionBehavior='all',SubtitleLanguageList=['spa'],
+                  SubtitleBurnBehavior='foreign',SubtitleBurnBDSub=False,SubtitleBurnDVDSub=False)
+        for change in (dict(SubtitleBurnBDSub=True),dict(SubtitleBurnBehavior='first'),
+                       dict(SubtitleLanguageList=[]),dict(SubtitleLanguageList=['es'])):
+            with self.subTest(change=change),self.assertRaises(Rejected):
+                validate_media(probe(),probe(),dict(base,**change))
+
     def test_missing_decode_confirmation_blocks_publication(self):
         self.encoded();self.job['validation']['decoded']=False
         with self.assertRaises(Rejected):ops.publish(self.request,self.root,lambda *args:None)
