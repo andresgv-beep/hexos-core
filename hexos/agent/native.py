@@ -595,7 +595,14 @@ class NativeRuntime:
         header, raw = self.event()
         self.last_transcription_generation = dict(kind='transcription', raw=raw, finish_reason=header[4],
                                                   tokens=int(header[2]), ms=int(header[1]))
-        return ' '.join(visible_preview(raw).split())
+        text = ' '.join(visible_preview(raw).split())
+        # Si no entiende la voz no transcribe: se disculpa en inglés («I'm sorry,
+        # I cannot transcribe…»). Eso no es lo que dijo la persona y no debe
+        # llegar a la conversación como si lo fuera.
+        return '' if self.ASR_REFUSAL.search(text) else text
+
+    ASR_REFUSAL = re.compile(r"\b(?:I'?m sorry|I cannot|I can'?t|I am unable|unable to transcribe|"
+                             r"(?:audio|file) (?:is|was) not provided|provide the audio)\b", re.I)
 
     def extract_facts(self, text):
         """Hechos que la persona afirma de sí misma en ESE mensaje, para el perfil.

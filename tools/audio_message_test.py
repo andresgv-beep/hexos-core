@@ -82,6 +82,27 @@ class NativeAudioTest(unittest.TestCase):
         self.assertEqual(writes[-1]['attachment_ids'], ['a1'])
 
 
+class TranscriptionTest(unittest.TestCase):
+    def transcribe(self, raw):
+        rt = NativeRuntime.__new__(NativeRuntime)
+        rt._transport = SimpleNamespace(model_info={'multimodal': True})
+        rt.template = SimpleNamespace(render=lambda **kwargs: 'prompt')
+        rt.send = lambda prompt, image=None, auxiliar=False: self.sent.append((image, auxiliar))
+        rt.event = lambda: (['0', '10', '5', '0', 'eos'], raw)
+        self.sent = []
+        return rt.transcribe(AudioClip(b'\x00' * 64, 16000))
+
+    def test_the_clip_goes_to_the_auxiliary_session(self):
+        self.assertEqual(self.transcribe('  Quiero saber\ncuántos discos hay. '), 'Quiero saber cuántos discos hay.')
+        self.assertEqual(self.sent, [(AudioClip(b'\x00' * 64, 16000), True)])
+
+    def test_an_apology_is_not_a_transcript(self):
+        for raw in ("I'm sorry, I can't provide a transcription for that audio because it is not in English.",
+                    'I am unable to transcribe the audio because it is not provided.'):
+            with self.subTest(raw):
+                self.assertEqual(self.transcribe(raw), '')
+
+
 class VoiceTurnTest(unittest.TestCase):
     class Runtime:
         def __init__(self, transcript='¿Cuánto es 7 por 8?'):
