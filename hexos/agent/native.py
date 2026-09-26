@@ -567,7 +567,9 @@ class NativeRuntime:
         self.current=None
 
     # Prompt de la ficha de Gemma 4 para reconocimiento de voz; el audio va detrás.
-    ASR_PROMPT = ('Transcribe the following speech segment in its original language.\n\n'
+    # Con «in its original language» el 12B contestaba que no transcribía porque
+    # «no está en inglés»; nombrando el idioma, como la plantilla de la ficha, sí.
+    ASR_PROMPT = ('Transcribe the following speech segment in Spanish into Spanish text.\n\n'
                   'Follow these specific instructions for formatting the answer:\n'
                   '* Only output the transcription, with no newlines.\n'
                   '* When transcribing numbers, write the digits, i.e. write 1.7 and not one '
