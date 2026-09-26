@@ -9,7 +9,7 @@ import re
 import subprocess
 import threading
 
-from .native_transport import NativeTransport, TurnCancelled, GenerationInterrupted, visible_preview
+from .native_transport import AudioClip, NativeTransport, TurnCancelled, GenerationInterrupted, visible_preview
 from . import catalog
 from . import qwen_protocol
 from .decisions import InvalidDecision, validate_reply
@@ -270,6 +270,16 @@ class NativeRuntime:
             raise ValueError('la imagen debe ser RGB8 con tamaño coherente')
         self.pending_image = (pixels, width, height)
 
+    def attach_audio(self, pcm, sample_rate):
+        """Adjunta un mensaje de voz (PCM float32 mono) al turno siguiente."""
+        if not getattr(self, '_transport', None) or not self._transport.model_info.get('multimodal'):
+            raise RuntimeError('unsupported_attachment: este HNF no incluye un adaptador de audio')
+        if not pcm or len(pcm) % 4 or sample_rate <= 0:
+            raise ValueError('el audio debe ser PCM float32 mono')
+        # Mismo hueco que la imagen: un solo adjunto por turno, y el ciclo de
+        # vida del modelo ya lo guarda y lo limpia.
+        self.pending_image = AudioClip(pcm, sample_rate)
+
     def send(self, prompt, image=None, auxiliar=False):
         """Cabecera corta sin imagen; con imagen añade tamaño y geometría.
 
@@ -290,6 +300,8 @@ class NativeRuntime:
             self._transport.start(prompt, image, auxiliar)
             return data
         marca = '*' if auxiliar else ''
+        if isinstance(image, AudioClip):
+            raise RuntimeError('unsupported_attachment: el runtime formateado no admite audio')
         if image is None:
             header = (marca + str(len(data))).encode(); body = data
         else:
@@ -396,7 +408,12 @@ class NativeRuntime:
             rendered = [dict(m) for m in self.messages]
             for message in reversed(rendered):
                 if message['role'] == 'user':
-                    message['content'] = '<|image|>\n' + message['content']
+                    # La ficha de Gemma 4: imagen antes del texto, audio después.
+                    # Con el audio delante el 12B respondía como si no lo oyera.
+                    if isinstance(image, AudioClip):
+                        message['content'] = message['content'] + '\n<|audio|>'
+                    else:
+                        message['content'] = '<|image|>\n' + message['content']
                     break
         if getattr(self, 'qwen', False):
             rendered = qwen_protocol.render_messages(rendered)

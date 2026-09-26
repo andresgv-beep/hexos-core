@@ -139,6 +139,7 @@ body { background: var(--hud-bg); color: var(--hud-text); }
 .viewer-row:hover, .viewer-list li.marked { background: var(--hud-raised); }
 .hud-layout .icon-button { color: var(--hud-muted); }
 .hud-layout .icon-button:hover { color: var(--hud-bright); background: var(--hud-raised); }
+.hud-layout .icon-button.voice-recording { color: #ff6b86; }
 /* Concept: content occupies the right column, with activity below it. */
 .hud-content-dock { flex: 1; min-height: 260px; display: flex; flex-direction: column; border: 1px solid var(--hud-frame); background: var(--hud-code); border-radius: 0 20px 0 20px; overflow: hidden; }
 .hud-content-tabs { display: flex; flex-shrink: 0; min-height: 44px; border-bottom: 1px solid var(--hud-track); padding-left: 8px; }

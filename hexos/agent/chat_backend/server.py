@@ -8,6 +8,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 from .. import core, notes, catalog
 from ..work import strict_json, string
 from .images import decode_image
+from .audio import decode_audio
 from .settings import MAX_INPUT
 from .history_archive import history_page
 from .file_http import serve as serve_file
@@ -172,8 +173,10 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                     # Forma ampliada: adjunto o pensamiento limitado a este turno.
                     # El text/plain de siempre sigue valiendo para un turno sin imagen.
                     payload = strict_json(data.decode('utf-8'))
-                    if set(payload) - {'text', 'image', 'thinking', 'display_text', 'request_id'}:
-                        raise ValueError('campos permitidos: text, image, thinking, display_text, request_id')
+                    if set(payload) - {'text', 'image', 'audio', 'thinking', 'display_text', 'request_id'}:
+                        raise ValueError('campos permitidos: text, image, audio, thinking, display_text, request_id')
+                    if payload.get('image') is not None and payload.get('audio') is not None:
+                        raise ValueError('un turno lleva imagen o audio, no los dos')
                     rid = payload.get('request_id')
                     if rid is not None:
                         rid = string(rid, 'request_id', 128)
@@ -181,12 +184,14 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                     if thinking is not None and not isinstance(thinking, bool):
                         raise ValueError('thinking debe ser true o false')
                     # Con imagen el texto puede venir vacío: la pregunta la pone el agente.
-                    mensaje = string(payload.get('text'), 'text', MAX_INPUT,
-                                     empty=payload.get('image') is not None)
+                    adjunto = payload.get('image') is not None or payload.get('audio') is not None
+                    mensaje = string(payload.get('text'), 'text', MAX_INPUT, empty=adjunto)
                     visible = payload.get('display_text')
                     if visible is not None:
                         visible = string(visible, 'display_text', MAX_INPUT)
-                    self.respond(200, agent.chat(mensaje, decode_image(payload.get('image')),
+                    adjunto = (decode_audio(payload['audio']) if payload.get('audio') is not None
+                               else decode_image(payload.get('image')))
+                    self.respond(200, agent.chat(mensaje, adjunto,
                                                  thinking=thinking, display_text=visible, request_id=rid))
                 else:
                     self.respond(200, agent.chat(data.decode('utf-8')))

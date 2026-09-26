@@ -15,6 +15,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, [tabindex="0"]:focus
 .brand-symbol { font-size: 38px; font-weight: 200; color: #99dfff; line-height: 1; text-shadow: 0 0 20px #68c8ff60; letter-spacing: 0; }
 .icon-button { background: transparent; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid transparent; border-radius: 9px; width: 34px; height: 34px; color: #8aacbf; }
 .icon-button:hover, .icon-button.selected { color: #e0f6ff; background: #91c6ef18; }
+/* Grabando voz: rojo, con los segundos, y un pulso para que no se olvide abierto. */
+.icon-button.voice-recording { width: auto; gap: 4px; padding: 0 8px; color: #ff6b86; border-color: #ff6b8666; animation: voice-pulse 1.4s ease-in-out infinite; }
+.voice-elapsed { font-size: 12px; font-variant-numeric: tabular-nums; }
+@keyframes voice-pulse { 50% { background: #ff6b861f; } }
+@media (prefers-reduced-motion: reduce) { .icon-button.voice-recording { animation: none; } }
 .presence { position: absolute; inset: 58px 0 84px; display: flex; align-items: center; justify-content: center; pointer-events: none; }
 .orb-stage { width: min(1014px, 100vw); height: min(858px, 100%); position: relative; }
 .orb-canvas { position: absolute; inset: 0; z-index: 1; mask-image: radial-gradient(ellipse 50% 50% at center, #000 62%, transparent 100%); }

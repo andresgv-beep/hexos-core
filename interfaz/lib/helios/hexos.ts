@@ -90,7 +90,8 @@ export interface HeliosTransport {
   historyPage?(before?: number, signal?: AbortSignal): Promise<HistoryPage>;
   /** `image` es base64 de PNG/JPEG/WebP, sin la cabecera `data:`. Una por turno. */
   /** `thinking` abre el canal solo durante este turno; no cambia la preferencia AUTO. */
-  send(text: string, signal?: AbortSignal, image?: string, thinking?: boolean, displayText?: string, requestId?: string): Promise<ChatReply>;
+  /** `audio` es base64 de un WAV mono 16 kHz de hasta 30 s. Imagen o audio, no ambos. */
+  send(text: string, signal?: AbortSignal, image?: string, thinking?: boolean, displayText?: string, requestId?: string, audio?: string): Promise<ChatReply>;
   cancel?(requestId: string): Promise<boolean>;
 }
 
@@ -186,13 +187,13 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
         body: JSON.stringify({ request_id: requestId }) });
       return isRecord(data) && data.ok === true;
     },
-    async send(text, signal, image, thinking, displayText, requestId) {
+    async send(text, signal, image, thinking, displayText, requestId, audio) {
       if (!text.trim()) throw new Error("Escribe un mensaje");
       // Con imagen o razonamiento puntual el contrato es JSON; el chat ordinario
       // conserva text/plain para seguir siendo compatible con clientes anteriores.
-      const init: RequestInit = image || thinking !== undefined || displayText !== undefined || requestId !== undefined
+      const init: RequestInit = image || audio || thinking !== undefined || displayText !== undefined || requestId !== undefined
         ? { method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text, ...(image ? { image } : {}), ...(thinking !== undefined ? { thinking } : {}),
+            body: JSON.stringify({ text, ...(image ? { image } : {}), ...(audio ? { audio } : {}), ...(thinking !== undefined ? { thinking } : {}),
               ...(displayText !== undefined ? { display_text: displayText } : {}),
               ...(requestId ? { request_id: requestId } : {}) }), signal }
         : { method: "POST", headers: { "Content-Type": "text/plain; charset=utf-8" }, body: text, signal };

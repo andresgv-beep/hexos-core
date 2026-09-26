@@ -8,7 +8,8 @@ from ..work import now
 from ..work import string
 from .finalization import TurnFinalizer
 from .recovery import RecoveryController, RETRY
-from .settings import MAX_INPUT, IMAGEN_SIN_TEXTO, MAX_TURN_ITERATIONS
+from ..native_transport import AudioClip
+from .settings import MAX_INPUT, IMAGEN_SIN_TEXTO, AUDIO_SIN_TEXTO, MAX_TURN_ITERATIONS
 from .state import TurnState
 from .tools import ToolExecutor
 from .listing_followups import listing_followup
@@ -40,7 +41,7 @@ class TurnRunner:
         if not text.strip():
             if image is None:
                 raise ValueError('Mensaje vacío o mayor de 8 MiB; no se ha guardado')
-            text = IMAGEN_SIN_TEXTO
+            text = AUDIO_SIN_TEXTO if isinstance(image, AudioClip) else IMAGEN_SIN_TEXTO
         visible = display_text if display_text is not None else text
         if not self.agent.lock.acquire(blocking=False):
             raise RuntimeError('Ya hay un turno en curso')

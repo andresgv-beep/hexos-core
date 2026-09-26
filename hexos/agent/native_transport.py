@@ -4,8 +4,19 @@ import os
 import queue
 import subprocess
 import threading
+from typing import NamedTuple
 from uuid import uuid4
 
+
+
+class AudioClip(NamedTuple):
+    """Mensaje de voz para el turno siguiente: PCM float32 mono."""
+    pcm: bytes
+    sample_rate: int
+
+    @property
+    def seconds(self):
+        return len(self.pcm) / (4 * self.sample_rate)
 
 class TurnCancelled(RuntimeError):
     pass
@@ -136,12 +147,16 @@ class NativeTransport:
             self.control(dict(type='session_open', session=session, max_seq_len=1024))
             self.aux_ready = True
         attachments = []
-        if image or session in self.reset_sessions:
+        if image is not None or session in self.reset_sessions:
             # Visual soft tokens cannot be matched against the next full text
             # prompt. Rebuild from the adapter's textual history on that turn.
             self.control(dict(type='reset', session=session))
             self.reset_sessions.discard(session)
-        if image:
+        if isinstance(image, AudioClip):
+            ack = self.control(dict(type='attachment', kind='pcm_f32', bytes=len(image.pcm),
+                                    sample_rate=image.sample_rate, channels=1), image.pcm)
+            attachments.append(ack['request_id'])
+        elif image:
             pixels, width, height = image
             if len(pixels) > 64*1024*1024:
                 raise ValueError('imagen demasiado grande')

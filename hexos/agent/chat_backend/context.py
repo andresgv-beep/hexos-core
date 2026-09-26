@@ -6,6 +6,7 @@ import json
 from typing import TYPE_CHECKING
 from uuid import uuid4
 from .. import catalog, procedures, task_notices
+from ..native_transport import AudioClip
 from ..context import native_messages
 from ..work import now
 from .memory import AFIRMACION
@@ -168,7 +169,14 @@ class ContextManager:
         if hasattr(self.agent.runtime, 'harvest_pending') or cosechara:
             self.agent.runtime.harvest_pending = cosechara
         nota_imagen = ''
-        if turn.image is not None:
+        if isinstance(turn.image, AudioClip):
+            if not hasattr(self.agent.runtime, 'attach_audio'):
+                raise ValueError('este motor no admite audio; no se ha enviado nada')
+            self.agent.runtime.attach_audio(turn.image.pcm, turn.image.sample_rate)
+            nota_imagen = ('[La persona envió un mensaje de voz de %.1f s en este turno. '
+                           'Lo estás oyendo ahora; responde a lo que dice. En turnos '
+                           'posteriores solo quedará lo que digas de él.]\n' % turn.image.seconds)
+        elif turn.image is not None:
             if not hasattr(self.agent.runtime, 'attach_image'):
                 raise ValueError('este motor no admite imágenes; no se ha enviado nada')
             pixels, width, height = turn.image
