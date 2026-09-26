@@ -1,7 +1,9 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Mic, Square } from "lucide-react";
 import { audioToVoice, canRecord, VOICE_MAX_SECONDS } from "@/lib/helios/voice";
+
+const noSubscription = () => () => {};
 
 /** Graba un mensaje de voz (hasta 30 s) y lo entrega ya en WAV 16 kHz. */
 export function VoiceButton({ onRecorded, onError, disabled }: {
@@ -12,7 +14,10 @@ export function VoiceButton({ onRecorded, onError, disabled }: {
   const [elapsed, setElapsed] = useState<number | null>(null);
   const recorder = useRef<MediaRecorder | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
-  const available = canRecord();
+  // Se mira ya en el navegador: en el render del servidor no hay window, salía
+  // «sin micrófono» y la hidratación dejaba el botón deshabilitado para siempre.
+  // Servidor e hidratación ven false; justo después, el valor real.
+  const available = useSyncExternalStore(noSubscription, canRecord, () => false);
 
   useEffect(() => () => {
     if (timer.current) clearInterval(timer.current);
