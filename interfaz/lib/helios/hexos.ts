@@ -7,7 +7,7 @@ import { notesDismissed, notesTouched, parseToolActivities, type ToolActivity } 
 export interface ContextCut { at: string; messages: number; characters: number }
 /** Cómo se cierra el turno según lo COMPROBADO, no según lo que diga la respuesta. */
 export interface Closure { reason: string; note: string; unverified: { tool: string; verification?: string; evidence?: string }[] }
-export interface ChatReply { reply: string; tools: ToolActivity[]; notes: string[]; closeNotes: string[] | "todas" | null; fileIds?: string[]; document?: unknown; contextCut?: ContextCut; closure?: Closure; cancelled?: boolean; incomplete?: boolean }
+export interface ChatReply { reply: string; tools: ToolActivity[]; notes: string[]; closeNotes: string[] | "todas" | null; fileIds?: string[]; document?: unknown; contextCut?: ContextCut; closure?: Closure; cancelled?: boolean; incomplete?: boolean; /** Lo que Helios entendió de un mensaje de voz. */ transcript?: string }
 export interface Generation { requestId: string; phase: string; text: string; processed: number; total: number; cancellable: boolean; cancelling: boolean }
 export interface HistoryMessage { role: "user" | "assistant"; text: string }
 export interface HistoryPage { messages: HistoryMessage[]; nextBefore: number | null }
@@ -65,6 +65,7 @@ function parseChatReply(data: unknown): ChatReply {
                        evidence: typeof u.evidence === "string" ? u.evidence : undefined })) }
     : undefined;
   return { reply: data.reply, tools: parseToolActivities(data.tools, "done"),
+           ...(typeof data.transcript === "string" && data.transcript.trim() ? { transcript: data.transcript } : {}),
            fileIds: data.tools.filter(isRecord).filter(item => item.tool === 'nas.file_open' && !item.failed)
              .map(item => isRecord(item.result) ? item.result.file_id : null)
              .filter((id): id is string => typeof id === 'string' && /^[a-f0-9]{32}$/.test(id)),

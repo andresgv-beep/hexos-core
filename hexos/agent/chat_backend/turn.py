@@ -48,10 +48,21 @@ class TurnRunner:
         self.agent.state = 'thinking'
         self.agent.active_tools = []
         turn = None
+        transcript = None
         try:
             self.agent.begin_generation(request_id)
+            if isinstance(image, AudioClip):
+                # Primero se transcribe a solas y la conversación recibe texto:
+                # ver NativeRuntime.transcribe. La transcripción queda en el chat.
+                transcript = self.agent.runtime.transcribe(image)
+                if not transcript:
+                    raise ValueError('No he entendido el mensaje de voz; prueba a grabarlo otra vez')
+                voz = 'Mensaje de voz (%.0f s), transcrito: «%s»' % (image.seconds, transcript)
+                text = voz if text.strip() == AUDIO_SIN_TEXTO else text + '\n\n' + voz
+                visible = display_text if display_text is not None else text
+                image = None
             with self.agent.store() as store:
-                turn = TurnState(text=visible, image=image, model_request=text)
+                turn = TurnState(text=visible, image=image, model_request=text, transcript=transcript)
                 self.agent.context.prepare(store, turn)
                 self.agent.check_cancelled()
                 # Diagnóstico/contenedores/espacio + un único equipo nombrado

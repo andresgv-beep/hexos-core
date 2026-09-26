@@ -566,6 +566,35 @@ class NativeRuntime:
         self.messages[-1]['tool_responses'].append({'name':self.current['name'],'response':result})
         self.current=None
 
+    # Prompt de la ficha de Gemma 4 para reconocimiento de voz; el audio va detrás.
+    ASR_PROMPT = ('Transcribe the following speech segment in its original language.\n\n'
+                  'Follow these specific instructions for formatting the answer:\n'
+                  '* Only output the transcription, with no newlines.\n'
+                  '* When transcribing numbers, write the digits, i.e. write 1.7 and not one '
+                  'point seven, and write 3 instead of three.')
+
+    def transcribe(self, clip):
+        """Mensaje de voz -> texto, en la sesión auxiliar y a solas con el audio.
+
+        Dentro del turno completo, con ~5.000 tokens de instrucciones y
+        herramientas delante, el 12B dejaba de atender al audio («no he recibido
+        ningún archivo de audio»); con el mismo audio a solas lo transcribe. Así
+        que se transcribe aparte y la conversación recibe texto.
+        """
+        if not isinstance(clip, AudioClip):
+            raise ValueError('transcribe espera un AudioClip')
+        if not getattr(self, '_transport', None) or not self._transport.model_info.get('multimodal'):
+            raise RuntimeError('unsupported_attachment: este HNF no incluye un adaptador de audio')
+        messages = [{'role': 'user', 'content': [{'type': 'text', 'text': self.ASR_PROMPT},
+                                                 {'type': 'audio'}]}]
+        prompt = self.template.render(messages=messages, tools=[], bos_token='<bos>',
+                                      add_generation_prompt=True, enable_thinking=False)
+        self.send(prompt, clip, auxiliar=True)
+        header, raw = self.event()
+        self.last_transcription_generation = dict(kind='transcription', raw=raw, finish_reason=header[4],
+                                                  tokens=int(header[2]), ms=int(header[1]))
+        return ' '.join(visible_preview(raw).split())
+
     def extract_facts(self, text):
         """Hechos que la persona afirma de sí misma en ESE mensaje, para el perfil.
 

@@ -84,27 +84,47 @@ class NativeAudioTest(unittest.TestCase):
 
 class VoiceTurnTest(unittest.TestCase):
     class Runtime:
-        def __init__(self):
-            self.audio, self.inputs = [], []
+        def __init__(self, transcript='¿Cuánto es 7 por 8?'):
+            self.audio, self.inputs, self.transcript = [], [], transcript
+
+        def transcribe(self, clip):
+            self.audio.append((len(clip.pcm), clip.sample_rate))
+            return self.transcript
 
         def attach_audio(self, pcm, sample_rate):
-            self.audio.append((len(pcm), sample_rate))
+            raise AssertionError('el turno recibe la transcripción, no el audio')
 
         def generate(self, messages):
             self.inputs.append(repr(messages))
-            return dict(reply='Te he oído.', work=None)
+            return dict(reply='56.', work=None)
 
         def call(self, request):
             pass
 
-    def test_a_voice_message_without_text_asks_to_answer_it(self):
+    def test_a_voice_message_is_transcribed_first_and_the_turn_gets_text(self):
         with tempfile.TemporaryDirectory() as workspace:
             runtime = self.Runtime()
             agent = Agent(workspace, runtime)
-            agent.chat('', image=AudioClip(b'\x00' * 64000, 16000))
+            result = agent.chat('', image=AudioClip(b'\x00' * 64000, 16000))
             self.assertEqual(runtime.audio, [(64000, 16000)])
-            self.assertIn(AUDIO_SIN_TEXTO, runtime.inputs[0])
-            self.assertIn('mensaje de voz de 1.0 s', runtime.inputs[0])
+            self.assertEqual(result['transcript'], '¿Cuánto es 7 por 8?')
+            self.assertIn('Mensaje de voz (1 s), transcrito: «¿Cuánto es 7 por 8?»', runtime.inputs[0])
+            self.assertNotIn(AUDIO_SIN_TEXTO, runtime.inputs[0])
+            with agent.store() as store:
+                stored = store.db.execute("SELECT text FROM conversation WHERE role='user'").fetchone()[0]
+            self.assertIn('«¿Cuánto es 7 por 8?»', stored)
+
+    def test_typed_text_is_kept_next_to_the_transcript(self):
+        with tempfile.TemporaryDirectory() as workspace:
+            runtime = self.Runtime('pon la alarma')
+            Agent(workspace, runtime).chat('Esto es lo que dije:', image=AudioClip(b'\x00' * 32000, 16000))
+            self.assertIn('Esto es lo que dije:', runtime.inputs[0])
+            self.assertIn('«pon la alarma»', runtime.inputs[0])
+
+    def test_an_empty_transcript_is_an_error_not_a_blind_turn(self):
+        with tempfile.TemporaryDirectory() as workspace:
+            with self.assertRaisesRegex(ValueError, 'No he entendido'):
+                Agent(workspace, self.Runtime('')).chat('', image=AudioClip(b'\x00' * 32000, 16000))
 
 
 if __name__ == '__main__':

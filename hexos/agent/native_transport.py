@@ -143,8 +143,10 @@ class NativeTransport:
         if self.cancelled.is_set():
             raise TurnCancelled('Generación detenida')
         session = 'aux' if auxiliar else '0'
+        # 1536: una transcripción lleva hasta 752 tokens de audio (30 s) más el
+        # prompt y el texto que devuelve; con 1024 no cabía.
         if auxiliar and not self.aux_ready:
-            self.control(dict(type='session_open', session=session, max_seq_len=1024))
+            self.control(dict(type='session_open', session=session, max_seq_len=1536))
             self.aux_ready = True
         attachments = []
         if image is not None or session in self.reset_sessions:

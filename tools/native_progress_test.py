@@ -63,7 +63,7 @@ class PreviewTest(unittest.TestCase):
         tr.control = lambda obj: controls.append(obj)
         tr.start('prompt', auxiliar=True)
         tr.start('prompt2', auxiliar=True)
-        self.assertEqual(controls, [dict(type='session_open', session='aux', max_seq_len=1024)])
+        self.assertEqual(controls, [dict(type='session_open', session='aux', max_seq_len=1536)])
         sent = [json.loads(line) for line in tr.proc.stdin.getvalue().splitlines()]
         self.assertTrue(all(r['session'] == 'aux' for r in sent))
         self.assertFalse(sent[0]['generation']['close_turn'])

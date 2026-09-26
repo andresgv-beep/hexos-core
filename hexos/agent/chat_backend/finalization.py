@@ -127,7 +127,9 @@ class TurnFinalizer:
             # modelo. Reconstruir desde el archivo mantiene ambos diálogos iguales.
             self.agent.runtime.call({'type': 'reset'})
         corte_avisado, self.agent.context_cut = self.agent.context_cut, None
+        extra = {'transcript': turn.transcript} if turn.transcript else {}
         return dict(reply=output['reply'], work=job, document=turn.document, tools=turn.trace, context_sources=turn.context_sources, progress=self.agent.progress,
+            **extra,
             context_cut=corte_avisado, closure=self.agent.closure(turn.trace, output['reply']),
             diagnostics=dict(format_retries=turn.retries.format_retries, schema_retries=turn.retries.schema_retries,
                              recovery_requests=turn.retries.recovery_requests,

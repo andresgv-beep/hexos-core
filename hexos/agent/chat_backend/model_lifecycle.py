@@ -289,6 +289,9 @@ class ModelLifecycle:
     def attach_audio(self, pcm, sample_rate):
         return self._invoke('attach_audio', pcm, sample_rate)
 
+    def transcribe(self, clip):
+        return self._invoke('transcribe', clip)
+
     def begin_tool(self, messages, operation):
         return self._invoke('begin_tool', messages, operation)
 
