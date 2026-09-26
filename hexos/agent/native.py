@@ -153,7 +153,7 @@ class NativeRuntime:
             schema['minLength'] = 1
         return schema
 
-    def __init__(self,binary,model,ctx,workspace,template,thinking=False):
+    def __init__(self,binary,model,ctx,workspace,template,thinking=False,multimodal=None):
         from jinja2 import Environment
         env=Environment()
         # tojson escapaba cada tilde como \u00ed: seis caracteres y varios tokens
@@ -188,7 +188,7 @@ class NativeRuntime:
         self.log=open(Path(workspace)/'hector-native.log','a')
         if Path(binary).name != 'helios_formatted':
             try:
-                self._transport = NativeTransport(binary, model, ctx, self.log)
+                self._transport = NativeTransport(binary, model, ctx, self.log, multimodal)
                 self._transport.stop_tokens = [] if self.qwen else ['<|tool_response>']
                 self.proc = self._transport.proc
             except Exception:

@@ -14,9 +14,12 @@ cd "$HEXOS_CHECKOUT"
 case "$mode" in
   backend)
     export HELIOS_HOME="$HEXOS_WORKSPACE/.helios"
+    # Opcional: HNF de imagen/audio que acompaña al de texto (Gemma 4 12B).
+    multimodal=()
+    if [[ -n "${HEXOS_MULTIMODAL:-}" ]]; then multimodal=(--multimodal "$HEXOS_MULTIMODAL"); fi
     exec python3 -u -m hexos.agent.chat --workspace "$HEXOS_WORKSPACE" \
       --hera "$HEXOS_CHECKOUT/hera/bin/hera" --memory-home "${HEXOS_MEMORY_HOME:?}" \
-      --runtime "${HEXOS_RUNTIME:?}" --model "${HEXOS_MODEL:?}" \
+      --runtime "${HEXOS_RUNTIME:?}" --model "${HEXOS_MODEL:?}" "${multimodal[@]}" \
       --native-template "${HEXOS_TEMPLATE:?}" --ctx "${HEXOS_CTX:-16384}" --port 8080
     ;;
   ui)

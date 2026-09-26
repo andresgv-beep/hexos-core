@@ -55,8 +55,10 @@ def visible_preview(text, open_thought=False):
 
 
 class NativeTransport:
-    def __init__(self, binary, model, ctx, log):
-        self.proc = subprocess.Popen([binary, '--model', model, '--ctx', str(ctx), '--temp', '0'],
+    def __init__(self, binary, model, ctx, log, multimodal=None):
+        # Gemma 4 12B lleva imagen y audio en un HNF aparte del texto.
+        extra = ['--multimodal', multimodal] if multimodal else []
+        self.proc = subprocess.Popen([binary, '--model', model, *extra, '--ctx', str(ctx), '--temp', '0'],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log,
             env=dict(os.environ, HELIOS_EMBED_MMAP='1', HELIOS_VISION_MMAP='1'))
         self.events = queue.Queue()

@@ -29,6 +29,7 @@ def main():
     parser.add_argument('--ctx', type=int, default=32768)
     parser.add_argument('--hera', help='CLI HERA para recuperar el perfil confirmado')
     parser.add_argument('--memory-home', help='Perfil HERA existente; requiere --hera')
+    parser.add_argument('--multimodal', help='HNF de imagen/audio que acompaña al de texto (Gemma 4 12B)')
     parser.add_argument('--native-template', help='Gemma nativo con plantilla oficial; usar --runtime helios_runtime para progreso y cancelación')
     parser.add_argument('--native-thinking', action='store_true', help='Activar pensamiento de Gemma en el adaptador nativo')
     parser.add_argument('--model-idle-seconds', type=int, default=600,
@@ -38,6 +39,8 @@ def main():
         parser.error('--model-idle-seconds debe ser mayor que cero')
     if args.native_thinking and not args.native_template:
         parser.error('--native-thinking requiere --native-template')
+    if args.multimodal and not args.native_template:
+        parser.error('--multimodal requiere --native-template')
     if bool(args.hera) != bool(args.memory_home):
         parser.error('--hera y --memory-home deben indicarse juntos')
     Path(args.workspace).mkdir(parents=True, exist_ok=True)
@@ -45,7 +48,8 @@ def main():
         from ..native import NativeRuntime
         runtime = ModelLifecycle(
             lambda: NativeRuntime(args.runtime,args.model,args.ctx,args.workspace,
-                                  args.native_template,thinking=args.native_thinking),
+                                  args.native_template,thinking=args.native_thinking,
+                                  multimodal=args.multimodal),
             ctx=args.ctx, thinking=args.native_thinking,
             idle_seconds=args.model_idle_seconds, native=True,
             progressive=Path(args.runtime).name != 'helios_formatted')
