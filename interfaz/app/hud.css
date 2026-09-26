@@ -147,7 +147,7 @@ body { background: var(--hud-bg); color: var(--hud-text); }
 .hud-content-tabs button[aria-pressed="true"] { background: var(--hud-raised); color: var(--hud-bright); border-bottom-color: var(--hud-pink); }
 .hud-content-tabs .hud-expand { margin-left: auto; padding: 0 12px; }
 .hud-content-body { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
-.hud-content-body > iframe { flex: 1; min-height: 300px; width: 100%; border: 0; background: white; }
+.hud-content-body > .preview-fit { flex: 1; min-height: 300px; }
 .hud-content-empty { padding: 22px; color: var(--hud-muted); font-size: 14px; line-height: 1.6; }
 .hud-content-body > .reply-code { margin: 0; border: 0; border-radius: 0; flex: 1; }
 .hud-content-dock footer { padding: 10px 16px; border-top: 1px solid var(--hud-track); }

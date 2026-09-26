@@ -21,3 +21,10 @@ test("base64 aguanta audios largos sin desbordar la pila", () => {
   assert.equal(encoded.length, Math.ceil(bytes.length / 3) * 4);
   assert.equal(atob(encoded.slice(0, 4)).charCodeAt(0), 7);
 });
+
+test("el historial muestra la voz como al enviarla", async () => {
+  const { displayUserText } = await import("../lib/helios/voice");
+  assert.equal(displayUserText("Mensaje de voz (5 s), transcrito: «¿Cómo está el Synology?»"), "🎤 «¿Cómo está el Synology?»");
+  assert.equal(displayUserText("Mira esto:\n\nMensaje de voz (3 s), transcrito: «hola»"), "Mira esto:\n\n🎤 «hola»");
+  assert.equal(displayUserText("Un mensaje normal"), "Un mensaje normal");
+});

@@ -52,3 +52,8 @@ export function canRecord(): boolean {
   return typeof window !== "undefined" && window.isSecureContext && !!navigator.mediaDevices?.getUserMedia
     && typeof MediaRecorder !== "undefined";
 }
+
+/** El historial guarda lo que recibe el modelo; en el chat se ve como al enviarlo. */
+export function displayUserText(text: string): string {
+  return text.replace(/Mensaje de voz \(\d+ s\), transcrito: «([\s\S]*)»$/, "🎤 «$1»");
+}

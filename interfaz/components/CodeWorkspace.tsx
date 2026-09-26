@@ -5,6 +5,7 @@ import { Code2, GripHorizontal, MonitorUp, RotateCcw, Sparkles, X, Maximize2, Mi
 import { ReplyCode } from "./ReplyMarkdown";
 import { type ReplyArtifact } from "@/lib/helios/preview";
 import { usePreviewDocument } from "./usePreviewDocument";
+import { PreviewFrame } from "./PreviewFrame";
 
 export function CodeWorkspace({ artifact, busy, canUndo, onUndo, onClose, onImprove, onCreatePreview, fixedMode }: {
   fixedMode?: "code" | "preview";
@@ -88,7 +89,7 @@ export function CodeWorkspace({ artifact, busy, canUndo, onUndo, onClose, onImpr
     <div className="code-workspace-body">
       {mode === "code" ? <ReplyCode code={artifact.code} language={artifact.language} onImprove={onImprove} />
         : artifact.previewHtml
-          ? <iframe title="Vista previa de la interfaz generada" sandbox="allow-scripts" srcDoc={previewSource} />
+          ? <PreviewFrame title="Vista previa de la interfaz generada" srcDoc={previewSource} />
           : <div className="code-preview-empty">
               <MonitorUp size={38} aria-hidden="true" />
               <h3>Prepara una vista de esta interfaz</h3>

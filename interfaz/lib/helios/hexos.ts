@@ -1,6 +1,7 @@
 import { parseInferenceMetrics, type InferenceMetrics } from "./metrics";
 import { phaseFromHexos, type HeliosPhase } from "./state";
 import { notesDismissed, notesTouched, parseToolActivities, type ToolActivity } from "./tools";
+import { displayUserText } from "./voice";
 
 /** Llega el turno en que HexOS corta el contexto por lleno: lo anterior deja de
  *  estar en la ventana del modelo, aunque siga entero en el archivo. */
@@ -173,7 +174,7 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
     async history(signal) {
       const data = await request("history", { signal });
       if (!Array.isArray(data) || !data.every(row => row && (row.role === "user" || row.role === "assistant") && typeof row.text === "string")) throw new Error("Historial de HexOS no válido");
-      return data.map(({ role, text }) => ({ role, text }));
+      return data.map(({ role, text }) => ({ role, text: role === "user" ? displayUserText(text) : text }));
     },
     async historyPage(before, signal) {
       const data = await request(`history?limit=100${before === undefined ? "" : `&before=${before}`}`, { signal });
@@ -181,7 +182,7 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
           !data.messages.every(row => isRecord(row) && (row.role === "user" || row.role === "assistant") && typeof row.text === "string") ||
           !(data.next_before === null || (Number.isSafeInteger(data.next_before) && Number(data.next_before) > 0)))
         throw new Error("Página de historial de HexOS no válida");
-      return { messages: data.messages.map(({ role, text }) => ({ role, text })), nextBefore: data.next_before as number | null };
+      return { messages: data.messages.map(({ role, text }) => ({ role, text: role === "user" ? displayUserText(String(text)) : text })), nextBefore: data.next_before as number | null };
     },
     async cancel(requestId) {
       const data = await request("cancel", { method: "POST", headers: { "Content-Type": "application/json" },
