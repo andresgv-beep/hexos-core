@@ -3,7 +3,8 @@
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { Code2, GripHorizontal, MonitorUp, RotateCcw, Sparkles, X, Maximize2, Minimize2 } from "lucide-react";
 import { ReplyCode } from "./ReplyMarkdown";
-import { previewDocument, type ReplyArtifact } from "@/lib/helios/preview";
+import { type ReplyArtifact } from "@/lib/helios/preview";
+import { usePreviewDocument } from "./usePreviewDocument";
 
 export function CodeWorkspace({ artifact, busy, canUndo, onUndo, onClose, onImprove, onCreatePreview, fixedMode }: {
   fixedMode?: "code" | "preview";
@@ -16,6 +17,7 @@ export function CodeWorkspace({ artifact, busy, canUndo, onUndo, onClose, onImpr
   onCreatePreview: (code: string, language?: string) => void;
 }) {
   const artifactKey = `${artifact.code}\u0000${artifact.previewHtml ?? ""}`;
+  const previewSource = usePreviewDocument(artifact.previewHtml);
   const defaultMode = artifact.previewHtml ? "preview" : "code";
   const [view, setView] = useState<{ artifactKey: string; mode: "code" | "preview" }>(
     { artifactKey, mode: defaultMode });
@@ -86,7 +88,7 @@ export function CodeWorkspace({ artifact, busy, canUndo, onUndo, onClose, onImpr
     <div className="code-workspace-body">
       {mode === "code" ? <ReplyCode code={artifact.code} language={artifact.language} onImprove={onImprove} />
         : artifact.previewHtml
-          ? <iframe title="Vista previa de la interfaz generada" sandbox="allow-scripts" srcDoc={previewDocument(artifact.previewHtml)} />
+          ? <iframe title="Vista previa de la interfaz generada" sandbox="allow-scripts" srcDoc={previewSource} />
           : <div className="code-preview-empty">
               <MonitorUp size={38} aria-hidden="true" />
               <h3>Prepara una vista de esta interfaz</h3>

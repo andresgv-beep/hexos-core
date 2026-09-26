@@ -3,7 +3,8 @@ import { useState } from "react";
 import { Maximize2, RotateCcw } from "lucide-react";
 import { ReplyCode } from "./ReplyMarkdown";
 import { NasFileViewer } from "./NasFileViewer";
-import { previewDocument, type ReplyArtifact } from "@/lib/helios/preview";
+import { type ReplyArtifact } from "@/lib/helios/preview";
+import { usePreviewDocument } from "./usePreviewDocument";
 
 type Tab = "code" | "preview" | "nas";
 export function ContentDock({ artifact, fileRequest, busy, canUndo, onUndo, onExpandCode, onExpandFile, onImprove, onPreview }: {
@@ -12,6 +13,7 @@ export function ContentDock({ artifact, fileRequest, busy, canUndo, onUndo, onEx
   onImprove: (code: string, language?: string) => void; onPreview: (code: string, language?: string) => void;
 }) {
   const initialTab: Tab = fileRequest ? "nas" : artifact?.previewHtml ? "preview" : "code";
+  const previewSource = usePreviewDocument(artifact?.previewHtml);
   const [selection, setSelection] = useState({ tab: initialTab, nasVisited: initialTab === "nas", artifact, fileRequest });
   if (selection.artifact !== artifact || selection.fileRequest !== fileRequest) {
     const nextTab: Tab = fileRequest && selection.fileRequest !== fileRequest ? "nas"
@@ -31,7 +33,7 @@ export function ContentDock({ artifact, fileRequest, busy, canUndo, onUndo, onEx
         onClose={() => {}} onExpand={onExpandFile} /></div>}
       {tab === "nas" ? null : !artifact ? <div className="hud-content-empty"><p>{tab === "code" ? "El código que abra Helios aparecerá aquí." : "La vista previa de la implementación aparecerá aquí."}</p></div>
         : tab === "code" ? <ReplyCode download code={artifact.code} language={artifact.language} onImprove={onImprove} />
-        : artifact.previewHtml ? <iframe title="Vista previa lateral" sandbox="allow-scripts" srcDoc={previewDocument(artifact.previewHtml)} />
+        : artifact.previewHtml ? <iframe title="Vista previa lateral" sandbox="allow-scripts" srcDoc={previewSource} />
         : <div className="hud-content-empty"><p>Esta implementación todavía no tiene vista previa.</p>
           <button type="button" disabled={busy} onClick={() => onPreview(artifact.code, artifact.language)}>Crear interfaz</button></div>}
     </div>
