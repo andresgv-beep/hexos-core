@@ -117,5 +117,14 @@ class Runner:
                 return dict(next_state, due=now+120, index_progress=receipt)
             if receipt.get('indexed') is not True:
                 raise UncertainEffect('Salida publicada; falta actualizar catálogo')
-            return dict(next_state, state='completed', index_receipt=receipt)
+            return dict(next_state, state='cleaning', index_receipt=receipt)
+        if state == 'cleaning':
+            # Only after the published file was observed: temporaries and, if the
+            # operator enabled replace_original, the original go away here.
+            receipt = self.files.cleanup(job, key)
+            if receipt.get('pending') is True:
+                return dict(next_state, due=now+120, cleanup_progress=receipt)
+            if receipt.get('cleaned') is not True:
+                raise UncertainEffect('Limpieza no comprobada')
+            return dict(next_state, state='completed', cleanup=receipt)
         raise ValueError('Transición no ejecutable: ' + state)

@@ -47,6 +47,9 @@ class NasFiles:
     def publish(self, job, key):
         return self._call(job, key, 'publish')
 
+    def cleanup(self, job, key):
+        return self._call(job, key, 'cleanup')
+
     def stop(self, job, key):
         return self._call(job, key, 'stop', stop=True)
 

@@ -60,3 +60,6 @@ class Simulation:
 
     def index(self, job, key):
         return self._once(key, dict(indexed=True, simulated=True))
+
+    def cleanup(self, job, key):
+        return self._once(key, dict(cleaned=True, removed=[], original_removed=False, simulated=True))

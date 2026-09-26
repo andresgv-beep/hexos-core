@@ -23,6 +23,8 @@ def load(workspace):
         if path_argument(config['files'][key])=='/':
             raise ValueError('Ruta específica requerida para '+key)
     config['files']['libraries']=[path_argument(p) for p in config['files']['libraries']]
+    if not isinstance(config['files'].get('replace_original', False), bool):
+        raise ValueError('replace_original debe ser true o false')
     if '/' in config['files']['libraries']:
         raise ValueError('No se admite / como biblioteca de películas')
     if any(type(config['preset_version'].get(k)) is not int for k in ('VersionMajor','VersionMinor','VersionMicro')):

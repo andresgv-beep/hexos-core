@@ -50,7 +50,7 @@ def control(message, archive):
         if (job_root/'cancel.json').exists():
             return dict(status='cancelled', error='La ficha está cancelada')
         action_id = message['action_id']
-        if not re.fullmatch('[a-f0-9]{64}', action_id) or request['operation'] not in ('stage','verify','publish','index'):
+        if not re.fullmatch('[a-f0-9]{64}', action_id) or request['operation'] not in ('stage','verify','publish','index','cleanup'):
             raise ValueError('Operación inválida')
         root = job_root/'actions'/action_id
         root.mkdir(parents=True, exist_ok=True)

@@ -57,7 +57,9 @@ class FilesTest(unittest.TestCase):
         return output
 
     def test_copy_complete_preserves_original_and_subfolder_destination(self):
-        receipt=self.staged()
+        # Biblioteca en otro volumen (p. ej. /volume4): se copia y se comprueba el hash.
+        with patch.object(ops,'same_filesystem',return_value=False):
+            receipt=self.staged()
         self.assertEqual(Path(receipt['path']).read_bytes(),self.source.read_bytes())
         self.assertEqual(receipt['sha256'],hashlib.sha256(self.source.read_bytes()).hexdigest())
         self.assertIn('/'+self.job['id']+'/',receipt['container_path'])
@@ -80,7 +82,8 @@ class FilesTest(unittest.TestCase):
 
     def test_low_space_fails_before_copy(self):
         from types import SimpleNamespace
-        with patch('os.fstatvfs',return_value=SimpleNamespace(f_bavail=0,f_frsize=4096)):
+        with patch('os.fstatvfs',return_value=SimpleNamespace(f_bavail=0,f_frsize=4096)), \
+                patch.object(ops,'same_filesystem',return_value=False):
             with self.assertRaises(OSError): self.staged()
         self.assertFalse(ops.paths(self.request)[2].exists())
 
@@ -91,6 +94,56 @@ class FilesTest(unittest.TestCase):
         self.assertEqual(self.source.read_bytes(),b'original content')
         self.assertTrue(receipt['original_preserved'])
 
+    def published(self):
+        output=self.encoded()
+        self.job['publication']=ops.publish(self.request,self.root,lambda *args:None)
+        return output
+
+    def test_stage_on_same_volume_links_instead_of_copying(self):
+        staging=self.staged()
+        staged=Path(staging['path'])
+        self.assertEqual(staged.stat().st_ino,self.source.stat().st_ino)
+        self.assertIsNone(staging['sha256'])
+        self.assertEqual(self.source.read_bytes(),b'original content')
+
+    def test_publish_on_same_volume_moves_without_leftover_part(self):
+        output=self.published()
+        destination=Path(self.job['publication']['path'])
+        self.assertEqual(destination.stat().st_ino,output.stat().st_ino)
+        self.assertEqual(list(destination.parent.glob('.hexos-*')),[])
+
+    def test_cleanup_removes_temporaries_and_keeps_original_by_default(self):
+        output=self.published()
+        staged=Path(self.job['staging']['path'])
+        receipt=ops.cleanup(self.request,self.root,lambda *args:None)
+        self.assertTrue(receipt['cleaned'])
+        self.assertFalse(receipt['original_removed'])
+        self.assertFalse(staged.exists() or output.exists())
+        self.assertEqual(self.source.read_bytes(),b'original content')
+        self.assertEqual(Path(self.job['publication']['path']).read_bytes(),b'encoded movie')
+        # Idempotente: una segunda pasada no falla ni borra nada más.
+        self.assertEqual(ops.cleanup(self.request,self.root,lambda *args:None)['removed'],[])
+
+    def test_cleanup_replaces_original_only_after_checking_published_file(self):
+        self.published()
+        self.config['replace_original']=True
+        receipt=ops.cleanup(self.request,self.root,lambda *args:None)
+        self.assertTrue(receipt['original_removed'])
+        self.assertFalse(self.source.exists())
+        self.assertEqual(Path(self.job['publication']['path']).read_bytes(),b'encoded movie')
+
+    def test_cleanup_keeps_original_if_published_file_differs(self):
+        self.published()
+        self.config['replace_original']=True
+        self.job['validation']=dict(self.job['validation'],sha256='0'*64)
+        with self.assertRaises(Rejected):ops.cleanup(self.request,self.root,lambda *args:None)
+        self.assertEqual(self.source.read_bytes(),b'original content')
+
+    def test_cleanup_without_checked_publication_does_nothing(self):
+        output=self.encoded()
+        with self.assertRaises(Rejected):ops.cleanup(self.request,self.root,lambda *args:None)
+        self.assertTrue(output.exists())
+
     def test_publish_between_filesystems(self):
         if not Path('/dev/shm').is_dir(): self.skipTest('Requiere segundo filesystem')
         with tempfile.TemporaryDirectory(dir='/dev/shm') as other:
@@ -99,6 +152,7 @@ class FilesTest(unittest.TestCase):
             output=self.encoded()
             receipt=ops.publish(self.request,self.root,lambda *args:None)
             self.assertEqual(Path(receipt['path']).read_bytes(),output.read_bytes())
+            self.assertEqual(list(Path(receipt['path']).parent.glob('.hexos-*')),[])
 
     def test_original_changed_during_conversion_prevents_publication(self):
         self.encoded();self.source.write_bytes(b'original replaced')

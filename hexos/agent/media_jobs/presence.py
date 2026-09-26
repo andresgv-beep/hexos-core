@@ -50,7 +50,11 @@ def observe(workspace, config, job):
             raise ValueError('Ruta observada distinta de la solicitada')
     observed['source'] = 'live_ssh_stat'
     outputs = [item for name,item in observed['files'].items() if name in ('encoded','verified')]
-    observed['recorded_output_missing'] = bool(job.get('completion') and outputs and
+    cleaned = job.get('cleanup') or {}
+    observed['recorded_output_missing'] = bool(job.get('completion') and outputs and not cleaned and
         all(item['status'] == 'missing' for item in outputs))
     observed['note'] = 'Presencia actual; no comprueba calidad, integridad ni vuelve a validar el vídeo.'
+    if cleaned:
+        observed['note'] += (' Temporales borrados tras publicar: su ausencia es lo esperado.' +
+                             (' El original se sustituyó por la película optimizada.' if cleaned.get('original_removed') else ''))
     return observed

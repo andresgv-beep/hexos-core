@@ -3,7 +3,7 @@ import math
 
 TERMINAL = frozenset({'completed', 'failed', 'cancelled'})
 STATES = TERMINAL | {'queued', 'copying', 'ready', 'running', 'recovering',
-                     'verifying', 'publishing', 'indexing', 'cancel_requested', 'blocked', 'awaiting_review'}
+                     'verifying', 'publishing', 'indexing', 'cleaning', 'cancel_requested', 'blocked', 'awaiting_review'}
 
 
 def check_delay(eta_seconds=None, first=False):

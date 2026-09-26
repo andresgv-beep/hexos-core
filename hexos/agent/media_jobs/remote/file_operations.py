@@ -1,4 +1,5 @@
-"""Operaciones de una ficha; cada efecto conserva su temporal y su evidencia."""
+"""Operaciones de una ficha. Cada efecto deja evidencia; los temporales se borran
+en cleanup, solo después de comprobar la película publicada."""
 import fcntl
 import os
 from pathlib import Path
@@ -27,6 +28,10 @@ def paths(request):
     return path, destination, staged, output
 
 
+def same_filesystem(path, directory_path):
+    return os.stat(str(path)).st_dev == os.stat(str(directory_path)).st_dev
+
+
 def stage(request, root, checkpoint):
     job, config = request['job'], request['config']
     source, destination, staged, _ = paths(request)
@@ -34,13 +39,20 @@ def stage(request, root, checkpoint):
     if destination.exists() or destination.is_symlink():
         raise Rejected('Ya existe una salida en el destino')
     staged.parent.mkdir(parents=True, exist_ok=True)
-    temporary = staged.with_name(staged.name+'.part')
-    evidence = copy_checked(source, temporary, job['source']['identity'], checkpoint)
-    metadata = probe(temporary, config, root, checkpoint)
-    checkpoint()
-    os.link(str(temporary), str(staged), follow_symlinks=False)
-    if job.get('layout_version',1)==2:
-        temporary.unlink()
+    if same_filesystem(source, staged.parent):
+        # Same volume: the encoder reads the original through a hard link, no copy.
+        checkpoint()
+        os.link(str(source), str(staged), follow_symlinks=False)
+        evidence = dict(sha256=None)
+        metadata = probe(staged, config, root, checkpoint)
+    else:
+        temporary = staged.with_name(staged.name+'.part')
+        evidence = copy_checked(source, temporary, job['source']['identity'], checkpoint)
+        metadata = probe(temporary, config, root, checkpoint)
+        checkpoint()
+        os.link(str(temporary), str(staged), follow_symlinks=False)
+        if job.get('layout_version',1)==2:
+            temporary.unlink()
     sync_directory(staged.parent)
     if job.get('layout_version',1)==2:
         save(staged.parent/'estado.json', dict(job_id=job['id'],source=str(source),destination=str(destination),status='copied'))
@@ -89,10 +101,20 @@ def publish(request, root, checkpoint):
     inspect(source, job['source']['identity'])
     inspect(output, validated['identity'])
     temporary = destination.with_name('.hexos-'+request['run_id']+'.part')
-    # La copia vive en el filesystem de destino; link publica sin reemplazar.
-    evidence = copy_checked(output, temporary, validated['identity'], checkpoint)
-    if evidence['sha256'] != validated['sha256']:
-        raise Rejected('La salida cambió desde su validación')
+    if same_filesystem(output, destination.parent):
+        # Same volume: move by linking the validated file, no second copy.
+        if temporary.exists() or temporary.is_symlink():
+            temporary.unlink()
+        os.link(str(output), str(temporary), follow_symlinks=False)
+        evidence = dict(identity=inspect(temporary), sha256=sha256(temporary, checkpoint))
+        if evidence['sha256'] != validated['sha256']:
+            temporary.unlink()
+            raise Rejected('La salida cambió desde su validación')
+    else:
+        # La copia vive en el filesystem de destino; link publica sin reemplazar.
+        evidence = copy_checked(output, temporary, validated['identity'], checkpoint)
+        if evidence['sha256'] != validated['sha256']:
+            raise Rejected('La salida cambió desde su validación')
     checkpoint()
     parent = directory(destination.parent)
     try:
@@ -102,6 +124,7 @@ def publish(request, root, checkpoint):
             checkpoint()
             inspect(source, job['source']['identity'])
             os.link(temporary.name, destination.name, src_dir_fd=parent, dst_dir_fd=parent, follow_symlinks=False)
+            os.unlink(temporary.name, dir_fd=parent)
             os.fsync(parent)
         observed = inspect(destination, evidence['identity'])
         if job.get('layout_version',1)==2:
@@ -122,4 +145,41 @@ def observe_publication(request, root, checkpoint):
     return dict(path=str(destination), identity=actual, verified=True)
 
 
-OPERATIONS = dict(stage=stage, verify=verify, publish=publish, index=observe_publication)
+def cleanup(request, root, checkpoint):
+    """After a checked publication: drop the staged input and encoder output and,
+    if the operator asked for it, the original. Missing files are already clean."""
+    job, config = request['job'], request['config']
+    source, destination, staged, output = paths(request)
+    names = layout(job, request['run_id'])
+    verified = Path(config['output'])/'.hexos-media'/names['verified']
+    publication = job.get('publication') or {}
+    if publication.get('published') is not True or publication.get('path') != str(destination):
+        raise Rejected('No consta una publicación comprobada; no se limpia nada')
+    inspect(destination, publication['identity'])
+    removed = []
+    for path in (staged, staged.with_name(staged.name+'.part'), output, verified):
+        if path.is_file() and not path.is_symlink():
+            path.unlink()
+            removed.append(str(path))
+    for folder in (staged.parent, verified.parent):
+        state = folder/'estado.json'
+        if state.is_file():
+            state.unlink()
+        try:
+            folder.rmdir()
+        except OSError:
+            pass
+    original_removed = False
+    if config.get('replace_original') is True:
+        checkpoint()
+        if sha256(destination, checkpoint) != job['validation']['sha256']:
+            raise Rejected('La película publicada no coincide con la validada; se conserva el original')
+        inspect(source, job['source']['identity'])
+        source.unlink()
+        sync_directory(source.parent)
+        original_removed = True
+    return dict(cleaned=True, removed=removed, original_removed=original_removed,
+                kept=[str(destination)] + ([] if original_removed else [str(source)]))
+
+
+OPERATIONS = dict(stage=stage, verify=verify, publish=publish, index=observe_publication, cleanup=cleanup)
