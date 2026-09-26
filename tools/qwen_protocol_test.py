@@ -10,6 +10,19 @@ class Tests(unittest.TestCase):
             with self.assertRaises(ValueError):q.calls('<tool_call>'+value+'</tool_call>')
         with self.assertRaises(ValueError):q.calls('<tool_call>{"name":"a","arguments":{}}</tool_call>extra')
 
+    def test_size_arithmetic_is_folded_outside_strings(self):
+        # La llamada literal que tumbó un turno: «Expecting ',' delimiter».
+        raw = ('<tool_call>\n{"name": "nas_find", "arguments": {"device": "Synology", "extensions": '
+               '["mkv", "mp4", "avi"], "min_bytes": 20 * 1024 * 1024 * 1024, '
+               '"max_bytes": 40*1024*1024*1024}}\n</tool_call>')
+        args = q.calls(raw)[0]['arguments']
+        self.assertEqual((args['min_bytes'], args['max_bytes']), (20*1024**3, 40*1024**3))
+        kept = q.calls('<tool_call>{"name":"a","arguments":{"query":"2 * 3 \\" 4*5","n":2*3}}</tool_call>')
+        self.assertEqual(kept[0]['arguments'], {'query': '2 * 3 " 4*5', 'n': 6})
+        for bad in ('"n":2*x', '"n":2**3', '"n":eval(1)'):
+            with self.subTest(bad), self.assertRaises(ValueError):
+                q.calls('<tool_call>{"name":"a","arguments":{' + bad + '}}</tool_call>')
+
     def test_results_and_thought(self):
         source = [dict(role='assistant', tool_calls=[], tool_responses=[
             dict(name='note_list',response={'total':2})])]
