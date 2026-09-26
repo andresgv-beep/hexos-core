@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 from uuid import uuid4
-from .. import notes
+from .. import notes, task_notices
 from ..work import KINDS, now, string, strings
 from .references import PEDIR_CERRAR, PEDIR_VER, NOTA_MENCIONADA
 from .recovery import RETRY
@@ -107,6 +107,12 @@ class TurnFinalizer:
         if missing_sources:
             output['reply'] = (output['reply'].rstrip() + '\n\nFuentes consultadas:\n' +
                                '\n'.join('- ' + url for url in missing_sources))
+        if turn.task_notices:
+            # Se da por contado lo que la respuesta nombra; lo que calló lo añade HexOS.
+            olvidados = task_notices.unmentioned(output['reply'], turn.task_notices)
+            if olvidados:
+                output['reply'] = output['reply'].rstrip() + '\n\n' + task_notices.fallback_line(olvidados)
+            task_notices.mark_reported(store.db, [n['key'] for n in turn.task_notices], turn.uid)
         recordado = self.agent.harvest_facts(store, turn.text, turn.uid, turn.trace)
         if recordado:
             output['reply'] = output['reply'].rstrip() + '\n\n' + recordado

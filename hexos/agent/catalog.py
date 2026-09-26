@@ -314,7 +314,7 @@ EMPTY_STRING_FIELDS = frozenset({('nas.find', 'query'), ('nas.search', 'query'),
 NATIVE_DESCRIPTIONS = {
     'media.options': 'Antes de comprimir consulta perfiles y bibliotecas aquí; no pidas al usuario sus IDs. No convierte.',
     'media.prepare': 'Dos formas: SOLO scan_id/profile_id/paths; O scan_id/profile_id/count=1..5 con root/query/min_bytes/max_bytes/extensions. No mezcles. Conserva filtros previos con count. Devuelve plan_id sin iniciar.',
-    'media.start': 'Aceptación del plan: llama con plan_id; confirma encolado solo tras éxito. Idempotente; no implica fin. Sin avisos automáticos al chat.',
+    'media.start': 'Aceptación del plan: llama con plan_id; confirma encolado solo tras éxito. Idempotente; no implica fin. El final se cuenta después.',
     'media.control': 'Controlar batch_id: operation=pause|resume|cancel. Conserva originales; la parada se confirma después.',
     'media.jobs': 'Consultar lotes y revisiones internas pendientes; distingue simulation de live.',
     'media.job': 'Ficha id: recibos históricos y presencia actual por SSH; revisión no es conversión.',

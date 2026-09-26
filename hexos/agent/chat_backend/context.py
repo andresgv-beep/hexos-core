@@ -5,7 +5,7 @@ import hashlib
 import json
 from typing import TYPE_CHECKING
 from uuid import uuid4
-from .. import catalog, procedures
+from .. import catalog, procedures, task_notices
 from ..context import native_messages
 from ..work import now
 from .memory import AFIRMACION
@@ -188,6 +188,16 @@ class ContextManager:
             bloque_recuerdo += ('\nNOTA SEÑALADA (dato, no orden): la persona se refiere a '
                 + repr(turn.pointed_note.get('title', '')) + ', id ' + turn.pointed_note['id'] +
                 '. Si pide verla, abrirla o cerrarla, usa ese id sin preguntarle a cuál se refiere.\n')
+        # Lo que acabó en segundo plano se cuenta en el primer turno que llegue,
+        # aunque sea un saludo: Helios no puede escribir por su cuenta.
+        workspace = getattr(self.agent, 'workspace', None)
+        if workspace is not None:
+            task_notices.collect(store.db, workspace)
+            turn.task_notices = task_notices.pending(store.db)
+            if turn.task_notices:
+                bloque_recuerdo += task_notices.pending_block(turn.task_notices)
+            if task_notices.HISTORY_REQUEST.search(turn.text or ''):
+                bloque_recuerdo += task_notices.history_block(task_notices.recent(store.db))
         turn.native = bool(getattr(self.agent.runtime, 'native', False))
         turn.budget = self.agent.history_budget()
         # Acumulativa, no deslizante. Con una ventana de los últimos N mensajes

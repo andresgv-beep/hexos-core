@@ -96,6 +96,7 @@ class TurnState:
     document: dict | None = None
     prompt_text: str = ''
     pointed_note: dict | None = None
+    task_notices: list = field(default_factory=list)
     listing_followup: bool = False
     reading_started: float | None = None
     document_read_mark: tuple | None = None

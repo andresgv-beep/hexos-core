@@ -56,7 +56,7 @@ class ReplyPolicy:
                 parts[i] = 'No consta un encolado confirmado en este turno; anunciarlo no inicia la conversión.'
                 changed = True
             elif cls.NOTIFICATION.search(plain):
-                parts[i] = 'No hay avisos automáticos al chat; puedes preguntarme por el progreso.'
+                parts[i] = 'No puedo escribirte por mi cuenta: cuando termine te lo contaré en cuanto me escribas.'
                 changed = True
         return ' '.join(parts) if changed else reply
 
@@ -65,7 +65,8 @@ class ReplyPolicy:
         if cls.media_reply_correction(reply, trace) != reply:
             return ('Distingue preparar, encolar y convertir usando resultados comprobados. '
                     'No afirmes haber encolado sin éxito de media_start. No prometas avisos '
-                    'automáticos al chat: no están implementados. Corrige la respuesta o '
+                    'por tu cuenta: no puedes escribir sin que te escriban; lo que termine se '
+                    'cuenta en el siguiente mensaje de la persona. Corrige la respuesta o '
                     'completa únicamente la acción solicitada por la persona.')
         return None
 
