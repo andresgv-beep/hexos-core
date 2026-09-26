@@ -125,8 +125,11 @@ def mark_reported(db, keys, turn_id, clock=time.time):
 
 
 def _plain(text):
+    # Sin tildes ni puntuación: el modelo escribió «Anillos: Las dos Torres»
+    # para la carpeta «Anillos Las dos Torres», y eso ya es nombrarla.
     table = str.maketrans('áéíóúüñ', 'aeiouun')
-    return re.sub(r'\s+', ' ', (text or '').lower().translate(table)).strip()
+    words = re.sub(r'[^\w\s]', ' ', (text or '').lower().translate(table))
+    return ' ' + ' '.join(words.split()) + ' '
 
 
 def unmentioned(reply, notices):

@@ -100,6 +100,12 @@ class TaskNoticesTest(unittest.TestCase):
         notices = [dict(title='Parque Jurásico 2', outcome='terminada', body={})]
         self.assertEqual(task_notices.unmentioned('Ya terminó parque jurasico 2, ocupa 7 GB.', notices), [])
         self.assertEqual(len(task_notices.unmentioned('¡Hola! ¿Qué tal?', notices)), 1)
+        # Caso real: la carpeta no lleva los dos puntos que puso el modelo.
+        anillos = [dict(title='El Señor de los Anillos Las dos Torres', outcome='terminada', body={})]
+        self.assertEqual(task_notices.unmentioned(
+            'La película *El Señor de los Anillos: Las dos Torres* ya ha sido procesada.', anillos), [])
+        # Palabras enteras: «Dune» no se da por nombrada dentro de «Dunes».
+        self.assertEqual(len(task_notices.unmentioned('Las Dunes de Bolonia', [dict(title='Dune', outcome='x', body={})])), 1)
 
     def test_history_request_is_recognised_and_greeting_is_not(self):
         for text in ('¿Qué tareas has terminado?', 'enséñame el historial de tareas',
