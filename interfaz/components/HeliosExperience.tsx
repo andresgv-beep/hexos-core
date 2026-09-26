@@ -136,6 +136,8 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const [codeArtifact, setCodeArtifact] = useState<ReplyArtifact | null>(null);
   const [codeOpen, setCodeOpen] = useState(false);
   const [codeFloating, setCodeFloating] = useState(false);
+  // Solo se edita código con la ventana a la vista; oculta, el chat es chat.
+  const editingCode = !mobile && codeFloating && codeOpen ? codeArtifact : null;
   const [fileFloating, setFileFloating] = useState<{ id?: string } | null>(null);
   const [codeHistory, setCodeHistory] = useState<ReplyArtifact[]>([]);
   const [previous, setPrevious] = useState<HistoryMessage[]>([]);
@@ -425,7 +427,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       if (forzado) reenvioPendiente.current = { text: forzado, options };
       return;
     }
-    const editingArtifact = !forzado && codeOpen ? codeArtifact : null;
+    const editingArtifact = forzado ? null : editingCode;
     const visibleQuestion = options?.displayText ?? question;
     const text = visibleQuestion + attachments.map(file => `\n\nAdjunto: ${file.name}`).join("");
     // La imagen viaja aparte, en su propio campo; solo los documentos van en el texto.
@@ -646,17 +648,18 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
           hasEarlier={historyNext !== null} olderLoading={olderLoading} onLoadEarlier={loadOlderHistory}
           onReplyComplete={() => setRevealing(false)} onImproveCode={improveCode} onPreviewCode={previewCode} />
     <section className="conversation" aria-label="Chat con Helios">
-      {!mobile && !codeOpen && (codeArtifact || historicalArtifacts.length > 0) &&
+      {!mobile && !editingCode && (codeArtifact || historicalArtifacts.length > 0) &&
         <button type="button" className="history-code-open" onClick={() => {
           if (codeArtifact) setCodeOpen(true);
           else openHistoricalArtifact(historicalArtifacts[historicalArtifacts.length - 1]);
+          setCodeFloating(true);
         }}><Code2 size={15} aria-hidden="true" /> Abrir implementación</button>}
       {!!attachments.length && <ChatAttachments files={attachments} onRemove={removeAttachment} />}
       {attachmentError && <p className="attachment-error" role="alert">{attachmentError}</p>}
       <form className="composer" onSubmit={send} onDragOver={event => { if (event.dataTransfer.types.includes("Files")) event.preventDefault(); }} onDrop={event => { event.preventDefault(); if (!sending) void addAttachments(Array.from(event.dataTransfer.files)); }}>
         <AttachmentButton onSelect={files => void addAttachments(files)} disabled={sending} />
         <MessageSquare className="composer-spark" size={19} aria-hidden="true" />
-        <input ref={inputRef} aria-label="Mensaje para Helios" aria-describedby={connection !== "ready" ? "connection-note" : undefined} placeholder={codeOpen && codeArtifact ? "Pide un cambio en esta implementación…" : "Escribe a Helios…"} value={draft} maxLength={4000} onChange={event => updateDraft(event.target.value)} />
+        <input ref={inputRef} aria-label="Mensaje para Helios" aria-describedby={connection !== "ready" ? "connection-note" : undefined} placeholder={editingCode ? "Pide un cambio en esta implementación…" : "Escribe a Helios…"} value={draft} maxLength={4000} onChange={event => updateDraft(event.target.value)} />
         {sending ? <button className="send-button" type="button" onClick={() => void stopGeneration()}
           disabled={!canStop || stopping || !transport.cancel} aria-label={stopping ? "Deteniendo generación" : "Detener generación"}>
           <Square size={18} /></button>
@@ -696,7 +699,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       onImproveCode={improveCode} onPreviewCode={previewCode} />}
     {!mobile && codeFloating && codeOpen && codeArtifact && <CodeWorkspace artifact={codeArtifact} busy={sending}
       canUndo={Boolean(codeHistory.length || fallbackArtifact)} onUndo={undoCodeArtifact}
-      onClose={() => { setCodeFloating(false); inputRef.current?.focus(); }} onImprove={improveCode} onCreatePreview={previewCode} />}
+      onClose={() => { setCodeFloating(false); setCodeOpen(false); inputRef.current?.focus(); }} onImprove={improveCode} onCreatePreview={previewCode} />}
     {access && <div className="access-backdrop">
       <div className="access-panel" role="dialog" aria-modal="true" aria-labelledby="access-title">
         <h2 id="access-title" className="panel-title">
