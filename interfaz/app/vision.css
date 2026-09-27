@@ -1,0 +1,246 @@
+/* Helios · visión: carbón con grano, contornos dorados y la conversación en el centro.
+   Va después de las demás hojas: define la paleta --hud-* para que los diálogos
+   y paneles que ya existen la adopten sin tocarlos uno a uno. */
+:root {
+  --v-bg: #161616;
+  --v-gold: #e8b04f;
+  --v-gold-soft: #f4c46a;
+  --v-text: #f3efe8;
+  --v-muted: #aba69e;
+  --v-glass: rgba(255, 236, 208, 0.065);
+  --v-line: rgba(255, 255, 255, 0.07);
+  --v-line-strong: rgba(232, 176, 79, 0.30);
+  --v-rim: rgba(240, 186, 90, 0.72);
+  --v-highlight: rgba(255, 224, 165, 0.90);
+  --v-glow: 0 0 14px rgba(232, 176, 79, 0.32), 0 0 44px rgba(232, 176, 79, 0.10);
+  --v-lift: 0 14px 36px rgba(0, 0, 0, 0.55);
+  --v-radius: 10px;
+  --v-font: Manrope, "Segoe UI", system-ui, sans-serif;
+  --v-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --hud-bg: #161616;
+  --hud-panelA: #1d1c1b;
+  --hud-panelB: #1a1918;
+  --hud-chat: #181817;
+  --hud-code: #121212;
+  --hud-input: #141414;
+  --hud-raised: #262523;
+  --hud-frame: #4a3f2c;
+  --hud-track: #2a2927;
+  --hud-tick: #6b5a3a;
+  --hud-line: #34312c;
+  --hud-userBubble: #252422;
+  --hud-heliosBubble: #1b1a19;
+  --hud-label: #d8cfc0;
+  --hud-muted: #aba69e;
+  --hud-dim: #8a857d;
+  --hud-text: #f3efe8;
+  --hud-bright: #fffaf1;
+  --hud-userText: #f3efe8;
+  --hud-codeHi: #f0c77a;
+  --hud-onPink: #1a1206;
+  --hud-accent: #e8b04f;
+  --hud-pink: #f4c46a;
+  font-family: var(--v-font);
+}
+body { background: var(--v-bg); color: var(--v-text); }
+
+/* Superficies de cristal con el contorno encendido. */
+.vision-layout :is(.composer, .vision-workspace, .vision-system),
+:is(.chat-history, .nas-file-viewer, .core-viewer, .code-workspace, .window-glass, .access-panel, .viewer-glass) {
+  background: var(--v-glass);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border: 1px solid var(--v-rim);
+  border-radius: var(--v-radius);
+  box-shadow: inset 0 1px 0 var(--v-highlight), var(--v-lift), var(--v-glow);
+  clip-path: none;
+}
+:is(.chat-history, .nas-file-viewer, .core-viewer, .code-workspace, .window-glass, .access-panel, .viewer-glass) {
+  background: rgba(26, 25, 24, 0.94);
+  border-top: 1px solid var(--v-rim);
+}
+
+/* Lienzo: carbón plano, viñeta hacia los bordes y grano fino. */
+.hud-layout.vision-layout {
+  --phase-color: var(--v-gold) !important;
+  flex-direction: row; gap: 0; padding: 0;
+  background: var(--v-bg); color: var(--v-text); font-family: var(--v-font);
+}
+.vision-layout::before, .vision-layout::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+.vision-layout::before {
+  background:
+    radial-gradient(420px 420px at 51% 64%, rgba(232, 176, 79, 0.07), transparent 70%),
+    radial-gradient(ellipse 75% 70% at 50% 45%, transparent 40%, rgba(0, 0, 0, 0.55) 100%);
+}
+.vision-layout::after {
+  opacity: .09;
+  background-size: 240px 240px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.vision-layout > :is(.vision-rail, .vision-main, .vision-workspace) { position: relative; z-index: 1; }
+
+/* Raíl de secciones. */
+.vision-rail {
+  width: 76px; flex-shrink: 0; box-sizing: border-box; padding: 88px 0 20px;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  border-right: 1px solid var(--v-line);
+}
+.vision-rail button {
+  width: 48px; height: 48px; border-radius: 8px; border: 0; background: transparent;
+  display: flex; align-items: center; justify-content: center; color: var(--v-muted); cursor: pointer;
+}
+.vision-rail button:hover { color: var(--v-text); background: var(--v-line); }
+.vision-rail button:is([aria-current="page"], [aria-pressed="true"]) { color: var(--v-text); background: var(--v-line); }
+.vision-rail button:focus-visible { outline: 2px solid var(--v-gold); outline-offset: 2px; }
+.vision-rail-gap { flex-grow: 1; }
+
+.vision-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+/* Cabecera: el emblema es la presencia de Helios. */
+.vision-header { height: 76px; flex-shrink: 0; box-sizing: border-box; padding: 0 28px; display: flex; align-items: center; gap: 18px; }
+.vision-emblem { width: 34px; height: 34px; flex-shrink: 0; filter: drop-shadow(0 0 6px rgba(232, 176, 79, 0.35)); }
+.vision-emblem > span {
+  display: block; width: 100%; height: 100%; background: var(--v-text);
+  -webkit-mask: url(/helios-emblem.png) center / contain no-repeat;
+  mask: url(/helios-emblem.png) center / contain no-repeat;
+}
+.vision-layout:is(.phase-thinking, .phase-tool, .phase-responding) .vision-emblem {
+  filter: drop-shadow(0 0 18px rgba(232, 176, 79, 0.8)); animation: vision-work 1.6s ease-in-out infinite;
+}
+.vision-layout:is(.phase-thinking, .phase-tool, .phase-responding) .vision-emblem > span { background: var(--v-gold); }
+@keyframes vision-work { 0%, 100% { opacity: .7; } 50% { opacity: 1; } }
+.vision-brand { display: flex; flex-direction: column; gap: 2px; }
+.vision-brand strong { font-family: "Russo One", var(--v-font); font-weight: 400; font-size: 21px; letter-spacing: .05em; line-height: 1; color: var(--v-text); }
+.vision-brand span { font-size: 12px; color: var(--v-muted); }
+.vision-search {
+  flex: 0 1 520px; margin: 0 auto; height: 42px; box-sizing: border-box; padding: 0 14px;
+  display: flex; align-items: center; gap: 12px; cursor: pointer;
+  border-radius: 8px; border: 1px solid var(--v-line-strong); background: var(--v-glass);
+  backdrop-filter: blur(22px) saturate(140%); -webkit-backdrop-filter: blur(22px) saturate(140%);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.30); color: var(--v-muted); font: 400 14px var(--v-font); text-align: left;
+}
+.vision-search > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vision-search kbd { font: 12px var(--v-mono); padding: 2px 8px; border-radius: 6px; border: 1px solid var(--v-line-strong); }
+.vision-search:hover { color: var(--v-text); }
+.vision-chip {
+  height: 38px; padding: 0 14px; border-radius: 7px; border: 1px solid var(--v-line-strong); background: transparent;
+  color: var(--v-text); font: 600 13px var(--v-font); display: inline-flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap;
+}
+.vision-chip:hover { border-color: var(--v-rim); }
+.vision-chip[aria-pressed="true"] svg { color: var(--v-gold); }
+.vision-chip:disabled { opacity: .6; cursor: default; }
+:is(.vision-search, .vision-chip):focus-visible { outline: 2px solid var(--v-gold); outline-offset: 2px; }
+
+/* Conversación centrada. */
+.vision-conversation { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; }
+.vision-conversation .hud-chat-scroll { flex: 1; min-height: 0; width: 100%; overflow-y: auto; padding: 26px 0 18px; box-sizing: border-box; scrollbar-gutter: stable both-edges; }
+.vision-conversation .hud-chat-messages { width: min(760px, calc(100% - 48px)); margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+.vision-conversation .message-author { display: none; }
+.vision-layout .vision-conversation :is(.stream-question, .hud-saved-message.user) {
+  align-self: flex-end; max-width: 78%; margin: 0; padding: 13px 18px;
+  border-radius: 12px 12px 3px 12px; border: 1px solid var(--v-line); border-right: 1px solid var(--v-line);
+  background: rgba(255, 255, 255, 0.08); color: var(--v-text); font-size: 16px; line-height: 1.55; white-space: pre-wrap;
+}
+.vision-layout .vision-conversation :is(.stream-body, .hud-saved-message.assistant) {
+  margin: 0; padding: 0; background: none; border: 0; max-height: none;
+}
+.vision-layout .vision-conversation .stream-turn { display: flex; flex-direction: column; gap: 20px; margin: 0; }
+.vision-layout .vision-conversation :is(.helios-answer, .helios-answer :is(p, ul, ol), .hud-saved-message) { font-size: 17px; line-height: 1.6; color: var(--v-text); }
+.vision-layout .vision-conversation .helios-answer :is(li::marker) { color: var(--v-gold); }
+.vision-layout .vision-conversation .helios-answer strong { color: var(--hud-bright); }
+.vision-layout .vision-conversation :is(.reply-status, .reply-progress li) { color: var(--v-muted); font-size: 15px; }
+.vision-layout .vision-conversation .reply-caveat { border-left-color: var(--v-gold); background: rgba(232, 176, 79, 0.08); color: #e6cfa6; border-radius: 0 6px 6px 0; }
+.vision-layout .vision-conversation .reply-code { border-radius: var(--v-radius); border-color: var(--v-line); background: #121212; }
+.vision-layout .vision-conversation .history-code-open { align-self: flex-start; }
+.vision-layout .hud-welcome { padding: 18vh 20px 0; }
+.vision-layout .hud-welcome h2 { font-family: "Russo One", var(--v-font); font-weight: 400; font-size: 26px; letter-spacing: .02em; color: var(--v-text); }
+.vision-layout .hud-welcome p { color: var(--v-muted); }
+
+/* Cuadro de escritura. */
+.vision-layout .vision-conversation .conversation { width: min(760px, calc(100% - 48px)); padding: 0 0 12px; }
+.hud-layout.vision-layout .composer {
+  height: 60px; box-sizing: border-box; padding: 0 8px 0 12px; gap: 6px; border-radius: var(--v-radius);
+  background: var(--v-glass); border: 1px solid var(--v-rim);
+  box-shadow: inset 0 1px 0 var(--v-highlight), var(--v-lift), var(--v-glow);
+}
+.hud-layout.vision-layout .composer:focus-within { border-color: var(--v-gold-soft); box-shadow: inset 0 1px 0 var(--v-highlight), var(--v-lift), 0 0 18px rgba(232, 176, 79, 0.45), 0 0 54px rgba(232, 176, 79, 0.14); }
+.hud-layout.vision-layout .composer input { font: 400 16px var(--v-font); color: var(--v-text); padding: 0 6px; }
+.hud-layout.vision-layout .composer input::placeholder { color: var(--v-muted); }
+.hud-layout.vision-layout .composer .icon-button { width: 44px; height: 44px; color: var(--v-muted); border-radius: 7px; }
+.hud-layout.vision-layout .composer .icon-button:hover { color: var(--v-text); background: var(--v-line); }
+.hud-layout.vision-layout .send-button {
+  width: 44px; height: 44px; min-width: 44px; padding: 0; border-radius: 7px;
+  border: 0; background: var(--v-line-strong); color: var(--v-text);
+}
+.hud-layout.vision-layout .send-button:not(:disabled):hover { background: rgba(232, 176, 79, 0.45); }
+.vision-layout .history-code-open { border-radius: 7px; border: 1px solid var(--v-line-strong); background: transparent; color: var(--v-text); }
+.vision-layout .history-code-open:hover { border-color: var(--v-rim); background: transparent; }
+.vision-layout .connection-note { color: var(--v-muted); font-size: 12px; }
+
+/* Horizonte: lo que pasa en segundo plano, sin panel. */
+.vision-horizon {
+  height: 44px; flex-shrink: 0; box-sizing: border-box; padding: 0 28px; display: flex; align-items: center; gap: 18px;
+  font: 12px var(--v-mono); color: var(--v-muted);
+}
+.vision-horizon-state { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.vision-horizon-state > span { width: 7px; height: 7px; border-radius: 50%; background: var(--v-muted); }
+.vision-horizon-state[data-busy] { color: var(--v-text); }
+.vision-horizon-state[data-busy] > span { background: var(--v-gold); box-shadow: 0 0 10px rgba(244, 181, 68, 0.8); animation: vision-work 1.2s ease-in-out infinite; }
+.vision-horizon-line { flex: 1; height: 1px; background: var(--v-line); }
+.vision-horizon .inference-footer { padding: 0; font: 12px var(--v-mono); color: var(--v-muted); flex-wrap: nowrap; }
+.vision-horizon .inference-track { background: var(--v-line); }
+.vision-horizon .inference-track > span { background: var(--v-gold); }
+
+/* Espacio de trabajo: solo aparece cuando hay contenido. */
+.vision-workspace {
+  width: min(460px, 34vw); flex-shrink: 0; margin: 16px 16px 16px 0; padding: 12px;
+  display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: hidden; box-sizing: border-box;
+}
+.vision-workspace .hud-content-dock { border: 0; border-radius: 0; clip-path: none; background: transparent; min-height: 0; }
+.vision-workspace .hud-content-tabs { border-bottom-color: var(--v-line); }
+.vision-workspace .hud-content-tabs button { font: 600 12px var(--v-font); letter-spacing: .04em; text-transform: none; }
+.vision-workspace .hud-content-tabs button[aria-pressed="true"] { background: transparent; border-bottom-color: var(--v-gold); }
+.vision-workspace :is(.hud-content-dock footer button, .hud-content-empty button, .reply-code-actions a) { border-radius: 7px; border-color: var(--v-line-strong); background: transparent; }
+.vision-workspace .hud-panel { clip-path: none; background: transparent; border: 0; border-top: 1px solid var(--v-line); border-radius: 0; padding: 12px 4px 0; }
+.vision-workspace .hud-panel::before { display: none; }
+.vision-workspace .hud-activity h2 { font: 600 12px var(--v-font); letter-spacing: .08em; color: var(--v-muted); }
+.vision-workspace .hud-tool-icons button { border-radius: 7px; border-color: var(--v-line); background: transparent; }
+
+/* Estado del sistema, a demanda. */
+.vision-system { position: absolute; left: 88px; bottom: 60px; z-index: 20; width: 300px; padding: 8px; }
+.vision-system .system-monitor { clip-path: none; background: transparent; border: 0; border-radius: 0; }
+.vision-system .system-monitor::before { display: none; }
+.vision-system-close { position: absolute; top: 8px; right: 8px; z-index: 1; }
+
+/* Diálogos y ventanas existentes, sin las esquinas cortadas del HUD. */
+:is(.history-heading, .window-heading, .code-workspace-heading) { background: transparent; border-color: var(--v-line); }
+:is(.chat-history, .code-workspace, .window-glass, .viewer-glass) :is(button, select, input) { border-radius: 7px; }
+.hud-layout :is(.history-code-open, .core-favorite) { border-radius: 7px; }
+:is(.hud-chat-scroll, .hud-content-body, .hud-activity, .viewer-list, .history-messages, .window-content, .reply-code pre) {
+  scrollbar-color: rgba(232, 176, 79, 0.45) transparent;
+}
+:is(.hud-chat-scroll, .hud-content-body, .hud-activity, .viewer-list, .history-messages, .window-content, .reply-code pre)::-webkit-scrollbar-thumb { background: rgba(232, 176, 79, 0.45); border-radius: 3px; }
+:is(.hud-chat-scroll, .hud-content-body, .hud-activity, .viewer-list, .history-messages, .window-content, .reply-code pre)::-webkit-scrollbar-track { background: transparent; }
+.hud-layout.vision-layout .floating-workspace { inset: 90px 24px 110px 100px; }
+
+@media (max-width: 1100px) {
+  .vision-chip { padding: 0 10px; }
+  .vision-search kbd { display: none; }
+}
+@media (max-width: 900px) {
+  .vision-header { gap: 10px; padding: 0 16px; }
+  .vision-chip { font-size: 0; gap: 0; width: 38px; justify-content: center; padding: 0; }
+  .vision-chip svg { width: 17px; height: 17px; }
+}
+/* En el móvil manda MobileWorkspace: se quedan la cabecera y el cuadro de escritura. */
+.hud-layout.vision-layout.mobile-layout { flex-direction: column; }
+.vision-layout.mobile-layout :is(.vision-rail, .vision-horizon, .vision-search, .vision-conversation .hud-chat-scroll) { display: none; }
+.vision-layout.mobile-layout .vision-header { height: 64px; padding: 0 14px; }
+.vision-layout.mobile-layout .vision-header .vision-chip { margin-left: auto; }
+.vision-layout.mobile-layout .vision-header .vision-chip ~ .vision-chip { margin-left: 0; }
+.vision-layout.mobile-layout .vision-conversation .conversation { position: fixed; left: 10px; right: 10px; width: auto; bottom: max(10px, env(safe-area-inset-bottom)); z-index: 16; }
+@media (prefers-reduced-motion: reduce) {
+  .vision-layout *, .vision-layout *::before { animation: none !important; }
+}
+.hud-content-dock, .window-glass { position: relative; }

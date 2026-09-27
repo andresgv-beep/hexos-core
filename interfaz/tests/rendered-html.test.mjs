@@ -13,11 +13,14 @@ test('serves the HUD shell with existing controls and no orb', async () => {
   // Las ventanas ya no son la conversación: son notas e informes. El chat vive en
   // la columna y no aparece en el HTML inicial porque todavía no hay turno.
   assert.match(html, /Notas e informes abiertos/);
-  assert.match(html, /Favoritos del núcleo/);
+  assert.match(html, /aria-label="Secciones"/);
+  assert.match(html, /Buscar en tus notas/);
   assert.match(html, /Mensaje para Helios/);
   assert.match(html, /Conectando con Helios/);
   assert.match(html, /Historial/);
-  assert.match(html, /Contenido y actividad/);
+  assert.match(html, /En segundo plano/);
+  // El espacio de trabajo no ocupa sitio hasta que hay algo que enseñar.
+  assert.doesNotMatch(html, /Espacio de trabajo"|Contenido y actividad|Favoritos del núcleo/);
   assert.doesNotMatch(html, /Ajustar luminosidad|nebula-orb|orb-history-trigger/);
   assert.doesNotMatch(html, /Todo empieza contigo|Probar estados|UN ESPACIO PARA CONVERSAR|HECHO DE CONEXIONES/);
   assert.doesNotMatch(html, /Pausar movimiento|Probar conversación|PRUEBA VISUAL/);
