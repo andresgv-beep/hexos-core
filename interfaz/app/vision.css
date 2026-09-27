@@ -206,8 +206,8 @@ body { background: var(--v-bg); color: var(--v-text); }
 
 /* Estado del sistema, a demanda. */
 .vision-system {
-  position: absolute; left: 88px; bottom: 60px; z-index: 20; width: 340px; box-sizing: border-box;
-  max-height: calc(100% - 120px); overflow-y: auto; padding: 6px 4px;
+  position: absolute; left: 88px; top: 88px; bottom: 56px; z-index: 20; width: 236px; box-sizing: border-box;
+  overflow-y: auto; padding: 6px 4px; display: flex; flex-direction: column;
 }
 .vision-layout .vision-system .system-monitor {
   position: static; inset: auto; width: auto; overflow: visible; clip-path: none; background: transparent;
@@ -222,16 +222,23 @@ body { background: var(--v-bg); color: var(--v-text); }
 .vision-system .monitor-status.online { background: #86d69a; box-shadow: 0 0 7px rgba(134, 214, 154, 0.7); }
 .vision-layout .vision-system .monitor-content { padding: 0 14px 10px; }
 /* Roscos del sistema: degradados encendidos con su propio resplandor. */
-.vision-system .hud-gauge-row { display: flex; justify-content: space-between; gap: 10px; margin: 6px 0 16px; }
-.vision-system .hud-gauge { flex: 1; min-width: 0; text-align: center; }
-.vision-system .hud-gauge-dial { position: relative; width: 100%; max-width: 78px; margin: 0 auto 6px; }
+/* En columna: cada rosco a la izquierda y lo que significa a su derecha. */
+.vision-layout .vision-system .system-monitor { flex: 1; display: flex; flex-direction: column; }
+.vision-layout .vision-system .monitor-content { flex: 1; display: flex; flex-direction: column; }
+.vision-system .hud-system-gauges { flex: 1; display: flex; flex-direction: column; }
+.vision-system .hud-gauge-row { display: flex; flex-direction: column; gap: 22px; margin: 10px 0 20px; }
+.vision-system .hud-gauge {
+  display: grid; grid-template-columns: 76px minmax(0, 1fr); grid-template-rows: auto 1fr;
+  column-gap: 14px; align-items: start; text-align: left;
+}
+.vision-system .hud-gauge-dial { grid-row: 1 / span 2; position: relative; width: 76px; margin: 0; }
 .vision-system .hud-gauge-dial svg { display: block; width: 100%; height: auto; overflow: visible; }
 .vision-system .hud-gauge-ticks { stroke: rgba(255, 255, 255, 0.14); }
 .vision-system .hud-gauge-track { stroke: rgba(255, 255, 255, 0.07); }
 .vision-system .hud-gauge-fill { filter: drop-shadow(0 0 4px rgba(255, 190, 90, 0.85)) drop-shadow(0 0 10px rgba(255, 150, 50, 0.45)); transition: stroke-dasharray .7s ease; }
 .vision-system .hud-gauge-dial strong { position: absolute; inset: 0; display: grid; place-items: center; font: 600 13px var(--v-mono); color: var(--v-text); text-shadow: 0 0 10px rgba(255, 200, 110, 0.5); }
-.vision-system .hud-gauge > span { font: 600 11px var(--v-font); letter-spacing: .1em; color: var(--v-muted); }
-.vision-system .hud-ram-label { display: flex; justify-content: space-between; font: 12px var(--v-mono); color: var(--v-muted); }
+.vision-system .hud-gauge > span { align-self: end; padding-top: 10px; font: 600 12px var(--v-font); letter-spacing: .12em; color: var(--v-muted); }
+.vision-system .hud-ram-label { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--v-line); display: flex; flex-direction: column; gap: 4px; font: 11px var(--v-mono); color: var(--v-muted); }
 .vision-system .hud-ram-label > span:first-child { font: 600 11px var(--v-font); letter-spacing: .1em; }
 .vision-system .hud-ram-bar { height: 8px; margin: 8px 0; border-radius: 4px; background: rgba(255, 255, 255, 0.07); overflow: visible; }
 .vision-system .hud-ram-bar > span {
@@ -239,7 +246,7 @@ body { background: var(--v-bg); color: var(--v-text); }
   background: linear-gradient(90deg, #ffb43a, #ffd98a 70%, #fff3cf);
   box-shadow: 0 0 8px rgba(255, 190, 90, 0.8), 0 0 18px rgba(255, 150, 50, 0.35);
 }
-.vision-system .hud-gauge-facts { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font: 11px/1.4 var(--v-mono); color: var(--v-muted); }
+.vision-system .hud-gauge-facts { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font: 11px/1.4 var(--v-mono); color: var(--v-muted); }
 .vision-system .hud-gauge-facts li:first-child { color: var(--v-text); }
 .vision-system .hud-gpu-detail { margin: 6px 0 0; font: 11px/1.5 var(--v-mono); color: var(--v-muted); }
 .vision-system-close { position: absolute; top: 8px; right: 8px; z-index: 1; }
