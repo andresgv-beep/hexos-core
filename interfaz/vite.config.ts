@@ -3,7 +3,7 @@ import { defineConfig } from "vite";
 import hostingConfig from "./.openai/hosting.json";
 import { sites } from "./build/sites-vite-plugin";
 import { attachmentPlugin } from "./server/attachments";
-import { heliosProxyOrigin } from "./lib/helios/proxy";
+import { heliosAllowedHosts, heliosProxyOrigin } from "./lib/helios/proxy";
 
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
   "00000000-0000-4000-8000-000000000000";
@@ -48,6 +48,9 @@ export default defineConfig(async () => {
   return {
     server: {
       host: process.env.HELIOS_UI_HOST || "127.0.0.1",
+      // Detrás de Tailscale o un proxy con nombre propio, Vite rechaza ese Host
+      // si no se declara: se aceptan los de HELIOS_UI_ORIGINS y nada más.
+      allowedHosts: heliosAllowedHosts(),
       ...(isCodexSeatbeltSandbox ? { watch: { useFsEvents: false, usePolling: true } } : {}),
       // Local interface only: forward the existing contract to the running agent.
       proxy: {

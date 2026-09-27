@@ -18,3 +18,18 @@ export function heliosProxyOrigin(origin: string | undefined, extraOrigins = pro
   }
   return origin && localOrigins.has(origin) ? "http://127.0.0.1:8080" : origin;
 }
+
+/** Los nombres de host que el servidor de la interfaz acepta, además de localhost
+ *  y las IP: los de los orígenes declarados en HELIOS_UI_ORIGINS (por ejemplo el
+ *  https://…ts.net de Tailscale). Nunca «cualquiera». */
+export function heliosAllowedHosts(extraOrigins = process.env.HELIOS_UI_ORIGINS ?? ""): string[] {
+  const hosts = new Set<string>();
+  for (const candidate of extraOrigins.split(',')) {
+    try {
+      const url = new URL(candidate.trim());
+      if ((url.protocol === 'http:' || url.protocol === 'https:') && !url.username && !url.password
+          && candidate.trim() === url.origin) hosts.add(url.hostname);
+    } catch { /* Una entrada inválida no amplía el acceso. */ }
+  }
+  return [...hosts];
+}

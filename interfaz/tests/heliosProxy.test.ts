@@ -20,3 +20,10 @@ test("LAN access accepts only the explicitly configured exact origin", () => {
   assert.equal(heliosProxyOrigin(allowed, '*'), allowed);
   assert.equal(heliosProxyOrigin(allowed, allowed + '/path'), allowed);
 });
+
+test("the interface accepts exactly the host names of the declared origins", async () => {
+  const { heliosAllowedHosts } = await import("../lib/helios/proxy");
+  assert.deepEqual(heliosAllowedHosts("https://helios.tailb449cc.ts.net,http://192.168.1.35:3000"), ["helios.tailb449cc.ts.net", "192.168.1.35"]);
+  assert.deepEqual(heliosAllowedHosts("https://user:pw@evil.example,no-es-url,https://ok.example/ruta"), []);
+  assert.deepEqual(heliosAllowedHosts(""), []);
+});
