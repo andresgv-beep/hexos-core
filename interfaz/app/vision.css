@@ -221,13 +221,22 @@ body { background: var(--v-bg); color: var(--v-text); }
 .vision-layout .vision-system .system-monitor::before { display: none; }
 .vision-system .monitor-status.online { background: #86d69a; box-shadow: 0 0 7px rgba(134, 214, 154, 0.7); }
 .vision-layout .vision-system .monitor-content { padding: 0 14px 10px; }
-.vision-system .system-metric { padding: 12px 0; border-top: 1px solid var(--v-line); }
-.vision-system .system-metric:first-of-type { border-top: 0; }
-.vision-layout .vision-system .metric-heading > span { color: var(--v-muted); font: 500 12px var(--v-font); letter-spacing: .04em; }
-.vision-layout .vision-system .metric-heading strong { color: var(--v-text); font: 500 13px var(--v-mono); }
-.vision-layout .vision-system .metric-track { height: 4px; margin-top: 9px; border-radius: 2px; background: var(--v-line); }
-.vision-layout .vision-system .metric-track span { border-radius: 2px; background: var(--v-gold); box-shadow: 0 0 8px rgba(244, 181, 68, 0.55); }
-.vision-layout .vision-system .metric-detail { color: var(--v-muted); font: 11px var(--v-mono); margin-top: 6px; }
+/* Roscos del sistema: degradados encendidos con su propio resplandor. */
+.vision-system .hud-gauge-row { display: flex; justify-content: space-between; gap: 10px; margin: 6px 0 16px; }
+.vision-system .hud-gauge { flex: 1; min-width: 0; text-align: center; }
+.vision-system .hud-gauge-dial { position: relative; width: 100%; max-width: 78px; margin: 0 auto 6px; }
+.vision-system .hud-gauge-dial svg { display: block; width: 100%; height: auto; overflow: visible; }
+.vision-system .hud-gauge-ticks { stroke: rgba(255, 255, 255, 0.14); }
+.vision-system .hud-gauge-track { stroke: rgba(255, 255, 255, 0.07); }
+.vision-system .hud-gauge-fill { filter: drop-shadow(0 0 4px rgba(255, 190, 90, 0.85)) drop-shadow(0 0 10px rgba(255, 150, 50, 0.45)); transition: stroke-dasharray .7s ease; }
+.vision-system .hud-gauge-dial strong { position: absolute; inset: 0; display: grid; place-items: center; font: 600 13px var(--v-mono); color: var(--v-text); text-shadow: 0 0 10px rgba(255, 200, 110, 0.5); }
+.vision-system .hud-gauge > span { font: 600 11px var(--v-font); letter-spacing: .1em; color: var(--v-muted); }
+.vision-system .hud-ram-label { display: flex; justify-content: space-between; font: 12px var(--v-mono); color: var(--v-muted); }
+.vision-system .hud-ram-label > span:first-child { font: 600 11px var(--v-font); letter-spacing: .1em; }
+.vision-system .hud-ram-segments { display: flex; gap: 3px; margin: 8px 0; }
+.vision-system .hud-ram-segments i { flex: 1; height: 10px; border-radius: 2px; background: rgba(255, 255, 255, 0.07); }
+.vision-system .hud-ram-segments i[data-filled="true"] { background: linear-gradient(180deg, #fff0b8, #ffb43a); box-shadow: 0 0 6px rgba(255, 180, 70, 0.7); }
+.vision-system .hud-gpu-detail { margin: 6px 0 0; font: 11px/1.5 var(--v-mono); color: var(--v-muted); }
 .vision-system-close { position: absolute; top: 8px; right: 8px; z-index: 1; }
 
 /* Diálogos y ventanas existentes, sin las esquinas cortadas del HUD. */
