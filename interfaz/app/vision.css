@@ -333,8 +333,8 @@ body { background: var(--v-bg); color: var(--v-text); }
 .vision-layout.mobile-layout .tool-terminal { font-size: 12px; }
 
 /* Código: carbón oscuro, cabecera sobria y colores de sintaxis cálidos. */
-.reply-code { border: 1px solid var(--v-line); border-radius: var(--v-radius); background: #111111; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), inset 0 1px rgba(255, 255, 255, 0.04); }
-.reply-code header { background: #1a1918; border-bottom-color: var(--v-line); color: var(--v-muted); }
+.reply-code { border: 1px solid var(--v-line); border-radius: var(--v-radius); background: rgba(14, 13, 12, 0.42); backdrop-filter: blur(16px) saturate(130%); -webkit-backdrop-filter: blur(16px) saturate(130%); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), inset 0 1px rgba(255, 255, 255, 0.04); }
+.reply-code header { background: rgba(255, 236, 208, 0.045); border-bottom-color: var(--v-line); color: var(--v-muted); }
 .reply-code button, .reply-code-actions button:not(:last-child) { color: var(--v-muted); }
 .reply-code button:hover { color: var(--v-text); background: rgba(232, 176, 79, 0.12); }
 .reply-code pre { color: #e8e2d8; scrollbar-color: rgba(232, 176, 79, 0.45) transparent; }
@@ -390,7 +390,7 @@ body { background: var(--v-bg); color: var(--v-text); }
 :is(.viewer-star.on, .viewer-filter.on) { color: var(--v-gold); }
 .viewer-filter:hover { color: var(--v-text); border-color: var(--v-rim); }
 .attachment-chip { border: 1px solid var(--v-line-strong); border-radius: 8px; background: rgba(0, 0, 0, 0.30); color: var(--v-text); }
-.nas-file-text { background: #111111; color: #e8e2d8; }
+.nas-file-text { background: rgba(14, 13, 12, 0.42); color: #e8e2d8; }
 
 /* En la conversación, el código es una tarjeta más: contorno dorado encendido. */
 .helios-answer .reply-code {
@@ -540,3 +540,6 @@ button.vision-horizon-state:focus-visible { outline: 2px solid var(--v-gold); ou
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 56px, #000 calc(100% - 18px), transparent 100%);
   mask-image: linear-gradient(to bottom, transparent 0, #000 56px, #000 calc(100% - 18px), transparent 100%);
 }
+
+.vision-workspace .reply-code, .code-workspace-body > .reply-code { background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none; }
+.code-workspace { background: rgba(22, 21, 20, 0.66); backdrop-filter: blur(22px) saturate(140%); -webkit-backdrop-filter: blur(22px) saturate(140%); }
