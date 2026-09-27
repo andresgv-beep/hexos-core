@@ -27,4 +27,6 @@ test("el historial muestra la voz como al enviarla", async () => {
   assert.equal(displayUserText("Mensaje de voz (5 s), transcrito: «¿Cómo está el Synology?»"), "🎤 «¿Cómo está el Synology?»");
   assert.equal(displayUserText("Mira esto:\n\nMensaje de voz (3 s), transcrito: «hola»"), "Mira esto:\n\n🎤 «hola»");
   assert.equal(displayUserText("Un mensaje normal"), "Un mensaje normal");
+  assert.equal(displayUserText("[La persona envió un mensaje de voz de 4.3 s en este turno. Lo estás oyendo ahora; responde a lo que dice.]\nTranscribe exactamente lo que dice el audio, en español."), "🎤 Mensaje de voz (4 s)");
+  assert.equal(displayUserText("[Nota interna] algo"), "[Nota interna] algo");
 });

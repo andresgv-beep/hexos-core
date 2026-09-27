@@ -113,16 +113,6 @@ body { background: var(--v-bg); color: var(--v-text); }
 .vision-brand { display: flex; flex-direction: column; gap: 2px; }
 .vision-brand strong { font-family: "Russo One", var(--v-font); font-weight: 400; font-size: 21px; letter-spacing: .05em; line-height: 1; color: var(--v-text); }
 .vision-brand span { font-size: 12px; color: var(--v-muted); }
-.vision-search {
-  flex: 0 1 520px; margin: 0 auto; height: 42px; box-sizing: border-box; padding: 0 14px;
-  display: flex; align-items: center; gap: 12px; cursor: pointer;
-  border-radius: 8px; border: 1px solid var(--v-line-strong); background: var(--v-glass);
-  backdrop-filter: blur(22px) saturate(140%); -webkit-backdrop-filter: blur(22px) saturate(140%);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.30); color: var(--v-muted); font: 400 14px var(--v-font); text-align: left;
-}
-.vision-search > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.vision-search kbd { font: 12px var(--v-mono); padding: 2px 8px; border-radius: 6px; border: 1px solid var(--v-line-strong); }
-.vision-search:hover { color: var(--v-text); }
 .vision-chip {
   height: 38px; padding: 0 14px; border-radius: 7px; border: 1px solid var(--v-line-strong); background: transparent;
   color: var(--v-text); font: 600 13px var(--v-font); display: inline-flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap;
@@ -201,8 +191,6 @@ body { background: var(--v-bg); color: var(--v-text); }
 .vision-workspace .hud-content-tabs button { font: 600 12px var(--v-font); letter-spacing: .04em; text-transform: none; }
 .vision-workspace .hud-content-tabs button[aria-pressed="true"] { background: transparent; border-bottom-color: var(--v-gold); }
 .vision-workspace :is(.hud-content-dock footer button, .hud-content-empty button, .reply-code-actions a) { border-radius: 7px; border-color: var(--v-line-strong); background: transparent; }
-.vision-workspace .hud-panel { clip-path: none; background: transparent; border: 0; border-top: 1px solid var(--v-line); border-radius: 0; padding: 12px 4px 0; }
-.vision-workspace .hud-panel::before { display: none; }
 
 /* Estado del sistema, a demanda. */
 .vision-system {
@@ -263,7 +251,6 @@ body { background: var(--v-bg); color: var(--v-text); }
 
 @media (max-width: 1100px) {
   .vision-chip { padding: 0 10px; }
-  .vision-search kbd { display: none; }
 }
 @media (max-width: 900px) {
   .vision-header { gap: 10px; padding: 0 16px; }
@@ -543,3 +530,5 @@ button.vision-horizon-state:focus-visible { outline: 2px solid var(--v-gold); ou
 .voice-mode-actions button:focus-visible { outline: 2px solid var(--v-gold-soft); outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) { .voice-mode-orb > i { animation: none; opacity: .4; } .voice-mode-emblem { animation: none; transition: none; } }
 @media (max-width: 520px) { .voice-mode-orb { width: 190px; height: 190px; } .voice-mode-emblem { width: 118px; height: 118px; } }
+/* La regla del móvil fija los márgenes de cada mensaje; los tuyos van a la derecha. */
+.vision-layout.mobile-layout .mobile-page .history-entry.user { margin-left: auto; margin-right: 0; }

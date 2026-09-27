@@ -55,5 +55,10 @@ export function canRecord(): boolean {
 
 /** El historial guarda lo que recibe el modelo; en el chat se ve como al enviarlo. */
 export function displayUserText(text: string): string {
+  // Antes de transcribir en dos pasos se guardaba la instrucción interna del audio
+  // («[La persona envió un mensaje de voz de 4.3 s…] Transcribe…»). No es lo que
+  // dijo la persona: se muestra como el mensaje de voz que fue.
+  const antiguo = /^\[La persona envió un mensaje de voz de ([\d.]+) s[^\]]*\][\s\S]*$/.exec(text);
+  if (antiguo) return `🎤 Mensaje de voz (${Math.max(1, Math.round(Number(antiguo[1])))} s)`;
   return text.replace(/Mensaje de voz \(\d+ s\), transcrito: «([\s\S]*)»$/, "🎤 «$1»");
 }
