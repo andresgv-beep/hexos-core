@@ -124,7 +124,7 @@ body { background: var(--v-bg); color: var(--v-text); }
 
 /* Conversación centrada. */
 .vision-conversation { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; }
-.vision-conversation .hud-chat-scroll { flex: 1; min-height: 0; width: 100%; overflow-y: auto; padding: 26px 0 18px; box-sizing: border-box; scrollbar-gutter: stable both-edges; }
+.vision-conversation .hud-chat-scroll { flex: 1; min-height: 0; width: 100%; overflow-y: auto; padding: 44px 0 18px; box-sizing: border-box; scrollbar-gutter: stable both-edges; }
 .vision-conversation .hud-chat-messages { width: min(760px, calc(100% - 48px)); margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
 .vision-conversation .message-author { display: none; }
 .vision-layout .vision-conversation :is(.stream-question, .hud-saved-message.user) {
@@ -532,3 +532,11 @@ button.vision-horizon-state:focus-visible { outline: 2px solid var(--v-gold); ou
 @media (max-width: 520px) { .voice-mode-orb { width: 190px; height: 190px; } .voice-mode-emblem { width: 118px; height: 118px; } }
 /* La regla del móvil fija los márgenes de cada mensaje; los tuyos van a la derecha. */
 .vision-layout.mobile-layout .mobile-page .history-entry.user { margin-left: auto; margin-right: 0; }
+
+/* El chat no se corta en seco bajo la cabecera: se desvanece hacia el fondo real
+   (grano incluido), arriba más largo y abajo, junto al cuadro de escritura, corto. */
+.vision-conversation .hud-chat-scroll,
+.vision-layout.mobile-layout .mobile-page {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 56px, #000 calc(100% - 18px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 56px, #000 calc(100% - 18px), transparent 100%);
+}
