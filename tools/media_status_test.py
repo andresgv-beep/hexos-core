@@ -48,6 +48,13 @@ class MediaStatusTest(unittest.TestCase):
         self.assertNotIn('/peliculas', json.dumps(card))
         self.assertFalse({'source', 'profile', 'observation', 'pid'} & set(card))
 
+    def test_first_pass_without_output_gives_no_size_estimate(self):
+        job_id = self.store.create([source(1)], profile(), 'encoder', 'r1', 1000)['jobs'][0]['id']
+        self.put(job_id, state='running', observation=dict(status='running', percent=11.4, output_bytes=0))
+        card, = media_http.summary(self.root, now=1100)['jobs']
+        self.assertEqual(card['percent'], 11.4)
+        self.assertNotIn('estimated_gb', card)
+
     def test_early_progress_gives_no_size_estimate(self):
         job_id = self.store.create([source(1)], profile(), 'encoder', 'r1', 1000)['jobs'][0]['id']
         self.put(job_id, state='running', observation=dict(status='running', percent=2.0, output_bytes=10))
@@ -75,6 +82,56 @@ class MediaStatusTest(unittest.TestCase):
                         dict(batch_id=batch['id'], operation='pause', extra=1), dict(batch_id='', operation='pause')):
             with self.subTest(payload=payload), self.assertRaises(ValueError):
                 media_http.control(self.root, payload, now=1001)
+
+
+    def test_live_reading_replaces_the_stored_one(self):
+        job_id = self.store.create([source(1)], profile(), 'encoder', 'r1', 1000, mode='live')['jobs'][0]['id']
+        self.put(job_id, state='running', run_id='run-1', observation=dict(status='running', percent=2.4, eta_seconds=3917))
+        class Fixed:
+            def sample(self, job):
+                return dict(run_id='run-1', status='running', percent=37.0, eta_seconds=2400, output_bytes=2_600_000_000)
+        card, = media_http.summary(self.root, now=1100, progress=Fixed())['jobs']
+        self.assertEqual((card['percent'], card['eta_seconds'], card['estimated_gb']), (37.0, 2400, 7.0))
+
+
+
+class LiveProgressTest(unittest.TestCase):
+    def setUp(self):
+        self.now = [100.0]
+        self.calls = []
+        self.samples = [dict(run_id='r1', status='running', percent=41.5, eta_seconds=1800, output_bytes=3_000_000_000)]
+        def observe(job):
+            self.calls.append(job['id'])
+            result = self.samples[0]
+            if isinstance(result, Exception):
+                raise result
+            return result
+        # spawn síncrono: la lectura «en segundo plano» ocurre en el acto.
+        self.progress = media_http.LiveProgress(observe, clock=lambda: self.now[0], interval=20, spawn=lambda work: work())
+
+    def test_reads_at_most_once_per_interval(self):
+        job = dict(id='j1', run_id='r1')
+        # La primera lectura arranca ahora; la respuesta de este momento aún no la tiene.
+        self.assertIsNone(self.progress.sample(job))
+        self.assertEqual(self.progress.sample(job)['percent'], 41.5)
+        self.assertEqual(len(self.calls), 1)
+        self.now[0] += 25
+        self.progress.sample(job)
+        self.assertEqual(len(self.calls), 2)
+
+    def test_a_failed_read_keeps_the_last_one_and_retries_later(self):
+        job = dict(id='j1', run_id='r1')
+        self.progress.sample(job)
+        self.samples[0] = media_http.UncertainEffect('SSH caído')
+        self.now[0] += 25
+        self.assertEqual(self.progress.sample(job)['percent'], 41.5)
+        self.now[0] += 25
+        self.progress.sample(job)
+        self.assertEqual(len(self.calls), 3)
+
+    def test_another_run_is_never_shown(self):
+        self.progress.sample(dict(id='j1', run_id='r1'))
+        self.assertIsNone(self.progress.sample(dict(id='j1', run_id='r2')))
 
 
 if __name__ == '__main__':

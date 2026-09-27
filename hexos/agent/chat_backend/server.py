@@ -17,6 +17,9 @@ from . import media_http
 
 def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, native_template=False):
     """Inyecta dependencias y la ruta original de chat.html (no la del subpaquete)."""
+    # Una sola por servidor: las peticiones de la tarjeta comparten lectura y ritmo.
+    media_progress = media_http.LiveProgress(media_http.encoder_observer(agent.env.workspace))
+
     class Handler(BaseHTTPRequestHandler):
         def respond(self, status, obj):
             data = json.dumps(obj, ensure_ascii=False).encode()
@@ -72,7 +75,7 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                     except ValueError as exc:
                         self.respond(404, {'error': str(exc)})
             elif self.path == '/api/media':
-                self.respond(200, media_http.summary(agent.env.workspace))
+                self.respond(200, media_http.summary(agent.env.workspace, progress=media_progress))
             elif self.path == '/api/telemetry':
                 self.respond(200, system_telemetry.snapshot())
             elif self.path == '/api/work':
@@ -140,7 +143,7 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                     rid = string(payload['request_id'], 'request_id', 128)
                     self.respond(200, agent.cancel_generation(rid))
                 elif self.path == '/api/media/control':
-                    self.respond(200, media_http.control(agent.env.workspace, strict_json(data.decode('utf-8'))))
+                    self.respond(200, media_http.control(agent.env.workspace, strict_json(data.decode('utf-8')), progress=media_progress))
                 elif self.path == '/api/model/warmup':
                     if strict_json(data.decode('utf-8')) != {}:
                         raise ValueError('Se espera {}')
