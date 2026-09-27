@@ -149,8 +149,9 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const [codeArtifact, setCodeArtifact] = useState<ReplyArtifact | null>(null);
   const [codeOpen, setCodeOpen] = useState(false);
   const [codeFloating, setCodeFloating] = useState(false);
-  // Solo se edita código con la ventana a la vista; oculta, el chat es chat.
-  const editingCode = !mobile && codeFloating && codeOpen ? codeArtifact : null;
+  // Solo se edita código con la implementación a la vista (en el panel o ampliada);
+  // con el panel cerrado, el chat es chat.
+  const editingCode = !mobile && codeOpen ? codeArtifact : null;
   const [fileFloating, setFileFloating] = useState<{ id?: string } | null>(null);
   const [codeHistory, setCodeHistory] = useState<ReplyArtifact[]>([]);
   const [previous, setPrevious] = useState<HistoryMessage[]>([]);
@@ -392,7 +393,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       if (guardado.resumed) {
         const id = ++nextId.current;
         const result = guardado.resumed;
-        if (result.fileIds?.length) setFileViewer({ id: result.fileIds.at(-1) });
+        if (result.fileIds?.length) { setFileViewer({ id: result.fileIds.at(-1) }); setCodeOpen(true); }
         const cierre = result.closure;
         const reparo = cierre && !["comprobado", "sin_operaciones"].includes(cierre.reason)
           ? { note: cierre.note, tools: cierre.unverified.map(u => u.tool) }
@@ -495,7 +496,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         const heard = `🎤 «${result.transcript}»`;
         setTurns(items => items.map(item => item.id === id ? { ...item, text: draftWasEmpty ? heard : `${visibleQuestion}\n\n${heard}` } : item));
       }
-      if (result.fileIds?.length) setFileViewer({ id: result.fileIds.at(-1) });
+      if (result.fileIds?.length) { setFileViewer({ id: result.fileIds.at(-1) }); setCodeOpen(true); }
       if (!controller.signal.aborted) {
         setConnection("ready");
         setTurnTools(items => mergeToolActivities(items, result.tools));
@@ -659,7 +660,14 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const turnExtras = turnoMedia && mediaJobs.length
     ? { [turnoMedia.id]: <MediaCard jobs={mediaJobs} onControl={controlMedia} /> } : undefined;
   // El espacio de trabajo solo ocupa sitio cuando hay algo que enseñar en él.
-  const workspaceOpen = !mobile && Boolean(codeArtifact || fileViewer);
+  // Un solo sitio para el código: el panel, o la ventana ampliada que lo sustituye.
+  const workspaceOpen = !mobile && codeOpen && !codeFloating && Boolean(codeArtifact || fileViewer);
+  const ultimaImplementacion = codeArtifact ?? historicalArtifacts[historicalArtifacts.length - 1] ?? null;
+  function alternarImplementacion() {
+    if (codeOpen) { setCodeOpen(false); setCodeFloating(false); return; }
+    if (codeArtifact) setCodeOpen(true);
+    else if (ultimaImplementacion) openHistoricalArtifact(ultimaImplementacion);
+  }
   return <main className={`helios-app hud-layout vision-layout phase-${phase}${mobile ? ' mobile-layout' : ''}`} style={{ "--phase-color": active.color } as CSSProperties}>
     {mobile && <MobileWorkspace previous={previous} turns={turns} notes={windows.map(w => w.note)}
       artifact={codeArtifact ?? historicalArtifacts[historicalArtifacts.length - 1] ?? null}
@@ -671,6 +679,8 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       <button type="button" aria-label="Conversación" aria-current="page" onClick={() => inputRef.current?.focus()}><MessageCircle size={21} /></button>
       <button type="button" aria-label="Notas" aria-pressed={coreOpen} onClick={() => setCoreOpen(true)}><NotebookText size={21} /></button>
       <button type="button" aria-label="Archivos del NAS" onClick={() => setFileFloating({})}><HardDrive size={21} /></button>
+      <button type="button" aria-label="Implementación" aria-pressed={codeOpen} disabled={!ultimaImplementacion && !fileViewer}
+        onClick={alternarImplementacion}><Code2 size={21} /></button>
       <button type="button" aria-label={tareasEnCurso ? `Tareas, ${tareasEnCurso} en curso` : "Tareas"} aria-pressed={tasksOpen}
         onClick={() => { setSystemOpen(false); setTasksOpen(open => !open); }}>
         <ListChecks size={21} />{tareasEnCurso > 0 && <span className="vision-rail-badge" aria-hidden="true">{tareasEnCurso}</span>}</button>
@@ -694,12 +704,6 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
           hasEarlier={historyNext !== null} olderLoading={olderLoading} onLoadEarlier={loadOlderHistory}
           onReplyComplete={() => setRevealing(false)} onPreviewCode={previewCode} turnExtras={turnExtras} />
     <section className="conversation" aria-label="Chat con Helios">
-      {!mobile && !editingCode && (codeArtifact || historicalArtifacts.length > 0) &&
-        <button type="button" className="history-code-open" onClick={() => {
-          if (codeArtifact) setCodeOpen(true);
-          else openHistoricalArtifact(historicalArtifacts[historicalArtifacts.length - 1]);
-          setCodeFloating(true);
-        }}><Code2 size={15} aria-hidden="true" /> Abrir implementación</button>}
       {!!attachments.length && <ChatAttachments files={attachments} onRemove={removeAttachment} />}
       {attachmentError && <p className="attachment-error" role="alert">{attachmentError}</p>}
       <form className="composer" onSubmit={send} onDragOver={event => { if (event.dataTransfer.types.includes("Files")) event.preventDefault(); }} onDrop={event => { event.preventDefault(); if (!sending) void addAttachments(Array.from(event.dataTransfer.files)); }}>
@@ -736,8 +740,10 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       </footer>
     </div>
     {workspaceOpen && <aside className="vision-workspace" aria-label="Espacio de trabajo">
+      <button type="button" className="icon-button vision-workspace-close" aria-label="Cerrar el espacio de trabajo"
+        onClick={() => { setCodeOpen(false); inputRef.current?.focus(); }}><X size={16} /></button>
       <ContentDock artifact={codeArtifact} fileRequest={fileViewer} busy={sending} canUndo={Boolean(codeHistory.length || fallbackArtifact)} onUndo={undoCodeArtifact}
-        onExpandCode={() => { setCodeFloating(true); setCodeOpen(true); }}
+        onExpandCode={() => setCodeFloating(true)}
         onExpandFile={id => setFileFloating({ id })} onPreview={previewCode} />
     </aside>}
     {tasksOpen && !mobile && <TasksPanel media={mediaJobs} onControl={controlMedia} onClose={() => setTasksOpen(false)} />}
@@ -762,7 +768,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       onPreviewCode={previewCode} />}
     {!mobile && codeFloating && codeOpen && codeArtifact && <CodeWorkspace artifact={codeArtifact} busy={sending}
       canUndo={Boolean(codeHistory.length || fallbackArtifact)} onUndo={undoCodeArtifact}
-      onClose={() => { setCodeFloating(false); setCodeOpen(false); inputRef.current?.focus(); }} onCreatePreview={previewCode} />}
+      onClose={() => { setCodeFloating(false); inputRef.current?.focus(); }} onCreatePreview={previewCode} />}
     {access && <div className="access-backdrop">
       <div className="access-panel" role="dialog" aria-modal="true" aria-labelledby="access-title">
         <h2 id="access-title" className="panel-title">

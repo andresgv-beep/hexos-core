@@ -495,3 +495,9 @@ button.vision-horizon-state:focus-visible { outline: 2px solid var(--v-gold); ou
 .helios-answer ol.reply-entries { counter-reset: entrada; }
 .helios-answer ol.reply-entries > li::before { counter-increment: entrada; content: counter(entrada); width: 22px; flex-shrink: 0; font: 12px var(--v-mono); color: var(--v-muted); }
 .vision-header-gap { flex: 1; }
+
+/* Cierre del espacio de trabajo, en la fila de pestañas junto a «ampliar». */
+.vision-workspace { position: relative; }
+.vision-workspace-close { position: absolute; top: 16px; right: 14px; z-index: 2; }
+.vision-workspace .hud-content-tabs { padding-right: 44px; }
+.vision-rail button:disabled { opacity: .35; cursor: default; background: transparent; }
