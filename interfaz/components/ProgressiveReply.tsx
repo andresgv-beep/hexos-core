@@ -114,7 +114,9 @@ export function ProgressiveReply({ text, live = false, onComplete, onPreviewCode
           <li key={linea.index}>{linea.parts.map((parte, i) => <Palabra key={i} token={parte} />)}</li>)}</Lista>;
       })}</div>
     </div>
-    {!complete && <button className="reveal-all" onClick={() => finish.current()}>Mostrar todo</button>}
+    {/* Solo con la respuesta ya recibida entera. Mientras llega, el revelado alcanza
+        el texto una y otra vez, y el botón aparecía y desaparecía moviendo todo. */}
+    {!complete && !live && <button className="reveal-all" onClick={() => finish.current()}>Mostrar todo</button>}
   </>;
 }
 

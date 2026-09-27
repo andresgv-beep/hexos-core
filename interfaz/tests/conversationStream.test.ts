@@ -49,7 +49,14 @@ test("el texto progresivo pasa por el revelador y no aparece en ráfagas crudas"
   const html = render({ pending: true, preview: "Primera ráfaga recibida", streamed: true });
   assert.match(html, /aria-label="Respuesta en generación"/);
   assert.match(html, /class="sr-only">Primera ráfaga recibida/);
-  assert.match(html, /class="reveal-all"/);
+  // Mientras llega texto nada entra ni sale alrededor: ni «Mostrar todo» ni la línea de estado.
+  assert.doesNotMatch(html, /class="reveal-all"/);
+  assert.doesNotMatch(html, /role="status"/);
+});
+
+test("antes del primer texto se ve el estado; con la respuesta entera se ofrece mostrarla toda", () => {
+  assert.match(render({ pending: true, generationStatus: "Leyendo contexto…" }), /Leyendo contexto…/);
+  assert.match(render({ reply: "Respuesta completa ya recibida del todo" }), /class="reveal-all"/);
 });
 
 test("el reparo viaja pegado a la respuesta, no se pierde en la mudanza", () => {

@@ -57,11 +57,14 @@ export function TurnoVisible({ turn, saliendo, settled = false, extra, onReplyCo
   return <article className={`stream-turn${saliendo ? " leaving" : ""}`} aria-hidden={saliendo || undefined}>
     <p className="stream-question"><span className="message-author">TÚ</span>{turn.text}</p>
     <div className="stream-body">
-      {!!turn.tools?.length && <ToolTerminal tools={turn.tools} live={Boolean(turn.pending)} />}
+      {/* Se pliega cuando empieza a llegar la respuesta, no al terminar: así el
+          salto ocurre una vez, antes del texto, y no bajo lo que se está leyendo. */}
+      {!!turn.tools?.length && <ToolTerminal tools={turn.tools} live={Boolean(turn.pending) && !turn.preview} />}
       {!!turn.progress?.length && <ul className="reply-progress">
         {turn.progress.map((linea, i) => <li key={i}>{linea}</li>)}
       </ul>}
-      {turn.pending && <p className="reply-status" role="status">
+      {/* El estado se ve hasta que llega el primer texto; después lo dice el emblema. */}
+      {turn.pending && !turn.preview && <p className="reply-status" role="status">
         {turn.generationStatus || (turn.progress?.length ? "Helios está en ello…" : "Helios está pensando…")}
       </p>}
       {(turn.preview || turn.reply) && (saliendo || settled

@@ -5,7 +5,7 @@ import { InferenceFooter } from "./InferenceFooter";
 import { type InferenceMetrics } from "@/lib/helios/metrics";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
-import { Activity, ArrowRight, Brain, Code2, HardDrive, History, ListChecks, MessageCircle, NotebookText, Search, Square, X } from "lucide-react";
+import { Activity, ArrowRight, Brain, Code2, HardDrive, History, ListChecks, MessageCircle, NotebookText, Square, X } from "lucide-react";
 import { AttachmentButton, ChatAttachments, type Attachment } from "./ChatAttachments";
 import { VoiceButton } from "./VoiceButton";
 import { audioToVoice } from "@/lib/helios/voice";
@@ -681,9 +681,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       <header className="vision-header">
         <span className="vision-emblem" aria-hidden="true"><span /></span>
         <div className="vision-brand"><strong>HELIOS</strong><span role="status">{estado}</span></div>
-        <button type="button" className="vision-search" onClick={() => setCoreOpen(true)}>
-          <Search size={17} aria-hidden="true" /><span>Buscar en tus notas…</span><kbd>Ctrl K</kbd>
-        </button>
+        <span className="vision-header-gap" />
         {thinking !== null && <button className="vision-chip" type="button" aria-pressed={thinking}
           disabled={thinkingBusy} onClick={() => void toggleThinking()}>
           <Brain size={15} aria-hidden="true" /> Razonamiento: {thinkingBusy ? "…" : thinking ? "automático" : "apagado"}

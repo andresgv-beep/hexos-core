@@ -14,7 +14,6 @@ test('serves the HUD shell with existing controls and no orb', async () => {
   // la columna y no aparece en el HTML inicial porque todavía no hay turno.
   assert.match(html, /Notas e informes abiertos/);
   assert.match(html, /aria-label="Secciones"/);
-  assert.match(html, /Buscar en tus notas/);
   assert.match(html, /Mensaje para Helios/);
   assert.match(html, /Conectando con Helios/);
   assert.match(html, /Historial/);
