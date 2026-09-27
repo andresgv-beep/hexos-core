@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseTelemetry } from "../lib/helios/telemetry";
+import { parseTelemetry, shortHardwareName } from "../lib/helios/telemetry";
 
 test("validates and bounds system telemetry before it reaches the interface", () => {
   const result = parseTelemetry({
@@ -23,4 +23,10 @@ test("cpu details are optional: an older backend reads as unknown, not zero", ()
   assert.deepEqual([old.cpu.cores, old.cpu.load1m, old.cpu.temperatureC], [null, null, null]);
   const now = parseTelemetry({ ...base, cpu: { usage_pct: 12, cores: 16, load_1m: 1.24, temperature_c: 61.8 } });
   assert.deepEqual([now.cpu.cores, now.cpu.load1m, now.cpu.temperatureC], [16, 1.24, 61.8]);
+});
+
+test("hardware names read short", () => {
+  assert.equal(shortHardwareName("AMD Ryzen 7 5700X 8-Core Processor"), "Ryzen 7 5700X");
+  assert.equal(shortHardwareName("NVIDIA GeForce RTX 4070 Ti"), "RTX 4070 Ti");
+  assert.equal(shortHardwareName("Intel(R) Core(TM) i7-12700K CPU @ 3.60GHz"), "Core i7-12700K");
 });

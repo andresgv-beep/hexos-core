@@ -13,11 +13,12 @@ CPU_SENSORS = ('k10temp', 'zenpower', 'coretemp')
 class SystemTelemetry:
     """Muestra CPU, RAM y la GPU primaria sin mantener procesos residentes."""
 
-    def __init__(self, hwmon=Path('/sys/class/hwmon'), loadavg=Path('/proc/loadavg')):
+    def __init__(self, hwmon=Path('/sys/class/hwmon'), loadavg=Path('/proc/loadavg'), cpuinfo=Path('/proc/cpuinfo')):
         self._lock = threading.Lock()
         self._previous_cpu = None
         self._hwmon = hwmon
         self._loadavg = loadavg
+        self._cpuinfo = cpuinfo
 
     def _cpu_temperature(self):
         """La primera lectura del sensor de la CPU (Tctl en AMD, el paquete en Intel)."""
@@ -28,6 +29,21 @@ class SystemTelemetry:
         except (OSError, ValueError):
             pass
         return None
+
+    def _cpu_model(self):
+        """El modelo y la frecuencia media actual de los núcleos, de /proc/cpuinfo."""
+        name, frequencies = None, []
+        try:
+            for line in self._cpuinfo.read_text().splitlines():
+                key, _, value = line.partition(':')
+                key = key.strip()
+                if key == 'model name' and name is None:
+                    name = value.strip() or None
+                elif key == 'cpu MHz':
+                    frequencies.append(float(value))
+        except (OSError, ValueError):
+            pass
+        return name, (round(sum(frequencies) / len(frequencies)) if frequencies else None)
 
     def _cpu_load(self):
         try:
@@ -57,7 +73,9 @@ class SystemTelemetry:
             if elapsed > 0:
                 usage = 100.0 * (1.0 - (idle - old_idle) / elapsed)
         self._previous_cpu = (idle, total)
+        name, frequency = self._cpu_model()
         return {'usage_pct': round(max(0.0, min(100.0, usage)), 1), 'cores': os.cpu_count(),
+                'name': name, 'frequency_mhz': frequency,
                 'load_1m': self._cpu_load(), 'temperature_c': self._cpu_temperature()}
 
     @staticmethod

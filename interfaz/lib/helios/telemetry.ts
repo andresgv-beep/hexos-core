@@ -1,7 +1,7 @@
 export interface SystemTelemetry {
   timestampMs: number;
   /** Núcleos, carga y temperatura son null si el backend no los sabe (o es anterior). */
-  cpu: { usagePct: number; cores: number | null; load1m: number | null; temperatureC: number | null };
+  cpu: { usagePct: number; name: string | null; frequencyMhz: number | null; cores: number | null; load1m: number | null; temperatureC: number | null };
   ram: { usedMb: number; totalMb: number };
   gpu: { name: string; usagePct: number; temperatureC: number | null; powerW: number | null; healthy: boolean };
   vram: { usedMb: number; totalMb: number };
@@ -25,9 +25,18 @@ export function parseTelemetry(value: unknown): SystemTelemetry {
   if (typeof gpu.name !== "string" || typeof gpu.healthy !== "boolean") throw new Error("Telemetría de GPU no válida");
   return {
     timestampMs: finite(root.timestamp_ms),
-    cpu: { usagePct: Math.min(100, finite(cpu.usage_pct)), cores: maybe(cpu.cores), load1m: maybe(cpu.load_1m), temperatureC: maybe(cpu.temperature_c) },
+    cpu: { usagePct: Math.min(100, finite(cpu.usage_pct)), name: typeof cpu.name === "string" && cpu.name.trim() ? cpu.name.trim() : null,
+      frequencyMhz: maybe(cpu.frequency_mhz), cores: maybe(cpu.cores), load1m: maybe(cpu.load_1m), temperatureC: maybe(cpu.temperature_c) },
     ram: { usedMb: finite(ram.used_mb), totalMb: finite(ram.total_mb) },
     gpu: { name: gpu.name, usagePct: Math.min(100, finite(gpu.usage_pct)), temperatureC: optional(gpu.temperature_c), powerW: optional(gpu.power_w), healthy: gpu.healthy },
     vram: { usedMb: finite(vram.used_mb), totalMb: finite(vram.total_mb) },
   };
+}
+
+/** «AMD Ryzen 7 5700X 8-Core Processor» → «Ryzen 7 5700X»; «NVIDIA GeForce RTX 4070 Ti» → «RTX 4070 Ti». */
+export function shortHardwareName(name: string) {
+  return name.replace(/\((?:R|TM)\)|®|™/gi, "")
+    .replace(/^(?:AMD|Intel|NVIDIA)\s+/i, "").replace(/^(?:GeForce|Radeon)\s+/i, "")
+    .replace(/\s+\d+-Core Processor$/i, "").replace(/\s+(?:CPU\s+)?@.*$/i, "").replace(/\s+Processor$/i, "")
+    .replace(/^Core\s+/i, "Core ").replace(/\s{2,}/g, " ").trim();
 }

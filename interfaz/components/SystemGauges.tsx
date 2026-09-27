@@ -1,4 +1,4 @@
-import type { SystemTelemetry } from '@/lib/helios/telemetry';
+import { shortHardwareName, type SystemTelemetry } from '@/lib/helios/telemetry';
 
 /** Cada rosco con su propio degradado encendido: se distinguen de un vistazo. */
 const TONES = {
@@ -16,10 +16,13 @@ export function SystemGauges({ telemetry }: { telemetry: SystemTelemetry }) {
   // Debajo de cada rosco, lo que el porcentaje no dice: temperatura, consumo, lo que queda.
   const gauges = [
     { label: 'CPU', value: cpu.usagePct, lines: [
-      cpu.temperatureC !== null ? `${Math.round(cpu.temperatureC)} °C` : null,
-      cpu.cores !== null ? `${cpu.cores} hilos` : null,
-      cpu.load1m !== null ? `carga ${decimal(cpu.load1m)}` : null] },
+      cpu.name ? shortHardwareName(cpu.name) : null,
+      [cpu.temperatureC !== null ? `${Math.round(cpu.temperatureC)} °C` : null,
+        cpu.frequencyMhz !== null ? `${decimal(cpu.frequencyMhz / 1000)} GHz` : null].filter(Boolean).join(' · ') || null,
+      [cpu.cores !== null ? `${cpu.cores} hilos` : null,
+        cpu.load1m !== null ? `carga ${decimal(cpu.load1m)}` : null].filter(Boolean).join(' · ') || null] },
     { label: 'GPU', value: gpu.usagePct, lines: [
+      gpu.healthy ? shortHardwareName(gpu.name) : null,
       gpu.temperatureC !== null ? `${Math.round(gpu.temperatureC)} °C` : null,
       gpu.powerW !== null ? `${Math.round(gpu.powerW)} W` : null] },
     { label: 'VRAM', value: percent(vram.usedMb, vram.totalMb), lines: [
@@ -48,6 +51,5 @@ export function SystemGauges({ telemetry }: { telemetry: SystemTelemetry }) {
     <div className="hud-ram-label"><span>RAM</span><span>{gb(ram.usedMb)} / {gb(ram.totalMb)} GB · quedan {gb(Math.max(0, ram.totalMb - ram.usedMb))} GB</span></div>
     <div className="hud-ram-bar" role="meter" aria-label="RAM" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(ramPct)}>
       <span style={{ width: `${ramPct}%` }} /></div>
-    <p className="hud-gpu-detail">{gpu.name}</p>
   </div>;
 }
