@@ -501,3 +501,45 @@ button.vision-horizon-state:focus-visible { outline: 2px solid var(--v-gold); ou
 .vision-workspace-close { position: absolute; top: 16px; right: 14px; z-index: 2; }
 .vision-workspace .hud-content-tabs { padding-right: 44px; }
 .vision-rail button:disabled { opacity: .35; cursor: default; background: transparent; }
+
+/* Modo voz: el emblema grande escucha. --voice-level (0–1) sigue el volumen. */
+.voice-mode {
+  --voice-level: 0;
+  position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px;
+  padding: 24px; box-sizing: border-box; text-align: center; color: var(--v-text); font-family: var(--v-font);
+  background: rgba(6, 6, 6, 0.82); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  animation: voice-in .25s ease-out both;
+}
+@keyframes voice-in { from { opacity: 0; } to { opacity: 1; } }
+.voice-mode-orb { position: relative; width: 240px; height: 240px; display: grid; place-items: center; }
+.voice-mode-orb > i {
+  position: absolute; inset: 0; border-radius: 50%; border: 1px solid rgba(244, 181, 68, calc(0.35 + var(--voice-level) * 0.5));
+  animation: voice-wave 2.4s ease-out infinite;
+}
+.voice-mode-orb > i:nth-child(2) { animation-delay: .8s; }
+.voice-mode-orb > i:nth-child(3) { animation-delay: 1.6s; }
+@keyframes voice-wave { from { transform: scale(1); opacity: .6; } to { transform: scale(1.9); opacity: 0; } }
+.voice-mode-emblem {
+  width: 150px; height: 150px; display: block;
+  transform: scale(calc(1 + var(--voice-level) * 0.12)); transition: transform .08s linear;
+  filter: drop-shadow(0 0 calc(24px + var(--voice-level) * 40px) rgba(232, 176, 79, 0.75));
+  animation: voice-breathe 2.4s ease-in-out infinite;
+}
+.voice-mode-emblem > span {
+  display: block; width: 100%; height: 100%; background: linear-gradient(160deg, #fff3cf, var(--v-gold) 55%, #d98a2b);
+  -webkit-mask: url(/helios-emblem.png) center / contain no-repeat; mask: url(/helios-emblem.png) center / contain no-repeat;
+}
+@keyframes voice-breathe { 0%, 100% { opacity: .9; } 50% { opacity: 1; } }
+.voice-mode h2 { margin: 0; font: 400 24px "Russo One", var(--v-font); letter-spacing: .06em; }
+.voice-mode-hint { margin: -12px 0 0; font-size: 15px; color: var(--v-muted); }
+.voice-mode-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px; }
+.voice-mode-time { font: 14px var(--v-mono); color: var(--v-muted); min-width: 92px; }
+.voice-mode-actions button { min-height: 48px; padding: 0 24px; border-radius: 8px; font: 700 15px var(--v-font); cursor: pointer; }
+.voice-mode-send { border: 0; background: var(--v-gold); color: #1a1206; box-shadow: 0 0 18px rgba(232, 176, 79, 0.45); }
+.voice-mode-send:hover:not(:disabled) { background: var(--v-gold-soft); }
+.voice-mode-cancel { border: 1px solid var(--v-line-strong); background: transparent; color: var(--v-text); }
+.voice-mode-cancel:hover:not(:disabled) { border-color: var(--v-rim); }
+.voice-mode-actions button:disabled { opacity: .55; cursor: default; }
+.voice-mode-actions button:focus-visible { outline: 2px solid var(--v-gold-soft); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .voice-mode-orb > i { animation: none; opacity: .4; } .voice-mode-emblem { animation: none; transition: none; } }
+@media (max-width: 520px) { .voice-mode-orb { width: 190px; height: 190px; } .voice-mode-emblem { width: 118px; height: 118px; } }
