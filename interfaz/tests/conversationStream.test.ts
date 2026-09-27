@@ -9,7 +9,7 @@ import { CodeWorkspace } from "../components/CodeWorkspace";
 test("el espacio de código ofrece maximizar sin cambiar el artefacto", () => {
   const html = renderToStaticMarkup(createElement(CodeWorkspace, {
     artifact: { reply: '', code: '<main>Actual</main>', language: 'html' },
-    busy: false, canUndo: false, onUndo() {}, onClose() {}, onImprove() {}, onCreatePreview() {},
+    busy: false, canUndo: false, onUndo() {}, onClose() {}, onCreatePreview() {},
   }));
   assert.match(html, /Maximizar implementación/);
   assert.match(html, /Actual/);
@@ -73,18 +73,18 @@ test("el código cercado se pinta como bloque y nunca como HTML ejecutable", () 
   assert.doesNotMatch(html, /<script>/);
 });
 
-test("un bloque de código ofrece mejora y vista cuando la conversación las conecta", () => {
+test("un bloque de código ofrece la vista, sin un «Mejorar» sin intención", () => {
   const html = renderToStaticMarkup(createElement(ReplyMarkdown, {
-    text: "```jsx\n<App />\n```", onImproveCode() {}, onPreviewCode() {},
+    text: "```jsx\n<App />\n```", onPreviewCode() {},
   }));
-  assert.match(html, />Mejorar</);
+  assert.doesNotMatch(html, />Mejorar</);
   assert.match(html, />Crear vista</);
 });
 
 test("el código y la interfaz comparten una ventana con dos modos", () => {
   const html = renderToStaticMarkup(createElement(CodeWorkspace, {
     artifact: { reply: "Listo", code: "<h1>Panel</h1>", language: "html", previewHtml: "<h1>Panel</h1>" },
-    busy: false, canUndo: true, onUndo() {}, onClose() {}, onImprove() {}, onCreatePreview() {},
+    busy: false, canUndo: true, onUndo() {}, onClose() {}, onCreatePreview() {},
   }));
   assert.match(html, /sandbox="allow-scripts"/);
   assert.match(html, /Mover espacio de código con las flechas/);

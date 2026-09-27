@@ -7,14 +7,13 @@ import { type ReplyArtifact } from "@/lib/helios/preview";
 import { usePreviewDocument } from "./usePreviewDocument";
 import { PreviewFrame } from "./PreviewFrame";
 
-export function CodeWorkspace({ artifact, busy, canUndo, onUndo, onClose, onImprove, onCreatePreview, fixedMode }: {
+export function CodeWorkspace({ artifact, busy, canUndo, onUndo, onClose, onCreatePreview, fixedMode }: {
   fixedMode?: "code" | "preview";
   artifact: ReplyArtifact;
   busy: boolean;
   canUndo: boolean;
   onUndo: () => void;
   onClose: () => void;
-  onImprove: (code: string, language?: string) => void;
   onCreatePreview: (code: string, language?: string) => void;
 }) {
   const artifactKey = `${artifact.code}\u0000${artifact.previewHtml ?? ""}`;
@@ -87,7 +86,7 @@ export function CodeWorkspace({ artifact, busy, canUndo, onUndo, onClose, onImpr
       <button type="button" className="code-workspace-close" onClick={onClose} aria-label="Cerrar espacio de código"><X size={19} /></button>
     </header>
     <div className="code-workspace-body">
-      {mode === "code" ? <ReplyCode code={artifact.code} language={artifact.language} onImprove={onImprove} />
+      {mode === "code" ? <ReplyCode code={artifact.code} language={artifact.language} />
         : artifact.previewHtml
           ? <PreviewFrame title="Vista previa de la interfaz generada" srcDoc={previewSource} />
           : <div className="code-preview-empty">

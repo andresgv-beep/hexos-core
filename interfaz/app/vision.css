@@ -151,7 +151,6 @@ body { background: var(--v-bg); color: var(--v-text); }
 .vision-layout .vision-conversation .helios-answer strong { color: var(--hud-bright); }
 .vision-layout .vision-conversation :is(.reply-status, .reply-progress li) { color: var(--v-muted); font-size: 15px; }
 .vision-layout .vision-conversation .reply-caveat { border-left-color: var(--v-gold); background: rgba(232, 176, 79, 0.08); color: #e6cfa6; border-radius: 0 6px 6px 0; }
-.vision-layout .vision-conversation .reply-code { border-radius: var(--v-radius); border-color: var(--v-line); background: #121212; }
 .vision-layout .vision-conversation .history-code-open { align-self: flex-start; }
 .vision-layout .hud-welcome { padding: 18vh 20px 0; }
 .vision-layout .hud-welcome h2 { font-family: "Russo One", var(--v-font); font-weight: 400; font-size: 26px; letter-spacing: .02em; color: var(--v-text); }
@@ -204,8 +203,6 @@ body { background: var(--v-bg); color: var(--v-text); }
 .vision-workspace :is(.hud-content-dock footer button, .hud-content-empty button, .reply-code-actions a) { border-radius: 7px; border-color: var(--v-line-strong); background: transparent; }
 .vision-workspace .hud-panel { clip-path: none; background: transparent; border: 0; border-top: 1px solid var(--v-line); border-radius: 0; padding: 12px 4px 0; }
 .vision-workspace .hud-panel::before { display: none; }
-.vision-workspace .hud-activity h2 { font: 600 12px var(--v-font); letter-spacing: .08em; color: var(--v-muted); }
-.vision-workspace .hud-tool-icons button { border-radius: 7px; border-color: var(--v-line); background: transparent; }
 
 /* Estado del sistema, a demanda. */
 .vision-system { position: absolute; left: 88px; bottom: 60px; z-index: 20; width: 300px; padding: 8px; }
@@ -279,5 +276,102 @@ body { background: var(--v-bg); color: var(--v-text); }
   border: 1px solid var(--v-rim); border-radius: var(--v-radius); background: var(--v-glass);
   box-shadow: inset 0 1px 0 var(--v-highlight), var(--v-glow);
 }
-.vision-layout.mobile-layout .mobile-page .reply-code { border-radius: var(--v-radius); border-color: var(--v-line); background: #121212; }
 .vision-layout.mobile-layout .vision-conversation .conversation { padding-bottom: 0; }
+
+/* Terminal de llamadas: un hilo dorado dentro de la conversación, sin caja. */
+.tool-terminal {
+  margin: 0 0 4px 3px; padding: 2px 0 2px 16px;
+  border-left: 2px solid var(--v-gold); box-shadow: -8px 0 14px -8px rgba(232, 176, 79, 0.75);
+  font: 12.5px/1.75 var(--v-mono); color: var(--v-muted);
+}
+.tool-terminal-head { display: flex; align-items: center; gap: 10px; }
+.tool-terminal-head > span { flex: 1; min-width: 0; }
+.tool-terminal-head button {
+  min-height: 26px; padding: 0 4px; border: 0; background: transparent; cursor: pointer;
+  color: var(--v-muted); font: 500 11px var(--v-mono); text-decoration: underline; text-underline-offset: 3px;
+}
+.tool-terminal-head button:hover { color: var(--v-text); }
+.tool-terminal-head button:focus-visible { outline: 2px solid var(--v-gold); outline-offset: 2px; }
+.tool-terminal ul { list-style: none; margin: 0; padding: 0; }
+.tool-terminal li { display: flex; align-items: baseline; gap: 10px; }
+.tool-terminal-prompt { color: var(--v-gold); }
+.tool-terminal-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--v-text); }
+.tool-terminal-name > span { color: var(--v-muted); }
+.tool-terminal-state { white-space: nowrap; color: #86d69a; }
+.tool-terminal li[data-status="failed"] .tool-terminal-state { color: #f08a7a; }
+.tool-terminal li[data-status="running"] .tool-terminal-state { color: var(--v-gold); animation: vision-work 1.2s ease-in-out infinite; }
+.tool-terminal-state > i { display: inline-block; width: 7px; height: 14px; margin-left: 4px; vertical-align: -2px; background: var(--v-gold); animation: tool-cursor 1s steps(2) infinite; }
+@keyframes tool-cursor { 50% { opacity: 0; } }
+.tool-terminal-time { width: 52px; text-align: right; }
+.vision-layout.mobile-layout .tool-terminal { font-size: 12px; }
+
+/* Código: carbón oscuro, cabecera sobria y colores de sintaxis cálidos. */
+.reply-code { border: 1px solid var(--v-line); border-radius: var(--v-radius); background: #111111; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), inset 0 1px rgba(255, 255, 255, 0.04); }
+.reply-code header { background: #1a1918; border-bottom-color: var(--v-line); color: var(--v-muted); }
+.reply-code button, .reply-code-actions button:not(:last-child) { color: var(--v-muted); }
+.reply-code button:hover { color: var(--v-text); background: rgba(232, 176, 79, 0.12); }
+.reply-code pre { color: #e8e2d8; scrollbar-color: rgba(232, 176, 79, 0.45) transparent; }
+.helios-answer code { background: rgba(232, 176, 79, 0.12); color: #f3dcae; }
+.syntax-comment { color: #857f76; }
+.syntax-string { color: #b8cc8a; }
+.syntax-number { color: #f0b86c; }
+.syntax-keyword { color: #e39a70; }
+.syntax-literal { color: #f0c77a; }
+.syntax-tag { color: #e8b04f; }
+.syntax-attribute { color: #d6b98c; }
+.syntax-function { color: #f3d9a4; }
+.syntax-property { color: #cbbfa9; }
+.syntax-operator { color: #a39d94; }
+.code-workspace-heading strong { color: var(--v-text); }
+.code-workspace-heading small, .code-workspace-drag > svg:last-child { color: var(--v-muted); }
+.code-workspace-heading nav { background: rgba(0, 0, 0, 0.35); border-radius: 8px; }
+.code-workspace-heading nav button { color: var(--v-muted); border-radius: 6px; }
+.code-workspace-heading nav button.active { background: rgba(232, 176, 79, 0.18); color: var(--v-text); box-shadow: none; }
+.code-workspace-close { color: var(--v-muted); }
+.code-workspace-close:hover { color: var(--v-text); background: rgba(232, 176, 79, 0.12); }
+.code-workspace-drag:focus-visible { outline-color: var(--v-gold); }
+
+/* Restos azules de la hoja original, pasados a la paleta. */
+:is(button, a, input, [tabindex="0"]):focus-visible { outline-color: var(--v-gold); }
+.icon-button { color: var(--v-muted); }
+.icon-button:hover, .icon-button.selected { color: var(--v-text); background: rgba(232, 176, 79, 0.12); }
+:is(.window-heading, .window-drag, .message-author, .original-message, .original-message summary, .viewer-title) { color: var(--v-muted); }
+.window-dot { background: var(--v-gold); box-shadow: 0 0 8px rgba(232, 176, 79, 0.6); }
+.window-content, .history-messages, .viewer-list { scrollbar-color: rgba(232, 176, 79, 0.45) transparent; }
+:is(.original-message p, .window-content .reply-status, .note-meta, .reveal-all, .attachment-chip span:not(.attachment-thumbnail)) { color: var(--v-muted); }
+.note-body { color: var(--v-text); }
+.reveal-all:hover { color: var(--v-text); }
+.link-button { color: var(--v-gold-soft); }
+:is(.reply-progress, .conversation-stream .reply-progress) { border-left-color: var(--v-line-strong); }
+:is(.reply-progress li, .conversation-stream .reply-progress li) { color: var(--v-muted); }
+:is(.note-actions button, .access-actions button, .window-tray button, .code-preview-empty button) {
+  border: 1px solid var(--v-line-strong); border-radius: 7px; background: transparent; color: var(--v-text);
+}
+:is(.note-actions button, .access-actions button, .window-tray button, .code-preview-empty button):hover { border-color: var(--v-rim); background: rgba(232, 176, 79, 0.10); }
+.access-actions .access-save { background: var(--v-gold); border-color: var(--v-gold); color: #1a1206; font-weight: 700; }
+.access-actions .access-save:hover { background: var(--v-gold-soft); }
+:is(.panel-title, .code-preview-empty h3) { color: var(--v-text); }
+:is(.access-target, .access-field, .access-hint, .access-note, .code-preview-empty, .viewer-date, .viewer-empty) { color: var(--v-muted); }
+:is(.access-field input, .viewer-search input, .nas-file-viewer select) {
+  background: rgba(0, 0, 0, 0.30); color: var(--v-text); border: 1px solid var(--v-line-strong); border-radius: 7px;
+}
+:is(.access-field input, .viewer-search input):focus { border-color: var(--v-gold); outline: none; }
+.code-preview-empty svg, .viewer-icon { color: var(--v-gold); filter: none; }
+.viewer-search { border-color: var(--v-line); }
+.viewer-list li:hover, .viewer-row:hover { background: rgba(232, 176, 79, 0.08); }
+:is(.viewer-star, .viewer-filter) { color: var(--v-muted); }
+:is(.viewer-star.on, .viewer-filter.on) { color: var(--v-gold); }
+.viewer-filter:hover { color: var(--v-text); border-color: var(--v-rim); }
+.attachment-chip { border: 1px solid var(--v-line-strong); border-radius: 8px; background: rgba(0, 0, 0, 0.30); color: var(--v-text); }
+.nas-file-text { background: #111111; color: #e8e2d8; }
+
+/* En la conversación, el código es una tarjeta más: contorno dorado encendido. */
+.helios-answer .reply-code {
+  border: 1px solid var(--v-rim); border-radius: var(--v-radius);
+  box-shadow: inset 0 1px 0 var(--v-highlight), var(--v-lift), var(--v-glow);
+}
+.helios-answer .reply-code header { border-bottom-color: var(--v-line-strong); }
+
+/* El núcleo se abre por encima de todo: en el móvil quedaba debajo de las pestañas. */
+.viewer-dock { z-index: 30; }
+.vision-layout.mobile-layout ~ .viewer-dock, .mobile-layout .viewer-dock { left: 10px; right: 10px; width: auto !important; }

@@ -6,17 +6,15 @@ import { parseReply, type Inline } from "@/lib/helios/markdown";
 import { CodeText } from "./CodeText";
 
 export interface CodeActions {
-  onImproveCode?: (code: string, language?: string) => void;
   onPreviewCode?: (code: string, language?: string) => void;
 }
 
-export function ReplyMarkdown({ text, onImproveCode, onPreviewCode }: { text: string } & CodeActions) {
+export function ReplyMarkdown({ text, onPreviewCode }: { text: string } & CodeActions) {
   const bloques = parseReply(text);
   return <div className="helios-answer">{bloques.map((bloque, indice) => {
     if (bloque.kind === "code") {
       const codigo = bloque.lines.map(linea => linea.map(parte => parte.text).join("")).join("\n");
-      return <ReplyCode key={indice} code={codigo} language={bloque.language}
-        onImprove={onImproveCode} onPreview={onPreviewCode} />;
+      return <ReplyCode key={indice} code={codigo} language={bloque.language} onPreview={onPreviewCode} />;
     }
     if (bloque.kind === "p") return <p key={indice}>{bloque.lines[0].map((parte, i) => <InlinePart key={i} part={parte} />)}</p>;
     const Lista = bloque.kind === "ol" ? "ol" : "ul";
@@ -31,13 +29,12 @@ function InlinePart({ part }: { part: Inline }) {
   return part.text;
 }
 
-export function ReplyCode({ code, language, children, copy = true, download = false, onImprove, onPreview }: {
+export function ReplyCode({ code, language, children, copy = true, download = false, onPreview }: {
   code: string;
   language?: string;
   children?: ReactNode;
   copy?: boolean;
   download?: boolean;
-  onImprove?: (code: string, language?: string) => void;
   onPreview?: (code: string, language?: string) => void;
 }) {
   const [copiado, setCopiado] = useState(false);
@@ -53,7 +50,6 @@ export function ReplyCode({ code, language, children, copy = true, download = fa
     <header>
       <span>{language || "código"}</span>
       <span className="reply-code-actions">
-        {onImprove && <button type="button" onClick={() => onImprove(code, language)}>Mejorar</button>}
         {onPreview && <button type="button" onClick={() => onPreview(code, language)}>
           {["html", "htm"].includes((language ?? "").toLowerCase()) ? "Ver" : "Crear vista"}
         </button>}

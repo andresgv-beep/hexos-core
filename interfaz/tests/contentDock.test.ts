@@ -4,7 +4,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ContentDock } from '../components/ContentDock';
 
-const actions = { fileRequest: null, busy: false, canUndo: false, onUndo() {}, onExpandCode() {}, onExpandFile() {}, onImprove() {}, onPreview() {} };
+const actions = { fileRequest: null, busy: false, canUndo: false, onUndo() {}, onExpandCode() {}, onExpandFile() {}, onPreview() {} };
 test('content dock exposes three destinations without inventing file content', () => {
   const html = renderToStaticMarkup(createElement(ContentDock, { ...actions, artifact: null }));
   for (const label of ['Código', 'Interfaz', 'NAS']) assert.ok(html.includes(label));

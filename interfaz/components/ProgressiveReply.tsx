@@ -7,7 +7,7 @@ import type { CodeActions } from "./ReplyMarkdown";
 
 /** Suaviza las actualizaciones progresivas del servidor: palabras en prosa y
  *  fragmentos pequeños en código, manteniendo un cursor visual independiente. */
-export function ProgressiveReply({ text, live = false, onComplete, onImproveCode, onPreviewCode }: {
+export function ProgressiveReply({ text, live = false, onComplete, onPreviewCode }: {
   text: string; live?: boolean; onComplete?: () => void;
 } & CodeActions) {
   // Helios escribe en Markdown: se interpreta antes de revelar, para que una lista
@@ -95,7 +95,6 @@ export function ProgressiveReply({ text, live = false, onComplete, onImproveCode
         if (bloque.kind === "code") {
           const codigo = bloque.lines.map(linea => linea.parts.map(parte => parte.text).join("")).join("\n");
           return <ReplyCode key={bloque.index} code={codigo} language={bloque.language} copy={complete}
-            onImprove={complete && !live ? onImproveCode : undefined}
             onPreview={complete && !live ? onPreviewCode : undefined} />;
         }
         const lineas = bloque.lines.map(linea =>

@@ -10,10 +10,9 @@ import { CodeWorkspace } from "./CodeWorkspace";
 const panels = ["Notas", "Chat", "Código", "Visualización"];
 /** Presentation only: no second transport, conversation or agent. */
 export function MobileWorkspace({ previous, turns, notes, artifact, busy, error, onBrowseNotes,
-  onImprove, onPreview, hasEarlier, olderLoading, onLoadEarlier, onOpenFiles }: {
+  onPreview, hasEarlier, olderLoading, onLoadEarlier, onOpenFiles }: {
   previous: HistoryMessage[]; turns: Turn[]; notes: NoteDetail[]; artifact: ReplyArtifact | null;
   busy: boolean; error: string; onBrowseNotes: () => void;
-  onImprove: (code: string, language?: string) => void;
   onPreview: (code: string, language?: string) => void;
   hasEarlier?: boolean; olderLoading?: boolean; onLoadEarlier?: () => Promise<void>;
   onOpenFiles?: () => void;
@@ -83,13 +82,13 @@ export function MobileWorkspace({ previous, turns, notes, artifact, busy, error,
         {!previous.length && !turns.length && <p>Habla con Helios. Tu conversación continúa aquí.</p>}
         {previous.map((message, index) => <article className={`history-entry ${message.role}`} key={index}>
           <span className="message-author">{message.role === 'user' ? 'TÚ' : 'HELIOS'}</span>
-          <ReplyMarkdown text={message.text} onImproveCode={onImprove} onPreviewCode={onPreview} />
+          <ReplyMarkdown text={message.text} onPreviewCode={onPreview} />
         </article>)}
-        {turns.map(turn => <TurnoVisible key={turn.id} turn={turn} onImproveCode={onImprove} onPreviewCode={onPreview} />)}
+        {turns.map(turn => <TurnoVisible key={turn.id} turn={turn} onPreviewCode={onPreview} />)}
       </section>
       {[2, 3].map(index => <section className="mobile-page mobile-artifact" aria-label={panels[index]} key={index}>
         {artifact ? <CodeWorkspace artifact={artifact} busy={busy} canUndo={false} onUndo={() => {}}
-          onClose={() => go(1)} onImprove={onImprove} onCreatePreview={onPreview}
+          onClose={() => go(1)} onCreatePreview={onPreview}
           fixedMode={index === 2 ? 'code' : 'preview'} />
           : <div><h2>{panels[index]}</h2><p>Cuando Helios genere una implementación, aparecerá aquí.</p></div>}
       </section>)}

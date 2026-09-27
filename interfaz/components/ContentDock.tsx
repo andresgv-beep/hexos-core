@@ -8,10 +8,10 @@ import { usePreviewDocument } from "./usePreviewDocument";
 import { PreviewFrame } from "./PreviewFrame";
 
 type Tab = "code" | "preview" | "nas";
-export function ContentDock({ artifact, fileRequest, busy, canUndo, onUndo, onExpandCode, onExpandFile, onImprove, onPreview }: {
+export function ContentDock({ artifact, fileRequest, busy, canUndo, onUndo, onExpandCode, onExpandFile, onPreview }: {
   artifact: ReplyArtifact | null; fileRequest: { id?: string } | null; busy: boolean;
   canUndo: boolean; onUndo: () => void; onExpandCode: () => void; onExpandFile: (id?: string) => void;
-  onImprove: (code: string, language?: string) => void; onPreview: (code: string, language?: string) => void;
+  onPreview: (code: string, language?: string) => void;
 }) {
   const initialTab: Tab = fileRequest ? "nas" : artifact?.previewHtml ? "preview" : "code";
   const previewSource = usePreviewDocument(artifact?.previewHtml);
@@ -33,7 +33,7 @@ export function ContentDock({ artifact, fileRequest, busy, canUndo, onUndo, onEx
       {(nasVisited || tab === "nas") && <div className="hud-nas-pane" hidden={tab !== "nas"}><NasFileViewer key={fileRequest?.id ?? "library"} embedded initialId={fileRequest?.id}
         onClose={() => {}} onExpand={onExpandFile} /></div>}
       {tab === "nas" ? null : !artifact ? <div className="hud-content-empty"><p>{tab === "code" ? "El código que abra Helios aparecerá aquí." : "La vista previa de la implementación aparecerá aquí."}</p></div>
-        : tab === "code" ? <ReplyCode download code={artifact.code} language={artifact.language} onImprove={onImprove} />
+        : tab === "code" ? <ReplyCode download code={artifact.code} language={artifact.language} />
         : artifact.previewHtml ? <PreviewFrame title="Vista previa lateral" srcDoc={previewSource} />
         : <div className="hud-content-empty"><p>Esta implementación todavía no tiene vista previa.</p>
           <button type="button" disabled={busy} onClick={() => onPreview(artifact.code, artifact.language)}>Crear interfaz</button></div>}

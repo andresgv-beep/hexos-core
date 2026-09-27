@@ -7,7 +7,7 @@ import { MobileWorkspace } from '../components/MobileWorkspace';
 test('mobile presents the supplied single conversation and four panels', () => {
   const html = renderToStaticMarkup(createElement(MobileWorkspace, {
     previous: [{ role: 'user', text: 'Mensaje compartido' }], turns: [], notes: [],
-    artifact: null, busy: false, error: '', onBrowseNotes() {}, onImprove() {}, onPreview() {},
+    artifact: null, busy: false, error: '', onBrowseNotes() {}, onPreview() {},
   }));
   for (const label of ['Notas','Chat','Código','Visualización','Mensaje compartido']) assert.ok(html.includes(label));
   assert.equal(html.match(/Mensaje compartido/g)?.length, 1);
