@@ -56,7 +56,8 @@ class MediaWorker:
                 reviews.finish(request,token,time.time(),decision=result.get('decision'),
                                deferred=result.get('status')=='deferred')
             except Exception as exc:
-                try:reviews.finish(request,token,time.time(),error=str(exc))
+                from ..chat_backend.model_lifecycle import ModelUnavailable
+                try:reviews.finish(request,token,time.time(),error=str(exc),unavailable=isinstance(exc,ModelUnavailable))
                 except ValueError:pass
                 self.last_error=str(exc)
         finally:store.close()

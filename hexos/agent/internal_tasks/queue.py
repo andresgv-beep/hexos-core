@@ -50,7 +50,7 @@ class ReviewQueue:
                 return json.loads(row['request']),token
         return None
 
-    def finish(self, request, token, now, *, decision=None, error=None, deferred=False):
+    def finish(self, request, token, now, *, decision=None, error=None, deferred=False, unavailable=False):
         from .requests import validate
         with self.store.transaction():
             row=self.store.db.execute('SELECT * FROM media_reviews WHERE id=?',(request['request_id'],)).fetchone()
@@ -64,9 +64,11 @@ class ReviewQueue:
                 self.store.db.execute("UPDATE media_reviews SET status='obsolete' WHERE id=?",(row['id'],));return
             if decision is not None:
                 validate(request,decision,job)
-            if deferred or error or (decision and decision['action']=='wait'):
+            # Sin modelo que responder no hay intento que contar: tres cargas fallidas
+            # por falta de VRAM dejaban la película en «attention» para siempre.
+            if deferred or unavailable or error or (decision and decision['action']=='wait'):
                 self.store.db.execute('UPDATE media_reviews SET due=?,lease=NULL,expires=NULL,result=?,attempts=attempts-? WHERE id=?',
-                                     (now+(2 if deferred else 120),json.dumps(dict(error=error,decision=decision)),int(deferred),row['id']))
+                                     (now+(2 if deferred else 120),json.dumps(dict(error=error,decision=decision)),int(deferred or unavailable),row['id']))
                 return
             if decision is None:
                 raise ValueError('Falta decisión')

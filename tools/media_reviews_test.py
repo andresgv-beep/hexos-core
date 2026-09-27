@@ -68,6 +68,16 @@ class ReviewsTest(unittest.TestCase):
             self.clock.now+=2
         self.assertEqual(self.queue.pending()[0]['attempts'],0)
 
+    def test_model_that_cannot_load_retries_later_without_spending_attempts(self):
+        self.until_review()
+        for _ in range(5):
+            request,token=self.queue.claim(self.clock())
+            self.queue.finish(request,token,self.clock(),error='No se pudo cargar el modelo: El motor terminó',unavailable=True)
+            self.assertIsNone(self.queue.claim(self.clock()))  # espera, no martillea
+            self.clock.now+=120
+        row=self.queue.pending()[0]
+        self.assertEqual((row['status'],row['attempts']),('pending',0))
+
     def test_invalid_model_outputs_stop_after_three_attempts(self):
         self.until_review()
         for _ in range(3):

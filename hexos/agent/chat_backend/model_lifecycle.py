@@ -8,6 +8,11 @@ from ..native_transport import TurnCancelled
 from ..internal_tasks.resources import InferenceSlot
 
 
+
+class ModelUnavailable(RuntimeError):
+    """El modelo no pudo cargarse (sin VRAM, el motor cayó…). Es la máquina, no una
+    respuesta: quien lo reciba puede reintentar más tarde sin darlo por fallido."""
+
 class ModelLifecycle:
     """Mantiene un runtime cargado solo mientras la conversación lo necesita.
 
@@ -205,7 +210,7 @@ class ModelLifecycle:
                         self._turn_acquired = True
                         return
                     if self._state == 'error':
-                        raise RuntimeError('No se pudo cargar el modelo: ' + str(self._error))
+                        raise ModelUnavailable('No se pudo cargar el modelo: ' + str(self._error))
                     elif self._state == 'unloaded':
                         self._start_loading_locked()
                     self._condition.wait(timeout=.1)
@@ -240,7 +245,7 @@ class ModelLifecycle:
                         break
                     if self._state == 'error':
                         error = self._error
-                        raise RuntimeError('No se pudo cargar el modelo: ' + str(error))
+                        raise ModelUnavailable('No se pudo cargar el modelo: ' + str(error))
                     if self._state == 'unloaded':
                         self._start_loading_locked()
                     self._condition.wait()
