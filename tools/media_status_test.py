@@ -69,6 +69,13 @@ class MediaStatusTest(unittest.TestCase):
         self.assertEqual((card['label'], card['percent'], card['size_after_gb']), ('Terminada', 100.0, 7.2))
         self.assertEqual(media_http.summary(self.root, now=2000 + 7*3600)['jobs'], [])
 
+    def test_verified_film_waiting_to_publish_shows_its_final_size(self):
+        job_id = self.store.create([source(1)], profile(), 'encoder', 'r1', 1000)['jobs'][0]['id']
+        self.put(job_id, state='awaiting_review', review_kind='publication',
+                 validation=dict(valid=True, identity=dict(size_bytes=6_073_919_068)))
+        card, = media_http.summary(self.root, now=1100)['jobs']
+        self.assertEqual((card['label'], card['percent'], card['size_after_gb']), ('Lista para publicar', 100.0, 6.1))
+
     def test_controls_pause_and_cancel_the_batch(self):
         batch = self.store.create([source(1), source(2)], profile(), 'encoder', 'r1', 1000)
         paused = media_http.control(self.root, dict(batch_id=batch['id'], operation='pause'), now=1001)

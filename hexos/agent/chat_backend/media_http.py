@@ -107,10 +107,15 @@ def _card(job, paused, updated, live=None):
             written = observation.get('output_bytes')
             if percent >= 5 and isinstance(written, (int, float)) and written > 0:
                 item['estimated_gb'] = _gb(written * 100 / percent)
-    elif state in AFTER_ENCODE or state == 'completed':
+    elif state in AFTER_ENCODE or state == 'completed' or job.get('review_kind') == 'publication':
         item['percent'] = 100.0
+    if state == 'awaiting_review' and job.get('review_kind') == 'publication':
+        # Convertida y comprobada: solo falta el visto bueno para ponerla en la biblioteca.
+        item['label'] = 'Lista para publicar'
     if state == 'completed':
         item['size_after_gb'] = _gb(((job.get('publication') or {}).get('identity') or {}).get('size_bytes'))
+    elif (job.get('validation') or {}).get('valid') is True:
+        item['size_after_gb'] = _gb(((job.get('validation') or {}).get('identity') or {}).get('size_bytes'))
     elif state in ('failed', 'blocked') and job.get('error'):
         item['error'] = str(job['error'])[:200]
     return item
