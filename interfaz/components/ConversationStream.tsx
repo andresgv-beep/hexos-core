@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ProgressiveReply } from "./ProgressiveReply";
 import { ReplyMarkdown } from "./ReplyMarkdown";
 import { ToolTerminal } from "./ToolTerminal";
@@ -52,8 +52,8 @@ export function ConversationStream({ turn, onReplyComplete, onPreviewCode }:
   </section>;
 }
 
-export function TurnoVisible({ turn, saliendo, settled = false, onReplyComplete, onPreviewCode }:
-  { turn: Turn; saliendo?: boolean; settled?: boolean; onReplyComplete?: (id: number) => void } & CodeActions) {
+export function TurnoVisible({ turn, saliendo, settled = false, extra, onReplyComplete, onPreviewCode }:
+  { turn: Turn; saliendo?: boolean; settled?: boolean; extra?: ReactNode; onReplyComplete?: (id: number) => void } & CodeActions) {
   return <article className={`stream-turn${saliendo ? " leaving" : ""}`} aria-hidden={saliendo || undefined}>
     <p className="stream-question"><span className="message-author">TÚ</span>{turn.text}</p>
     <div className="stream-body">
@@ -72,6 +72,7 @@ export function TurnoVisible({ turn, saliendo, settled = false, onReplyComplete,
             onComplete={() => onReplyComplete?.(turn.id)}
             onPreviewCode={onPreviewCode} />
         </div>)}
+      {extra}
       {/* El reparo viaja pegado a la respuesta: es lo que evita creerse lo que no pasó. */}
       {turn.caveat && <p className="reply-caveat" role="note">
         {turn.caveat.note}

@@ -1,14 +1,16 @@
 "use client";
 
-import { useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import type { HistoryMessage } from '@/lib/helios/hexos';
 import { TurnoVisible, type Turn } from './ConversationStream';
 import { ReplyMarkdown, type CodeActions } from './ReplyMarkdown';
 
 /** A single scroll surface; incoming text follows only while the reader is at the bottom. */
 export function ContinuousChat({ previous, turns, historyError, hasEarlier, olderLoading, onLoadEarlier,
-  onReplyComplete, onPreviewCode }: {
+  onReplyComplete, onPreviewCode, turnExtras }: {
   previous: HistoryMessage[]; turns: Turn[]; historyError: string;
+  /** Tarjetas vivas que acompañan a un turno concreto, por id. */
+  turnExtras?: Record<number, ReactNode>;
   hasEarlier: boolean; olderLoading: boolean; onLoadEarlier: () => Promise<void>;
   onReplyComplete: () => void;
 } & CodeActions) {
@@ -48,7 +50,7 @@ export function ContinuousChat({ previous, turns, historyError, hasEarlier, olde
         <span className="message-author">{message.role === 'user' ? 'TÚ' : 'HELIOS'}</span>
         <ReplyMarkdown text={message.text} onPreviewCode={onPreviewCode} />
       </article>)}
-      {turns.map((turn, index) => <TurnoVisible key={turn.id} turn={turn} settled={index < turns.length - 1}
+      {turns.map((turn, index) => <TurnoVisible key={turn.id} turn={turn} settled={index < turns.length - 1} extra={turnExtras?.[turn.id]}
         onReplyComplete={index === turns.length - 1 ? onReplyComplete : undefined}
         onPreviewCode={onPreviewCode} />)}
       {!previous.length && !turns.length && <div className="hud-welcome"><h2>Hablemos, socio.</h2>

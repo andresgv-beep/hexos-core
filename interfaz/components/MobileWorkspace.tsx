@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { HistoryMessage } from "@/lib/helios/hexos";
 import type { ReplyArtifact } from "@/lib/helios/preview";
 import type { NoteDetail } from "@/lib/helios/core";
@@ -10,12 +10,13 @@ import { CodeWorkspace } from "./CodeWorkspace";
 const panels = ["Notas", "Chat", "Código", "Visualización"];
 /** Presentation only: no second transport, conversation or agent. */
 export function MobileWorkspace({ previous, turns, notes, artifact, busy, error, onBrowseNotes,
-  onPreview, hasEarlier, olderLoading, onLoadEarlier, onOpenFiles }: {
+  onPreview, hasEarlier, olderLoading, onLoadEarlier, onOpenFiles, turnExtras }: {
   previous: HistoryMessage[]; turns: Turn[]; notes: NoteDetail[]; artifact: ReplyArtifact | null;
   busy: boolean; error: string; onBrowseNotes: () => void;
   onPreview: (code: string, language?: string) => void;
   hasEarlier?: boolean; olderLoading?: boolean; onLoadEarlier?: () => Promise<void>;
   onOpenFiles?: () => void;
+  turnExtras?: Record<number, ReactNode>;
 }) {
   const [page, setPage] = useState(1);
   const rail = useRef<HTMLDivElement>(null);
@@ -84,7 +85,7 @@ export function MobileWorkspace({ previous, turns, notes, artifact, busy, error,
           <span className="message-author">{message.role === 'user' ? 'TÚ' : 'HELIOS'}</span>
           <ReplyMarkdown text={message.text} onPreviewCode={onPreview} />
         </article>)}
-        {turns.map(turn => <TurnoVisible key={turn.id} turn={turn} onPreviewCode={onPreview} />)}
+        {turns.map(turn => <TurnoVisible key={turn.id} turn={turn} extra={turnExtras?.[turn.id]} onPreviewCode={onPreview} />)}
       </section>
       {[2, 3].map(index => <section className="mobile-page mobile-artifact" aria-label={panels[index]} key={index}>
         {artifact ? <CodeWorkspace artifact={artifact} busy={busy} canUndo={false} onUndo={() => {}}

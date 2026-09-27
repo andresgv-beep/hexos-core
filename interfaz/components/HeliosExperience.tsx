@@ -23,12 +23,15 @@ import { phases } from "@/lib/helios/state";
 import { createHexosTransport, type ContextCut, type CredentialRequest, type HeliosTransport, type HistoryMessage } from "@/lib/helios/hexos";
 import { mergeToolActivities, type ToolActivity } from "@/lib/helios/tools";
 import { coreSectionForTools, createCoreClient, type NoteDetail } from "@/lib/helios/core";
+import { createMediaClient, isActive, remaining, type MediaControl, type MediaJob } from "@/lib/helios/media";
+import { MediaCard } from "./MediaCard";
 import { assessCodeRevision, codeRevisionPrompt, extractHtmlPreview, extractReplyArtifact, type ReplyArtifact } from "@/lib/helios/preview";
 
 const localTransport = createHexosTransport("/api/helios");
 
 /** The host can supply the existing HexOS transport without coupling windows to the model. */
 const coreClient = createCoreClient("/api/helios");
+const mediaClient = createMediaClient("/api/helios");
 type SendOptions = { thinking?: boolean; displayText?: string; previewSource?: { code: string; language?: string } };
 
 function sameArtifact(left: ReplyArtifact, right: ReplyArtifact) {
@@ -239,6 +242,9 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   // palabras del mensaje abriría el panel mientras Helios habla de otra cosa.
   const [coreOpen, setCoreOpen] = useState(false);
   const [systemOpen, setSystemOpen] = useState(false);
+  // La cola de vídeo se lee aparte del chat: la tarjeta avanza sin gastar turnos.
+  const [mediaJobs, setMediaJobs] = useState<MediaJob[]>([]);
+  const [mediaReload, setMediaReload] = useState(0);
   const [coreReload, setCoreReload] = useState(0);
   const nextId = useRef(0);
   const request = useRef<AbortController | null>(null);
@@ -508,6 +514,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
             // así que un fallo aquí pierde la comodidad, no la información.
             .catch(() => {});
         }
+        if (result.tools.some(tool => tool.name.startsWith("media."))) setMediaReload(n => n + 1);
         const tocado = coreSectionForTools(result.tools);
         if (tocado !== null) {
           // El visor enseña notas. Abrirlo porque Helios tocó un informe o una
@@ -619,6 +626,23 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     window.addEventListener("keydown", abrirBusqueda);
     return () => window.removeEventListener("keydown", abrirBusqueda);
   }, []);
+  useEffect(() => {
+    let disposed = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const controller = new AbortController();
+    const leer = () => mediaClient.jobs(controller.signal).then(jobs => {
+      if (disposed) return;
+      setMediaJobs(jobs);
+      // Mientras algo convierte, cada pocos segundos; en calma, de vez en cuando.
+      timer = setTimeout(leer, jobs.some(isActive) ? 3000 : 30000);
+    }).catch(() => { if (!disposed) timer = setTimeout(leer, 30000); });
+    void leer();
+    return () => { disposed = true; clearTimeout(timer); controller.abort(); };
+  }, [mediaReload]);
+  async function controlMedia(batchId: string, operation: MediaControl) {
+    setMediaJobs(await mediaClient.control(batchId, operation));
+    setAnnouncement(operation === "cancel" ? "Cancelación pedida" : operation === "pause" ? "Cola en pausa" : "Cola reanudada");
+  }
   function closeHistory() {
     setHistoryOpen(false);
     historyButton.current?.focus();
@@ -627,6 +651,11 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     : phase === "tool" ? "Usando herramientas" : phase === "thinking" ? "Pensando…"
     : phase === "responding" ? "Respondiendo" : "En reposo";
   const herramientaEnCurso = turnTools.find(tool => tool.status === "running");
+  const convirtiendo = mediaJobs.find(job => job.state === "running") ?? mediaJobs.find(isActive);
+  // La tarjeta acompaña a la última respuesta que tocó la cola de vídeo.
+  const turnoMedia = [...turns].reverse().find(turn => turn.tools?.some(tool => tool.name.startsWith("media.")));
+  const turnExtras = turnoMedia && mediaJobs.length
+    ? { [turnoMedia.id]: <MediaCard jobs={mediaJobs} onControl={controlMedia} /> } : undefined;
   // El espacio de trabajo solo ocupa sitio cuando hay algo que enseñar en él.
   const workspaceOpen = !mobile && Boolean(codeArtifact || fileViewer);
   return <main className={`helios-app hud-layout vision-layout phase-${phase}${mobile ? ' mobile-layout' : ''}`} style={{ "--phase-color": active.color } as CSSProperties}>
@@ -635,7 +664,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       busy={sending} error={historyError} onBrowseNotes={() => setCoreOpen(true)}
       hasEarlier={historyNext !== null} olderLoading={olderLoading} onLoadEarlier={loadOlderHistory}
       onOpenFiles={() => setFileViewer({})}
-      onPreview={previewCode} />}
+      onPreview={previewCode} turnExtras={turnExtras} />}
     <nav className="vision-rail" aria-label="Secciones">
       <button type="button" aria-label="Conversación" aria-current="page" onClick={() => inputRef.current?.focus()}><MessageCircle size={21} /></button>
       <button type="button" aria-label="Notas" aria-pressed={coreOpen} onClick={() => setCoreOpen(true)}><NotebookText size={21} /></button>
@@ -660,7 +689,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       <section className="vision-conversation" aria-label="Conversación">
         <ContinuousChat previous={previous} turns={turns} historyError={historyError}
           hasEarlier={historyNext !== null} olderLoading={olderLoading} onLoadEarlier={loadOlderHistory}
-          onReplyComplete={() => setRevealing(false)} onPreviewCode={previewCode} />
+          onReplyComplete={() => setRevealing(false)} onPreviewCode={previewCode} turnExtras={turnExtras} />
     <section className="conversation" aria-label="Chat con Helios">
       {!mobile && !editingCode && (codeArtifact || historicalArtifacts.length > 0) &&
         <button type="button" className="history-code-open" onClick={() => {
@@ -694,9 +723,12 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     </section>
       </section>
       <footer className="vision-horizon" aria-label="En segundo plano">
-        <span className="vision-horizon-state" data-busy={sending || undefined}><span aria-hidden="true" />
-          {herramientaEnCurso ? herramientaEnCurso.name : sending ? "Helios está trabajando" : "Todo en calma"}</span>
-        <span className="vision-horizon-line" aria-hidden="true" />
+        <span className="vision-horizon-state" data-busy={sending || convirtiendo ? true : undefined}><span aria-hidden="true" />
+          {herramientaEnCurso ? herramientaEnCurso.name : sending ? "Helios está trabajando"
+            : convirtiendo ? [convirtiendo.title, convirtiendo.percent !== undefined ? `${Math.round(convirtiendo.percent)} %` : convirtiendo.label.toLowerCase(),
+                convirtiendo.etaSeconds !== undefined ? `quedan ${remaining(convirtiendo.etaSeconds)}` : ""].filter(Boolean).join(" · ")
+            : "Todo en calma"}</span>
+        <span className="vision-horizon-line" aria-hidden="true">{convirtiendo?.percent !== undefined && <span style={{ width: `${convirtiendo.percent}%` }} />}</span>
         <InferenceFooter metrics={connection === "ready" ? metrics : undefined} />
       </footer>
     </div>

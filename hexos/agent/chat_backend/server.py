@@ -12,6 +12,7 @@ from .audio import decode_audio
 from .settings import MAX_INPUT
 from .history_archive import history_page
 from .file_http import serve as serve_file
+from . import media_http
 
 
 def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, native_template=False):
@@ -70,6 +71,8 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                                                revisions=notes.history(store, identificador)))
                     except ValueError as exc:
                         self.respond(404, {'error': str(exc)})
+            elif self.path == '/api/media':
+                self.respond(200, media_http.summary(agent.env.workspace))
             elif self.path == '/api/telemetry':
                 self.respond(200, system_telemetry.snapshot())
             elif self.path == '/api/work':
@@ -113,7 +116,7 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
 
         def do_POST(self):
             if self.path not in ('/api/chat', '/api/work', '/api/context/reset', '/api/credentials',
-                                 '/api/thinking', '/api/cancel', '/api/model/warmup'):
+                                 '/api/thinking', '/api/cancel', '/api/model/warmup', '/api/media/control'):
                 self.respond(404, {'error':'ruta inexistente'})
                 return
             # Una página abierta en otra pestaña no puede accionar el agente ni,
@@ -136,6 +139,8 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                         raise ValueError('se espera request_id')
                     rid = string(payload['request_id'], 'request_id', 128)
                     self.respond(200, agent.cancel_generation(rid))
+                elif self.path == '/api/media/control':
+                    self.respond(200, media_http.control(agent.env.workspace, strict_json(data.decode('utf-8'))))
                 elif self.path == '/api/model/warmup':
                     if strict_json(data.decode('utf-8')) != {}:
                         raise ValueError('Se espera {}')
