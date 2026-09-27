@@ -7,16 +7,28 @@ const TONES = {
   VRAM: ['#fff7dc', '#f4c46a'],
 } as const;
 
+const gb = (mb: number) => (mb / 1024).toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const decimal = (value: number) => value.toLocaleString('es-ES', { maximumFractionDigits: 1 });
+
 export function SystemGauges({ telemetry }: { telemetry: SystemTelemetry }) {
   const percent = (used: number, total: number) => total > 0 ? Math.min(100, used / total * 100) : 0;
+  const { cpu, gpu, vram, ram } = telemetry;
+  // Debajo de cada rosco, lo que el porcentaje no dice: temperatura, consumo, lo que queda.
   const gauges = [
-    { label: 'CPU', value: telemetry.cpu.usagePct },
-    { label: 'GPU', value: telemetry.gpu.usagePct },
-    { label: 'VRAM', value: percent(telemetry.vram.usedMb, telemetry.vram.totalMb) },
+    { label: 'CPU', value: cpu.usagePct, lines: [
+      cpu.temperatureC !== null ? `${Math.round(cpu.temperatureC)} °C` : null,
+      cpu.cores !== null ? `${cpu.cores} hilos` : null,
+      cpu.load1m !== null ? `carga ${decimal(cpu.load1m)}` : null] },
+    { label: 'GPU', value: gpu.usagePct, lines: [
+      gpu.temperatureC !== null ? `${Math.round(gpu.temperatureC)} °C` : null,
+      gpu.powerW !== null ? `${Math.round(gpu.powerW)} W` : null] },
+    { label: 'VRAM', value: percent(vram.usedMb, vram.totalMb), lines: [
+      `${gb(vram.usedMb)} / ${gb(vram.totalMb)} GB`,
+      `quedan ${gb(Math.max(0, vram.totalMb - vram.usedMb))} GB`] },
   ] as const;
-  const ram = percent(telemetry.ram.usedMb, telemetry.ram.totalMb);
+  const ramPct = percent(ram.usedMb, ram.totalMb);
   return <div className="hud-system-gauges">
-    <div className="hud-gauge-row">{gauges.map(({ label, value }) => <div className="hud-gauge" key={label}>
+    <div className="hud-gauge-row">{gauges.map(({ label, value, lines }) => <div className="hud-gauge" key={label}>
       <div className="hud-gauge-dial">
         <svg viewBox="0 0 78 78" fill="none" aria-hidden="true">
           <defs>
@@ -29,11 +41,13 @@ export function SystemGauges({ telemetry }: { telemetry: SystemTelemetry }) {
           <circle cx="39" cy="39" r="28" pathLength="100" stroke={`url(#gauge-${label})`} strokeWidth="6" strokeLinecap="round"
             strokeDasharray={`${Math.max(value, 0.5)} 100`} transform="rotate(-90 39 39)" className="hud-gauge-fill" />
         </svg><strong>{Math.round(value)}%</strong>
-      </div><span>{label}</span>
+      </div>
+      <span>{label}</span>
+      <ul className="hud-gauge-facts">{lines.filter(Boolean).map(line => <li key={line}>{line}</li>)}</ul>
     </div>)}</div>
-    <div className="hud-ram-label"><span>RAM</span><span>{(telemetry.ram.usedMb / 1024).toFixed(1)} / {(telemetry.ram.totalMb / 1024).toFixed(1)} GB</span></div>
-    <div className="hud-ram-segments" role="meter" aria-label="RAM" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(ram)}>
-      {Array.from({ length: 20 }, (_, i) => <i key={i} data-filled={i < Math.round(ram / 5)} />)}</div>
-    <p className="hud-gpu-detail">{telemetry.gpu.name}{telemetry.gpu.temperatureC !== null && ` · ${Math.round(telemetry.gpu.temperatureC)} °C`}</p>
+    <div className="hud-ram-label"><span>RAM</span><span>{gb(ram.usedMb)} / {gb(ram.totalMb)} GB · quedan {gb(Math.max(0, ram.totalMb - ram.usedMb))} GB</span></div>
+    <div className="hud-ram-bar" role="meter" aria-label="RAM" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(ramPct)}>
+      <span style={{ width: `${ramPct}%` }} /></div>
+    <p className="hud-gpu-detail">{gpu.name}</p>
   </div>;
 }

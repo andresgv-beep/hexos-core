@@ -1,16 +1,39 @@
 """Lectura local y acotada de la telemetría que muestra HexOS."""
+import os
 from pathlib import Path
 import subprocess
 import threading
 import time
 
 
+# Sensores de temperatura de CPU conocidos: AMD (k10temp, zenpower) e Intel (coretemp).
+CPU_SENSORS = ('k10temp', 'zenpower', 'coretemp')
+
+
 class SystemTelemetry:
     """Muestra CPU, RAM y la GPU primaria sin mantener procesos residentes."""
 
-    def __init__(self):
+    def __init__(self, hwmon=Path('/sys/class/hwmon'), loadavg=Path('/proc/loadavg')):
         self._lock = threading.Lock()
         self._previous_cpu = None
+        self._hwmon = hwmon
+        self._loadavg = loadavg
+
+    def _cpu_temperature(self):
+        """La primera lectura del sensor de la CPU (Tctl en AMD, el paquete en Intel)."""
+        try:
+            for sensor in sorted(self._hwmon.iterdir()):
+                if (sensor/'name').read_text().strip() in CPU_SENSORS:
+                    return round(int((sensor/'temp1_input').read_text().strip()) / 1000, 1)
+        except (OSError, ValueError):
+            pass
+        return None
+
+    def _cpu_load(self):
+        try:
+            return round(float(self._loadavg.read_text().split()[0]), 2)
+        except (OSError, ValueError, IndexError):
+            return None
 
     @staticmethod
     def _memory():
@@ -34,7 +57,8 @@ class SystemTelemetry:
             if elapsed > 0:
                 usage = 100.0 * (1.0 - (idle - old_idle) / elapsed)
         self._previous_cpu = (idle, total)
-        return {'usage_pct': round(max(0.0, min(100.0, usage)), 1)}
+        return {'usage_pct': round(max(0.0, min(100.0, usage)), 1), 'cores': os.cpu_count(),
+                'load_1m': self._cpu_load(), 'temperature_c': self._cpu_temperature()}
 
     @staticmethod
     def _gpu():
