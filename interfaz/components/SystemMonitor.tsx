@@ -1,10 +1,7 @@
 "use client";
 
-import { HudAccents } from "./HudAccents";
-
 import { useEffect, useState } from "react";
 import { Activity, Boxes, Brain, Cpu, MemoryStick, Microchip } from "lucide-react";
-import { SystemGauges } from "./SystemGauges";
 import { parseTelemetry, type SystemTelemetry } from "@/lib/helios/telemetry";
 
 function percent(used: number, total: number) {
@@ -25,8 +22,7 @@ function Metric({ icon, label, value, detail, amount }: {
   </div>;
 }
 
-export function SystemMonitor({ autoEnabled, autoBusy = false, onToggleAuto, coreTotal, coreOpen = false, onToggleCore, hud = false }: {
-  hud?: boolean;
+export function SystemMonitor({ autoEnabled, autoBusy = false, onToggleAuto, coreTotal, coreOpen = false, onToggleCore }: {
   autoEnabled: boolean | null;
   autoBusy?: boolean;
   onToggleAuto: () => void;
@@ -70,18 +66,17 @@ export function SystemMonitor({ autoEnabled, autoBusy = false, onToggleAuto, cor
   const ram = telemetry ? percent(telemetry.ram.usedMb, telemetry.ram.totalMb) : 0;
   const vram = telemetry ? percent(telemetry.vram.usedMb, telemetry.vram.totalMb) : 0;
   return <aside className="system-monitor" aria-label="Consumo del sistema">
-    {hud && <HudAccents />}
     <div className="monitor-title">
       <Activity size={17} /><span>SISTEMA</span><span className={`monitor-status ${online ? "online" : ""}`} />
     </div>
     <div className="monitor-content">
       {!telemetry && <p className="monitor-loading">{online ? "Leyendo recursos…" : "Telemetría desconectada"}</p>}
-      {telemetry && (hud ? <SystemGauges telemetry={telemetry} /> : <>
+      {telemetry && <>
         <Metric icon={<Cpu size={15} />} label="CPU" value={`${Math.round(cpu)}%`} amount={cpu} />
         <Metric icon={<MemoryStick size={15} />} label="RAM" value={`${Math.round(ram)}%`} amount={ram} detail={`${gigabytes(telemetry.ram.usedMb)} / ${gigabytes(telemetry.ram.totalMb)}`} />
         <Metric icon={<Microchip size={15} />} label="GPU" value={`${Math.round(gpu)}%`} amount={gpu} detail={telemetry.gpu.temperatureC === null ? telemetry.gpu.name : `${Math.round(telemetry.gpu.temperatureC)} °C · ${telemetry.gpu.name}`} />
         <Metric icon={<MemoryStick size={15} />} label="VRAM" value={`${Math.round(vram)}%`} amount={vram} detail={`${gigabytes(telemetry.vram.usedMb)} / ${gigabytes(telemetry.vram.totalMb)}`} />
-      </>)}
+      </>}
       {!online && <p className="monitor-offline">Datos temporalmente no disponibles</p>}
     </div>
     {onToggleCore && <div className="monitor-core">

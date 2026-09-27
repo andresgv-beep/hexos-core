@@ -739,7 +739,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     </aside>}
     {systemOpen && !mobile && <div className="vision-system" role="dialog" aria-label="Estado del sistema">
       <button type="button" className="icon-button vision-system-close" aria-label="Cerrar estado del sistema" onClick={() => setSystemOpen(false)}><X size={16} /></button>
-      <SystemMonitor hud autoEnabled={null} onToggleAuto={() => void toggleThinking()} />
+      <SystemMonitor autoEnabled={null} onToggleAuto={() => void toggleThinking()} />
     </div>}
     <section className="floating-workspace" aria-label="Notas e informes abiertos">
       {windows.filter(item => !item.minimized && (mobile || item.id === floatingNote)).map(item => <NoteWindow key={item.id} state={item}

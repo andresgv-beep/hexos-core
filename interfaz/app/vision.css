@@ -205,9 +205,29 @@ body { background: var(--v-bg); color: var(--v-text); }
 .vision-workspace .hud-panel::before { display: none; }
 
 /* Estado del sistema, a demanda. */
-.vision-system { position: absolute; left: 88px; bottom: 60px; z-index: 20; width: 300px; padding: 8px; }
-.vision-system .system-monitor { clip-path: none; background: transparent; border: 0; border-radius: 0; }
-.vision-system .system-monitor::before { display: none; }
+.vision-system {
+  position: absolute; left: 88px; bottom: 60px; z-index: 20; width: 300px; box-sizing: border-box;
+  max-height: calc(100% - 120px); overflow-y: auto; padding: 6px 4px;
+}
+.vision-layout .vision-system .system-monitor {
+  position: static; inset: auto; width: auto; overflow: visible; clip-path: none; background: transparent;
+  border: 0; border-radius: 0; padding: 0;
+}
+.vision-layout .vision-system .monitor-title {
+  height: 40px; margin: 0; padding: 0 44px 0 14px; border: 0; color: var(--v-muted); gap: 9px;
+  font: 600 12px var(--v-font); letter-spacing: .08em;
+}
+.vision-system .monitor-title > span:nth-child(2) { font-size: 12px; letter-spacing: .08em; }
+.vision-layout .vision-system .system-monitor::before { display: none; }
+.vision-system .monitor-status.online { background: #86d69a; box-shadow: 0 0 7px rgba(134, 214, 154, 0.7); }
+.vision-layout .vision-system .monitor-content { padding: 0 14px 10px; }
+.vision-system .system-metric { padding: 12px 0; border-top: 1px solid var(--v-line); }
+.vision-system .system-metric:first-of-type { border-top: 0; }
+.vision-layout .vision-system .metric-heading > span { color: var(--v-muted); font: 500 12px var(--v-font); letter-spacing: .04em; }
+.vision-layout .vision-system .metric-heading strong { color: var(--v-text); font: 500 13px var(--v-mono); }
+.vision-layout .vision-system .metric-track { height: 4px; margin-top: 9px; border-radius: 2px; background: var(--v-line); }
+.vision-layout .vision-system .metric-track span { border-radius: 2px; background: var(--v-gold); box-shadow: 0 0 8px rgba(244, 181, 68, 0.55); }
+.vision-layout .vision-system .metric-detail { color: var(--v-muted); font: 11px var(--v-mono); margin-top: 6px; }
 .vision-system-close { position: absolute; top: 8px; right: 8px; z-index: 1; }
 
 /* Diálogos y ventanas existentes, sin las esquinas cortadas del HUD. */
