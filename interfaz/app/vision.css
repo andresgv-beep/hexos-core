@@ -555,3 +555,21 @@ button.vision-horizon-state:focus-visible { outline: 2px solid var(--v-gold); ou
   box-shadow: inset 0 1px 0 rgba(255, 224, 165, 0.55), 0 10px 26px rgba(0, 0, 0, 0.45), 0 0 16px rgba(232, 176, 79, 0.22);
 }
 .vision-tasks .media-card-icon { background: rgba(232, 176, 79, 0.16); box-shadow: inset 0 0 12px rgba(232, 176, 79, 0.18); }
+
+/* Núcleo: la lupa y el resto de la lista, sin el azul de la hoja original. */
+.viewer-search { color: var(--v-muted); border-bottom-color: var(--v-line); }
+.viewer-search input { color: var(--v-text); }
+.viewer-name { color: var(--v-text); }
+.viewer-list li.marked { background: rgba(232, 176, 79, 0.12); box-shadow: inset 0 0 0 1px rgba(232, 176, 79, 0.36); }
+.viewer-list li.marked .viewer-name { color: #ffe6b5; }
+
+/* La línea de abajo nunca se parte en dos renglones: con poco sitio, las etiquetas se van y quedan los datos. */
+.vision-horizon, .vision-horizon .inference-footer, .vision-horizon .inference-context, .vision-horizon .inference-footer > span { white-space: nowrap; }
+.vision-horizon .inference-footer { gap: 18px; flex-shrink: 0; }
+.vision-horizon-state { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 1180px) {
+  .vision-horizon .inference-context > span:first-child, .vision-horizon .inference-track { display: none; }
+}
+@media (max-width: 960px) {
+  .vision-horizon .inference-footer > span:last-child { display: none; }
+}
