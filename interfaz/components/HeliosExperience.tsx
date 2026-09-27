@@ -5,7 +5,7 @@ import { InferenceFooter } from "./InferenceFooter";
 import { type InferenceMetrics } from "@/lib/helios/metrics";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
-import { Activity, ArrowRight, Brain, Code2, HardDrive, History, MessageCircle, NotebookText, Search, Square, X } from "lucide-react";
+import { Activity, ArrowRight, Brain, Code2, HardDrive, History, ListChecks, MessageCircle, NotebookText, Search, Square, X } from "lucide-react";
 import { AttachmentButton, ChatAttachments, type Attachment } from "./ChatAttachments";
 import { VoiceButton } from "./VoiceButton";
 import { audioToVoice } from "@/lib/helios/voice";
@@ -23,8 +23,9 @@ import { phases } from "@/lib/helios/state";
 import { createHexosTransport, type ContextCut, type CredentialRequest, type HeliosTransport, type HistoryMessage } from "@/lib/helios/hexos";
 import { mergeToolActivities, type ToolActivity } from "@/lib/helios/tools";
 import { coreSectionForTools, createCoreClient, type NoteDetail } from "@/lib/helios/core";
-import { createMediaClient, isActive, remaining, type MediaControl, type MediaJob } from "@/lib/helios/media";
+import { createMediaClient, isActive, type MediaControl, type MediaJob } from "@/lib/helios/media";
 import { MediaCard } from "./MediaCard";
+import { TasksPanel } from "./TasksPanel";
 import { assessCodeRevision, codeRevisionPrompt, extractHtmlPreview, extractReplyArtifact, type ReplyArtifact } from "@/lib/helios/preview";
 
 const localTransport = createHexosTransport("/api/helios");
@@ -242,6 +243,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   // palabras del mensaje abriría el panel mientras Helios habla de otra cosa.
   const [coreOpen, setCoreOpen] = useState(false);
   const [systemOpen, setSystemOpen] = useState(false);
+  const [tasksOpen, setTasksOpen] = useState(false);
   // La cola de vídeo se lee aparte del chat: la tarjeta avanza sin gastar turnos.
   const [mediaJobs, setMediaJobs] = useState<MediaJob[]>([]);
   const [mediaReload, setMediaReload] = useState(0);
@@ -651,7 +653,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     : phase === "tool" ? "Usando herramientas" : phase === "thinking" ? "Pensando…"
     : phase === "responding" ? "Respondiendo" : "En reposo";
   const herramientaEnCurso = turnTools.find(tool => tool.status === "running");
-  const convirtiendo = mediaJobs.find(job => job.state === "running") ?? mediaJobs.find(isActive);
+  const tareasEnCurso = mediaJobs.filter(isActive).length;
   // La tarjeta acompaña a la última respuesta que tocó la cola de vídeo.
   const turnoMedia = [...turns].reverse().find(turn => turn.tools?.some(tool => tool.name.startsWith("media.")));
   const turnExtras = turnoMedia && mediaJobs.length
@@ -669,8 +671,11 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       <button type="button" aria-label="Conversación" aria-current="page" onClick={() => inputRef.current?.focus()}><MessageCircle size={21} /></button>
       <button type="button" aria-label="Notas" aria-pressed={coreOpen} onClick={() => setCoreOpen(true)}><NotebookText size={21} /></button>
       <button type="button" aria-label="Archivos del NAS" onClick={() => setFileFloating({})}><HardDrive size={21} /></button>
+      <button type="button" aria-label={tareasEnCurso ? `Tareas, ${tareasEnCurso} en curso` : "Tareas"} aria-pressed={tasksOpen}
+        onClick={() => { setSystemOpen(false); setTasksOpen(open => !open); }}>
+        <ListChecks size={21} />{tareasEnCurso > 0 && <span className="vision-rail-badge" aria-hidden="true">{tareasEnCurso}</span>}</button>
       <span className="vision-rail-gap" />
-      <button type="button" aria-label="Estado del sistema" aria-pressed={systemOpen} onClick={() => setSystemOpen(open => !open)}><Activity size={21} /></button>
+      <button type="button" aria-label="Estado del sistema" aria-pressed={systemOpen} onClick={() => { setTasksOpen(false); setSystemOpen(open => !open); }}><Activity size={21} /></button>
     </nav>
     <div className="vision-main">
       <header className="vision-header">
@@ -723,12 +728,12 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     </section>
       </section>
       <footer className="vision-horizon" aria-label="En segundo plano">
-        <span className="vision-horizon-state" data-busy={sending || convirtiendo ? true : undefined}><span aria-hidden="true" />
-          {herramientaEnCurso ? herramientaEnCurso.name : sending ? "Helios está trabajando"
-            : convirtiendo ? [convirtiendo.title, convirtiendo.percent !== undefined ? `${Math.round(convirtiendo.percent)} %` : convirtiendo.label.toLowerCase(),
-                convirtiendo.etaSeconds !== undefined ? `quedan ${remaining(convirtiendo.etaSeconds)}` : ""].filter(Boolean).join(" · ")
-            : "Todo en calma"}</span>
-        <span className="vision-horizon-line" aria-hidden="true">{convirtiendo?.percent !== undefined && <span style={{ width: `${convirtiendo.percent}%` }} />}</span>
+        {!herramientaEnCurso && !sending && tareasEnCurso > 0
+          ? <button type="button" className="vision-horizon-state" data-busy onClick={() => { setSystemOpen(false); setTasksOpen(true); }}>
+              <span aria-hidden="true" />{tareasEnCurso === 1 ? "1 tarea en curso" : `${tareasEnCurso} tareas en curso`}</button>
+          : <span className="vision-horizon-state" data-busy={sending || undefined}><span aria-hidden="true" />
+              {herramientaEnCurso ? herramientaEnCurso.name : sending ? "Helios está trabajando" : "Todo en calma"}</span>}
+        <span className="vision-horizon-line" aria-hidden="true" />
         <InferenceFooter metrics={connection === "ready" ? metrics : undefined} />
       </footer>
     </div>
@@ -737,6 +742,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         onExpandCode={() => { setCodeFloating(true); setCodeOpen(true); }}
         onExpandFile={id => setFileFloating({ id })} onPreview={previewCode} />
     </aside>}
+    {tasksOpen && !mobile && <TasksPanel media={mediaJobs} onControl={controlMedia} onClose={() => setTasksOpen(false)} />}
     {systemOpen && !mobile && <div className="vision-system" role="dialog" aria-label="Estado del sistema">
       <button type="button" className="icon-button vision-system-close" aria-label="Cerrar estado del sistema" onClick={() => setSystemOpen(false)}><X size={16} /></button>
       <SystemMonitor autoEnabled={null} onToggleAuto={() => void toggleThinking()} />

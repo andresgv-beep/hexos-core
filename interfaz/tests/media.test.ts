@@ -58,3 +58,14 @@ test('time left reads in minutes and hours', () => {
   assert.equal(remaining(720), '12 min');
   assert.equal(remaining(3900), '1 h 05 min');
 });
+
+test('the tasks panel splits what runs from what finished, and says when there is nothing', async () => {
+  const { TasksPanel } = await import('../components/TasksPanel');
+  const jobs = parseMediaJobs({ jobs: [running, { ...running, id: 'j2', batch_id: 'b2', title: 'Las dos Torres', state: 'completed', label: 'Terminada' }] });
+  const html = renderToStaticMarkup(createElement(TasksPanel, { media: jobs, onControl: async () => {}, onClose() {} }));
+  assert.match(html, /1 en curso/);
+  assert.ok(html.indexOf('En curso') < html.indexOf('Parque Jurásico 3'));
+  assert.ok(html.indexOf('Recientes') < html.indexOf('Las dos Torres'));
+  const empty = renderToStaticMarkup(createElement(TasksPanel, { media: [], onControl: async () => {}, onClose() {} }));
+  assert.match(empty, /No hay tareas en segundo plano/);
+});
