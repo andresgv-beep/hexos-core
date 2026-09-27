@@ -2,7 +2,7 @@
 
 import { type ReactNode, useState } from "react";
 import { Check, Copy } from "lucide-react";
-import { parseReply, type Inline } from "@/lib/helios/markdown";
+import { entry, parseReply, type Inline } from "@/lib/helios/markdown";
 import { CodeText } from "./CodeText";
 
 export interface CodeActions {
@@ -18,6 +18,11 @@ export function ReplyMarkdown({ text, onPreviewCode }: { text: string } & CodeAc
     }
     if (bloque.kind === "p") return <p key={indice}>{bloque.lines[0].map((parte, i) => <InlinePart key={i} part={parte} />)}</p>;
     const Lista = bloque.kind === "ol" ? "ol" : "ul";
+    if (bloque.entries) return <Lista key={indice} className="reply-entries">{bloque.lines.map((linea, i) => {
+      const fila = entry(linea)!;
+      return <li key={i}><span className="reply-entry-name">{fila.name.map((parte, j) => <InlinePart key={j} part={parte} />)}</span>
+        <span className="reply-entry-value">{fila.value}</span></li>;
+    })}</Lista>;
     return <Lista key={indice}>{bloque.lines.map((linea, i) =>
       <li key={i}>{linea.map((parte, j) => <InlinePart key={j} part={parte} />)}</li>)}</Lista>;
   })}</div>;

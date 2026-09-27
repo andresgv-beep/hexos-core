@@ -478,3 +478,19 @@ body { background: var(--v-bg); color: var(--v-text); }
 button.vision-horizon-state { border: 0; background: transparent; padding: 0; cursor: pointer; font: inherit; color: var(--v-text); }
 button.vision-horizon-state:hover { color: var(--v-gold-soft); }
 button.vision-horizon-state:focus-visible { outline: 2px solid var(--v-gold); outline-offset: 3px; border-radius: 4px; }
+
+/* Resultados en dos columnas: el nombre a la izquierda, el dato alineado a la derecha. */
+.helios-answer :is(ul, ol).reply-entries {
+  list-style: none; margin: .4em 0 1em; padding: 0; display: block;
+  border-top: 1px solid var(--v-line);
+}
+.helios-answer .reply-entries > li {
+  display: flex; align-items: baseline; gap: 16px; margin: 0; padding: 9px 4px;
+  border-bottom: 1px solid var(--v-line);
+}
+.helios-answer .reply-entries > li:hover { background: rgba(232, 176, 79, 0.05); }
+.helios-answer .reply-entry-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.helios-answer .reply-entry-name strong { font-weight: 600; color: var(--v-text); }
+.helios-answer .reply-entry-value { flex-shrink: 0; font: 14px var(--v-mono); color: var(--v-gold-soft); text-align: right; white-space: nowrap; }
+.helios-answer ol.reply-entries { counter-reset: entrada; }
+.helios-answer ol.reply-entries > li::before { counter-increment: entrada; content: counter(entrada); width: 22px; flex-shrink: 0; font: 12px var(--v-mono); color: var(--v-muted); }

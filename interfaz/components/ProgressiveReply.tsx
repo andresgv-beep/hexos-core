@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { parseReply, regroup, tokenize, type Token } from "@/lib/helios/markdown";
+import { entryValue, parseReply, regroup, tokenize, type Token } from "@/lib/helios/markdown";
 import { ReplyCode } from "./ReplyMarkdown";
 import type { CodeActions } from "./ReplyMarkdown";
 
@@ -102,6 +102,14 @@ export function ProgressiveReply({ text, live = false, onComplete, onPreviewCode
             <Palabra key={i} token={parte} />)}</Fragment>);
         if (bloque.kind === "p") return <p key={bloque.index}>{lineas}</p>;
         const Lista = bloque.kind === "ol" ? "ol" : "ul";
+        if (bloque.entries) return <Lista key={bloque.index} className="reply-entries">{bloque.lines.map(linea => {
+          // El nombre es la negrita que abre la línea; lo demás, ya revelado o no, es el valor.
+          const corte = linea.parts.findIndex(parte => !parte.bold && !/^\s+$/.test(parte.text));
+          const nombre = corte < 0 ? linea.parts : linea.parts.slice(0, corte);
+          const valor = corte < 0 ? "" : entryValue(linea.parts.slice(corte).map(parte => parte.text).join(""));
+          return <li key={linea.index}><span className="reply-entry-name">{nombre.map((parte, i) => <Palabra key={i} token={parte} />)}</span>
+            <span className="reply-entry-value">{valor}</span></li>;
+        })}</Lista>;
         return <Lista key={bloque.index}>{bloque.lines.map(linea =>
           <li key={linea.index}>{linea.parts.map((parte, i) => <Palabra key={i} token={parte} />)}</li>)}</Lista>;
       })}</div>

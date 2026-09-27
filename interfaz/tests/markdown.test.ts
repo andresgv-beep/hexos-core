@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { inlines, parseReply, regroup, tokenize } from "../lib/helios/markdown";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { ReplyMarkdown } from "../components/ReplyMarkdown";
+import { entry, inlines, parseReply, regroup, tokenize } from "../lib/helios/markdown";
 
 test("el código progresivo conserva espacios y líneas sin revelar líneas enteras de golpe", () => {
   const source = '  const mensaje = "hola 🌍";\n\n    console.log(mensaje);';
@@ -76,4 +79,22 @@ test("un bloque cortado sin cerca final no se mezcla con el párrafo", () => {
   assert.equal(bloques.length, 1);
   assert.equal(bloques[0].kind, "code");
   assert.equal(bloques[0].lines[0][0].text, "const listo = true;");
+});
+
+test("a list of named results becomes two columns; explanations stay a list", () => {
+  const [tabla] = parseReply("- **La Monja II (2023)** (21.1 GB)\n- **TRON Ares (2025)** (23.0 GB)\n- **Joker Folie a Deux (2024)**: 27.2 GB");
+  assert.equal(tabla.entries, true);
+  assert.deepEqual(entry(tabla.lines[0])?.value, "21.1 GB");
+  assert.equal(entry(tabla.lines[2])?.value, "27.2 GB");
+  const [explicacion] = parseReply("- **Discos:** Los tres discos principales están en estado PASSED según su autodiagnóstico SMART.\n- **RAID:** md2 md3 md6 completos.\n- **NVMe:** sin datos.");
+  assert.equal(explicacion.entries, undefined);
+  const [corta] = parseReply("- **A** (1 GB)\n- **B** (2 GB)");
+  assert.equal(corta.entries, undefined);
+});
+
+test("the entries render as name and value, also while they are being revealed", () => {
+  const html = renderToStaticMarkup(createElement(ReplyMarkdown, { text: "- **Parque Jurásico 3** (21.9 GB)\n- **TRON Ares (2025)** (23.0 GB)\n- **La Monja (4K)** (21.2 GB)" }));
+  assert.match(html, /class="reply-entries"/);
+  assert.match(html, /<span class="reply-entry-name"><strong>Parque Jurásico 3<\/strong><\/span>/);
+  assert.match(html, /<span class="reply-entry-value">21.9 GB<\/span>/);
 });

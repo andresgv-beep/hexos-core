@@ -9,6 +9,8 @@ export interface Block {
   kind: "p" | "ul" | "ol" | "code";
   lines: Inline[][];
   language?: string;
+  /** Lista de resultados «**nombre** (valor)»: se pinta en dos columnas. */
+  entries?: boolean;
 }
 
 const VINETA = /^\s*[*-]\s+(.*)$/;
@@ -28,6 +30,29 @@ export function inlines(text: string): Inline[] {
   }
   if (ultimo < text.length) salida.push({ text: text.slice(ultimo) });
   return salida.length ? salida : [{ text }];
+}
+
+/** «**Parque Jurásico 3** (21.9 GB)» → nombre y valor. Solo cuando el nombre abre la
+ *  línea en negrita y el valor es corto: una explicación no es un dato de tabla. */
+export function entry(line: Inline[]): { name: Inline[]; value: string } | null {
+  const inicio = line.findIndex(part => !part.bold);
+  if (inicio <= 0) return null;
+  const value = entryValue(line.slice(inicio).map(part => part.text).join(""));
+  if (!value || value.length > 40) return null;
+  return { name: line.slice(0, inicio), value };
+}
+
+/** El valor sin su envoltorio: «(39.3 GB)», «: 32 GB», «— terminada». */
+export function entryValue(text: string) {
+  return text.trim().replace(/^[:—–-]\s*/, "").replace(/^\((.*?)\)?$/, "$1").trim();
+}
+
+function markEntries(bloques: Block[]) {
+  for (const bloque of bloques) {
+    if ((bloque.kind === "ul" || bloque.kind === "ol") && bloque.lines.length >= 3
+        && bloque.lines.every(linea => entry(linea) !== null)) bloque.entries = true;
+  }
+  return bloques;
 }
 
 export function parseReply(text: string): Block[] {
@@ -74,12 +99,12 @@ export function parseReply(text: string): Block[] {
   // justo antes de los tres acentos al alcanzar su límite de salida.
   if (codigo !== null) bloques.push({ kind: "code", language: lenguaje, lines: codigo.map(texto => [{ text: texto }]) });
   cerrarParrafo();
-  return bloques;
+  return markEntries(bloques);
 }
 
 /** Una palabra, sabiendo de qué bloque y línea viene. El revelado avanza sobre
  *  esta lista, así que la estructura no depende de cuánto se lleve mostrado. */
-export interface Token extends Inline { block: number; line: number; kind: Block["kind"]; language?: string }
+export interface Token extends Inline { block: number; line: number; kind: Block["kind"]; language?: string; entries?: boolean }
 
 export function tokenize(blocks: Block[]): Token[] {
   const salida: Token[] = [];
@@ -96,10 +121,10 @@ export function tokenize(blocks: Block[]): Token[] {
       return;
     }
     linea.forEach(trozo => {
-      if (trozo.code) { salida.push({ ...trozo, block: b, line: l, kind: bloque.kind }); return; }
+      if (trozo.code) { salida.push({ ...trozo, block: b, line: l, kind: bloque.kind, entries: bloque.entries }); return; }
       // Se conservan los espacios para no rehacer el texto al juntarlo.
       for (const palabra of trozo.text.split(/(\s+)/)) {
-        if (palabra) salida.push({ ...trozo, text: palabra, block: b, line: l, kind: bloque.kind });
+        if (palabra) salida.push({ ...trozo, text: palabra, block: b, line: l, kind: bloque.kind, entries: bloque.entries });
       }
     });
   }));
@@ -107,12 +132,12 @@ export function tokenize(blocks: Block[]): Token[] {
 }
 
 /** Los tokens ya mostrados, devueltos a su forma de bloques y líneas. */
-export function regroup(tokens: Token[]): { kind: Block["kind"]; index: number; language?: string; lines: { index: number; parts: Token[] }[] }[] {
-  const salida: { kind: Block["kind"]; index: number; language?: string; lines: { index: number; parts: Token[] }[] }[] = [];
+export function regroup(tokens: Token[]): { kind: Block["kind"]; index: number; language?: string; entries?: boolean; lines: { index: number; parts: Token[] }[] }[] {
+  const salida: { kind: Block["kind"]; index: number; language?: string; entries?: boolean; lines: { index: number; parts: Token[] }[] }[] = [];
   for (const token of tokens) {
     let bloque = salida[salida.length - 1];
     if (!bloque || bloque.index !== token.block) {
-      bloque = { kind: token.kind, index: token.block, language: token.language, lines: [] };
+      bloque = { kind: token.kind, index: token.block, language: token.language, entries: token.entries, lines: [] };
       salida.push(bloque);
     }
     let linea = bloque.lines[bloque.lines.length - 1];
