@@ -244,3 +244,40 @@ body { background: var(--v-bg); color: var(--v-text); }
   .vision-layout *, .vision-layout *::before { animation: none !important; }
 }
 .hud-content-dock, .window-glass { position: relative; }
+
+/* Historial y pestañas del móvil: mismos mensajes que la conversación central. */
+.history-entry { padding: 0; border: 0; border-radius: 0; background: none; margin: 0 0 20px; }
+.history-entry p { font-size: 16px; line-height: 1.6; color: var(--v-text); }
+.history-entry .message-author { display: none; }
+.history-entry.user {
+  margin-left: auto; width: fit-content; max-width: 82%; padding: 12px 16px;
+  border-radius: 12px 12px 3px 12px; border: 1px solid var(--v-line); background: rgba(255, 255, 255, 0.08);
+}
+.history-entry.user p { margin: 0; }
+.history-entry.assistant { margin-right: 0; }
+.history-empty, .history-footer span { color: var(--v-muted); }
+.history-footer { border-top-color: var(--v-line); }
+.history-footer button { border-radius: 7px; border: 1px solid var(--v-line-strong); background: transparent; color: var(--v-text); }
+
+.hud-layout.vision-layout.mobile-layout > .mobile-workspace { top: 64px; background: transparent; }
+.vision-layout.mobile-layout .mobile-tabs { border-bottom: 1px solid var(--v-line); }
+.vision-layout.mobile-layout .mobile-tabs button { color: var(--v-muted); font: 600 13px var(--v-font); }
+.vision-layout.mobile-layout .mobile-tabs button[aria-current] { color: var(--v-text); box-shadow: inset 0 -2px var(--v-gold); }
+.vision-layout.mobile-layout .mobile-page { color: var(--v-text); }
+.vision-layout.mobile-layout .mobile-page h2 { font-family: "Russo One", var(--v-font); font-weight: 400; letter-spacing: .02em; }
+.vision-layout.mobile-layout .mobile-chat .stream-turn { display: flex; flex-direction: column; gap: 16px; }
+.vision-layout.mobile-layout .mobile-chat .stream-question {
+  align-self: flex-end; max-width: 82%; margin: 0; padding: 12px 16px; white-space: pre-wrap;
+  border-radius: 12px 12px 3px 12px; border: 1px solid var(--v-line); background: rgba(255, 255, 255, 0.08);
+  color: var(--v-text); font-size: 16px; line-height: 1.55;
+}
+.vision-layout.mobile-layout .mobile-chat .stream-body { padding: 0; background: none; border: 0; }
+.vision-layout.mobile-layout .mobile-page :is(.message-author) { display: none; }
+.vision-layout.mobile-layout .mobile-page :is(.helios-answer, .helios-answer :is(p, ul, ol)) { font-size: 16.5px; line-height: 1.6; color: var(--v-text); }
+.vision-layout.mobile-layout .mobile-page .helios-answer li::marker { color: var(--v-gold); }
+.vision-layout.mobile-layout .mobile-note {
+  border: 1px solid var(--v-rim); border-radius: var(--v-radius); background: var(--v-glass);
+  box-shadow: inset 0 1px 0 var(--v-highlight), var(--v-glow);
+}
+.vision-layout.mobile-layout .mobile-page .reply-code { border-radius: var(--v-radius); border-color: var(--v-line); background: #121212; }
+.vision-layout.mobile-layout .vision-conversation .conversation { padding-bottom: 0; }
