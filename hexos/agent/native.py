@@ -75,7 +75,19 @@ def split_thinking(text, open_thought=False):
         before, after = text[:start], text[end+len('<channel|>'):]
         separator = '\n' if before and after and not before[-1].isspace() and not after[0].isspace() else ''
         text = (before + separator + after).lstrip()
+    # Sin pensamiento, Gemma 4 reabre bloques thought vacíos tras anunciar la
+    # consulta: el original BF16 lo prefiere (p≈0,74) a llamar directamente.
+    # Vacíos no llevan nada y se descartan; uno con contenido sigue siendo error.
+    while True:
+        call = text.find('<|tool_call>')
+        empty = _EMPTY_THOUGHT.search(text, 0, call if call >= 0 else len(text))
+        if not empty:
+            break
+        text = (text[:empty.start()] + text[empty.end():]).lstrip()
     return text, reasoning
+
+
+_EMPTY_THOUGHT = re.compile(r'<\|channel>thought\n\s*<channel\|>')
 
 
 def calls_from_text(text):

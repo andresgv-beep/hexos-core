@@ -52,6 +52,16 @@ class NativeChannelsTest(unittest.TestCase):
         self.assertEqual(split_thinking('razón<channel|>Hola',True),('Hola','razón'))
         self.assertEqual(split_thinking('Sin canales'),('Sin canales',None))
 
+    def test_empty_thought_blocks_around_the_preamble_are_dropped(self):
+        # Salida real (HQS v4 y original BF16): bloque vacío, anuncio, otro bloque vacío.
+        empty = '<|channel>thought\n<channel|>'
+        raw = empty + empty + 'Voy a leer el siguiente fragmento.\n\n' + empty + CALL
+        runtime = self.runtime(raw)
+        self.assertEqual(runtime.generate([])['tool'], 'nas.file_read')
+        self.assertEqual(runtime.last_preamble, 'Voy a leer el siguiente fragmento.')
+        self.assertNotIn('<|channel>', runtime.last_generation['visible_output'])
+        self.assertEqual(split_thinking(empty + 'Hola' + empty), ('Hola', ''))
+
     def test_do_not_modify_markers_inside_tool_string_arguments(self):
         raw = '<|tool_call>call:nas_file_read{file_id:<|"|>a<|channel>thought\nx<channel|>b<|"|>}<tool_call|>'
         clean,reason=split_thinking(raw)
