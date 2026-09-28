@@ -62,6 +62,12 @@ class NativeChannelsTest(unittest.TestCase):
         self.assertNotIn('<|channel>', runtime.last_generation['visible_output'])
         self.assertEqual(split_thinking(empty + 'Hola' + empty), ('Hola', ''))
 
+    def test_escaped_media_markers_are_removed_from_a_reply(self):
+        runtime = self.runtime('Es un ESP32 montado sobre una placa de<audio|> pruebas.', finish='eos')
+        reply = runtime.generate([])['reply']
+        self.assertEqual(reply, 'Es un ESP32 montado sobre una placa de pruebas.')
+        self.assertNotIn('<audio|>', runtime.messages[-1]['content'])
+
     def test_do_not_modify_markers_inside_tool_string_arguments(self):
         raw = '<|tool_call>call:nas_file_read{file_id:<|"|>a<|channel>thought\nx<channel|>b<|"|>}<tool_call|>'
         clean,reason=split_thinking(raw)

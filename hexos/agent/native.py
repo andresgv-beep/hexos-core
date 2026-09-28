@@ -89,6 +89,7 @@ def split_thinking(text, open_thought=False):
 
 
 _EMPTY_THOUGHT = re.compile(r'<\|channel>thought\n\s*<channel\|>')
+_MEDIA_MARKER = re.compile(r'<\|(?:image|audio)\|?>|<(?:image|audio)\|>|<\|video\|>')
 
 
 def calls_from_text(text):
@@ -561,6 +562,9 @@ class NativeRuntime:
             self.current=self.pending.popleft()
             return {'tool':self.names[self.current['name']], 'arguments':self.current['arguments']}
         if header[4]!='eos':raise RuntimeError('generación nativa incompleta: '+header[4])
+        # Un marcador de imagen o audio escapado no lleva contenido («una placa de<audio|>»,
+        # 28/09): se quita del texto visible en vez de enseñarlo o reintentar el turno.
+        raw = _MEDIA_MARKER.sub('', raw)
         if '<|tool_' in raw or '<|channel>' in raw or '<tool_call' in raw or '</tool_call>' in raw:raise NativeSyntax('marcadores inesperados en respuesta')
         try:
             validate_reply(raw)
