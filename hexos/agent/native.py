@@ -8,6 +8,7 @@ import queue
 import re
 import subprocess
 import threading
+import time
 
 from .native_transport import AudioClip, NativeTransport, TurnCancelled, GenerationInterrupted, visible_preview
 from . import catalog
@@ -575,7 +576,8 @@ class NativeRuntime:
 
     def tool_result(self,result):
         if self.current is None:raise RuntimeError('resultado sin llamada')
-        self.messages[-1]['tool_responses'].append({'name':self.current['name'],'response':result})
+        # `ts` no se pinta en la plantilla; tool_digest lo usa para saber qué ha envejecido.
+        self.messages[-1]['tool_responses'].append({'name':self.current['name'],'response':result,'ts':time.time()})
         self.current=None
 
     # Prompt de la ficha de Gemma 4 para reconocimiento de voz; el audio va detrás.

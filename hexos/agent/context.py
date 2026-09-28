@@ -1,6 +1,7 @@
 """Contexto conversacional con roles y fuentes, sin extraer hechos con heurísticas."""
 import json
 
+from . import catalog, tool_digest
 from .decisions import InvalidDecision, validate_reply
 
 
@@ -27,10 +28,12 @@ def native_messages(history, metadata, request, tool_events=None, memory_evidenc
     # de red son 3.209 caracteres: entraban nueve vecinos de dieciséis y el turno
     # siguiente remataba con «y las otras 7». Con 16.384 de ventana cabe entera.
     event_budget = 9000
+    effects = {name: spec.get('effect') for name, spec in catalog.TOOLS.items()}
+    newest = next((row['id'] for row, _ in selected if tool_events.get(row['id'])), None)
     for row, _ in selected:
         kept = []
         for event in reversed(tool_events.get(row['id'], [])):
-            event = dict(event)
+            event = tool_digest.compact_archived(dict(event), row['id'] == newest, effects)
             encoded = json.dumps(event['result'], ensure_ascii=False)
             if len(encoded) > 4000:
                 # `truncated: True` a secas se leía como «esto es lo que hay» y el
@@ -73,7 +76,7 @@ def native_messages(history, metadata, request, tool_events=None, memory_evidenc
                 alias = event['tool'].replace('.', '_')
                 messages.append({'role':'assistant',
                     'tool_calls':[{'function':{'name':alias,'arguments':event['arguments']}}],
-                    'tool_responses':[{'name':alias,'response':result}]})
+                    'tool_responses':[{'name':alias,'response':result,'ts':tool_digest.epoch(event.get('ts'))}]})
     if memory_evidence is not None:
         # Recuperación local determinista. Limpiar el contexto de turnos no borra
         # las citas guardadas; no dependemos de que el modelo adivine que existen.

@@ -5,7 +5,7 @@ import hashlib
 import json
 from typing import TYPE_CHECKING
 from uuid import uuid4
-from .. import catalog, procedures, task_notices
+from .. import catalog, procedures, task_notices, tool_digest
 from ..native_transport import AudioClip
 from ..context import native_messages
 from ..work import now
@@ -331,6 +331,11 @@ class ContextManager:
                 # gastar tokens decorativos, una aceptación como «pues hazlo»
                 # sigue siendo la misma frase dentro de la conversación nativa.
                 current = (turn.metadata + '\nPETICIÓN ACTUAL:\n' if turn.metadata else '') + turn.prompt_text
+                # Lo ya contestado no viaja entero en cada turno: solo cambia el
+                # final del prefijo, así que el motor reaprovecha todo lo anterior.
+                tool_digest.compact_live(self.agent.runtime.messages,
+                    getattr(self.agent.runtime, 'names', {}) or {},
+                    {name: spec.get('effect') for name, spec in catalog.TOOLS.items()})
                 turn.messages = [dict(role='user', content=current)]
         else:
             # El adaptador JSON no conserva un historial de mensajes propio.
