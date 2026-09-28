@@ -20,7 +20,7 @@ def decode_image(encoded):
     if len(crudo) > 16 * 1024 * 1024:
         raise ValueError('imagen mayor de 16 MiB')
     try:
-        from PIL import Image
+        from PIL import Image, ImageOps
     except ImportError as exc:
         raise ValueError('falta Pillow en el servidor; no se pueden leer imágenes') from exc
     try:
@@ -28,6 +28,10 @@ def decode_image(encoded):
         imagen.load()
     except Exception as exc:
         raise ValueError('no se pudo leer la imagen: ' + str(exc)) from exc
+    # Los móviles guardan muchas fotos en horizontal con una etiqueta EXIF de giro.
+    # Sin aplicarla, el modelo recibía tumbada una foto vertical (1536x1152) y no
+    # leía el texto: una placa ESP32 se tomó por una Raspberry Pi (28/09).
+    imagen = ImageOps.exif_transpose(imagen)
     imagen = imagen.convert('RGB')
     # El preprocesado de Gemma reescala a su propio tamaño; por encima de esto
     # solo se transportarían píxeles que se van a tirar.
