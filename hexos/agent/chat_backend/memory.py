@@ -44,13 +44,26 @@ AFIRMACION = re.compile(
 ACTUALIDAD = re.compile(
     r'\b[úu]ltim[ao]\s+versi[óo]n\b|\bversi[óo]n\s+m[áa]s\s+(?:reciente|actual|nueva)\b'
     r'|\bqu[ée]\s+versi[óo]n\b.{0,24}\b(?:actual|hoy|ahora)\b'
-    r'|\bcu[áa]nto\s+(?:cuesta|vale)\b|\bprecio\s+(?:de|del|actual)\b'
+    r'|\bcu[áa]nto\s+(?:cuesta|vale)\b'
     r'|\bnovedades\b|\bqu[ée]\s+hay\s+de\s+nuevo\b|\bya\s+(?:sali[óo]|est[áa]\s+disponible)\b'
     r'|\b[úu]ltimas?\s+noticias\b', re.I)
+# «Precio de…» también aparece en frases hechas: «no puedo pagar el precio del
+# contexto» lanzó el 28/09 una búsqueda web con el mensaje entero. Solo cuenta
+# cuando el mensaje pregunta.
+PRECIO = re.compile(r'\bprecio\s+(?:de|del|actual)\b', re.I)
+PREGUNTA = re.compile(r'[?¿]|^\s*(?:cu[áa]l|qu[ée]|cu[áa]nto|d[óo]nde|a\s+cu[áa]nto)\b', re.I)
 # …salvo cuando habla de lo suyo: sus equipos y sus notas no están en internet.
 ES_LOCAL = re.compile(
     r'\bnotas?\b|\bcontenedor|\bdocker\b|\bnas\b|\bsynology\b|\bservidorsrv|\bnimos\b'
     r'|\bdisco\b|\bsd[a-z]\b|\bhelios\b|\bhexos\b|\braid\b', re.I)
+
+
+def pide_dato_de_ahora(text):
+    """La pregunta pide un dato de ahora que está en internet, no en sus equipos."""
+    text = text or ''
+    if ES_LOCAL.search(text):
+        return False
+    return bool(ACTUALIDAD.search(text) or (PRECIO.search(text) and PREGUNTA.search(text)))
 
 
 RECUERDO = re.compile(
@@ -177,7 +190,7 @@ class MemoryService:
         fuentes: solo deja los resultados delante para que el modelo abra la que
         le sirva con web_read, que es la puerta que ya existe.
         """
-        if not ACTUALIDAD.search(text or '') or ES_LOCAL.search(text or ''):
+        if not pide_dato_de_ahora(text):
             return None
         empezado = time.monotonic()
         try:

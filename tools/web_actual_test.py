@@ -11,11 +11,11 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from hexos.agent.chat_backend.memory import ACTUALIDAD, ES_LOCAL, MemoryService
+from hexos.agent.chat_backend.memory import MemoryService, pide_dato_de_ahora
 
 
 def salta(texto):
-    return bool(ACTUALIDAD.search(texto)) and not ES_LOCAL.search(texto)
+    return pide_dato_de_ahora(texto)
 
 
 class PuertaTest(unittest.TestCase):
@@ -36,6 +36,15 @@ class PuertaTest(unittest.TestCase):
                       'cual es el ultimo informe del raid', 'estado del disco sda'):
             with self.subTest(texto):
                 self.assertFalse(salta(texto), texto)
+
+    def test_el_precio_solo_cuenta_si_pregunta(self):
+        # Frase real del 28/09: disparó una búsqueda web con el mensaje entero.
+        self.assertFalse(salta('la pena Esque el contexto se te pierde al comprimir… no puedo pagar '
+                               'el precio del contexto tuyo por que no tengo maquinará para ello'))
+        self.assertFalse(salta('eso tiene un precio de oportunidad alto'))
+        for texto in ('¿cuál es el precio del iphone 18?', 'precio del bitcoin?', 'qué precio tiene la 3090'):
+            with self.subTest(texto):
+                self.assertEqual(salta(texto), 'precio de' in texto or 'precio del' in texto, texto)
 
     def test_una_conversación_normal_no_dispara_una_búsqueda(self):
         for texto in ('hola', 'vale', 'gracias socio', 'que tal va todo'):
