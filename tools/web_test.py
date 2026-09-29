@@ -116,6 +116,46 @@ class WebBoundaryTest(unittest.TestCase):
                              resolver=public_resolver)
         self.assertNotIn('published', sin_fecha)
 
+    def test_lo_ultimo_filtra_solo_y_cada_resultado_dice_su_edad(self):
+        from datetime import date
+        html = ('<div class="result"><a class="result__a" href="https://www.apple.com/la/newsroom/2025/09/'
+                'get-ready/">Presentación</a><a class="result__snippet">x</a></div>')
+        opener = Opener(Response(html))
+        pedido = []
+        abrir = opener.open
+        opener.open = lambda request, timeout=0: pedido.append(request.data.decode()) or abrir(request, timeout)
+        result = web.search('últimos modelos de iPhone 2024 2025 2026', opener=opener, today=date(2026, 9, 29))
+        self.assertIn('df=y', pedido[0])
+        self.assertTrue(result['recency_auto'])
+        self.assertEqual(result['items'][0]['url_date'], '2025-09')
+        self.assertEqual(result['items'][0]['age'], 'hace 12 meses')
+
+    def test_si_el_filtro_automatico_vacia_la_busqueda_se_repite_sin_el(self):
+        vacia = Response('<html></html>')
+        llena = Response('<div class="result"><a class="result__a" href="https://example.com/a">A</a>'
+                         '<a class="result__snippet">x</a></div>')
+        respuestas = [vacia, llena]
+        opener = Opener(vacia)
+        opener.open = lambda request, timeout=0: respuestas.pop(0)
+        result = web.search('novedades de algo raro', opener=opener)
+        self.assertIsNone(result['recency'])
+        self.assertEqual(len(result['items']), 1)
+
+    def test_pagina_vieja_avisa_y_la_modificacion_no_la_disfraza(self):
+        from datetime import date
+        page = ('<html><head><title>N</title><meta property="article:published_time" content="2025-09-11">'
+                '<meta property="article:modified_time" content="2026-08-19"></head><body><p>Texto.</p></body></html>')
+        result = web.read('https://example.com/page', opener=Opener(Response(page)),
+                          resolver=public_resolver, today=date(2026, 9, 29))
+        self.assertEqual(result['published'], '2025-09-11')
+        self.assertEqual(result['age'], 'hace 12 meses')
+        self.assertIn('No la presentes como lo último', result['age_warning'])
+        self.assertNotIn('modified', result)
+        self.assertNotIn('updated', result)
+        reciente = web.read('https://example.com/page', opener=Opener(Response(page.replace('2025-09-11', '2026-09-09'))),
+                            resolver=public_resolver, today=date(2026, 9, 29))
+        self.assertNotIn('age_warning', reciente)
+
     def test_catalogo_admite_recency_opcional(self):
         from hexos.agent import catalog
         catalog.validate('web.search', {'query': 'x', 'recency': 'año'})

@@ -28,6 +28,24 @@ _MESES = ('enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agost
           'septiembre', 'octubre', 'noviembre', 'diciembre')
 
 
+# Una consulta que pide lo último se limita al último año aunque el modelo no lo pida:
+# el 29/09 «últimos modelos de iPhone … 2024 2025 2026» trajo la presentación de 2025.
+PIDE_RECIENTE = re.compile(r'\b(?:[úu]ltim[oa]s?|nuev[oa]s?|actual(?:es|mente)?|reciente(?:s|mente)?'
+                           r'|novedades|este\s+a[ñn]o|hoy)\b', re.I)
+_URL_FECHA = re.compile(r'/(20\d\d)[/-](0?[1-9]|1[0-2])(?=[/-]|$)')
+VIEJA_MESES = 6
+
+
+def _meses(desde, hasta):
+    return (hasta.year - desde.year) * 12 + hasta.month - desde.month
+
+
+def _hace(meses):
+    if meses <= 0:
+        return 'este mes'
+    return 'hace 1 mes' if meses == 1 else f'hace {meses} meses'
+
+
 def today_text(today=None):
     """La fecha de hoy tal como la lee el modelo, que por sí solo no sabe en qué día vive."""
     d = today or date.today()
@@ -208,29 +226,48 @@ def search(query, *, opener=None, limit=5, recency=None, today=None):
         raise ValueError(f'limit debe estar entre 1 y {MAX_RESULTS}')
     if recency is not None and recency not in RECENCY:
         raise ValueError('recency debe ser dia, semana, mes o año')
-    url = 'https://html.duckduckgo.com/html/'
-    campos = {'q': query.strip()}
-    if recency:
-        campos['df'] = RECENCY[recency]
-    request = Request(url, data=urlencode(campos).encode(),
-                      headers={'User-Agent': USER_AGENT,
-                               'Content-Type': 'application/x-www-form-urlencoded'})
-    try:
-        with (opener or build_opener()).open(request, timeout=12) as response:
-            raw = response.read(MAX_DOWNLOAD + 1)
-            charset = response.headers.get_content_charset() or 'utf-8'
-    except (OSError, HTTPError) as exc:
-        raise ValueError('el buscador web no respondió') from exc
-    if len(raw) > MAX_DOWNLOAD:
-        raise ValueError('la respuesta del buscador es demasiado grande')
-    parser = _SearchParser()
-    parser.feed(raw.decode(charset, errors='replace'))
-    parser.close()
-    items = parser.results[:limit]
+    automatica = recency is None and bool(PIDE_RECIENTE.search(query))
+    if automatica:
+        recency = 'año'
+
+    def buscar(filtro):
+        campos = {'q': query.strip()}
+        if filtro:
+            campos['df'] = RECENCY[filtro]
+        request = Request('https://html.duckduckgo.com/html/', data=urlencode(campos).encode(),
+                          headers={'User-Agent': USER_AGENT,
+                                   'Content-Type': 'application/x-www-form-urlencoded'})
+        try:
+            with (opener or build_opener()).open(request, timeout=12) as response:
+                raw = response.read(MAX_DOWNLOAD + 1)
+                charset = response.headers.get_content_charset() or 'utf-8'
+        except (OSError, HTTPError) as exc:
+            raise ValueError('el buscador web no respondió') from exc
+        if len(raw) > MAX_DOWNLOAD:
+            raise ValueError('la respuesta del buscador es demasiado grande')
+        parser = _SearchParser()
+        parser.feed(raw.decode(charset, errors='replace'))
+        parser.close()
+        return parser.results[:limit]
+
+    items = buscar(recency)
+    if not items and automatica:
+        # El filtro lo puso HexOS: si deja la búsqueda vacía, mejor algo que nada.
+        recency, automatica = None, False
+        items = buscar(None)
     if not items:
         raise ValueError('el buscador no devolvió resultados legibles')
+    dia = today or date.today()
+    for item in items:
+        # La fecha que va en la dirección (/newsroom/2025/09/) se ve antes de abrirla.
+        fecha = _URL_FECHA.search(urlparse(item['url']).path)
+        if fecha:
+            desde = date(int(fecha.group(1)), int(fecha.group(2)), 1)
+            item['url_date'] = desde.strftime('%Y-%m')
+            item['age'] = _hace(_meses(desde, dia))
     hoy = today_text(today)
-    return {'query': query.strip(), 'today': hoy, 'recency': recency, 'items': items, 'count': len(items),
+    return {'query': query.strip(), 'today': hoy, 'recency': recency, 'recency_auto': automatica,
+            'items': items, 'count': len(items),
             'note': 'Hoy es ' + hoy + '. Resultados de búsqueda, no hechos confirmados, y el orden del '
                     'buscador no dice cuál es el más reciente. Usa web.read para leer las fuentes '
                     'necesarias: da la fecha de publicación cuando la página la declara. Si piden lo '
@@ -294,6 +331,15 @@ def read(url, *, opener=None, resolver=socket.getaddrinfo, today=None):
                       'Hoy es ' + hoy + ': compara con la fecha de la fuente antes de llamarla actual.'}
     if publicada:
         salida['published'] = publicada
-    if modificada:
-        salida['modified'] = modificada
+        meses = _meses(date.fromisoformat(publicada), today or date.today())
+        salida['age'] = _hace(meses)
+        if meses >= VIEJA_MESES:
+            # La cuenta la hace el código: con la fecha delante, el 12B llamó «lanzados en
+            # 2026» a lo presentado en septiembre de 2025.
+            salida['age_warning'] = ('Publicada ' + _hace(meses) + ' (' + publicada + '). No la presentes '
+                                     'como lo último o lo actual sin una fuente más reciente.')
+    elif modificada:
+        # Sin fecha de publicación, la de actualización es lo único que hay. Con ella al lado,
+        # un retoque de 2026 hacía pasar por nueva una página de 2025.
+        salida['updated'] = modificada
     return salida
