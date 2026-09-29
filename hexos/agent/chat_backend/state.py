@@ -18,9 +18,9 @@ def default_nas_read(workspace, **kwargs):
     return read(workspace, **kwargs)
 
 
-def default_web_search(query, limit=5):
+def default_web_search(query, limit=5, recency=None):
     from ..web import search
-    return search(query, limit=limit)
+    return search(query, limit=limit, recency=recency)
 
 
 def default_nas_files(workspace, *, operation, **kwargs):

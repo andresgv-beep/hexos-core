@@ -75,6 +75,51 @@ class WebBoundaryTest(unittest.TestCase):
                                            'url':'https://example.com/doc',
                                            'snippet':'Resumen útil.'}])
 
+    def test_search_quita_anuncios_y_da_la_fecha_de_hoy(self):
+        from datetime import date
+        html = ('<div class="result result--ad"><a class="result__a" href="https://duckduckgo.com/y.js?'
+                'ad_domain=tienda.com&u3=x">Apple iPhone 14</a><a class="result__snippet">Oferta.</a></div>'
+                '<div class="result"><a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2F'
+                'www.apple.com%2Fes%2Fiphone%2F">iPhone - Apple</a><a class="result__snippet">iPhone 18 Pro.</a></div>')
+        result = web.search('último iphone', opener=Opener(Response(html)), today=date(2026, 9, 29))
+        self.assertEqual([i['url'] for i in result['items']], ['https://www.apple.com/es/iphone/'])
+        self.assertEqual(result['today'], '2026-09-29 (martes 29 de septiembre de 2026)')
+        self.assertIn('Hoy es 2026-09-29', result['note'])
+        self.assertIn('recency', result['note'])
+
+    def test_search_filtra_por_antiguedad_cuando_se_pide(self):
+        html = '<div class="result"><a class="result__a" href="https://example.com/a">A</a><a class="result__snippet">x</a></div>'
+        opener = Opener(Response(html))
+        pedido = []
+        abrir = opener.open
+        opener.open = lambda request, timeout=0: pedido.append(request.data.decode()) or abrir(request, timeout)
+        web.search('novedades', opener=opener, recency='mes')
+        self.assertIn('df=m', pedido[0])
+        with self.assertRaises(ValueError):
+            web.search('novedades', opener=Opener(Response(html)), recency='siglo')
+
+    def test_read_da_la_fecha_de_la_pagina_y_la_de_hoy(self):
+        from datetime import date
+        casos = {
+            '<meta property="article:published_time" content="2024-03-05T10:00:00Z">': '2024-03-05',
+            '<script type="application/ld+json">{"datePublished": "2026-09-10"}</script>': '2026-09-10',
+            '<time datetime="2025-12-01">1 dic</time>': '2025-12-01',
+        }
+        for cabecera, esperada in casos.items():
+            with self.subTest(esperada=esperada):
+                page = '<html><head><title>N</title>' + cabecera + '</head><body><p>Texto.</p></body></html>'
+                result = web.read('https://example.com/page', opener=Opener(Response(page)),
+                                  resolver=public_resolver, today=date(2026, 9, 29))
+                self.assertEqual(result['published'], esperada)
+                self.assertTrue(result['today'].startswith('2026-09-29'))
+        sin_fecha = web.read('https://example.com/page', opener=Opener(Response('<p>Texto.</p>')),
+                             resolver=public_resolver)
+        self.assertNotIn('published', sin_fecha)
+
+    def test_catalogo_admite_recency_opcional(self):
+        from hexos.agent import catalog
+        catalog.validate('web.search', {'query': 'x', 'recency': 'año'})
+
     def test_read_extrae_texto_y_elimina_scripts(self):
         page = '<html><head><title>Fuente</title><script>robar()</script></head><body><h1>Dato</h1><p>Contenido verificable.</p></body></html>'
         result = web.read('https://example.com/page', opener=Opener(Response(page)),

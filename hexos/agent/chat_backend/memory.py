@@ -194,7 +194,8 @@ class MemoryService:
             return None
         empezado = time.monotonic()
         try:
-            encontrados = web.search(text.strip()[:200])
+            # Pide un dato de ahora: lo del último año, no lo que el buscador ponga arriba.
+            encontrados = web.search(text.strip()[:200], recency='año')
         except Exception as exc:
             return dict(tool='web.search', arguments=dict(query=text.strip()[:200]),
                         effect='read', changes_state=False, ts=now(),

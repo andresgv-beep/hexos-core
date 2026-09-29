@@ -153,7 +153,10 @@ class ToolDispatcher:
         if name.startswith('history.'):
             return history_tool(store, name, args)
         if name == 'web.search':
-            return self.env.dependencies.web_search(args['query'], limit=args.get('limit', 5))
+            opciones = dict(limit=args.get('limit', 5))
+            if args.get('recency'):
+                opciones['recency'] = args['recency']
+            return self.env.dependencies.web_search(args['query'], **opciones)
         if name == 'web.read':
             return self.env.dependencies.web_read(args['url'])
         if name.startswith('procedure.') or name in ('report.save', 'result.get'):
