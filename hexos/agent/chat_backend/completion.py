@@ -75,6 +75,16 @@ class ReplyPolicy:
     # una escritura. Si no hubo escritura en el turno, eso hay que decirlo.
     HECHO = ('guardad|anotad|apuntad|cread|registrad|reiniciad|parad|arrancad|'
              'encendid|apagad|detenid|borrad|eliminad|actualizad|ajustad|memorizad')
+    # «Ajustar» y «actualizar» también describen la conversación: «ahora que hemos
+    # ajustado la precisión y la cronología» (29/09) saltaba sin haber escritura.
+    # En singular siguen contando («he ajustado mi modo»); en plural, solo si nombran
+    # algo que se guarda.
+    CLARO = ('guardad|anotad|apuntad|cread|registrad|reiniciad|parad|arrancad|'
+             'encendid|apagad|detenid|borrad|eliminad|memorizad')
+    VAGO = 'actualizad|ajustad'
+    GUARDABLE = (r'(?:el|la|los|las|tu|tus|mi|mis|su|sus|esa|ese|esta|este)?\s*(?:nota|notas|perfil|'
+                 r'memoria|archivo|archivos|configuraci[óo]n|contenedor|contenedores|equipo|'
+                 r'acceso|tarea|procedimiento|informe|lista)\b')
     ESCRITURA_DICHA = re.compile(
         # PRIMERA persona y nada más. Con «ha» valía también «el sistema ha registrado
         # múltiples eventos», que describe lo que hizo el NAS y no lo que hizo Helios:
@@ -82,7 +92,9 @@ class ReplyPolicy:
         # «había» es ambiguo entre yo y él, así que solo cuenta con un pronombre
         # delante —«te había preparado y guardado»—, que es como falló de verdad.
         # Y «no he guardado nada» no es una afirmación de haber guardado.
-        r'(?<!no )\b(?:he|hemos|hab[íi]amos)\b(?:\s+\w+)?(?:\s+y)?\s+(?:' + HECHO + r')[oa]s?\b'
+        r'(?<!no )\b(?:he|hemos|hab[íi]amos)\b(?:\s+\w+)?(?:\s+y)?\s+(?:' + CLARO + r')[oa]s?\b'
+        r'|(?<!no )\bhe\b(?:\s+\w+)?(?:\s+y)?\s+(?:' + VAGO + r')[oa]s?\b'
+        r'|(?<!no )\b(?:hemos|hab[íi]amos)\b(?:\s+\w+)?(?:\s+y)?\s+(?:' + VAGO + r')[oa]s?\s+' + GUARDABLE +
         r'|\b(?:me|te|le|lo|la|se)\s+hab[íi]a\b(?:\s+\w+)?(?:\s+y)?\s+(?:' + HECHO + r')[oa]s?\b'
         r'|\bqued[óo]\s+(?:guardad|anotad|apuntad)[oa]s?\b'
         # «he tomado nota» no lleva participio de los de arriba y es de las formas

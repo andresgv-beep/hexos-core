@@ -249,6 +249,17 @@ class AfirmacionSinTrazaTest(unittest.TestCase):
             with self.subTest(texto):
                 self.assertEqual(self.cerrar(texto, [])['reason'], 'no_consta')
 
+    def test_hablar_de_lo_ajustado_en_la_conversacion_no_es_una_escritura(self):
+        # 29/09: saltaba el aviso de escritura sin herramientas por un «hemos ajustado».
+        for texto in ('Me alegra haberlo logrado. Ahora que hemos ajustado la precisión y la '
+                      'cronología, estoy listo para ayudarte.',
+                      'Hemos actualizado el enfoque de la búsqueda.'):
+            with self.subTest(texto):
+                self.assertNotEqual(self.cerrar(texto, [])['reason'], 'no_consta')
+        for texto in ('Hemos ajustado tu perfil.', 'Hemos actualizado la nota del NAS.'):
+            with self.subTest(texto):
+                self.assertEqual(self.cerrar(texto, [])['reason'], 'no_consta')
+
     def test_negar_haberlo_guardado_no_es_afirmarlo(self):
         for texto in ('No he guardado nada todavía.', 'No he tomado nota de eso.'):
             with self.subTest(texto):
