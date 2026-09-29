@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { entryValue, parseReply, regroup, tokenize, type Token } from "@/lib/helios/markdown";
+import { CELDA_CORTA, entryValue, parseReply, regroup, tokenize, type Token } from "@/lib/helios/markdown";
 import { ReplyCode } from "./ReplyMarkdown";
 import type { CodeActions } from "./ReplyMarkdown";
 
@@ -109,9 +109,12 @@ export function ProgressiveReply({ text, live = false, onComplete, onPreviewCode
           // Cada palabra sabe su celda; la cabecera es la línea 0.
           const columnas = Math.max(1, ...bloque.lines.flatMap(linea => linea.parts.map(parte => (parte.cell ?? 0) + 1)));
           const fila = (linea: (typeof bloque.lines)[number], Celda: "th" | "td") =>
-            <tr key={linea.index}>{Array.from({ length: columnas }, (_, c) =>
-              <Celda key={c}>{linea.parts.filter(parte => (parte.cell ?? 0) === c)
-                .map((parte, i) => <Palabra key={i} token={parte} />)}</Celda>)}</tr>;
+            <tr key={linea.index}>{Array.from({ length: columnas }, (_, c) => {
+              const partes = linea.parts.filter(parte => (parte.cell ?? 0) === c);
+              const corta = partes.map(parte => parte.text).join("").length <= CELDA_CORTA;
+              return <Celda key={c} className={Celda === "td" && corta ? "reply-cell-short" : undefined}>
+                {partes.map((parte, i) => <Palabra key={i} token={parte} />)}</Celda>;
+            })}</tr>;
           const [cabecera, ...filas] = bloque.lines;
           return <div key={bloque.index} className="reply-table"><table>
             <thead>{cabecera && cabecera.index === 0 && fila(cabecera, "th")}</thead>

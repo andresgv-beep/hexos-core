@@ -24,6 +24,10 @@ const TITULO = /^\s*(#{1,6})\s+(.*?)\s*#*\s*$/;
 const FILA = /^\s*\|.*\|\s*$/;
 const SEPARADOR = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
 
+/** Una celda corta (nombre, modelo, número de serie, estado) no se parte: la tabla se
+ *  ensancha y se desliza. Solo el texto largo pasa a varias líneas. */
+export const CELDA_CORTA = 32;
+
 /** Celdas de una fila «| a | b |». */
 function celdas(linea: string): string[] {
   return linea.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map(celda => celda.trim());

@@ -2,7 +2,7 @@
 
 import { type ReactNode, useState } from "react";
 import { Check, Copy } from "lucide-react";
-import { entry, parseReply, type Inline } from "@/lib/helios/markdown";
+import { CELDA_CORTA, entry, parseReply, type Inline } from "@/lib/helios/markdown";
 import { CodeText } from "./CodeText";
 
 export interface CodeActions {
@@ -26,7 +26,11 @@ export function ReplyMarkdown({ text, onPreviewCode }: { text: string } & CodeAc
       const celda = (partes: Inline[]) => partes.map((parte, k) => <InlinePart key={k} part={parte} />);
       return <div key={indice} className="reply-table"><table>
         <thead><tr>{cabecera.map((c, j) => <th key={j}>{celda(c)}</th>)}</tr></thead>
-        <tbody>{filas.map((fila, i) => <tr key={i}>{cabecera.map((_, j) => <td key={j}>{celda(fila[j] ?? [])}</td>)}</tr>)}</tbody>
+        <tbody>{filas.map((fila, i) => <tr key={i}>{cabecera.map((_, j) => {
+          const partes = fila[j] ?? [];
+          const corta = partes.map(parte => parte.text).join("").length <= CELDA_CORTA;
+          return <td key={j} className={corta ? "reply-cell-short" : undefined}>{celda(partes)}</td>;
+        })}</tr>)}</tbody>
       </table></div>;
     }
     const Lista = bloque.kind === "ol" ? "ol" : "ul";

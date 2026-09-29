@@ -113,7 +113,7 @@ test("títulos, tablas y cursiva salen con forma (salidas reales del 29/09)", ()
   const html = renderToStaticMarkup(createElement(ReplyMarkdown, { text: texto }));
   assert.match(html, /<h4 class="reply-heading">Contenedores Activos<\/h4>/);
   assert.match(html, /<th>Número de Serie<\/th>/);
-  assert.match(html, /<td>ZW63LFHC<\/td>/);
+  assert.match(html, /<td class="reply-cell-short">ZW63LFHC<\/td>/);
   assert.match(html, /<em>healthy<\/em>/);
   assert.doesNotMatch(html, /###|\| :---/);
 });
@@ -128,4 +128,13 @@ test("el guion bajo y el asterisco suelto no se vuelven cursiva", () => {
 
 test("una fila de tabla sin separador todavía es texto (llegando en directo)", () => {
   assert.deepEqual(parseReply("| Modelo | Precio |").map(b => b.kind), ["p"]);
+});
+
+test("las celdas cortas de una tabla no se parten; las largas sí", () => {
+  const html = renderToStaticMarkup(createElement(ReplyMarkdown, { text:
+    "| Disco | Modelo | Características |\n|---|---|---|\n" +
+    "| **sda** | Seagate ST4000VN006-3CW104 | Chip A20 Pro (2nm), cámara con apertura variable y hasta 36h de vídeo |" }));
+  assert.match(html, /<td class="reply-cell-short"><strong>sda<\/strong><\/td>/);
+  assert.match(html, /<td class="reply-cell-short">Seagate ST4000VN006-3CW104<\/td>/);
+  assert.match(html, /<td>Chip A20 Pro/);
 });
