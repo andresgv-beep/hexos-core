@@ -200,7 +200,9 @@ class NasSessionTest(unittest.TestCase):
         self.assertEqual(result['effective_section'],'diagnosis')
 
     def test_read_without_stored_credentials_explains_how_to_save_them(self):
+        # Un equipo que existe (se localiza) pero sin credencial: lo pide la ventana.
         with patch('hexos.agent.nas_session.hosts.credentials',return_value=None), \
+             patch('hexos.agent.nas_session.hosts.resolve',return_value=dict(host='192.168.1.243')), \
              patch('hexos.agent.nas_session.execute') as run:
             with self.assertRaises(ValueError) as caught:
                 read('/unused','diagnosis',device='synology')

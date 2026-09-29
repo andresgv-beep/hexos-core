@@ -37,12 +37,35 @@ class CredentialRequestTest(unittest.TestCase):
             self.assertIn('no pidas la contraseña por el chat', str(needed).lower())
             self.assertIn('no significa que el equipo esté sano', str(needed))
 
-    def test_unknown_device_still_asks_instead_of_failing_silently(self):
+    def test_unknown_device_names_the_real_ones_instead_of_opening_the_window(self):
+        # 29/09: el modelo inventó «NAS_PRINCIPAL» y la ventana creó un equipo fantasma.
         with tempfile.TemporaryDirectory() as tmp:
             inventory(tmp)
+            hosts.save(tmp, 'synology 1', 'helios', 'secreta', 30, 'servidorsrv1.ddns.net')
+            with self.assertRaises(ValueError) as caught:
+                read(tmp, 'diagnosis', device='NAS_PRINCIPAL')
+            self.assertNotIsInstance(caught.exception, hosts.AccessNeeded)
+            mensaje = str(caught.exception)
+            self.assertIn("'synology 1'", mensaje)
+            self.assertIn("'synology'", mensaje)          # registrado en la red, sin acceso
+            self.assertIn('device_remote', mensaje)
+            self.assertNotIn('secreta', mensaje)
+            self.assertIsNone(hosts.credentials(tmp, 'nas_principal'))
+
+    def test_a_device_registered_with_its_address_still_opens_the_window(self):
+        # El camino bueno para uno nuevo: registrado con dirección, la ventana ya sabe
+        # a qué host y puerto va y solo falta la contraseña.
+        with tempfile.TemporaryDirectory() as tmp:
+            db = sqlite3.connect(str(Path(tmp) / 'work.sqlite'))
+            db.execute('CREATE TABLE network_devices (id TEXT PRIMARY KEY, body TEXT)')
+            body = dict(id='remoto/servidor 2', pinned_host='servidorsrv2.ddns.net', pinned_port=30,
+                        pinned_original='https://servidorsrv2.ddns.net:30', addresses=[],
+                        latest_addresses=[], identity=dict(name='servidor 2', source='user_statement'))
+            db.execute('INSERT INTO network_devices VALUES (?,?)', ('remoto/servidor 2', json.dumps(body)))
+            db.commit(); db.close()
             with self.assertRaises(hosts.AccessNeeded) as caught:
-                read(tmp, 'diagnosis', device='otro')
-            self.assertIsNone(caught.exception.located)
+                read(tmp, 'diagnosis', device='servidor 2')
+            self.assertEqual(caught.exception.located['host'], 'servidorsrv2.ddns.net')
 
     def test_saving_access_never_returns_or_stores_the_password_in_the_open(self):
         with tempfile.TemporaryDirectory() as tmp:

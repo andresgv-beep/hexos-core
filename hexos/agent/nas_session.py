@@ -76,7 +76,11 @@ def read(workspace, section, disk=None, device=None, container=None, action=None
         try:
             located = hosts.resolve(workspace, device)
         except ValueError:
-            located = None
+            # Un nombre que no es de ningún equipo no abre la ventana. El 29/09 el modelo
+            # inventó «NAS_PRINCIPAL» y la ventana dio de alta un equipo fantasma con otro
+            # host, otro puerto y otro usuario. Los nuevos se registran con device_remote
+            # (nombre y dirección de la persona) y la ventana pide solo la contraseña.
+            raise ValueError(hosts.unknown_device_message(workspace, device)) from None
         raise hosts.AccessNeeded(device, located)
     result = execute(workspace, device, section, disk, container, action)
     presentado = present_result(result, section, requested_section)

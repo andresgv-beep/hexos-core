@@ -270,6 +270,35 @@ def match(workspace, name):
     return None
 
 
+def unknown_device_message(workspace, name):
+    """Qué contestar cuando se pide un equipo que no existe: los que sí existen y cómo dar de alta uno."""
+    guardados = sorted(load(workspace))
+    en_red = []
+    database = Path(workspace) / 'work.sqlite'
+    if database.exists():
+        connection = sqlite3.connect('file:' + str(database) + '?mode=ro', uri=True)
+        try:
+            for (body,) in connection.execute('SELECT body FROM network_devices'):
+                try:
+                    nombre = (json.loads(body).get('identity') or {}).get('name')
+                except (TypeError, json.JSONDecodeError):
+                    continue
+                if nombre and nombre.casefold() not in guardados:
+                    en_red.append(nombre)
+        except sqlite3.Error:
+            pass
+        finally:
+            connection.close()
+    partes = ['No hay ningún equipo llamado ' + repr(name) + '; no se ha pedido ningún acceso.']
+    partes.append('Con acceso guardado: ' + (', '.join(repr(n) for n in guardados) or 'ninguno') + '.')
+    if en_red:
+        partes.append('Registrados sin acceso: ' + ', '.join(repr(n) for n in sorted(set(en_red))) + '.')
+    partes.append('Repite la llamada con uno de esos nombres, sin inventar otro. Si la persona quiere '
+                  'añadir un equipo nuevo, regístralo antes con device_remote usando el nombre y la '
+                  'dirección que ella dé; después device_connect abrirá la ventana para la contraseña.')
+    return ' '.join(partes)
+
+
 def only_device(workspace):
     """El único destino inequívoco, o un error que nombra las opciones.
 
