@@ -1,4 +1,9 @@
+from pathlib import Path
+import sys
 import unittest
+
+# El módulo vive al lado; así se importa igual como script que con unittest desde la raíz.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from native_tools_audit import parse_native
 
 

@@ -62,14 +62,25 @@ class ContinuityTest(unittest.TestCase):
                 runtime = Runtime()
                 a = Agent(workspace, runtime, profile)
                 a.clear_context(); a.chat('¿Cómo me llamo?')
-                self.assertIn('Su nombre es Andrés', runtime.messages[-1]['content'])
+                # Desde 0a2c9b6 el perfil no viaja entero en cada turno: se anuncia
+                # y el modelo lo consulta con profile_recall.
+                enviado = runtime.messages[-1]['content']
+                self.assertIn('profile_recall', enviado)
+                self.assertNotIn('Andrés', enviado)
+                with a.store() as s:
+                    hechos = a.tool(s, 'profile.recall', {'query': 'nombre'})['facts']
+                self.assertEqual([h['value'] for h in hechos], ['Andrés'])
 
     def test_failed_profile_is_not_silent(self):
         class Broken:
             def read(self): raise RuntimeError('memoria rota')
+            def keys(self): raise RuntimeError('memoria rota')
         with tempfile.TemporaryDirectory() as home:
             a = Agent(home, Runtime(), Broken())
-            with self.assertRaisesRegex(RuntimeError, 'memoria rota'):
-                a.chat('hola')
+            # Un saludo no toca el perfil, así que no puede romperse por él…
+            self.assertEqual(a.chat('hola')['reply'], 'Recibido')
+            # …pero consultarlo con la memoria rota lo dice, no devuelve «nada guardado».
+            with a.store() as s, self.assertRaisesRegex(RuntimeError, 'memoria rota'):
+                a.tool(s, 'profile.recall', {'query': 'nombre'})
 
 if __name__ == '__main__': unittest.main()
