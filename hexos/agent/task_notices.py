@@ -91,14 +91,21 @@ def collect(db, workspace, clock=time.time):
     seeded = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='task_notices'").fetchone()
     ensure(db)
     stamp = clock()
+    vigentes = set()
     for key, job in media_jobs(workspace):
+        vigentes.add(key)
         source = (job.get('source') or {}).get('path') or job['id']
         db.execute('INSERT OR IGNORE INTO task_notices VALUES (?,?,?,?,?,?,?,?)',
                    (key, 'media', stamp, movie_title(source), MEDIA_OUTCOMES[job['state']],
                     json.dumps(media_notice(job), ensure_ascii=False),
                     None if seeded else stamp, None if seeded else 'antes-de-los-avisos'))
-    db.execute('DELETE FROM task_notices WHERE reported IS NOT NULL AND reported < ?',
-               (stamp-RETENTION_SECONDS,))
+    # Contado hace más de tres días: sale del historial (recent), pero la fila se queda
+    # mientras el trabajo siga en la cola. Borrarla hacía que el siguiente collect viera
+    # ese final como nuevo: el 29/09 se volvió a anunciar Parque Jurásico 2, del 26/09.
+    for (key,) in db.execute('SELECT key FROM task_notices WHERE reported IS NOT NULL AND reported < ?',
+                             (stamp-RETENTION_SECONDS,)).fetchall():
+        if key not in vigentes:
+            db.execute('DELETE FROM task_notices WHERE key=?', (key,))
     db.commit()
 
 
@@ -113,8 +120,9 @@ def pending(db):
     return _rows(db, 'reported IS NULL')
 
 
-def recent(db):
-    return _rows(db, '1')
+def recent(db, clock=time.time):
+    """Lo pendiente y lo contado en los últimos tres días."""
+    return _rows(db, 'reported IS NULL OR reported >= ?', (clock()-RETENTION_SECONDS,))
 
 
 def mark_reported(db, keys, turn_id, clock=time.time):

@@ -58,7 +58,7 @@ class TaskNoticesTest(unittest.TestCase):
         self.queue.put(job('old', 'completed'))
         self.collect()
         self.assertEqual(task_notices.pending(self.store.db), [])
-        self.assertEqual(len(task_notices.recent(self.store.db)), 1)
+        self.assertEqual(len(task_notices.recent(self.store.db, clock=lambda: self.clock[0])), 1)
 
     def test_new_endings_are_pending_once_and_skip_what_needs_no_telling(self):
         self.collect()
@@ -91,10 +91,14 @@ class TaskNoticesTest(unittest.TestCase):
         self.assertEqual(task_notices.pending(self.store.db), [])
         self.clock[0] += 3*24*3600 - 60
         self.collect()
-        self.assertTrue(task_notices.recent(self.store.db)[0]['reported'])
+        self.assertTrue(task_notices.recent(self.store.db, clock=lambda: self.clock[0])[0]['reported'])
         self.clock[0] += 120
         self.collect()
-        self.assertEqual(task_notices.recent(self.store.db), [])
+        self.assertEqual(task_notices.recent(self.store.db, clock=lambda: self.clock[0]), [])
+        # 29/09: el trabajo sigue en la cola y, al caducar el aviso, se volvía a anunciar.
+        self.clock[0] += 3600
+        self.collect()
+        self.assertEqual(task_notices.pending(self.store.db), [])
 
     def test_mention_ignores_accents_and_case(self):
         notices = [dict(title='Parque Jurásico 2', outcome='terminada', body={})]
