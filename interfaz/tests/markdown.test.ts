@@ -98,3 +98,34 @@ test("the entries render as name and value, also while they are being revealed",
   assert.match(html, /<span class="reply-entry-name"><strong>Parque Jurásico 3<\/strong><\/span>/);
   assert.match(html, /<span class="reply-entry-value">21.9 GB<\/span>/);
 });
+
+test("títulos, tablas y cursiva salen con forma (salidas reales del 29/09)", () => {
+  const texto = "### Contenedores Activos\n" +
+    "| Disco | Modelo | Número de Serie | Estado SMART |\n| :--- | :--- | :--- | :--- |\n" +
+    "| **sda** | Seagate ST4000VN006-3CW104 | ZW63RNW6 | PASSED |\n" +
+    "| **sdb** | Seagate ST4000VN006-3CW104 | ZW63LFHC | PASSED |\n" +
+    "Todos en ejecución (Salud: *healthy*).";
+  const bloques = parseReply(texto);
+  assert.deepEqual(bloques.map(b => b.kind), ["h", "table", "p"]);
+  assert.equal(bloques[0].level, 3);
+  assert.equal(bloques[1].cells!.length, 3);
+  assert.deepEqual(bloques[1].cells![1][0], [{ text: "sda", bold: true }]);
+  const html = renderToStaticMarkup(createElement(ReplyMarkdown, { text: texto }));
+  assert.match(html, /<h4 class="reply-heading">Contenedores Activos<\/h4>/);
+  assert.match(html, /<th>Número de Serie<\/th>/);
+  assert.match(html, /<td>ZW63LFHC<\/td>/);
+  assert.match(html, /<em>healthy<\/em>/);
+  assert.doesNotMatch(html, /###|\| :---/);
+});
+
+test("el guion bajo y el asterisco suelto no se vuelven cursiva", () => {
+  assert.deepEqual(inlines("immich_machine_learning"), [{ text: "immich_machine_learning" }]);
+  assert.deepEqual(inlines("5 * 3 = 15"), [{ text: "5 * 3 = 15" }]);
+  const tokens = tokenize(parseReply("| a | b |\n|---|---|\n| 1 |  |"));
+  const fila = regroup(tokens)[0].lines[1];
+  assert.deepEqual(fila.parts.map(p => p.cell), [0, 1]);
+});
+
+test("una fila de tabla sin separador todavía es texto (llegando en directo)", () => {
+  assert.deepEqual(parseReply("| Modelo | Precio |").map(b => b.kind), ["p"]);
+});

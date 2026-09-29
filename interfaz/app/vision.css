@@ -466,6 +466,20 @@ button.vision-horizon-state { border: 0; background: transparent; padding: 0; cu
 button.vision-horizon-state:hover { color: var(--v-gold-soft); }
 button.vision-horizon-state:focus-visible { outline: 2px solid var(--v-gold); outline-offset: 3px; border-radius: 4px; }
 
+/* Títulos y tablas del Markdown de Helios. La tabla se desplaza de lado dentro de su
+   recuadro cuando no cabe: en el móvil nunca empuja la página. */
+.helios-answer .reply-heading { margin: 1.1em 0 .4em; font: 600 1.05em/1.35 var(--v-font); color: var(--v-gold-soft); letter-spacing: .01em; }
+.helios-answer h4.reply-heading { font-size: .95em; color: var(--v-text); }
+.helios-answer .reply-table { margin: .5em 0 1em; overflow-x: auto; -webkit-overflow-scrolling: touch; border-top: 1px solid var(--v-line); }
+.helios-answer .reply-table table { border-collapse: collapse; min-width: 100%; font-size: .9em; line-height: 1.45; }
+.helios-answer .reply-table :is(th, td) { padding: 8px 12px 8px 4px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--v-line); }
+.helios-answer .reply-table th { font: 600 11px var(--v-font); letter-spacing: .08em; text-transform: uppercase; color: var(--v-muted); white-space: nowrap; }
+.helios-answer .reply-table td { min-width: 7ch; max-width: 32ch; overflow-wrap: normal; word-break: normal; }
+/* Un código de modelo o de serie no se parte a letras: si no cabe, la tabla se desliza. */
+.helios-answer .reply-table td :is(strong, code) { white-space: nowrap; }
+.helios-answer .reply-table tbody tr:hover { background: rgba(232, 176, 79, 0.05); }
+.helios-answer em { font-style: italic; color: inherit; }
+
 /* Resultados en dos columnas: el nombre a la izquierda, el dato alineado a la derecha. */
 .helios-answer :is(ul, ol).reply-entries {
   list-style: none; margin: .4em 0 1em; padding: 0; display: block;

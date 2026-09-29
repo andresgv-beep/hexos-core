@@ -17,6 +17,18 @@ export function ReplyMarkdown({ text, onPreviewCode }: { text: string } & CodeAc
       return <ReplyCode key={indice} code={codigo} language={bloque.language} onPreview={onPreviewCode} />;
     }
     if (bloque.kind === "p") return <p key={indice}>{bloque.lines[0].map((parte, i) => <InlinePart key={i} part={parte} />)}</p>;
+    if (bloque.kind === "h") {
+      const Titulo = (bloque.level ?? 3) <= 2 ? "h3" : "h4";
+      return <Titulo key={indice} className="reply-heading">{bloque.lines[0].map((parte, i) => <InlinePart key={i} part={parte} />)}</Titulo>;
+    }
+    if (bloque.kind === "table" && bloque.cells) {
+      const [cabecera, ...filas] = bloque.cells;
+      const celda = (partes: Inline[]) => partes.map((parte, k) => <InlinePart key={k} part={parte} />);
+      return <div key={indice} className="reply-table"><table>
+        <thead><tr>{cabecera.map((c, j) => <th key={j}>{celda(c)}</th>)}</tr></thead>
+        <tbody>{filas.map((fila, i) => <tr key={i}>{cabecera.map((_, j) => <td key={j}>{celda(fila[j] ?? [])}</td>)}</tr>)}</tbody>
+      </table></div>;
+    }
     const Lista = bloque.kind === "ol" ? "ol" : "ul";
     if (bloque.entries) return <Lista key={indice} className="reply-entries">{bloque.lines.map((linea, i) => {
       const fila = entry(linea)!;
@@ -31,6 +43,7 @@ export function ReplyMarkdown({ text, onPreviewCode }: { text: string } & CodeAc
 function InlinePart({ part }: { part: Inline }) {
   if (part.code) return <code>{part.text}</code>;
   if (part.bold) return <strong>{part.text}</strong>;
+  if (part.italic) return <em>{part.text}</em>;
   return part.text;
 }
 

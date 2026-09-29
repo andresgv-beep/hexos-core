@@ -101,6 +101,23 @@ export function ProgressiveReply({ text, live = false, onComplete, onPreviewCode
           <Fragment key={linea.index}>{linea.parts.map((parte, i) =>
             <Palabra key={i} token={parte} />)}</Fragment>);
         if (bloque.kind === "p") return <p key={bloque.index}>{lineas}</p>;
+        if (bloque.kind === "h") {
+          const Titulo = (bloque.level ?? 3) <= 2 ? "h3" : "h4";
+          return <Titulo key={bloque.index} className="reply-heading">{lineas}</Titulo>;
+        }
+        if (bloque.kind === "table") {
+          // Cada palabra sabe su celda; la cabecera es la línea 0.
+          const columnas = Math.max(1, ...bloque.lines.flatMap(linea => linea.parts.map(parte => (parte.cell ?? 0) + 1)));
+          const fila = (linea: (typeof bloque.lines)[number], Celda: "th" | "td") =>
+            <tr key={linea.index}>{Array.from({ length: columnas }, (_, c) =>
+              <Celda key={c}>{linea.parts.filter(parte => (parte.cell ?? 0) === c)
+                .map((parte, i) => <Palabra key={i} token={parte} />)}</Celda>)}</tr>;
+          const [cabecera, ...filas] = bloque.lines;
+          return <div key={bloque.index} className="reply-table"><table>
+            <thead>{cabecera && cabecera.index === 0 && fila(cabecera, "th")}</thead>
+            <tbody>{(cabecera && cabecera.index === 0 ? filas : bloque.lines).map(linea => fila(linea, "td"))}</tbody>
+          </table></div>;
+        }
         const Lista = bloque.kind === "ol" ? "ol" : "ul";
         if (bloque.entries) return <Lista key={bloque.index} className="reply-entries">{bloque.lines.map(linea => {
           // El nombre es la negrita que abre la línea; lo demás, ya revelado o no, es el valor.
@@ -122,7 +139,8 @@ export function ProgressiveReply({ text, live = false, onComplete, onPreviewCode
 
 function Palabra({ token }: { token: Token }) {
   if (/^\s+$/.test(token.text)) return token.text;
+  if (!token.text) return null;
   const contenido = token.code ? <code>{token.text}</code>
-    : token.bold ? <strong>{token.text}</strong> : token.text;
+    : token.bold ? <strong>{token.text}</strong> : token.italic ? <em>{token.text}</em> : token.text;
   return <span className="reveal-word">{contenido}</span>;
 }

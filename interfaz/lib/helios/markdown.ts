@@ -4,28 +4,42 @@
  *
  *  Deliberadamente pequeño: solo lo que este modelo usa de verdad. Nada de HTML
  *  incrustado, que además sería texto ajeno metido en la página. */
-export interface Inline { text: string; bold?: boolean; code?: boolean }
+export interface Inline { text: string; bold?: boolean; code?: boolean; italic?: boolean }
 export interface Block {
-  kind: "p" | "ul" | "ol" | "code";
+  kind: "p" | "ul" | "ol" | "code" | "h" | "table";
   lines: Inline[][];
   language?: string;
   /** Lista de resultados «**nombre** (valor)»: se pinta en dos columnas. */
   entries?: boolean;
+  /** Título «### …»: 1 a 6. */
+  level?: number;
+  /** Tabla: filas y, en cada fila, sus celdas. La primera fila es la cabecera. */
+  cells?: Inline[][][];
 }
 
 const VINETA = /^\s*[*-]\s+(.*)$/;
 const NUMERO = /^\s*\d+[.)]\s+(.*)$/;
 const CERCA = /^\s*```([^\s`]*)\s*$/;
+const TITULO = /^\s*(#{1,6})\s+(.*?)\s*#*\s*$/;
+const FILA = /^\s*\|.*\|\s*$/;
+const SEPARADOR = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
 
-/** Negrita y código dentro de una línea. Un asterisco suelto es un asterisco. */
+/** Celdas de una fila «| a | b |». */
+function celdas(linea: string): string[] {
+  return linea.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map(celda => celda.trim());
+}
+
+/** Negrita, cursiva y código dentro de una línea. Un asterisco suelto es un asterisco,
+ *  y el guion bajo nunca es cursiva: partiría nombres como immich_server. */
 export function inlines(text: string): Inline[] {
   const salida: Inline[] = [];
-  const patron = /\*\*(.+?)\*\*|`([^`]+)`/g;
+  const patron = /\*\*(.+?)\*\*|`([^`]+)`|(?<![*\w])\*(?![\s*])([^*\n]*?[^\s*])\*(?![*\w])/g;
   let ultimo = 0;
   for (let m = patron.exec(text); m; m = patron.exec(text)) {
     if (m.index > ultimo) salida.push({ text: text.slice(ultimo, m.index) });
     if (m[1] !== undefined) salida.push({ text: m[1], bold: true });
-    else salida.push({ text: m[2], code: true });
+    else if (m[2] !== undefined) salida.push({ text: m[2], code: true });
+    else salida.push({ text: m[3], italic: true });
     ultimo = m.index + m[0].length;
   }
   if (ultimo < text.length) salida.push({ text: text.slice(ultimo) });
@@ -65,7 +79,9 @@ export function parseReply(text: string): Block[] {
     bloques.push({ kind: "p", lines: [inlines(parrafo.join(" "))] });
     parrafo = [];
   };
-  for (const linea of text.split("\n")) {
+  const lineas = text.split("\n");
+  for (let n = 0; n < lineas.length; n++) {
+    const linea = lineas[n];
     const cerca = CERCA.exec(linea);
     if (codigo !== null) {
       if (cerca) {
@@ -79,6 +95,23 @@ export function parseReply(text: string): Block[] {
       cerrarParrafo();
       codigo = [];
       lenguaje = cerca[1];
+      continue;
+    }
+    // Tabla: una fila «| … |» seguida de su separador «|:--|:--|». Sin separador aún
+    // (llegando en directo) sigue siendo texto hasta que aparezca.
+    if (FILA.test(linea) && n + 1 < lineas.length && SEPARADOR.test(lineas[n + 1])) {
+      cerrarParrafo();
+      const filas = [celdas(linea)];
+      n += 1;
+      while (n + 1 < lineas.length && FILA.test(lineas[n + 1])) filas.push(celdas(lineas[++n]));
+      const cells = filas.map(fila => fila.map(celda => inlines(celda)));
+      bloques.push({ kind: "table", cells, lines: cells.map(fila => fila.flat()) });
+      continue;
+    }
+    const titulo = TITULO.exec(linea);
+    if (titulo) {
+      cerrarParrafo();
+      bloques.push({ kind: "h", level: titulo[1].length, lines: [inlines(titulo[2])] });
       continue;
     }
     const vineta = VINETA.exec(linea);
@@ -104,7 +137,7 @@ export function parseReply(text: string): Block[] {
 
 /** Una palabra, sabiendo de qué bloque y línea viene. El revelado avanza sobre
  *  esta lista, así que la estructura no depende de cuánto se lleve mostrado. */
-export interface Token extends Inline { block: number; line: number; kind: Block["kind"]; language?: string; entries?: boolean }
+export interface Token extends Inline { block: number; line: number; kind: Block["kind"]; language?: string; entries?: boolean; level?: number; cell?: number }
 
 export function tokenize(blocks: Block[]): Token[] {
   const salida: Token[] = [];
@@ -120,24 +153,32 @@ export function tokenize(blocks: Block[]): Token[] {
       }
       return;
     }
-    linea.forEach(trozo => {
-      if (trozo.code) { salida.push({ ...trozo, block: b, line: l, kind: bloque.kind, entries: bloque.entries }); return; }
+    const base = { block: b, line: l, kind: bloque.kind, entries: bloque.entries, level: bloque.level };
+    const partes = (trozos: Inline[], cell?: number) => trozos.forEach(trozo => {
+      if (trozo.code) { salida.push({ ...trozo, ...base, cell }); return; }
       // Se conservan los espacios para no rehacer el texto al juntarlo.
       for (const palabra of trozo.text.split(/(\s+)/)) {
-        if (palabra) salida.push({ ...trozo, text: palabra, block: b, line: l, kind: bloque.kind, entries: bloque.entries });
+        if (palabra) salida.push({ ...trozo, text: palabra, ...base, cell });
       }
     });
+    if (bloque.kind === "table" && bloque.cells) {
+      // Una celda vacía no deja token: se marca para que la fila conserve sus columnas.
+      bloque.cells[l].forEach((celda, c) => celda.length && celda.some(t => t.text) ? partes(celda, c)
+        : salida.push({ text: "", ...base, cell: c }));
+      return;
+    }
+    partes(linea);
   }));
   return salida;
 }
 
 /** Los tokens ya mostrados, devueltos a su forma de bloques y líneas. */
-export function regroup(tokens: Token[]): { kind: Block["kind"]; index: number; language?: string; entries?: boolean; lines: { index: number; parts: Token[] }[] }[] {
-  const salida: { kind: Block["kind"]; index: number; language?: string; entries?: boolean; lines: { index: number; parts: Token[] }[] }[] = [];
+export function regroup(tokens: Token[]): { kind: Block["kind"]; index: number; language?: string; entries?: boolean; level?: number; lines: { index: number; parts: Token[] }[] }[] {
+  const salida: { kind: Block["kind"]; index: number; language?: string; entries?: boolean; level?: number; lines: { index: number; parts: Token[] }[] }[] = [];
   for (const token of tokens) {
     let bloque = salida[salida.length - 1];
     if (!bloque || bloque.index !== token.block) {
-      bloque = { kind: token.kind, index: token.block, language: token.language, entries: token.entries, lines: [] };
+      bloque = { kind: token.kind, index: token.block, language: token.language, entries: token.entries, level: token.level, lines: [] };
       salida.push(bloque);
     }
     let linea = bloque.lines[bloque.lines.length - 1];
