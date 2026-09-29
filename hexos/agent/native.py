@@ -370,6 +370,18 @@ class NativeRuntime:
                               'tool_responses':[]})
         self.current = call
 
+    def require_check(self):
+        """La próxima generación empieza en el canal de llamada, solo con lecturas.
+
+        Para los reproches: pedirle por prompt que compruebe no bastó, contestaba
+        «he vuelto a comprobar la carpeta» sin llamar a nada. Es el mismo arranque
+        que tras una pseudollamada; qué lectura hacer lo decide el modelo.
+        """
+        if self.pending:
+            return False
+        self.repair_call = True
+        return True
+
     def require_read(self, name):
         """One-shot native read prefix; the model still chooses the arguments."""
         if name not in self.names.values() or catalog.TOOLS[name]['effect'] != 'read':

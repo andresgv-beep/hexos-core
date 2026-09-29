@@ -99,6 +99,8 @@ class TurnState:
     task_notices: list = field(default_factory=list)
     transcript: str | None = None
     listing_followup: bool = False
+    # «Pero no me habías dicho…»: antes de contestar, una lectura de verdad.
+    reproche: bool = False
     reading_started: float | None = None
     document_read_mark: tuple | None = None
     document_read_retries: int = 0

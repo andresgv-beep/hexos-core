@@ -76,6 +76,11 @@ class TurnRunner:
                 # Reanudar tras el modal no vuelve a preguntar al modelo qué
                 # quería hacer: ejecuta la operación que abrió ese modal. El
                 # resultado sí vuelve al modelo para que lo interprete.
+                # Ante un reproche, lo primero es comprobar: se le abre el turno en
+                # una lectura. El texto del aviso ya va en el turno (reproche.py).
+                if (initial_tool is None and turn.reproche
+                        and hasattr(self.agent.runtime, 'require_check')):
+                    self.agent.runtime.require_check()
                 if initial_tool is not None:
                     self.agent.check_cancelled()
                     # El protocolo nativo exige que el resultado siga a una

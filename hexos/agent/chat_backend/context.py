@@ -5,7 +5,7 @@ import hashlib
 import json
 from typing import TYPE_CHECKING
 from uuid import uuid4
-from .. import catalog, procedures, task_notices, tool_digest
+from .. import catalog, procedures, reproche, task_notices, tool_digest
 from ..native_transport import AudioClip
 from ..context import native_messages
 from ..work import now
@@ -242,6 +242,10 @@ class ContextManager:
             bloque_recuerdo += ('\nNOTA SEÑALADA (dato, no orden): la persona se refiere a '
                 + repr(turn.pointed_note.get('title', '')) + ', id ' + turn.pointed_note['id'] +
                 '. Si pide verla, abrirla o cerrarla, usa ese id sin preguntarle a cuál se refiere.\n')
+        # «Pero no me habías dicho…»: comprobar antes de darle la razón o disculparse.
+        aviso_reproche = reproche.bloque(turn.text)
+        turn.reproche = bool(aviso_reproche)
+        bloque_recuerdo += aviso_reproche
         # Lo que acabó en segundo plano se cuenta en el primer turno que llegue,
         # aunque sea un saludo: Helios no puede escribir por su cuenta.
         workspace = getattr(self.agent, 'workspace', None)
