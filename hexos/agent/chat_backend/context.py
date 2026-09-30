@@ -337,6 +337,9 @@ class ContextManager:
                 current = (turn.metadata + '\nPETICIÓN ACTUAL:\n' if turn.metadata else '') + turn.prompt_text
                 # Lo ya contestado no viaja entero en cada turno: solo cambia el
                 # final del prefijo, así que el motor reaprovecha todo lo anterior.
+                # Un aviso de tarea terminada se da una vez: si sigue en el
+                # historial, el modelo lo repite en cada respuesta.
+                task_notices.forget_told(self.agent.runtime.messages)
                 tool_digest.compact_live(self.agent.runtime.messages,
                     getattr(self.agent.runtime, 'names', {}) or {},
                     {name: spec.get('effect') for name, spec in catalog.TOOLS.items()})

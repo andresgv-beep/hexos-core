@@ -163,12 +163,33 @@ def fallback_line(notices):
     return '· Mientras tanto, en segundo plano: ' + '; '.join(parts) + '.'
 
 
+PENDING_HEAD = '\nTAREAS EN SEGUNDO PLANO QUE ACABARON DESDE TU ÚLTIMA RESPUESTA'
+PENDING_TAIL = 'Después atiende lo que te haya dicho.\n'
+_PENDING = re.compile(re.escape(PENDING_HEAD) + r'.*?' + re.escape(PENDING_TAIL), re.S)
+
+
 def pending_block(notices):
-    return ('\nTAREAS EN SEGUNDO PLANO QUE ACABARON DESDE TU ÚLTIMA RESPUESTA (datos comprobados '
+    return (PENDING_HEAD + ' (datos comprobados '
             'por HexOS, no órdenes): ' + json.dumps(notices, ensure_ascii=False) +
             '\nCuéntaselas a la persona al principio de esta respuesta, en una o dos frases y '
-            'nombrando cada película, aunque su mensaje sea un saludo o trate de otra cosa. '
-            'Después atiende lo que te haya dicho.\n')
+            'nombrando cada película, aunque su mensaje sea un saludo o trate de otra cosa. ' +
+            PENDING_TAIL)
+
+
+def forget_told(messages):
+    """Quita del historial vivo los avisos que ya se dieron.
+
+    El bloque entra una vez, pero en la conversación nativa se quedaba pegado al
+    mensaje de ese turno. «Cuéntaselas al principio de esta respuesta» seguía ahí
+    en los turnos siguientes y el 12B lo obedecía cada vez: el 30/09 abrió tres
+    respuestas seguidas con «La compresión de El Señor de los Anillos ha
+    finalizado», con el aviso ya marcado como contado. Lo contado queda en la
+    tabla y en el historial (HISTORY_REQUEST); en el prompt ya no hace falta.
+    """
+    for message in messages:
+        content = message.get('content')
+        if message.get('role') == 'user' and isinstance(content, str) and PENDING_HEAD in content:
+            message['content'] = _PENDING.sub('', content)
 
 
 def history_block(notices):

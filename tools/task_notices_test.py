@@ -136,6 +136,48 @@ class TurnTest(unittest.TestCase):
             self.assertIn('HISTORIAL DE TAREAS', agent.runtime.inputs[2])
             self.assertNotIn('segundo plano', third['reply'])
 
+    def test_told_notice_leaves_the_live_native_history(self):
+        # Conversación nativa: el historial vive en runtime.messages entre turnos.
+        class Native(Runtime):
+            native = True
+            def __init__(self, *replies):
+                super().__init__(*replies)
+                self.messages = []
+            def generate(self, messages):
+                if not self.messages:
+                    self.messages = list(messages)
+                else:
+                    self.messages.extend(messages)
+                reply = super().generate(self.messages)
+                self.messages.append(dict(role='assistant', content=reply['reply']))
+                return reply
+            def call(self, request):
+                self.messages = []
+
+        with tempfile.TemporaryDirectory() as workspace:
+            queue = Queue(workspace)
+            WorkStore(workspace).db.close()
+            runtime = Native('¡Hola!', 'Terminó «Parque Jurásico 2». ¡Hola!', 'Un bocadillo.')
+            agent = Agent(workspace, runtime)
+            agent.chat('Hola')
+            queue.put(job('done', 'completed'))
+            agent.chat('Hola de nuevo')
+            self.assertIn(task_notices.PENDING_HEAD.strip(), runtime.inputs[1])
+            agent.chat('¿Qué estoy comiendo?')
+            self.assertNotIn(task_notices.PENDING_HEAD.strip(), runtime.inputs[2])
+            self.assertNotIn('Cuéntaselas', runtime.inputs[2])
+            # Lo demás de aquel turno sigue: su pregunta y lo que se contestó.
+            self.assertIn('Hola de nuevo', runtime.inputs[2])
+            self.assertIn('Terminó «Parque Jurásico 2»', runtime.inputs[2])
+
+    def test_forget_told_only_touches_the_notice(self):
+        block = task_notices.pending_block([dict(title='Venom', outcome='terminada')])
+        messages = [dict(role='user', content='antes' + block + '\nPETICIÓN ACTUAL:\nhola'),
+                    dict(role='assistant', content='Terminó Venom.' + block)]
+        task_notices.forget_told(messages)
+        self.assertEqual(messages[0]['content'], 'antes\nPETICIÓN ACTUAL:\nhola')
+        self.assertIn(task_notices.PENDING_HEAD, messages[1]['content'])  # solo mensajes de la persona
+
 
 if __name__ == '__main__':
     unittest.main()
