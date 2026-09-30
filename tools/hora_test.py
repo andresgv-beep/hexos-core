@@ -1,7 +1,9 @@
 """La hora local llega al modelo al empezar y tras una pausa, sin tocar los turnos seguidos."""
 from datetime import datetime, timedelta, timezone
+import os
 import tempfile
 import unittest
+from unittest import mock
 from zoneinfo import ZoneInfo
 
 from hexos.agent.chat import Agent
@@ -33,6 +35,13 @@ class HoraTest(unittest.TestCase):
         noche = datetime(2026, 9, 30, 23, 40, tzinfo=ZoneInfo('Europe/Madrid'))
         self.assertIn('miércoles 30 de septiembre de 2026, 23:40', hora_local(noche))
 
+    def test_apagada_por_defecto(self):
+        with tempfile.TemporaryDirectory() as workspace, mock.patch.dict(os.environ, {'HEXOS_HORA': ''}):
+            runtime = Native()
+            Agent(workspace, runtime).chat('hola')
+            self.assertNotIn('HORA LOCAL', runtime.turns[-1])
+
+    @mock.patch.dict(os.environ, {'HEXOS_HORA': '1'})
     def test_al_empezar_y_tras_una_pausa_pero_no_en_turnos_seguidos(self):
         with tempfile.TemporaryDirectory() as workspace:
             runtime = Native()

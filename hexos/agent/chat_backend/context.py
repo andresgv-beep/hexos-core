@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import uuid4
@@ -35,6 +36,13 @@ def hora_local(momento=None):
 # aceptación como «pues hazlo» tiene que seguir siendo esa frase), y la hora del
 # turno anterior sigue en el historial, así que el modelo no la pierde.
 PAUSA_HORA = 20 * 60
+
+
+def hora_activa():
+    """Apagada por defecto. Medido el 30/09 (banco --hora): con la hora delante, el 12B
+    llamaba herramientas para contestar a «hola», «gracias» u «okey». Se enciende con
+    HEXOS_HORA=1 cuando el LoRA de tono haya aprendido a no hacerlo."""
+    return os.environ.get('HEXOS_HORA') == '1'
 
 
 def tras_pausa(store, turn_id, ahora=None):
@@ -289,7 +297,7 @@ class ContextManager:
                 bloque_recuerdo += task_notices.pending_block(turn.task_notices)
             if task_notices.HISTORY_REQUEST.search(turn.text or ''):
                 bloque_recuerdo += task_notices.history_block(task_notices.recent(store.db))
-        if tras_pausa(store, turn.uid):
+        if hora_activa() and tras_pausa(store, turn.uid):
             bloque_recuerdo += hora_local()
         turn.native = bool(getattr(self.agent.runtime, 'native', False))
         turn.budget = self.agent.history_budget()
@@ -362,7 +370,7 @@ class ContextManager:
             rebuild = bool(turn.handoff) or not reusable
             if rebuild:
                 turn.metadata = profile + turn.metadata
-                if 'HORA LOCAL' not in turn.metadata:
+                if hora_activa() and 'HORA LOCAL' not in turn.metadata:
                     turn.metadata += hora_local()
                 self.agent.runtime.call({'type': 'reset'})
                 turn.messages = native_messages(turn.history, turn.metadata, turn.prompt_text, tool_history,
