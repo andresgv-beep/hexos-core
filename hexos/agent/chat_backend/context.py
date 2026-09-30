@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import uuid4
 from .. import catalog, procedures, reproche, task_notices, tool_digest
@@ -15,6 +16,38 @@ from .state import TurnState
 
 if TYPE_CHECKING:
     from .agent import Agent
+
+
+DIAS = ('lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo')
+MESES = ('enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto',
+         'septiembre', 'octubre', 'noviembre', 'diciembre')
+
+
+def hora_local(momento=None):
+    """El día y la hora de la persona. El modelo no los sabe si no se le dicen:
+    se despedía igual a las 11 de la mañana que a medianoche."""
+    t = (momento or datetime.now()).astimezone()
+    return ('\nHORA LOCAL (dato de HexOS): ' + DIAS[t.weekday()] + ' ' + str(t.day) + ' de ' +
+            MESES[t.month - 1] + ' de ' + str(t.year) + ', ' + t.strftime('%H:%M') + '.\n')
+
+
+# Solo tras una pausa: los turnos seguidos mandan el mensaje literal (una
+# aceptación como «pues hazlo» tiene que seguir siendo esa frase), y la hora del
+# turno anterior sigue en el historial, así que el modelo no la pierde.
+PAUSA_HORA = 20 * 60
+
+
+def tras_pausa(store, turn_id, ahora=None):
+    fila = store.db.execute("SELECT ts FROM conversation WHERE role='user' AND id<>? "
+                            'ORDER BY rowid DESC LIMIT 1', (turn_id,)).fetchone()
+    if fila is None:
+        return False  # conversación nueva: entra al reconstruir el contexto
+    try:
+        antes = datetime.fromisoformat(fila[0])
+    except (TypeError, ValueError):
+        return True
+    ahora = ahora or datetime.now(antes.tzinfo)
+    return (ahora - antes).total_seconds() >= PAUSA_HORA
 
 
 HANDOFF_KEY = 'context_handoff'
@@ -256,6 +289,8 @@ class ContextManager:
                 bloque_recuerdo += task_notices.pending_block(turn.task_notices)
             if task_notices.HISTORY_REQUEST.search(turn.text or ''):
                 bloque_recuerdo += task_notices.history_block(task_notices.recent(store.db))
+        if tras_pausa(store, turn.uid):
+            bloque_recuerdo += hora_local()
         turn.native = bool(getattr(self.agent.runtime, 'native', False))
         turn.budget = self.agent.history_budget()
         # Acumulativa, no deslizante. Con una ventana de los últimos N mensajes
@@ -327,6 +362,8 @@ class ContextManager:
             rebuild = bool(turn.handoff) or not reusable
             if rebuild:
                 turn.metadata = profile + turn.metadata
+                if 'HORA LOCAL' not in turn.metadata:
+                    turn.metadata += hora_local()
                 self.agent.runtime.call({'type': 'reset'})
                 turn.messages = native_messages(turn.history, turn.metadata, turn.prompt_text, tool_history,
                                                turn.memory_evidence, budget=turn.budget)

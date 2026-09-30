@@ -223,14 +223,17 @@ def juzgar_conversacion(caso, decision, calls, preambulo):
 
 
 MULETAS = False
+HORA = None  # --hora: la línea de hora local que HexOS pone tras una pausa
 
 
 def peticion(mensaje):
     """El mensaje tal como lo manda HexOS: con --muletas, precedido de sus indicaciones del turno."""
-    if not MULETAS:
-        return mensaje
-    from hexos.agent import reproche
-    datos = reproche.bloque(mensaje)
+    datos = ''
+    if MULETAS:
+        from hexos.agent import reproche
+        datos += reproche.bloque(mensaje)
+    if HORA:
+        datos += HORA
     return datos + '\nPETICIÓN ACTUAL:\n' + mensaje if datos else mensaje
 
 
@@ -420,7 +423,7 @@ def release():
 
 
 def main():
-    global TEMPERATURA, MULETAS
+    global TEMPERATURA, MULETAS, HORA
     env = release()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--salida', type=Path, required=True)
@@ -434,6 +437,7 @@ def main():
     ap.add_argument('--plantilla', default=env.get('HEXOS_TEMPLATE'))
     ap.add_argument('--ctx', type=int, default=int(env.get('HEXOS_CTX', 24576)))
     ap.add_argument('--muletas', action='store_true', help='añade las indicaciones de HexOS (reproche) al mensaje')
+    ap.add_argument('--hora', default='', help='AAAA-MM-DDTHH:MM local: añade la hora como tras una pausa')
     ap.add_argument('--casos', default='', help='solo estos casos, separados por comas')
     ap.add_argument('--resumir', action='store_true', help='rehace el resumen de --salida sin volver a generar')
     a = ap.parse_args()
@@ -442,6 +446,10 @@ def main():
     if os.environ.pop('HELIOS_SEED', None):
         print('HELIOS_SEED ignorada: el banco necesita semilla aleatoria', flush=True)
     MULETAS = a.muletas
+    if a.hora:
+        from datetime import datetime
+        from hexos.agent.chat_backend.context import hora_local
+        HORA = hora_local(datetime.fromisoformat(a.hora).astimezone())
     temps = [float(t) for t in a.temperaturas.split(',')]
     bloques = a.bloques.split(',')
     a.salida.mkdir(parents=True, exist_ok=False)
@@ -466,7 +474,7 @@ def main():
 
     if a.casos:
         casos = [c for c in casos if c[1] in a.casos.split(',')]
-    meta = dict(muletas=a.muletas, runtime=a.runtime, modelo=a.modelo, ctx=a.ctx, temperaturas=temps,
+    meta = dict(muletas=a.muletas, hora=a.hora, runtime=a.runtime, modelo=a.modelo, ctx=a.ctx, temperaturas=temps,
                 top_k=os.environ.get('HELIOS_TOPK', '64 (Gemma 4)'), top_p=os.environ.get('HELIOS_TOPP', '0.95 (Gemma 4)'),
                 muestras=a.muestras, muestras_greedy=a.muestras_greedy, bloques=bloques, inicio=time.strftime('%F %T'))
     trabajo = a.salida / 'motor'
