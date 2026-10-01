@@ -658,11 +658,12 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     : phase === "tool" ? "Usando herramientas" : phase === "thinking" ? "Pensando…"
     : phase === "responding" ? "Respondiendo" : "En reposo";
   const herramientaEnCurso = turnTools.find(tool => tool.status === "running");
-  const tareasEnCurso = mediaJobs.filter(isActive).length;
-  // La tarjeta acompaña a la última respuesta que tocó la cola de vídeo.
+  const tareasActivas = mediaJobs.filter(isActive);
+  const tareasEnCurso = tareasActivas.length;
+  // El chat acompaña solo las tareas activas; las terminadas quedan en Tareas.
   const turnoMedia = [...turns].reverse().find(turn => turn.tools?.some(tool => tool.name.startsWith("media.")));
-  const turnExtras = turnoMedia && mediaJobs.length
-    ? { [turnoMedia.id]: <MediaCard jobs={mediaJobs} onControl={controlMedia} /> } : undefined;
+  const turnExtras = turnoMedia && tareasActivas.length
+    ? { [turnoMedia.id]: <MediaCard jobs={tareasActivas} onControl={controlMedia} /> } : undefined;
   // El espacio de trabajo solo ocupa sitio cuando hay algo que enseñar en él.
   // Un solo sitio para el código: el panel, o la ventana ampliada que lo sustituye.
   const workspaceOpen = !mobile && codeOpen && !codeFloating && Boolean(codeArtifact || fileViewer);
