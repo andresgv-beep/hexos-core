@@ -234,6 +234,40 @@ class FilesTest(unittest.TestCase):
             self.assertEqual(file_control.control(message,'/tmp/runtime.zip')['status'],'cancelled')
         launch.assert_not_called()
 
+    def test_library_expansion_recovers_receipt_without_relaunch_or_request_rewrite(self):
+        self.request['operation']='verify'
+        message=dict(request=self.request,operation='start',action_id='d'*64)
+        root=Path(self.config['control'])/'file-jobs'/self.job['id']/'actions'/('d'*64)
+        with patch.object(file_control.subprocess,'Popen') as launch:
+            file_control.control(message,'/tmp/runtime.zip')
+        launch.assert_called_once()
+        original=(root/'request.json').read_bytes()
+        receipt=dict(status='finished',result=dict(valid=True,decoded=True,sha256='e'*64))
+        save(root/'state.json',receipt)
+        expanded=copy.deepcopy(message)
+        expanded['request']['config']['libraries'].append(str(self.base/'otra-biblioteca'))
+        with patch.object(file_control.subprocess,'Popen') as launch:
+            self.assertEqual(file_control.control(expanded,'/tmp/runtime.zip'),receipt)
+        launch.assert_not_called()
+        self.assertEqual((root/'request.json').read_bytes(),original)
+
+    def test_library_expansion_does_not_allow_changed_effects_or_revocations(self):
+        message=dict(request=self.request,operation='start',action_id='d'*64)
+        with patch.object(file_control.subprocess,'Popen'):
+            file_control.control(message,'/tmp/runtime.zip')
+        changes=[('config','replace_original',True),('config','require_smaller',False),
+                 ('config','output',str(self.base/'other-output')),
+                 ('config','libraries',[str(self.base/'other-library')]),
+                 ('job','attempt',1),('job','profile',dict(preset=dict(VideoQualitySlider=25)))]
+        for section,key,value in changes:
+            changed=copy.deepcopy(message)
+            changed['request']['config']['libraries'].append(str(self.base/'extra'))
+            changed['request'][section][key]=value
+            with self.subTest(field=key),patch.object(file_control.subprocess,'Popen') as launch:
+                with self.assertRaisesRegex(ValueError,'La clave pertenece a otra acción'):
+                    file_control.control(changed,'/tmp/runtime.zip')
+                launch.assert_not_called()
+
     def test_dead_worker_blocks_instead_of_claiming_success(self):
         save(self.root/'state.json',dict(status='running'))
         self.assertEqual(file_control.snapshot(self.root)['status'],'blocked')

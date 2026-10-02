@@ -10,6 +10,26 @@ import time
 from .file_common import save
 
 
+def same_action(saved, request):
+    """Una ampliación de bibliotecas permite observar la acción ya fijada.
+
+    El worker conserva su petición original. Ningún ajuste de ejecución, ficha
+    o ruta puede cambiar bajo la misma clave; tampoco se admiten revocaciones.
+    """
+    if saved == request:
+        return True
+    old_config, new_config = saved.get('config', {}), request.get('config', {})
+    old_roots, new_roots = old_config.get('libraries'), new_config.get('libraries')
+    if not all(isinstance(roots, list) and all(isinstance(root, str) for root in roots)
+               for roots in (old_roots, new_roots)):
+        return False
+    root = saved.get('job', {}).get('source', {}).get('library_root')
+    if root not in old_roots or not set(old_roots).issubset(new_roots):
+        return False
+    normalized = dict(request, config=dict(new_config, libraries=old_roots))
+    return saved == normalized
+
+
 def snapshot(root):
     state_path = root/'state.json'
     with (root/'worker.lock').open('a') as lock:
@@ -55,7 +75,7 @@ def control(message, archive):
         root = job_root/'actions'/action_id
         root.mkdir(parents=True, exist_ok=True)
         path = root/'request.json'
-        if path.exists() and json.loads(path.read_text()) != request:
+        if path.exists() and not same_action(json.loads(path.read_text()), request):
             raise ValueError('La clave pertenece a otra acción')
         if not path.exists():
             save(path, request)
