@@ -1,5 +1,12 @@
 # Helios: estado vigente
 
+Actualización acotada del **2 de octubre de 2026**: perfil multimedia RF 18,
+bibliotecas Multimedia completas de los volúmenes 1 y 4 y tarjetas del chat
+limitadas a tareas activas. Configuración versionada y recuperación en
+[MEDIA_CONFIGURATION.md](docs/MEDIA_CONFIGURATION.md). La referencia multimedia
+de ese documento sustituye el alcance y preset históricos descritos abajo;
+el resto de esta revisión no se ha vuelto a auditar.
+
 Revisión local: **24 de septiembre de 2026**. Este documento sustituye las
 afirmaciones antiguas de que HandBrake no estaba conectado. El informe anterior
 se conserva en `docs/historico/IMPLEMENTATION_STATUS_2026-09-19.md`.

@@ -9,6 +9,11 @@
 - Datos existentes: `/home/andres/Documentos/hexos-prueba-12b-hq42`.
 - Perfil HERA existente: `/home/andres/.helios`.
 
+La configuración multimedia versionada (RF 18, alcance de Multimedia y borrado
+de originales) y su recuperación se describen en
+[MEDIA_CONFIGURATION.md](MEDIA_CONFIGURATION.md). El ejemplo de Git no
+sobrescribe automáticamente el `media_jobs.json` activo del workspace.
+
 No se duplican el historial, las tareas ni el perfil para arrancar la nueva
 versión. Los pesos y el binario de Héctor siguen siendo externos al repositorio.
 El antiguo worktree llamado `hexos-interface-live` pasa a llamarse `hexos-live`:
