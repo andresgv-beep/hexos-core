@@ -58,5 +58,27 @@ Fue una operación de mantenimiento de esa instalación, no una migración que
 se ejecute al hacer checkout. No cambiar huellas de tareas automáticamente
 para aceptar modificaciones generales del preset o de las políticas.
 
+### Corrección del recibo remoto, 2 de octubre
+
+La migración anterior quedó incompleta: la verificación de Joker ya tenía una
+petición durable en el NAS con las bibliotecas anteriores. Aunque se actualizó
+la huella local, al consultar esa acción con la lista ampliada el NAS respondió
+«La clave pertenece a otra acción» y la ficha quedó bloqueada. Reanudarla sin
+corregir esa discrepancia repetía el fallo. El revisor interno lo detectó y
+registró `report_incident`; no podía reparar el contrato de la petición.
+
+`remote/file_control.py` admite ahora consultar la misma acción si la única
+diferencia es una ampliación de la lista de bibliotecas y se conserva la raíz
+del origen. No modifica la petición guardada ni vuelve a lanzar el worker.
+Se siguen rechazando revocaciones, cambios de perfil, destino, política de
+borrado y cualquier otro campo. La comprobación de huella local del runner
+continúa vigente: esto no permite editar configuraciones activas arbitrarias.
+
+Se recuperó el recibo existente de Joker con `valid=true`, `decoded=true` y el
+mismo `run_id`: 3.950.265.559 bytes, sin volver a comprimir. La regresión verifica
+la recuperación sin relanzamiento ni reescritura de la petición, además del
+rechazo de cambios incompatibles. Validación: 70 pruebas en `media_files_test`,
+`media_layout_test`, `media_jobs_test` y `media_reviews_test`.
+
 Los trabajos terminados permanecen en «Recientes» del panel Tareas; el chat
 muestra solo los activos. Ese comportamiento sí forma parte del código de `main`.
