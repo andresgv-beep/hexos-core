@@ -11,6 +11,7 @@ con ese estado y con el código.
 |---|---|
 | [AGENTE_DOMESTICO_PLAN.md](AGENTE_DOMESTICO_PLAN.md) | Dirección y avance del producto de un modelo/un chat. |
 | [AVISOS_DE_OPERACION.md](AVISOS_DE_OPERACION.md) | Avisos de herramientas, distintos del streaming. |
+| [CATALOGO_POR_GRUPOS_PLAN.md](CATALOGO_POR_GRUPOS_PLAN.md) | Propuesta (2026-10-29), sin implementar: ofrecer herramientas por grupos según la intención. |
 | [CICLO_AGENTE_VERIFICACION.md](CICLO_AGENTE_VERIFICACION.md) | Diseño e implementación parcial; no certifica autonomía general. |
 | [E1_PROTOCOLO_RUNTIME.md](E1_PROTOCOLO_RUNTIME.md) | Estado del protocolo implementado y diferencias con E1. |
 | [INVENTARIO_DISPOSITIVOS.md](INVENTARIO_DISPOSITIVOS.md) | Registro y atribución de equipos. |
