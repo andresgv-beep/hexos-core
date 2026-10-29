@@ -111,6 +111,19 @@ def completed_call(turn, name, arguments):
     return None
 
 
+def failed_call(turn, name, arguments):
+    """Misma llamada que ya falló en este turno, si la hay.
+
+    El 29/10 el modelo volvió a leer la misma URL que acababa de dar 403 porque
+    un aviso le pidió abrir «un enlace». El prompt ya decía no repetir el error;
+    la regla tiene que estar en el ejecutor, no en la memoria del modelo.
+    """
+    for step in reversed(turn.trace):
+        if step.get('tool') == name and step.get('arguments') == arguments and step.get('failed'):
+            return step
+    return None
+
+
 def completed_registration(turn, name, arguments):
     """Registro equivalente ya completado aunque el modelo cambie de herramienta.
 
