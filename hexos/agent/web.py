@@ -18,7 +18,9 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
 USER_AGENT = 'Mozilla/5.0 (compatible; Helios/1.0; public-web-reader)'
-MAX_DOWNLOAD = 1_000_000
+# Las búsquedas de tiendas pasan de 1 MB por los scripts en línea: el 29/10
+# amazon.es se descartó entera por eso. Lo que exceda se recorta, no se rechaza.
+MAX_DOWNLOAD = 5_000_000
 MAX_TEXT = 12_000
 MAX_RESULTS = 8
 # Filtro de antigüedad de DuckDuckGo (parámetro df).
@@ -34,6 +36,17 @@ PIDE_RECIENTE = re.compile(r'\b(?:[úu]ltim[oa]s?|nuev[oa]s?|actual(?:es|mente)?
                            r'|novedades|este\s+a[ñn]o|hoy)\b', re.I)
 _URL_FECHA = re.compile(r'/(20\d\d)[/-](0?[1-9]|1[0-2])(?=[/-]|$)')
 VIEJA_MESES = 6
+# Las tiendas responden 200 con una página de control en vez del contenido: el
+# 29/10 idealo.es devolvió solo «Powered and protected by Privacy» y contaba como
+# fuente leída. Hace falta texto corto Y una marca: una página breve legítima pasa.
+MURO_MAX_TEXTO = 400
+_MURO = re.compile(r'protected by|just a moment|attention required|access denied|captcha'
+                   r'|are you (?:a )?(?:robot|human)|verify (?:that )?you are human'
+                   r'|checking (?:if the site connection|your browser)|enable (?:javascript|cookies)'
+                   r'|request (?:blocked|unsuccessful)|acceso denegado|eres un robot', re.I)
+# Reintentar no cambia una negativa del servidor; sí cambia elegir otra fuente.
+_BLOQUEO_HTTP = {401: 'pide identificarse', 403: 'rechaza la lectura automática',
+                 429: 'limita las lecturas automáticas', 451: 'no está disponible por motivos legales'}
 
 
 def _meses(desde, hasta):
@@ -205,6 +218,9 @@ def _request(url, *, opener=None, resolver=socket.getaddrinfo, limit=MAX_DOWNLOA
             if exc.code in (301, 302, 303, 307, 308) and exc.headers.get('Location'):
                 current = urljoin(current, exc.headers['Location'])
                 continue
+            if exc.code in _BLOQUEO_HTTP:
+                raise ValueError(f'la fuente respondió HTTP {exc.code}: {_BLOQUEO_HTTP[exc.code]}; '
+                                 'repetir la lectura no cambiará la respuesta') from exc
             raise ValueError(f'la fuente respondió HTTP {exc.code}') from exc
         with response:
             final = response.geturl()
@@ -212,9 +228,8 @@ def _request(url, *, opener=None, resolver=socket.getaddrinfo, limit=MAX_DOWNLOA
             content_type = response.headers.get_content_type()
             charset = response.headers.get_content_charset() or 'utf-8'
             raw = response.read(limit + 1)
-        if len(raw) > limit:
-            raise ValueError('la página supera el límite de lectura de 1 MB')
-        return final, content_type, raw.decode(charset, errors='replace')
+        cut = len(raw) > limit
+        return final, content_type, raw[:limit].decode(charset, errors='replace'), cut
     raise ValueError('demasiadas redirecciones web')
 
 
@@ -299,7 +314,7 @@ def _page_date(pattern, body):
 
 def read(url, *, opener=None, resolver=socket.getaddrinfo, today=None):
     """Lee texto de una URL pública, sin persistirlo ni seguir enlaces internos."""
-    final, content_type, body = _request(url, opener=opener, resolver=resolver)
+    final, content_type, body, cut = _request(url, opener=opener, resolver=resolver)
     publicada = modificada = None
     if content_type in ('text/html', 'application/xhtml+xml'):
         publicada, modificada = _page_date(_FECHA_META, body), _page_date(_FECHA_MOD, body)
@@ -308,6 +323,10 @@ def read(url, *, opener=None, resolver=socket.getaddrinfo, today=None):
         parser.feed(body)
         parser.close()
         title, text = parser.title(), parser.text()
+        visible = ' '.join((title + ' ' + text).split())
+        if len(visible) <= MURO_MAX_TEXTO and _MURO.search(visible):
+            raise ValueError('la fuente devolvió una página de protección antibots en vez del '
+                             'contenido («' + visible[:120] + '»); repetir la lectura no cambiará la respuesta')
     elif content_type == 'application/json':
         try:
             value = json.loads(body)
@@ -319,7 +338,7 @@ def read(url, *, opener=None, resolver=socket.getaddrinfo, today=None):
         title, text = '', body
     else:
         raise ValueError('formato web no legible; por ahora se admite HTML, texto y JSON')
-    was_truncated = len(text) > MAX_TEXT
+    was_truncated = cut or len(text) > MAX_TEXT
     text = text[:MAX_TEXT]
     if not text.strip():
         raise ValueError('la fuente no contiene texto legible')

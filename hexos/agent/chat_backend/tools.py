@@ -11,7 +11,7 @@ from ..progress import announcement
 from ..work import now
 from .state import Environment, SessionState, TurnState
 from .reading_budget import exhausted, READ_TOOLS
-from .ledger import completed_call, completed_registration
+from .ledger import completed_call, completed_registration, failed_call
 from .file_requests import validate_file_request
 
 if TYPE_CHECKING:
@@ -282,6 +282,16 @@ class ToolExecutor:
         started = time.monotonic()
         try:
             catalog.validate(output['tool'], output['arguments'])
+            # Solo web.read: la negativa de una web no cambia en segundos. Otras
+            # lecturas sí pueden dar otro resultado con los mismos argumentos
+            # (media.prepare cuando termina un escaneo), y eso tiene sus pruebas.
+            anterior = (failed_call(turn, output['tool'], output['arguments'])
+                        if output['tool'] == 'web.read' else None)
+            if anterior is not None:
+                raise ValueError('Esta misma llamada ya falló en este turno: ' +
+                                 str((anterior.get('result') or {}).get('error')) +
+                                 '. No se ha repetido. Cambia de fuente o de argumentos, '
+                                 'o explica el bloqueo con lo que ya tienes.')
             # Un aviso por cada llamada, no solo por la primera: en un turno
             # con cuatro herramientas se veía la primera y las otras tres
             # pasaban mudas, así que el recorrido era invisible.

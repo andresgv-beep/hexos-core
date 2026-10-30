@@ -12,6 +12,23 @@ from .work import now, string
 # 31 el 16, con dos IPs reclamadas por dos fichas porque el DHCP las reasignó.
 # Lo que la persona ha nombrado no caduca nunca; lo demás es de esta lectura.
 TTL_ANONIMO = 60
+# Mensajes de la persona, contando el del turno, donde puede constar la dirección.
+MENSAJES_EVIDENCIA = 6
+
+
+def endpoint_con_coma(value):
+    """hosts.endpoint, leyendo como punto una coma que deja la dirección inválida.
+
+    El 29/10 «https://servidorsrv1,ddns.net» se rechazó con un error genérico y la
+    persona tuvo que reescribirla. Una coma nunca es válida en un nombre de equipo,
+    así que leerla como punto no deduce nada; el resultado lo dice igualmente.
+    """
+    try:
+        return hosts.endpoint(value)
+    except ValueError:
+        if ',' not in (value or ''):
+            raise
+        return hosts.endpoint(value.replace(',', '.'))
 
 
 def literal_ip(text, value):
@@ -366,39 +383,47 @@ def dispatch(store, name, args, turn_id=None, observation=None):
         # hacerlo. La autoridad es el mensaje de la persona: se recupera de ahí
         # el literal que resuelve al mismo host propuesto por la llamada.
         propuesto = string(args['host'], 'host', 300).strip()
-        destino_propuesto, _ = hosts.endpoint(propuesto)
-        fila = store.db.execute("SELECT id,text FROM conversation WHERE id=? AND role='user'",
+        destino_propuesto, _ = endpoint_con_coma(propuesto)
+        fila = store.db.execute("SELECT id,text,rowid FROM conversation WHERE id=? AND role='user'",
                                 (turn_id,)).fetchone() if turn_id else None
         if not fila:
             raise ValueError('No hay mensaje de este turno del que tomar la evidencia')
-        cita = fila['text']
+        # El 29/10 la persona dio la URL y en el turno siguiente dijo «inténtalo
+        # sin protocolo»: mirar solo ese turno obligaba a reescribirla. Cuentan sus
+        # mensajes recientes, nunca los del asistente.
+        mensajes = [fila] + list(store.db.execute(
+            "SELECT id,text,rowid FROM conversation WHERE role='user' AND rowid<? "
+            'ORDER BY rowid DESC LIMIT ?', (fila['rowid'], MENSAJES_EVIDENCIA - 1)))
         candidatos = []
-        for token in re.findall(r'\S+', cita):
-            literal = token.strip('"\'`()[]{}<>,;.!?¿¡')
-            if not literal:
-                continue
-            try:
-                host_literal, _ = hosts.endpoint(literal)
-            except (TypeError, ValueError):
-                continue
-            if host_literal.casefold() == destino_propuesto.casefold():
-                candidatos.append(literal)
-        # Una URL completa contiene más evidencia que el host recortado. Si no
-        # hay equivalente literal, la comprobación de abajo rechaza la invención.
-        original = max(candidatos, key=lambda value: (bool(re.match(
-            r'^[a-z][a-z0-9+.-]*://', value, re.I)), len(value)), default=propuesto)
+        for orden, mensaje in enumerate(mensajes):
+            for token in re.findall(r'\S+', mensaje['text']):
+                literal = token.strip('"\'`()[]{}<>,;.!?¿¡')
+                if not literal:
+                    continue
+                try:
+                    host_literal, _ = endpoint_con_coma(literal)
+                except (TypeError, ValueError):
+                    continue
+                leido = literal.replace(',', '.')
+                if host_literal.casefold() == destino_propuesto.casefold():
+                    candidatos.append((orden, literal, leido, mensaje))
+        # Misma regla que identificar y que guardar un hecho: la dirección tiene que
+        # estar en las palabras de la persona. Así no se registra un equipo deducido,
+        # y menos uno al que luego se le mandaría una contraseña.
+        if not candidatos:
+            raise ValueError('Esa dirección no aparece en el mensaje de la persona ni en sus '
+                             'mensajes recientes. Registra solo la que te haya dado, tal cual la escribió.')
+        # El mensaje más reciente manda; dentro de él, una URL completa contiene
+        # más evidencia que el host recortado.
+        _, literal, original, mensaje = min(candidatos, key=lambda c: (
+            c[0], not re.match(r'^[a-z][a-z0-9+.-]*://', c[1], re.I), -len(c[1])))
+        cita = mensaje['text']
         # El diccionario es también el que acabará en la traza: debe registrar
         # el literal realmente ejecutado, no la versión recortada por el modelo.
         args['host'] = original
         destino, puerto = hosts.endpoint(original)
         esquema = re.match(r'^([a-z][a-z0-9+.-]*)://', original, re.I)
         esquema = esquema.group(1).casefold() if esquema else None
-        # Misma regla que identificar y que guardar un hecho: la dirección tiene que
-        # estar en las palabras de la persona. Así no se registra un equipo deducido,
-        # y menos uno al que luego se le mandaría una contraseña.
-        if original.casefold() not in cita.casefold():
-            raise ValueError('Esa dirección no aparece en el mensaje de la persona. Registra solo '
-                             'la que te haya dado, tal cual la escribió.')
         # Si ya hay un equipo con ese nombre —visto en la red o registrado antes—,
         # la dirección se le añade a ÉL. Crear otro registro dejaría dos fichas de
         # la misma máquina, que es como acabaron 'synology 1' y 'servidor 1'
@@ -423,18 +448,23 @@ def dispatch(store, name, args, turn_id=None, observation=None):
                         in_latest_snapshot=anterior.get('in_latest_snapshot', False) if observado else False,
                         last_observed_at=anterior.get('last_observed_at') if observado else None,
                         identity=dict(name=etiqueta, kind=args.get('kind') or None,
-                                      source='user_statement', source_id=fila['id'],
+                                      source='user_statement', source_id=mensaje['id'],
                                       evidence=cita[:1000], recorded_at=now()))
         store.db.execute('INSERT OR REPLACE INTO network_devices VALUES (?,?)',
                          (clave, json.dumps(registro)))
         store.db.commit()
-        return dict(saved=True, device=etiqueta, original_address=original,
-                    scheme=esquema, ssh_host=destino,
-                    ssh_port=registro['pinned_port'], pinned=True,
-                    attached_to_known=bool(mismos),
-                    note='Registrado con dirección fija: no se busca en los vecinos de la red y '
-                         'sigue valiendo desde cualquier sitio. Esto no comprueba que se llegue a '
-                         'él ni concede acceso; las credenciales se piden aparte por la ventana.')
+        salida = dict(saved=True, device=etiqueta, original_address=original,
+                      scheme=esquema, ssh_host=destino,
+                      ssh_port=registro['pinned_port'], pinned=True,
+                      attached_to_known=bool(mismos),
+                      note='Registrado con dirección fija: no se busca en los vecinos de la red y '
+                           'sigue valiendo desde cualquier sitio. Esto no comprueba que se llegue a '
+                           'él ni concede acceso; las credenciales se piden aparte por la ventana.')
+        if literal != original:
+            salida.update(written_as=literal, correction=(
+                'La persona escribió «' + literal + '» y se ha leído como «' + original +
+                '»: una coma no es válida en una dirección. Díselo al confirmar el registro.'))
+        return salida
     if observation:
         rows = ephemeral_rows(observation, rows)
     target = args['target'].casefold()
