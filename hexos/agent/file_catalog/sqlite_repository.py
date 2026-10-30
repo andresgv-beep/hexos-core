@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import posixpath
 import sqlite3
+import unicodedata
 from uuid import uuid4
 
 from ..work import now
@@ -42,6 +43,11 @@ def remember_directories(db, device, paths, observed_at):
                    ((device.casefold(), path, observed_at) for path in set(paths)))
 
 
+def plegar(texto):
+    """Sin tildes ni mayúsculas: «Películas» y «peliculas» son la misma carpeta al buscar."""
+    return ''.join(c for c in unicodedata.normalize('NFD', texto.casefold()) if unicodedata.category(c) != 'Mn')
+
+
 def locations(workspace, *, device=None, query=None, limit=20, offset=0):
     """Memoria local de directorios observados, sin SSH ni nuevo recorrido.
 
@@ -62,6 +68,7 @@ def locations(workspace, *, device=None, query=None, limit=20, offset=0):
                 remember_directories(db, scan['device'], paths, scan['observed_at'])
                 db.execute('INSERT INTO directory_imports VALUES (?)', (scan['id'],))
         db.create_function('casefold', 1, str.casefold)
+        db.create_function('plegar', 1, plegar)
         db.create_function('basename', 1, posixpath.basename)
         clauses, values = [], []
         if device:
@@ -70,8 +77,9 @@ def locations(workspace, *, device=None, query=None, limit=20, offset=0):
         if query:
             # Buscar el nombre del directorio evita devolver todas las películas
             # descendientes cuando se pide dónde está la carpeta multimedia.
-            clauses.append('instr(casefold(basename(path)),?)>0')
-            values.append(query.casefold())
+            # Sin tildes: el 08/10 buscó «películas» y no encontró las carpetas «peliculas».
+            clauses.append('instr(plegar(basename(path)),?)>0')
+            values.append(plegar(query))
         where = ' WHERE ' + ' AND '.join(clauses) if clauses else ''
         total = db.execute('SELECT COUNT(*) FROM directories' + where, values).fetchone()[0]
         items = [dict(row) for row in db.execute('SELECT * FROM directories' + where +

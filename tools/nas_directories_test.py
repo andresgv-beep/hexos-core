@@ -40,6 +40,13 @@ class DirectoryTest(unittest.TestCase):
         self.assertEqual(nas_files.locations(self.workspace, query='hnf9')['total_matches'], 1)
         self.assertTrue(result['network_used'])
 
+    def test_saved_locations_ignore_accents_and_case(self):
+        (self.root / 'peliculas').mkdir()
+        (self.root / 'Películas antiguas').mkdir()
+        self.search(query='')
+        for q in ('películas', 'PELICULAS', 'peliculas'):
+            self.assertEqual(nas_files.locations(self.workspace, query=q)['total_matches'], 2, q)
+
     def test_nested_roots_empty_folder_and_pagination(self):
         for index in range(4):
             (self.root / ('folder'+str(index))).mkdir()

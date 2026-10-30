@@ -18,6 +18,44 @@ if TYPE_CHECKING:
     from .agent import Agent
 
 
+def con_raices_conocidas(workspace, salida, args):
+    """Si una ruta pedida no existe en ese equipo, devuelve las raíces que sí se conocen de él.
+
+    Sin esto el modelo recibía solo «invalid_or_unreadable_root» y se quedaba con la
+    ruta que traía de la conversación: el 08/10 buscó en synology 1 una carpeta que
+    era del otro NAS. Las rutas salen de lo observado en ese equipo (nas.locations),
+    nunca de una lista escrita en el código.
+    """
+    if not isinstance(salida, dict):
+        return salida
+    malas = [e.get('path') for e in salida.get('errors') or [] if e.get('reason') == 'invalid_or_unreadable_root']
+    equipo = salida.get('device') or args.get('device')
+    if not malas or not equipo:
+        return salida
+    from .. import nas_files
+    import posixpath
+    util = lambda ruta: '@' not in ruta and len(ruta.strip('/').split('/')) <= 4
+    try:
+        # Primero las que se parecen a lo que se pidió («multimedia» → «multimedia 1/Multimedia»),
+        # luego las carpetas compartidas del equipo. Sin las internas del Synology (@eaDir…).
+        parecidas = []
+        for mala in malas:
+            nombre = posixpath.basename((mala or '').rstrip('/'))
+            if nombre:
+                parecidas += [v['path'] for v in nas_files.locations(workspace, device=equipo, query=nombre,
+                                                                     limit=50)['items']]
+        compartidas = [v['path'] for v in nas_files.locations(workspace, device=equipo, limit=100)['items']
+                       if len(v['path'].strip('/').split('/')) == 2]
+    except Exception:  # noqa: BLE001 - una ayuda; si falla, el error original sigue ahí
+        return salida
+    raices = [r for r in dict.fromkeys(parecidas + compartidas) if util(r)][:20]
+    if not raices:
+        return salida
+    return dict(salida, known_roots=raices,
+                known_roots_note=('No existe o no se puede leer en ' + equipo + ': ' + ', '.join(malas) +
+                                  '. Rutas observadas antes en ese mismo equipo: elige una de ellas.'))
+
+
 class ToolDispatcher:
     def __init__(self, env: Environment, session: SessionState, memory, references, verification):
         self.env = env
@@ -87,6 +125,7 @@ class ToolDispatcher:
                                                              operation=name.split('.')[1], **args)
                 else:
                     salida = self.env.dependencies.nas_read(self.env.workspace, **extra, **args)
+                salida = con_raices_conocidas(self.env.workspace, salida, args)
                 if container_scope is not None:
                     salida = dict(salida, scope=container_scope)
                     if not container_scope['covers_all_containers'] and not salida.get('containers'):
