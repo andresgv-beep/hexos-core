@@ -28,7 +28,9 @@ def con_raices_conocidas(workspace, salida, args):
     """
     if not isinstance(salida, dict):
         return salida
-    malas = [e.get('path') for e in salida.get('errors') or [] if e.get('reason') == 'invalid_or_unreadable_root']
+    # nas.browse los trae arriba; nas.find, dentro de coverage aunque otra raíz sí responda.
+    errores = (salida.get('errors') or []) + ((salida.get('coverage') or {}).get('errors') or [])
+    malas = [e.get('path') for e in errores if e.get('reason') == 'invalid_or_unreadable_root']
     equipo = salida.get('device') or args.get('device')
     if not malas or not equipo:
         return salida
