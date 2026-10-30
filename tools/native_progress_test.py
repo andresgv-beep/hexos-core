@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from hexos.agent.native_transport import NativeTransport, TurnCancelled, visible_preview
+from hexos.agent.native_transport import AUX_SEQ_LEN, NativeTransport, TurnCancelled, visible_preview
 from hexos.agent.chat import Agent
 from hexos.agent.native import NativeRuntime
 from collections import deque
@@ -63,7 +63,7 @@ class PreviewTest(unittest.TestCase):
         tr.control = lambda obj: controls.append(obj)
         tr.start('prompt', auxiliar=True)
         tr.start('prompt2', auxiliar=True)
-        self.assertEqual(controls, [dict(type='session_open', session='aux', max_seq_len=1536)])
+        self.assertEqual(controls, [dict(type='session_open', session='aux', max_seq_len=AUX_SEQ_LEN)])
         sent = [json.loads(line) for line in tr.proc.stdin.getvalue().splitlines()]
         self.assertTrue(all(r['session'] == 'aux' for r in sent))
         self.assertFalse(sent[0]['generation']['close_turn'])

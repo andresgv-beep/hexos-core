@@ -37,6 +37,31 @@ def hora_local(momento=None):
 # turno anterior sigue en el historial, así que el modelo no la pierde.
 PAUSA_HORA = 20 * 60
 
+# Un mensaje de más de 6.000 caracteres se guarda como documento y el modelo ve
+# un extracto. Solo el principio dejaba fuera la pregunta, que casi siempre va
+# DEBAJO de lo pegado: el 29/10 contestó «¿qué hago con este texto?».
+VISTA_PRINCIPIO = 800
+VISTA_FINAL = 1500
+
+
+def vista_parcial(texto, documento):
+    """Principio y final de un mensaje largo, con la referencia al documento entero."""
+    principio, final = texto[:VISTA_PRINCIPIO], texto[-VISTA_FINAL:]
+    # Que el final no empiece a mitad de palabra: mejor en un salto de línea
+    # cercano, o al menos en un espacio.
+    salto = final.find('\n')
+    espacio = final.find(' ')
+    if 0 <= salto < 300:
+        final = final[salto + 1:]
+    elif 0 <= espacio < 50:
+        final = final[espacio + 1:]
+    omitidos = len(texto) - len(principio) - len(final)
+    return (principio + '\n[… ' + str(omitidos) + ' caracteres omitidos. Ves el principio y el '
+            'final del mensaje; el texto completo está guardado como documento: ' +
+            json.dumps(documento) + '. Usa document.read o document.search si la petición '
+            'necesita el resto. Si el mensaje no pide nada concreto, pregunta qué desea hacer '
+            'con él.]\n' + final)
+
 
 def hora_activa():
     """Apagada por defecto. Medido el 30/09 (banco --hora): con la hora delante, el 12B
@@ -233,10 +258,7 @@ class ContextManager:
                             lines=len(turn.prompt_text.splitlines()), sha256=digest)
             store.db.execute('INSERT INTO documents VALUES (?,?,?,?)',
                              (turn.document['id'], now(), turn.prompt_text, digest))
-            turn.prompt_text = (turn.prompt_text[:1200] + '\n[Fin de vista parcial del mensaje. '
-                'El texto completo está guardado como documento: ' + json.dumps(turn.document) +
-                '. Usa document.read o document.search según la petición. '
-                'Si no contiene una tarea concreta, pregunta qué desea hacer con él.]')
+            turn.prompt_text = vista_parcial(turn.prompt_text, turn.document)
         turn.prompt_text = nota_imagen + turn.prompt_text
         store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
                          (turn.uid, now(), 'user', nota_imagen + turn.text, turn.prompt_text))

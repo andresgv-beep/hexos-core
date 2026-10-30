@@ -8,6 +8,11 @@ from typing import NamedTuple
 from uuid import uuid4
 
 
+# Capacidad de la sesión auxiliar (anuncios, extracción de hechos, transcripción).
+# Una transcripción lleva hasta 752 tokens de audio (30 s) más prompt y texto; la
+# extracción, unos 250 de instrucciones más hasta 3.000 caracteres del mensaje.
+AUX_SEQ_LEN = 3072
+
 
 class AudioClip(NamedTuple):
     """Mensaje de voz para el turno siguiente: PCM float32 mono."""
@@ -143,10 +148,8 @@ class NativeTransport:
         if self.cancelled.is_set():
             raise TurnCancelled('Generación detenida')
         session = 'aux' if auxiliar else '0'
-        # 1536: una transcripción lleva hasta 752 tokens de audio (30 s) más el
-        # prompt y el texto que devuelve; con 1024 no cabía.
         if auxiliar and not self.aux_ready:
-            self.control(dict(type='session_open', session=session, max_seq_len=1536))
+            self.control(dict(type='session_open', session=session, max_seq_len=AUX_SEQ_LEN))
             self.aux_ready = True
         attachments = []
         if image is not None or session in self.reset_sessions:
