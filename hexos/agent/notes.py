@@ -100,8 +100,11 @@ def save(store, turn_id, *, id=None, title=None, body=None, tags=None, revision=
     else:
         nota = get(store, id)
         if revision is not None and revision != nota['revision']:
+            # revision es la que tiene ahora, no la siguiente: el 12B pedía la 2 tras crear la 1.
             raise ValueError('la nota cambió desde que la leíste (va por la revisión ' +
-                             str(nota['revision']) + '); léela otra vez antes de retocarla')
+                             str(nota['revision']) + '); léela otra vez antes de retocarla. Si ya la has '
+                             'leído, repite con revision=' + str(nota['revision']) +
+                             ': es el número actual, no el siguiente')
         if title is not None:
             nota['title'] = string(title, 'title', TITULO)
         if body is not None:

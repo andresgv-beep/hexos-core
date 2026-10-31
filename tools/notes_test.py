@@ -61,6 +61,7 @@ class NotasTest(unittest.TestCase):
             notes.dispatch(self.store, 'note.save',
                            dict(id=n['id'], body='tercera', revision=n['revision']), 'turno-3')
         self.assertIn('cambió desde que la leíste', str(e.exception))
+        self.assertIn('repite con revision=', str(e.exception))
 
     def test_descartar_la_saca_de_la_lista_pero_no_borra_el_texto(self):
         n = self.crear()
