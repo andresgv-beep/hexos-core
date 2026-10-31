@@ -78,6 +78,16 @@ class FileCatalog:
                          'Si complete=false, las coincidencias son parciales: comunica los límites o errores.')
         # Vacío aquí no es vacío en el NAS: lo dice el resultado, y qué hacer lo decide el modelo.
         if roots and not page['total_matches'] and max_bytes != 0:
+            # Con un nombre concreto no hay nada que decidir: ni el dato ni la llamada
+            # exacta evitaban que parase a preguntar, así que lo mira HexOS. Sin query
+            # no, porque ampliar cambiaría lo pedido («las más pesadas de peliculas»).
+            if query:
+                amplia = self.find(device=result['device'], extensions=extensions, min_bytes=min_bytes,
+                                   max_bytes=max_bytes, query=query, limit=limit, include_hidden=include_hidden)
+                if amplia['total_matches']:
+                    amplia['ampliada'] = ('En ' + ', '.join(actual_roots) + ' no había nada: HexOS amplió '
+                                          'la búsqueda a todo el NAS. Dilo en tu respuesta.')
+                    return amplia
             page['falta_por_mirar'] = ((self.other_folders(result['device'], query, actual_roots) if query else None)
                                  or 'el resto del NAS; nas.find sin roots recorre todos los volúmenes')
         return page

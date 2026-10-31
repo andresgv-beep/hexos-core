@@ -71,8 +71,9 @@ class NasSimuladoTest(unittest.TestCase):
         self.herramienta('find', device='synology 1', extensions=['mkv'], roots=['/volume4/multimedia 3/multimedia'])
         r = self.herramienta('find', device='synology 1', extensions=['mkv'], query='marvel',
                              roots=['/volume1/multimedia 1/Multimedia'])
-        self.assertEqual(r['total_matches'], 0)
-        self.assertEqual(r['falta_por_mirar'], ['/volume4/multimedia 3/multimedia/marvel'])
+        self.assertEqual(r['total_matches'], 1)
+        self.assertIn('amplió', r['ampliada'])
+        self.assertIn(BUENA, [i['path'] for i in r['items']])
         r = self.herramienta('find', device='synology 1', extensions=['mkv'], query='spider-man',
                              roots=['/volume4/multimedia 3/multimedia/marvel'])
         self.assertIn('sin roots', r['falta_por_mirar'])
