@@ -289,7 +289,8 @@ def unknown_device_message(workspace, name):
             pass
         finally:
             connection.close()
-    partes = ['No hay ningún equipo llamado ' + repr(name) + '; no se ha pedido ningún acceso.']
+    partes = ['No hay ningún equipo llamado ' + repr(name) + '; no se ha pedido ningún acceso.',
+              'Este PC, donde corres, no está en el inventario: se mira con terminal_read.']
     partes.append('Con acceso guardado: ' + (', '.join(repr(n) for n in guardados) or 'ninguno') + '.')
     if en_red:
         partes.append('Registrados sin acceso: ' + ', '.join(repr(n) for n in sorted(set(en_red))) + '.')

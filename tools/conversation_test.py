@@ -212,6 +212,8 @@ class Tests(unittest.TestCase):
         from hexos.agent.chat_backend.completion import ReplyPolicy
         self.assertIn('terminal_read', ReplyPolicy.unsupported_claim('He revisado el sistema y los registros.', []))
         self.assertIn('terminal_read', ReplyPolicy.unsupported_claim('Ya lo he comprobado.', []))
+        self.assertIn('terminal_read', ReplyPolicy.unsupported_claim('He vuelto a verificar el servicio.', []))
+        self.assertIn('terminal_read', ReplyPolicy.unsupported_claim('El servicio sigue fallando.', []))
         self.assertIsNone(ReplyPolicy.unsupported_claim('He revisado el sistema.', [dict(tool='terminal.read')]))
         self.assertIsNone(ReplyPolicy.unsupported_claim('No he comprobado nada todavía.', []))
         self.assertIsNone(ReplyPolicy.unsupported_claim('Puedo revisarlo si quieres.', []))

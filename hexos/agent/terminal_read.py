@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import shlex
+import socket
 import subprocess
 
 MAX_SALIDA = 6000
@@ -45,6 +46,16 @@ ORDENES = {
 
 GESTORES = {'dpkg': 'apt', 'dpkg-query': 'apt', 'apt-cache': 'apt', 'apt': 'apt', 'apt-mark': 'apt',
             'flatpak': 'flatpak', 'snap': 'snap'}
+
+
+def este_pc():
+    """La máquina donde corre Helios: no está en el inventario y el modelo no lo sabe."""
+    try:
+        lineas = dict(l.split('=', 1) for l in open('/etc/os-release', encoding='utf-8') if '=' in l)
+        sistema = lineas.get('PRETTY_NAME', 'Linux').strip().strip('"')
+    except OSError:
+        sistema = 'Linux'
+    return dict(nombre=socket.gethostname(), sistema=sistema, se_mira_con='terminal_read')
 
 
 def trocear(orden):

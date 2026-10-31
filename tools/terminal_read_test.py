@@ -59,6 +59,11 @@ class TerminalReadTest(unittest.TestCase):
         self.assertEqual(terminal_read.falta_tras([orden], dict(exit_code=0)), ['systemctl status x.service'])
         self.assertEqual(terminal_read.falta_tras(['journalctl --user -u x', orden], dict(exit_code=3)), ['systemctl status x.service'])
 
+    def test_este_pc_dice_donde_corre(self):
+        pc = terminal_read.este_pc()
+        self.assertEqual(pc['se_mira_con'], 'terminal_read')
+        self.assertTrue(pc['nombre'] and pc['sistema'])
+
     def test_filter_no_es_una_opcion(self):
         with self.assertRaisesRegex(ValueError, 'opciones'):
             terminal_read.read('journalctl -u x', filter='-n 20')

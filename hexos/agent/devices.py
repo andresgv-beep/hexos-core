@@ -2,7 +2,7 @@
 import json
 import ipaddress
 import re
-from . import hosts
+from . import hosts, terminal_read
 from .network import snapshot
 from .work import now, string
 
@@ -293,7 +293,7 @@ def dispatch(store, name, args, turn_id=None, observation=None):
         repetidos = duplicados(rows, accesos)
         # Una petición, una naturaleza y una lista. Antes se devolvían identificados
         # y anónimos juntos y el modelo confundía «guardado» con «visible ahora».
-        return dict(scope=scope, items=selected[:48], counts=counts,
+        return dict(scope=scope, este_pc=terminal_read.este_pc(), items=selected[:48], counts=counts,
                     duplicates=repetidos, total=len(selected), truncated=len(selected)>48,
                     note='Inventario persistente, no una lectura actual. items contiene solo la '
                          'clase pedida por scope. registered=equipos con nombre; access=con '

@@ -104,9 +104,15 @@ class ReplyPolicy:
 
     # El 31/10 dijo «he revisado el sistema y los registros» sin llamar a nada, y
     # el informe salió de un registro de ejemplo que había en el historial.
+    # Con el chat largo tampoco hace falta la frase: «sigue fallando» y «el estado
+    # actual» repetían de memoria lo dicho antes, y un aviso de texto no lo frenaba.
     LECTURA_DICHA = re.compile(
         r'(?<!no )\b(?:he|hemos)\b(?:\s+\w+)?(?:\s+y)?\s+(?:revisad|comprobad|mirad|verificad|analizad|'
-        r'consultad|diagnosticad|examinad|inspeccionad)o\b', re.I)
+        r'consultad|diagnosticad|examinad|inspeccionad)o\b'
+        r'|(?<!no )\bhe\s+vuelto\s+a\s+(?:verificar|revisar|comprobar|mirar)\b'
+        r'|(?<!no )\bhe\s+ejecutado\b'
+        r'|\bsigue\s+(?:fallando|apareciendo|reportando|en\s+estado)\b'
+        r'|\bestado\s+actual\s+del\s+sistema\b', re.I)
 
     # Lo que dice que va a hacer AHORA y deja sin hacer. Solo verbos que tienen
     # herramienta detrás: «voy a explicarte» no es una promesa incumplida.
