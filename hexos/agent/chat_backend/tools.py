@@ -5,7 +5,7 @@ import json
 import time
 from typing import TYPE_CHECKING
 from uuid import uuid4
-from .. import catalog, devices, hosts, notes, core, workflow, procedures
+from .. import catalog, devices, hosts, notes, core, terminal_read, workflow, procedures
 from ..continuity import history_tool
 from ..progress import announcement
 from ..work import now
@@ -200,6 +200,8 @@ class ToolDispatcher:
             return self.env.dependencies.web_search(args['query'], **opciones)
         if name == 'web.read':
             return self.env.dependencies.web_read(args['url'])
+        if name == 'terminal.read':
+            return terminal_read.read(args['command'], args.get('filter'))
         if name.startswith('procedure.') or name in ('report.save', 'result.get'):
             return workflow.dispatch(store, name, args, turn_id)
         if name.startswith(('procedure.', 'report.', 'task.')):
@@ -323,6 +325,12 @@ class ToolExecutor:
             result = self.agent.tool(store, output['tool'], output['arguments'], turn_id=turn.uid)
         except (ValueError, TypeError) as exc:
             result = {'error': str(exc)}
+        if output['tool'] == 'terminal.read' and 'error' not in result:
+            ordenes = [s['arguments']['command'] for s in turn.trace
+                       if s.get('tool') == 'terminal.read' and not s.get('failed')]
+            pendientes = terminal_read.sin_mirar([*ordenes, output['arguments']['command']])
+            if pendientes:
+                result['falta_por_mirar'] = pendientes
         # La traza dice qué hizo cada llamada, cuánto tardó y si escribió algo:
         # una interfaz debe poder distinguir una lectura de un cambio real.
         from .document_reading import enrich
