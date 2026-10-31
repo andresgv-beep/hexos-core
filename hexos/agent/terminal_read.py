@@ -106,6 +106,20 @@ def sin_mirar(ordenes):
     return [gestor for gestor in ('apt', 'flatpak', 'snap') if gestor not in mirados]
 
 
+def falta_tras(ordenes, respuesta):
+    """Lo pendiente tras esta orden. Un servicio caído lleva a su registro, no a otro estado.
+
+    En el chat real miró el estado, copió de su historial que no tenía acceso a los
+    registros y atribuyó el fallo a una base de datos corrupta sin haberlos leído.
+    """
+    partes = ordenes[-1].split()
+    if (partes[0] == 'systemctl' and 'status' in partes and respuesta['exit_code'] != 0
+            and not any(orden.startswith('journalctl') for orden in ordenes)):
+        ambito = ['--user'] if '--user' in partes else []
+        return [' '.join(['journalctl', *ambito, '-u', partes[-1], '-n', '20', '--no-pager'])]
+    return sin_mirar(ordenes)
+
+
 def read(command, filter=None, *, runner=ejecutar):
     if filter and filter.startswith('-'):
         raise ValueError('filter es un texto que deben contener las líneas; las opciones van en command')

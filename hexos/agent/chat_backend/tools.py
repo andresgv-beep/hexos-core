@@ -328,7 +328,7 @@ class ToolExecutor:
         if output['tool'] == 'terminal.read' and 'error' not in result:
             ordenes = [s['arguments']['command'] for s in turn.trace
                        if s.get('tool') == 'terminal.read' and not s.get('failed')]
-            pendientes = terminal_read.sin_mirar([*ordenes, output['arguments']['command']])
+            pendientes = terminal_read.falta_tras([*ordenes, output['arguments']['command']], result)
             if pendientes:
                 result['falta_por_mirar'] = pendientes
         # La traza dice qué hizo cada llamada, cuánto tardó y si escribió algo:

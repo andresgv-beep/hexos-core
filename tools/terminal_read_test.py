@@ -50,6 +50,15 @@ class TerminalReadTest(unittest.TestCase):
         self.assertEqual(terminal_read.sin_mirar(['systemctl --failed', 'systemctl --user --failed']), [])
         self.assertEqual(terminal_read.sin_mirar(['journalctl -u x']), ['journalctl --user -u x'])
 
+    def test_servicio_caido_lleva_a_su_registro(self):
+        orden = 'systemctl --user status x.service'
+        self.assertEqual(terminal_read.falta_tras([orden], dict(exit_code=3)),
+                         ['journalctl --user -u x.service -n 20 --no-pager'])
+        self.assertEqual(terminal_read.falta_tras(['systemctl status x.service'], dict(exit_code=3)),
+                         ['journalctl -u x.service -n 20 --no-pager'])
+        self.assertEqual(terminal_read.falta_tras([orden], dict(exit_code=0)), ['systemctl status x.service'])
+        self.assertEqual(terminal_read.falta_tras(['journalctl --user -u x', orden], dict(exit_code=3)), ['systemctl status x.service'])
+
     def test_filter_no_es_una_opcion(self):
         with self.assertRaisesRegex(ValueError, 'opciones'):
             terminal_read.read('journalctl -u x', filter='-n 20')
