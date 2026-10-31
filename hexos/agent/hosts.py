@@ -314,7 +314,8 @@ def only_device(workspace):
     if len(guardados) > 1:
         raise ValueError('Hay varios equipos guardados y no has dicho cuál: ' +
                          ', '.join(repr(n) for n in guardados) +
-                         '. Repite la lectura indicando device.')
+                         '. Repite la lectura indicando device. Este PC no es ninguno de ellos: '
+                         'se mira con terminal_read.')
 
     database = Path(workspace) / 'work.sqlite'
     inventario = set()

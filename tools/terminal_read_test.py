@@ -44,6 +44,16 @@ class TerminalReadTest(unittest.TestCase):
         self.assertEqual(terminal_read.sin_mirar(['snap list', 'flatpak list', 'apt-cache search x']), [])
         self.assertEqual(terminal_read.sin_mirar(['dpkg -l', 'df -h']), [])
 
+    def test_dice_que_ambito_de_servicios_falta(self):
+        self.assertEqual(terminal_read.sin_mirar(['systemctl list-units --failed']), ['systemctl --user list-units --failed'])
+        self.assertEqual(terminal_read.sin_mirar(['systemctl --user list-units --failed']), ['systemctl list-units --failed'])
+        self.assertEqual(terminal_read.sin_mirar(['systemctl --failed', 'systemctl --user --failed']), [])
+        self.assertEqual(terminal_read.sin_mirar(['journalctl -u x']), ['journalctl --user -u x'])
+
+    def test_filter_no_es_una_opcion(self):
+        with self.assertRaisesRegex(ValueError, 'opciones'):
+            terminal_read.read('journalctl -u x', filter='-n 20')
+
     def test_orden_real_del_sistema(self):
         r = terminal_read.read('uname -r')
         self.assertEqual(r['exit_code'], 0)

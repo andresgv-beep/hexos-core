@@ -83,6 +83,7 @@ class RetryState:
     format_retries: int = 0
     web_evidence_retries: int = 0
     web_read_guided: bool = False
+    read_claim_checked: bool = False
 
 
 @dataclass

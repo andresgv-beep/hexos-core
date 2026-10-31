@@ -11,6 +11,7 @@ from ..work import now
 from .settings import PROMPT
 from .state import TurnState
 from .ledger import checkpoint_messages
+from .completion import ReplyPolicy
 
 if TYPE_CHECKING:
     from .agent import Agent
@@ -161,6 +162,17 @@ class RecoveryController:
 
     def before_completion(self, store, turn: TurnState, output: dict) -> bool:
         """True pide otra generación; no ejecuta acciones por su cuenta."""
+        # «He revisado» sin haber mirado nada: la siguiente generación empieza en una
+        # lectura, como tras un reproche. Avisarle no basta, y una sola vez: si tras
+        # mirar sigue afirmando algo, ya hay traza con la que contrastarlo.
+        if (not turn.trace and not turn.retries.read_claim_checked
+                and hasattr(self.agent.runtime, 'require_check')
+                and ReplyPolicy.LECTURA_DICHA.search(output.get('reply') or '')):
+            turn.retries.read_claim_checked = True
+            self.agent.runtime.require_check()
+            turn.messages = [dict(role='user', content='AVISO DE HEXOS (no es la persona): '
+                + ReplyPolicy.unsupported_claim(output['reply'], []) + ' No menciones este aviso.')]
+            return True
         recoverable = {name for name, definition in catalog.TOOLS.items()
                        if definition['effect'] in ('read', 'result')}
         last = turn.trace[-1] if turn.trace else {}

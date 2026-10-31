@@ -208,6 +208,21 @@ class Tests(unittest.TestCase):
             with agent.store() as store:
                 self.assertEqual(store.db.execute('SELECT COUNT(*) FROM tool_events').fetchone()[0], 12)
 
+    def test_decir_que_ha_revisado_sin_mirar_nada_no_pasa(self):
+        from hexos.agent.chat_backend.completion import ReplyPolicy
+        self.assertIn('terminal_read', ReplyPolicy.unsupported_claim('He revisado el sistema y los registros.', []))
+        self.assertIn('terminal_read', ReplyPolicy.unsupported_claim('Ya lo he comprobado.', []))
+        self.assertIsNone(ReplyPolicy.unsupported_claim('He revisado el sistema.', [dict(tool='terminal.read')]))
+        self.assertIsNone(ReplyPolicy.unsupported_claim('No he comprobado nada todavía.', []))
+        self.assertIsNone(ReplyPolicy.unsupported_claim('Puedo revisarlo si quieres.', []))
+
+    def test_decir_que_ha_revisado_le_hace_mirar_de_verdad(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(tmp, runtime_with_outputs('He revisado el sistema.', 'history_recent{}<tool_call|>', 'Mirado.'))
+            self.assertEqual(agent.chat('¿Algo falla?')['reply'], 'Mirado.')
+            with agent.store() as store:
+                self.assertEqual(store.db.execute('SELECT COUNT(*) FROM tool_events').fetchone()[0], 1)
+
     def test_context_preserves_roles_and_attributes_user_evidence(self):
         rows = [dict(id='u1',role='user',text='Soy Marta.'),
                 dict(id='a1',role='assistant',text='No sé tu nombre.'),

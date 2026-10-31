@@ -102,6 +102,12 @@ class ReplyPolicy:
         r'|(?<!no )\b(?:he|hemos)\s+tomado\s+nota\b'
         r'|\b(?:guardad|anotad|apuntad)[oa]s?\s+en\s+una\s+nota\b', re.I)
 
+    # El 31/10 dijo «he revisado el sistema y los registros» sin llamar a nada, y
+    # el informe salió de un registro de ejemplo que había en el historial.
+    LECTURA_DICHA = re.compile(
+        r'(?<!no )\b(?:he|hemos)\b(?:\s+\w+)?(?:\s+y)?\s+(?:revisad|comprobad|mirad|verificad|analizad|'
+        r'consultad|diagnosticad|examinad|inspeccionad)o\b', re.I)
+
     # Lo que dice que va a hacer AHORA y deja sin hacer. Solo verbos que tienen
     # herramienta detrás: «voy a explicarte» no es una promesa incumplida.
     PROMESA = re.compile(
@@ -199,6 +205,10 @@ class ReplyPolicy:
         afirmación con el registro de lo ejecutado. Decir «lo he guardado» no
         guarda nada, y quien lea la respuesta no tiene forma de saberlo.
         """
+        if isinstance(reply, str) and not trace and cls.LECTURA_DICHA.search(reply):
+            return ('La respuesta dice haber comprobado algo, pero en este turno no se ejecutó '
+                    'ninguna herramienta. Este PC se mira con terminal_read y el NAS con nas_read: '
+                    'compruébalo, o di que no lo has comprobado.')
         if not isinstance(reply, str) or not cls.ESCRITURA_DICHA.search(reply):
             return None
         escrituras = [paso['tool'] for paso in trace

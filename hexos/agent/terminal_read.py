@@ -87,14 +87,28 @@ def sin_mirar(ordenes):
     """Gestores que faltan: lo mirado en uno no dice nada de los otros.
 
     Sin gestores en la última orden no hay nada que señalar: `df` no busca aplicaciones.
+    Los servicios tienen dos ámbitos: el 31/10 miró el sistema, dijo que todo iba bien y
+    el servicio fallado estaba en la sesión de usuario.
     """
-    mirados = [GESTORES.get(orden.split()[0]) for orden in ordenes if orden.split()]
-    if not mirados or mirados[-1] is None:
+    ordenes = [orden.split() for orden in ordenes if orden.split()]
+    if not ordenes:
+        return []
+    if ordenes[-1][0] in ('systemctl', 'journalctl'):
+        ambitos = {'--user' in o or '--user-unit' in o for o in ordenes if o[0] == ordenes[-1][0]}
+        if len(ambitos) == 2:
+            return []
+        # La orden entera: «sesión de usuario» como texto lo ignoraba y daba todo por bueno.
+        ultima = [parte for parte in ordenes[-1] if parte != '--user']
+        return [' '.join(ultima if True in ambitos else [ultima[0], '--user', *ultima[1:]])]
+    mirados = [GESTORES.get(orden[0]) for orden in ordenes]
+    if mirados[-1] is None:
         return []
     return [gestor for gestor in ('apt', 'flatpak', 'snap') if gestor not in mirados]
 
 
 def read(command, filter=None, *, runner=ejecutar):
+    if filter and filter.startswith('-'):
+        raise ValueError('filter es un texto que deben contener las líneas; las opciones van en command')
     codigo, salida = runner(trocear(command))
     lineas = salida.splitlines()
     total = len(lineas)
