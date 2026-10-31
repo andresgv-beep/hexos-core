@@ -26,6 +26,7 @@ a mano: el veredicto solo mira hechos comprobables, no si la respuesta es buena.
 --grupo-correcto repite el banco ofreciendo solo las herramientas del caso, sin
 tocar el catálogo, para saber cuánto ayuda centrar al modelo.
 """
+import os
 import argparse
 import base64
 import json
@@ -452,6 +453,9 @@ def main():
     parser.add_argument('--grupo-correcto', action='store_true', help='Ofrece solo las herramientas del caso')
     parser.add_argument('--ctx', type=int, help='Ventana; por defecto la de release.env')
     parser.add_argument('--pensar', action='store_true', help='Abre el canal de pensamiento en todos los turnos')
+    parser.add_argument('--llama', help='GGUF que correr con llama-server en vez de Héctor')
+    parser.add_argument('--llama-server', default=os.path.expanduser('~/Documentos/GitHub/Hector-q4km-reference/build/bin/llama-server'))
+    parser.add_argument('--ngl', type=int, default=99, help='Capas en GPU con --llama; el resto va a RAM')
     args = parser.parse_args()
     env = leer_release()
     args.salida = args.salida.expanduser()
@@ -461,7 +465,13 @@ def main():
     apps = subprocess.check_output(['nvidia-smi', '--query-compute-apps=process_name', '--format=csv,noheader'], text=True)
     if 'helios_runtime' in apps:
         raise SystemExit('Hay un motor cargado en la GPU: para Helios antes de medir.')
+    from hexos.agent import native
     from hexos.agent.native import NativeRuntime
+    if args.llama:
+        from tools.llama_transport import LlamaTransport
+        LlamaTransport.ngl = args.ngl
+        native.NativeTransport = LlamaTransport
+        env['HEXOS_RUNTIME'], env['HEXOS_MODEL'] = args.llama_server, args.llama
     nas = NAS(json.loads((args.salida / 'nas.json').read_text()))
     elegidos = set(args.casos.split(',')) if args.casos else None
     lista = [c for c in casos(nas) if not elegidos or c.id in elegidos]
