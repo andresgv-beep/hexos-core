@@ -92,7 +92,7 @@ TOOLS = {
                      'extensions admite una lista literal, por ejemplo ["mkv","mp4","avi","mp3"], sin distinguir mayúsculas. '
                      'roots es opcional: si se omite descubre los volúmenes de datos Synology y sus subvolúmenes. '
                      'No pide rutas internas al usuario. Si ya se indicó una carpeta, úsala como raíz. '
-                     'min_bytes=0, max_bytes sin máximo por defecto; rangos inclusivos. query filtra nombre. '
+                     'min_bytes=0, max_bytes sin máximo por defecto; rangos inclusivos. query filtra nombre y carpetas de la ruta. '
                      'Recorre subcarpetas, excluyendo nombres ocultos e internos @ salvo include_hidden=true. '
                      'No sigue enlaces ni cruza otros montajes. Devuelve scan_id, coincidencias y cobertura; '
                      'complete=false significa hallazgos parciales. Para siguientes páginas usa nas.search con los mismos filtros.',
@@ -112,7 +112,7 @@ TOOLS = {
                        'min_bytes y max_bytes son límites inclusivos opcionales: por defecto 0 y sin máximo. '
                        'GB=1000000000 bytes, GiB=1073741824. kind=video filtra extensiones; all es el defecto. '
                        'extensions filtra una lista de extensiones literales como ["mkv","mp3"]. '
-                       'query busca texto literal en nombre; root filtra una raíz del catálogo. '
+                       'query busca texto literal en nombre y carpetas de la ruta; root filtra una raíz del catálogo. '
                        'Orden: tamaño descendente, ruta para empates. Sigue next_offset para más páginas. '
                        'Informa observed_at: es un catálogo, no el estado actual ni una selección para convertir.',
                        {'scan_id':'str'}, {'min_bytes':'int', 'max_bytes':'int', 'kind':'str',

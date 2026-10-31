@@ -149,7 +149,9 @@ def search(workspace, *, scan_id, min_bytes=0, max_bytes=None, query=None,
         clauses.append('extension(name) IN (' + ','.join('?' for _ in extensions) + ')')
         values.extend(extensions)
     if query:
-        clauses.append('instr(casefold(name), ?) > 0')
+        # La ruta entera incluye el nombre: «marvel» es a menudo la carpeta, no el
+        # archivo, y el 08/10 esas películas no aparecían con ningún filtro.
+        clauses.append('instr(casefold(path), ?) > 0')
         values.append(query.casefold())
     db = database(workspace)
     try:

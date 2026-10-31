@@ -15,7 +15,10 @@ class FileCatalog:
         self.store = store
 
     def search(self, **kwargs):
-        return bounded_page(self.store.search(**kwargs))
+        page = bounded_page(self.store.search(**kwargs))
+        if kwargs.get('max_bytes') == 0:
+            page['aviso'] = 'max_bytes=0 deja solo archivos vacíos; omítelo para no poner tope.'
+        return page
 
     def locations(self, **kwargs):
         return location_page(self.store.locations(**kwargs))
@@ -48,7 +51,8 @@ class FileCatalog:
         Reutiliza lector, publicación y consulta. A diferencia del indexado estricto,
         permite consultar hallazgos parciales sin ocultar fallos de cobertura.
         """
-        roots = roots_argument(roots) if roots is not None else None
+        # «Sin roots» a veces llega como lista vacía; significa lo mismo.
+        roots = roots_argument(roots) if roots else None
         # En una búsqueda, / representa todo el NAS: descubrir volúmenes evita
         # recorrer solo el sistema raíz, que no cruza los montajes de datos.
         if roots == ['/']:
@@ -72,4 +76,13 @@ class FileCatalog:
         page['note'] += (' Búsqueda recursiva realizada. Para más páginas o cambiar filtros usa nas.search '
                          'con este scan_id; no vuelvas a recorrer el NAS. '
                          'Si complete=false, las coincidencias son parciales: comunica los límites o errores.')
+        # Vacío aquí no es vacío en el NAS: lo dice el resultado, y qué hacer lo decide el modelo.
+        if roots and not page['total_matches'] and max_bytes != 0:
+            page['falta_por_mirar'] = ((self.other_folders(result['device'], query, actual_roots) if query else None)
+                                 or 'el resto del NAS; nas.find sin roots recorre todos los volúmenes')
         return page
+
+    def other_folders(self, device, query, roots):
+        carpetas = self.store.locations(device=device, query=query, limit=20)['items']
+        dentro = tuple(root.rstrip('/') + '/' for root in roots)
+        return [c['path'] for c in carpetas if not (c['path'] + '/').startswith(dentro)][:5]

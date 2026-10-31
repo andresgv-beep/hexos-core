@@ -120,7 +120,7 @@ def prepare(workspace, config, args, *, now=None):
                     continue
                 if path.suffix.lower() not in {'.mkv','.mp4','.avi','.m4v','.mov','.ts'} or path.stem.endswith('.optimizada'):
                     continue
-                if query and query not in path.name.casefold():
+                if query and query not in row['path'].casefold():
                     continue
                 paths.append(str(path))
                 if len(paths) == count:

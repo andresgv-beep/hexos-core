@@ -60,6 +60,34 @@ class NasSimuladoTest(unittest.TestCase):
         carpetas = self.herramienta('directories', device='synology 1', query='marvel')
         self.assertIn('/volume4/multimedia 3/multimedia/marvel', [i['path'] for i in carpetas['items']])
 
+    def test_query_encuentra_la_carpeta_y_no_solo_el_nombre(self):
+        rutas = [i['path'] for i in self.herramienta('find', device='synology 1', query='marvel', extensions=['mkv'])['items']]
+        self.assertEqual(rutas, [BUENA])
+        rutas = [i['path'] for i in self.herramienta('find', device='synology 1', query='multimedia/peliculas',
+                                                     extensions=['mkv'])['items']]
+        self.assertEqual(len(rutas), 2)
+
+    def test_busqueda_vacia_senala_la_carpeta_de_otra_raiz(self):
+        self.herramienta('find', device='synology 1', extensions=['mkv'], roots=['/volume4/multimedia 3/multimedia'])
+        r = self.herramienta('find', device='synology 1', extensions=['mkv'], query='marvel',
+                             roots=['/volume1/multimedia 1/Multimedia'])
+        self.assertEqual(r['total_matches'], 0)
+        self.assertEqual(r['falta_por_mirar'], ['/volume4/multimedia 3/multimedia/marvel'])
+        r = self.herramienta('find', device='synology 1', extensions=['mkv'], query='spider-man',
+                             roots=['/volume4/multimedia 3/multimedia/marvel'])
+        self.assertIn('sin roots', r['falta_por_mirar'])
+        r = self.herramienta('find', device='synology 1', extensions=['mkv'], query='spider-man')
+        self.assertNotIn('falta_por_mirar', r)
+
+    def test_roots_vacio_es_buscar_en_todo(self):
+        self.assertIn(BUENA, [i['path'] for i in self.herramienta('find', device='synology 1', roots=[], extensions=['mkv'])['items']])
+
+    def test_max_bytes_cero_avisa_y_no_manda_a_otra_parte(self):
+        r = self.herramienta('find', device='synology 1', extensions=['mkv'], max_bytes=0,
+                             roots=['/volume4/multimedia 3/multimedia/marvel'])
+        self.assertIn('vacíos', r['aviso'])
+        self.assertNotIn('falta_por_mirar', r)
+
     def test_abrir_y_leer_documento(self):
         hallado = self.herramienta('find', device='synology 1', query='notas-raid')
         abierto = self.herramienta('file_open', scan_id=hallado['scan_id'], path=banco.DOCUMENTO['path'])
