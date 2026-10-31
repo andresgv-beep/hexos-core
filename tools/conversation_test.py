@@ -199,14 +199,14 @@ class Tests(unittest.TestCase):
             self.assertEqual(len(result['tools']), 6)
             self.assertEqual(result['reply'], 'Consultas terminadas.')
 
-    def test_seventh_call_is_not_executed(self):
+    def test_call_past_the_budget_is_not_executed(self):
         with tempfile.TemporaryDirectory() as tmp:
             calls = '<|tool_call>call:history_recent{}<tool_call|>'
-            agent = Agent(tmp, runtime_with_outputs(calls * 6, calls))
+            agent = Agent(tmp, runtime_with_outputs(calls * 6, calls * 6, calls))
             with self.assertRaisesRegex(RuntimeError, 'no se ejecutó'):
-                agent.chat('Consulta siete veces el historial.')
+                agent.chat('Consulta trece veces el historial.')
             with agent.store() as store:
-                self.assertEqual(store.db.execute('SELECT COUNT(*) FROM tool_events').fetchone()[0], 6)
+                self.assertEqual(store.db.execute('SELECT COUNT(*) FROM tool_events').fetchone()[0], 12)
 
     def test_context_preserves_roles_and_attributes_user_evidence(self):
         rows = [dict(id='u1',role='user',text='Soy Marta.'),

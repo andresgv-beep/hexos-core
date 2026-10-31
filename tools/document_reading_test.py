@@ -157,7 +157,7 @@ class DocumentReadingTest(unittest.TestCase):
         turn = TurnState('Lee', trace=[dict(tool='nas.file_read')]*20)
         self.assertFalse(exhausted(turn, 'nas.file_read'))
         self.assertFalse(exhausted(turn, 'nas.find'))
-        turn.trace.extend([dict(tool='nas.find')]*6)
+        turn.trace.extend([dict(tool='nas.find')]*12)
         self.assertTrue(exhausted(turn, 'media.start'))
         self.assertFalse(exhausted(turn, 'nas.file_read'))
         turn.trace.extend([dict(tool='nas.file_read')]*28)
