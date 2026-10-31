@@ -7,7 +7,7 @@ import os
 from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import uuid4
-from .. import catalog, procedures, reproche, task_notices, tool_digest
+from .. import catalog, procedures, reproche, sin_resolver, task_notices, tool_digest
 from ..native_transport import AudioClip
 from ..context import native_messages
 from ..work import now
@@ -309,6 +309,7 @@ class ContextManager:
         aviso_reproche = reproche.bloque(turn.text)
         turn.reproche = bool(aviso_reproche)
         bloque_recuerdo += aviso_reproche
+        bloque_recuerdo += sin_resolver.bloque(store, turn.uid)
         # Lo que acabó en segundo plano se cuenta en el primer turno que llegue,
         # aunque sea un saludo: Helios no puede escribir por su cuenta.
         workspace = getattr(self.agent, 'workspace', None)
