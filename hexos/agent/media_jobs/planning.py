@@ -31,6 +31,7 @@ def prepare(workspace, config, args, *, now=None):
     if args['profile_id'] not in profiles:
         raise ValueError('Perfil no configurado; consulta media.options')
     scan_id = args['scan_id']
+    missing = None
     # A scan includes unfiltered files. The last delivered view is evidence of
     # the selection, not an implicit filter stored in the scan itself. When a
     # caller forgets its filters, return an actionable correction before LIMIT.
@@ -51,12 +52,6 @@ def prepare(workspace, config, args, *, now=None):
             previous = json.loads(row[0])['result'].get('filters', {})
             missing = {k:previous[k] for k in ('min_bytes','max_bytes','extensions','query','root')
                        if k not in args and previous.get(k) not in (None, '', [], 0)}
-            if missing:
-                raise ValueError('Faltan filtros de la selección observada. Repite media.prepare con los mismos '
-                    'argumentos y añade ' + json.dumps(missing, ensure_ascii=False) +
-                    '. scan_id contiene también archivos fuera de esos filtros; no pidas IDs al usuario. '
-                    'Si la persona eligió películas concretas de ese resultado, no uses filtros: '
-                    'llama solo con scan_id, profile_id y paths con sus rutas exactas.')
     database = Path(workspace)/'nas_files.sqlite'
     db = sqlite3.connect(database.resolve().as_uri()+'?mode=ro', uri=True)
     db.row_factory = sqlite3.Row
@@ -86,6 +81,14 @@ def prepare(workspace, config, args, *, now=None):
                     'películas concretas del resultado de nas.find, repite media.prepare solo con scan_id, '
                     'profile_id y paths con sus rutas exactas. Si pidió las más grandes, acota la búsqueda '
                     'con root para que el recorrido sea completo.')
+            # Después del recorrido parcial: si no hay top certificable, añadir filtros no
+            # lo arregla, y el 12B gastaba dos intentos en ellos antes de pasar a paths.
+            if missing:
+                raise ValueError('Faltan filtros de la selección observada. Repite media.prepare con los mismos '
+                    'argumentos y añade ' + json.dumps(missing, ensure_ascii=False) +
+                    '. scan_id contiene también archivos fuera de esos filtros; no pidas IDs al usuario. '
+                    'Si la persona eligió películas concretas de ese resultado, no uses filtros: '
+                    'llama solo con scan_id, profile_id y paths con sus rutas exactas.')
             roots = config['files']['libraries']
             root = args.get('root')
             if root is not None:
@@ -97,7 +100,9 @@ def prepare(workspace, config, args, *, now=None):
                 covered = [r for r in config['files']['libraries']
                            if any(r == s or r.startswith(s.rstrip('/')+'/') for s in scanned)]
                 raise ValueError('La búsqueda no cubre todas las bibliotecas seleccionadas. '
-                    'Conserva el alcance pedido: repite media.prepare con root igual a la biblioteca '
+                    'Si nas.find ya te dio las películas pedidas, llama solo con scan_id, profile_id y '
+                    'paths con sus rutas exactas: vale para varias bibliotecas a la vez. Si no, '
+                    'conserva el alcance pedido: repite media.prepare con root igual a la biblioteca '
                     'solicitada que sí está cubierta. root es una cadena, no una lista. '
                     'Bibliotecas cubiertas: ' + json.dumps(covered, ensure_ascii=False) +
                     ('. Ejemplo de argumento: ' + json.dumps(dict(root=covered[0]), ensure_ascii=False) if len(covered)==1 else '') +
