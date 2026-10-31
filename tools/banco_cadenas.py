@@ -411,7 +411,7 @@ def ejecutar(caso, root, runtime, nas, media, solo_grupo=False):
     finally:
         runtime.tools = completas
     return dict(caso=caso.id, ok=bool(ok), detalle=detalle, empujones=max(0, empujones - caso.confirmar), segundos=round(time.time() - inicio, 1),
-                **medir(eventos(agent)), charla=charla)
+                contexto=getattr(runtime, 'kv_position', None), **medir(eventos(agent)), charla=charla)
 
 
 def resumir(filas, modo):
@@ -451,6 +451,7 @@ def main():
     parser.add_argument('--casos', help='Ids separados por comas')
     parser.add_argument('--grupo-correcto', action='store_true', help='Ofrece solo las herramientas del caso')
     parser.add_argument('--ctx', type=int, help='Ventana; por defecto la de release.env')
+    parser.add_argument('--pensar', action='store_true', help='Abre el canal de pensamiento en todos los turnos')
     args = parser.parse_args()
     env = leer_release()
     args.salida = args.salida.expanduser()
@@ -468,7 +469,7 @@ def main():
     carpeta = args.salida / modo
     carpeta.mkdir(parents=True, exist_ok=True)
     runtime = NativeRuntime(env['HEXOS_RUNTIME'], env['HEXOS_MODEL'], args.ctx or int(env['HEXOS_CTX']), carpeta,
-                            env['HEXOS_TEMPLATE'])
+                            env['HEXOS_TEMPLATE'], thinking=args.pensar)
     filas = []
     try:
         with (carpeta / 'resultados.jsonl').open('w') as salida:
@@ -478,7 +479,7 @@ def main():
                 filas.append(fila)
                 salida.write(json.dumps(fila, ensure_ascii=False) + '\n')
                 salida.flush()
-                print(json.dumps({k: fila[k] for k in ('caso', 'ok', 'empujones', 'llamadas', 'fallos', 'repetidas', 'segundos',
+                print(json.dumps({k: fila[k] for k in ('caso', 'ok', 'empujones', 'llamadas', 'fallos', 'repetidas', 'segundos', 'contexto',
                                                        'herramientas', 'detalle')}, ensure_ascii=False), flush=True)
     finally:
         runtime.close()
