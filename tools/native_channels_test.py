@@ -91,6 +91,20 @@ class NativeChannelsTest(unittest.TestCase):
                 self.assertIsNone(runtime.current)
                 self.assertFalse(any('tool_calls' in m for m in runtime.messages))
 
+    def test_call_with_wrong_opener_retries_without_running_it(self):
+        raw = 'Voy a leerlo ahora.\n\n' + CALL.replace('<|tool_call>', '<|channel>')
+        runtime = self.runtime(raw)
+        with self.assertRaises(NativeSyntax): runtime.generate([])
+        self.assertTrue(runtime.repair_call)
+        self.assertFalse(runtime.pending)
+        self.assertIsNone(runtime.current)
+        self.assertFalse(any(m['role'] == 'assistant' for m in runtime.messages))
+
+    def test_generation_cut_short_is_still_an_error(self):
+        runtime = self.runtime('Una respuesta a medi', finish='length')
+        with self.assertRaises(RuntimeError) as raised: runtime.generate([])
+        self.assertNotIsInstance(raised.exception, NativeSyntax)
+
     def test_no_reasoning_or_protocol_leaks_at_any_stream_boundary(self):
         raw = PREAMBLE+'<|channel>thought\nSECRETO PRIVADO<channel|>'+CALL
         for end in range(len(raw)+1):

@@ -587,6 +587,12 @@ class NativeRuntime:
             self.pending.extend(calls)
             self.current=self.pending.popleft()
             return {'tool':self.names[self.current['name']], 'arguments':self.current['arguments']}
+        if header[4]=='stop' and header[3]=='1':
+            # Solo se para en la respuesta de herramienta: hubo llamada, pero con otra
+            # apertura («<|channel>call:…», 01/11). Falla el formato, no la generación:
+            # el reintento empieza en el canal de llamada y nada de esto se ejecuta.
+            self.repair_call = True
+            raise NativeSyntax('llamada sin apertura válida')
         if header[4]!='eos':raise RuntimeError('generación nativa incompleta: '+header[4])
         # Un marcador de imagen o audio escapado no lleva contenido («una placa de<audio|>»,
         # 28/09): se quita del texto visible en vez de enseñarlo o reintentar el turno.
