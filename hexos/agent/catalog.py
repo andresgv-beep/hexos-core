@@ -297,7 +297,8 @@ TOOLS = {
     'task.current': spec('Leer encargo activo y referencias a resultado e informe.'),
     'task.focus': spec('Registrar una interpretación provisional si falta un dato imprescindible.',
                       {'intent':'str','question':'str'}, effect='task'),
-    'document.read': spec('Leer líneas de un documento, start desde 1, count máximo 80.',
+    'document.read': spec('Leer líneas de un documento, start desde 1, count máximo 80. '
+                          'Sigue con next_line hasta llegar a total_lines.',
                          {'id':'str'}, {'start':'int','count':'int'}),
     'document.search': spec('Buscar texto en un documento.', {'id':'str','query':'str'}),
 }
