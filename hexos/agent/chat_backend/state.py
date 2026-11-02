@@ -96,6 +96,7 @@ class TurnState:
     uid: str = ''
     document: dict | None = None
     prompt_text: str = ''
+    archived_text: str = ''  # lo que queda en el historial, sin el documento entero
     pointed_note: dict | None = None
     task_notices: list = field(default_factory=list)
     transcript: str | None = None

@@ -42,7 +42,7 @@ class TurnFinalizer:
             strings(proposed['tags'], 'tags')
             string(proposed['reason'], 'reason')
             job = store.dispatch(dict(op='create', title=proposed['title'],
-                request=turn.prompt_text, source_ref='turn:' + turn.uid), actor='user')
+                request=turn.archived_text or turn.prompt_text, source_ref='turn:' + turn.uid), actor='user')
             job = store.dispatch(dict(op='classify', id=job['id'], revision=job['revision'],
                 **{k:v for k,v in proposed.items() if k != 'title'}), actor='model')
         return job

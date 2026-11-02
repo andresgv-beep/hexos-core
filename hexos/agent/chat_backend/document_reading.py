@@ -10,6 +10,22 @@ import re
 from .reading_budget import exhausted
 
 
+# Un adjunto llega como una sola línea JSON. document.read limita lo que devuelve
+# por llamada, así que una línea más larga que ese límite no se podría leer nunca.
+DOCUMENT_LINE_CHARS = 2000
+
+
+def document_lines(content):
+    """Líneas de lectura de un documento guardado, sin ninguna inabarcable."""
+    lines = []
+    for line in content.splitlines():
+        lines.extend(line[i:i + DOCUMENT_LINE_CHARS]
+                     for i in range(0, len(line), DOCUMENT_LINE_CHARS))
+        if not line:
+            lines.append('')
+    return lines
+
+
 def coverage(total, intervals):
     merged = []
     for start, end in sorted((max(0, a), min(total, b)) for a, b in intervals):
