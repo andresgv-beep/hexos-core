@@ -25,6 +25,18 @@ export interface CredentialRequest {
    *  distingue «la misma que ya descarté» de «me lo está pidiendo otra vez». */
   requestedAt?: string;
 }
+/** Plan de instalar o quitar un programa que Helios ha preparado y espera tu aprobación.
+ *  Helios no puede ejecutarlo: solo lo hace HexOS cuando lo apruebas aquí. */
+export interface SystemRequest {
+  planId: string; summary: string; manager: string; action: "install" | "remove"; package: string;
+  /** Paquetes que entran o salen según la simulación (los primeros 60). */
+  affects: string[]; affectsCount: number;
+}
+/** Cómo acabó un plan aprobado o rechazado. */
+export interface SystemDecision {
+  summary: string; executed: boolean; verified?: boolean; cancelled?: boolean;
+  refused?: string; check?: string;
+}
 export interface AccessSaved {
   device: string; user: string; host: string; pinned: boolean;
   /** Lo que se estaba pidiendo cuando faltó el acceso. La interfaz lo reenvía
@@ -77,7 +89,10 @@ function parseChatReply(data: unknown): ChatReply {
 export interface HeliosTransport {
   /** `thinking` es null cuando el motor no tiene canal de pensamiento. */
   status(signal?: AbortSignal): Promise<{ phase: HeliosPhase; mode: string; thinking: boolean | null;
-    tools: ToolActivity[]; credentialRequest: CredentialRequest | null; progress: Progress; generation?: Generation; metrics?: InferenceMetrics }>;
+    tools: ToolActivity[]; credentialRequest: CredentialRequest | null; systemRequest: SystemRequest | null;
+    progress: Progress; generation?: Generation; metrics?: InferenceMetrics }>;
+  /** Aprueba o rechaza el plan pendiente. Aprobarlo lo ejecuta HexOS y lo comprueba. */
+  decideSystem(planId: string, approve: boolean, signal?: AbortSignal): Promise<SystemDecision>;
   /** Guarda el acceso de un equipo. `host` fija su dirección: sin ella se busca
    *  entre los vecinos de la red, que solo sirve estando en la misma. */
   saveAccess(input: { device: string; user: string; password: string; host?: string; port?: number },
@@ -131,8 +146,16 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
             user: typeof r.user === "string" ? r.user : undefined,
             requestedAt: typeof r.requested_at === "string" ? r.requested_at : undefined }
         : null;
+      const sr = data.system_request;
+      const systemRequest: SystemRequest | null = isRecord(sr) && typeof sr.plan_id === "string" &&
+          typeof sr.summary === "string" && (sr.action === "install" || sr.action === "remove")
+        ? { planId: sr.plan_id, summary: sr.summary, manager: String(sr.manager ?? ""), action: sr.action,
+            package: String(sr.package ?? ""),
+            affects: Array.isArray(sr.affects) ? sr.affects.filter((x): x is string => typeof x === "string") : [],
+            affectsCount: typeof sr.affects_count === "number" ? sr.affects_count : 0 }
+        : null;
       return { phase: phaseFromHexos(data.state), mode: data.mode, thinking,
-               tools: parseToolActivities(data.active_tools, "running"), credentialRequest,
+               tools: parseToolActivities(data.active_tools, "running"), credentialRequest, systemRequest,
                progress: parseProgress(data.progress), generation, metrics: parseInferenceMetrics(data.metrics) };
     },
     async saveAccess({ device, user, password, host, port }, signal) {
@@ -152,6 +175,16 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
                resumedRequest: typeof data.resumed_request === "string" ? data.resumed_request : undefined,
                resumed: data.resumed === undefined ? undefined : parseChatReply(data.resumed),
                resumeError: typeof data.resume_error === "string" ? data.resume_error : undefined };
+    },
+    async decideSystem(planId, approve, signal) {
+      const data = await request("system", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan_id: planId, approve }), signal });
+      if (!isRecord(data) || typeof data.summary !== "string") throw new Error("HexOS no confirmó la decisión");
+      return { summary: data.summary, executed: data.executed === true,
+               verified: typeof data.verified === "boolean" ? data.verified : undefined,
+               cancelled: data.cancelled === true,
+               refused: typeof data.refused === "string" ? data.refused : undefined,
+               check: typeof data.check === "string" ? data.check : undefined };
     },
     async dismissAccess(device, signal) {
       await request("credentials", { method: "POST", headers: { "Content-Type": "application/json" },

@@ -21,7 +21,8 @@ import { NoteWindow, type NoteWindowState } from "./NoteWindow";
 import { CoreViewer } from "./CoreViewer";
 import { CodeWorkspace } from "./CodeWorkspace";
 import { phases } from "@/lib/helios/state";
-import { createHexosTransport, type ContextCut, type CredentialRequest, type HeliosTransport, type HistoryMessage } from "@/lib/helios/hexos";
+import { createHexosTransport, type ContextCut, type CredentialRequest, type HeliosTransport, type HistoryMessage,
+         type SystemRequest } from "@/lib/helios/hexos";
 import { mergeToolActivities, type ToolActivity } from "@/lib/helios/tools";
 import { coreSectionForTools, createCoreClient, type NoteDetail } from "@/lib/helios/core";
 import { createMediaClient, isActive, type MediaControl, type MediaJob } from "@/lib/helios/media";
@@ -50,6 +51,10 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const [thinkingBusy, setThinkingBusy] = useState(false);
   const [contextCut, setContextCut] = useState<ContextCut | null>(null);
   const [access, setAccess] = useState<CredentialRequest | null>(null);
+  // Plan de instalar o quitar un programa que espera tu aprobación (system.package_plan).
+  const [systemPlan, setSystemPlan] = useState<SystemRequest | null>(null);
+  const [systemBusy, setSystemBusy] = useState(false);
+  const [systemError, setSystemError] = useState("");
   const [accessForm, setAccessForm] = useState({ user: "", password: "", host: "", port: "22" });
   const [accessError, setAccessError] = useState("");
   const [accessSaving, setAccessSaving] = useState(false);
@@ -344,6 +349,12 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
           ? { ...item, progress: [...(item.progress ?? []), ...nuevos.map(m => m.text)] }
           : item));
       }
+      // Mientras se decide no se toca: el plan sigue pendiente en el servidor hasta la respuesta.
+      setSystemPlan(previo => {
+        const nuevo = estado.systemRequest;
+        if (!nuevo) return null;
+        return previo && previo.planId === nuevo.planId ? previo : nuevo;
+      });
       // Helios pide el acceso a mitad de turno, así que hay que seguir mirando;
       // con una sola consulta al montar la ventana no aparecía nunca.
       setAccess(previo => {
@@ -374,6 +385,29 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     window.addEventListener("resize", resetPositions);
     return () => window.removeEventListener("resize", resetPositions);
   }, []);
+  async function decidirSistema(approve: boolean) {
+    if (!systemPlan || systemBusy) return;
+    setSystemBusy(true);
+    setSystemError("");
+    try {
+      const r = await transport.decideSystem(systemPlan.planId, approve);
+      setSystemPlan(null);
+      const reply = r.cancelled ? `Cancelado: ${r.summary}. No se ha cambiado nada.`
+        : r.executed && r.verified ? `Hecho y comprobado: ${r.summary} (${r.check}).`
+        : r.executed ? `Se ejecutó, pero la comprobación no cuadra: ${r.check}. Revísalo antes de darlo por hecho.`
+        : `No se ejecutó: ${r.refused ?? "el gestor dio error"}.`;
+      const id = ++nextId.current;
+      setTurns(items => [...items, { id, text: approve ? `Aprobado: ${r.summary}` : `Cancelado: ${r.summary}`,
+                                     pending: false, reply }]);
+      setRevealing(true);
+      setAnnouncement(reply);
+    } catch (error) {
+      setSystemError(error instanceof Error ? error.message : "No se pudo enviar la decisión.");
+    } finally {
+      setSystemBusy(false);
+    }
+  }
+
   async function guardarAcceso() {
     if (!access || accessSaving) return;
     setAccessSaving(true);
@@ -776,6 +810,31 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     {!mobile && codeFloating && codeOpen && codeArtifact && <CodeWorkspace artifact={codeArtifact} busy={sending}
       canUndo={Boolean(codeHistory.length || fallbackArtifact)} onUndo={undoCodeArtifact}
       onClose={() => { setCodeFloating(false); inputRef.current?.focus(); }} onCreatePreview={previewCode} />}
+    {systemPlan && !access && <div className="access-backdrop">
+      <div className="access-panel" role="dialog" aria-modal="true" aria-labelledby="system-title">
+        <h2 id="system-title" className="panel-title">Helios propone: {systemPlan.summary}</h2>
+        <p className="access-target">
+          {systemPlan.action === "remove" ? "Saldrían" : "Entrarían"} según la simulación de {systemPlan.manager}:{" "}
+          <strong>{systemPlan.affects.slice(0, 12).join(", ")}</strong>
+          {systemPlan.affectsCount > 12 ? ` y ${systemPlan.affectsCount - 12} más` : ""}
+        </p>
+        {systemPlan.action === "remove" && systemPlan.affectsCount > 1 && <p className="access-warn" role="alert">
+          No es solo {systemPlan.package}: quitarlo arrastra {systemPlan.affectsCount} paquetes.
+        </p>}
+        {systemError && <p className="attachment-error" role="alert">{systemError}</p>}
+        <p className="access-note">
+          Helios no puede ejecutarlo. Si lo apruebas, lo hace HexOS con su ayudante, que solo
+          instala o quita paquetes de una lista cerrada, y después comprueba el resultado.
+        </p>
+        <div className="access-actions">
+          <button type="button" disabled={systemBusy} onClick={() => void decidirSistema(false)}>Cancelar</button>
+          <button type="button" className="access-save" disabled={systemBusy}
+            onClick={() => void decidirSistema(true)}>
+            {systemBusy ? "Ejecutando…" : systemPlan.action === "remove" ? "Aprobar y quitar" : "Aprobar e instalar"}
+          </button>
+        </div>
+      </div>
+    </div>}
     {access && <div className="access-backdrop">
       <div className="access-panel" role="dialog" aria-modal="true" aria-labelledby="access-title">
         <h2 id="access-title" className="panel-title">
