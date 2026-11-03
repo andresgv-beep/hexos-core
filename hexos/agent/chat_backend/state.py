@@ -83,6 +83,7 @@ class RetryState:
     coverage_mark: int = -1
     context_retries: int = 0
     format_retries: int = 0
+    drawer_retries: int = 0
     web_evidence_retries: int = 0
     web_read_guided: bool = False
     read_claim_checked: bool = False

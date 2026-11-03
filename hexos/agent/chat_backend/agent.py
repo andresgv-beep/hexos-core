@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 import threading
 from uuid import uuid4
+from .. import catalog
 from ..native_transport import TurnCancelled
 from .live import LiveGeneration
 from ..work import WorkStore, now
@@ -202,6 +203,12 @@ class Agent:
         return self.memory.harvest_facts(store, text, turn_id, trace)
 
     def tool(self, store, name, args, *, turn_id=None):
+        if name == 'tools.open':
+            # Los cajones son de lo que el modelo tiene a la vista: viven en el motor.
+            catalog.validate(name, args)
+            if not hasattr(self.runtime, 'open_drawer'):
+                raise ValueError('este motor ve todas las herramientas: no hay cajones que abrir')
+            return self.runtime.open_drawer(args['drawer'])
         return self.dispatcher.dispatch(store, name, args, turn_id=turn_id)
 
     def chat(self, text, image=None, *, thinking=None, display_text=None, request_id=None):

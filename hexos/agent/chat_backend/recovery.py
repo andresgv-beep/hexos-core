@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from .. import catalog
 from ..context import native_messages
 from ..decisions import InvalidDecision, validate_reply
+from ..native import DrawerClosed
 from ..native_transport import GenerationInterrupted
 from ..work import now
 from .settings import PROMPT
@@ -143,6 +144,14 @@ class RecoveryController:
             else:
                 turn.messages = [dict(role='system', content=PROMPT),
                             dict(role='user', content='PETICIÓN ACTUAL:\n' + turn.prompt_text)]
+            return RETRY
+        except DrawerClosed as exc:
+            # Abrir un cajón no es un fallo de formato: no gasta ese reintento. El
+            # tope solo evita dar vueltas si insiste en herramientas que no le sirven.
+            if turn.retries.drawer_retries >= len(catalog.DRAWERS):
+                raise InvalidDecision('Demasiadas llamadas a cajones cerrados en un turno. ' + str(exc)) from exc
+            turn.retries.drawer_retries += 1
+            turn.messages = [dict(role='user', content=exc.repair)]
             return RETRY
         except InvalidDecision as exc:
             if turn.retries.format_retries:

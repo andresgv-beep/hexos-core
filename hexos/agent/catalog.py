@@ -313,6 +313,45 @@ TOOLS = {
     'document.search': spec('Buscar texto en un documento.', {'id':'str','query':'str'}),
 }
 
+# Cajones: el modelo no ve el catálogo entero en cada turno. Con 51 herramientas a la
+# vista, el 4B, el 12B y el 26B se liaban igual: el 03/11 se usó media_start con el
+# plan de una desinstalación. Siempre a la vista queda el núcleo, lo que no está en
+# ningún cajón; el resto se abre con tools_open cuando el encargo lo pide, y el
+# resultado trae sus declaraciones. Un cajón abierto no se cierra hasta que se corta
+# el contexto o la persona empieza de nuevo.
+DRAWERS = {
+    'video': dict(
+        summary='comprimir películas y vídeos del NAS y seguir los lotes',
+        tools=('media.options', 'media.prepare', 'media.start', 'media.control', 'media.jobs', 'media.job'),
+        guide='Antes de buscar películas o comprimir, consulta media_options para conocer bibliotecas y '
+              'perfiles. Prepara con media_prepare usando IDs observados. «Prepara sin iniciar» no usa '
+              'media_start. media_start solo encola planes de media_prepare.'),
+    'nas': dict(
+        summary='archivos y carpetas del NAS: buscar, listar, abrir y leer',
+        tools=('nas.find', 'nas.search', 'nas.browse', 'nas.directories', 'nas.directory_page',
+               'nas.shares', 'nas.locations', 'nas.file_open', 'nas.file_read')),
+    'equipos': dict(
+        summary='equipos guardados y red local: salud, espacio y contenedores por SSH; registrar, '
+                'conectar u olvidar equipos',
+        tools=('device.list', 'nas.read', 'nas.container', 'device.connect', 'device.identify',
+               'device.remote', 'device.forget', 'network.local')),
+    'notas': dict(
+        summary='notas de la persona: crear, buscar, abrir en pantalla y marcar',
+        tools=('note.list', 'note.get', 'note.save', 'note.show', 'note.hide', 'note.mark')),
+    'trabajos': dict(
+        summary='fichas de trabajo, procedimientos, informes guardados y el encargo activo',
+        tools=('task.current', 'result.get', 'task.focus', 'work.list', 'work.get', 'procedure.list',
+               'procedure.get', 'procedure.run', 'report.list', 'report.get', 'report.save')),
+}
+DRAWER_OF = {tool: name for name, drawer in DRAWERS.items() for tool in drawer['tools']}
+
+TOOLS['tools.open'] = spec(
+    'Abrir un cajón de herramientas. Solo tienes a la vista las de uso general; las demás están en '
+    'cajones y se abren cuando el encargo lo pide. El resultado trae sus herramientas y desde ese '
+    'momento puedes llamarlas. Cajones: ' +
+    '; '.join(name + ' (' + drawer['summary'] + ')' for name, drawer in DRAWERS.items()) + '.',
+    {'drawer':'str'})
+
 # Compatibilidad de lectura/ejecución para trazas y clientes antiguos. Estas
 # entradas siguen validándose en TOOLS, pero el modelo no las ve: ofrecer dos
 # nombres para la misma observación vuelve ambigua una intención sencilla.
@@ -428,6 +467,23 @@ def model_tools():
             if name not in HIDDEN_TOOLS}
 
 
+def core_tools():
+    """Las que el modelo nativo ve siempre: las que no están en ningún cajón."""
+    return [name for name in model_tools() if name not in DRAWER_OF]
+
+
+def drawer_contents(name):
+    """Lo que devuelve tools.open: guía y declaraciones, con los nombres que ve el modelo."""
+    drawer = DRAWERS[name]
+    contents = dict(drawer=name, tools=[
+        dict(name=tool.replace('.', '_'), description=model_description(tool),
+             required=TOOLS[tool]['required'], optional=TOOLS[tool]['optional'])
+        for tool in drawer['tools']])
+    if drawer.get('guide'):
+        contents['guide'] = drawer['guide']
+    return contents
+
+
 def validate(name, args):
     if not isinstance(name, str) or name not in TOOLS:
         raise ValueError('herramienta inexistente')
@@ -455,8 +511,9 @@ def validate(name, args):
 
 
 def render():
+    # La ruta JSON antigua no tiene cajones: lleva el catálogo entero.
     return '\n'.join(name + ': ' + json.dumps(definition, ensure_ascii=False)
-                     for name, definition in model_tools().items())
+                     for name, definition in model_tools().items() if name != 'tools.open')
 
 
 def context_overhead_chars():
@@ -466,15 +523,17 @@ def context_overhead_chars():
     no el catálogo largo como texto adicional. Esta estimación incluye reservas,
     no es un recuento de tokens ni de caracteres efectivamente enviados.
     """
-    definitions = model_tools()
     declarations = [
         {'name': name.replace('.', '_'), 'description': model_description(name),
-         'required': definition['required'], 'optional': definition['optional']}
-        for name, definition in definitions.items()
+         'required': TOOLS[name]['required'], 'optional': TOOLS[name]['optional']}
+        for name in core_tools()
     ]
+    # El núcleo siempre; de los cajones se reserva el mayor, abierto en el prompt o
+    # en el resultado de tools_open.
+    drawer = max(len(json.dumps(drawer_contents(name), ensure_ascii=False)) for name in DRAWERS)
     # Política nativa (~3k), metadatos/perfil/evidencia (5k) y margen para una
     # respuesta o resultado de herramienta grande (6k).
-    return 3_000 + len(json.dumps(declarations, ensure_ascii=False)) + 11_000
+    return 3_000 + len(json.dumps(declarations, ensure_ascii=False)) + drawer + 11_000
 
 
 def prompt():

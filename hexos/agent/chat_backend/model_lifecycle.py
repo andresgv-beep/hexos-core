@@ -309,6 +309,16 @@ class ModelLifecycle:
     def require_check(self):
         return self._invoke('require_check')
 
+    def open_drawer(self, name):
+        return self._invoke('open_drawer', name)
+
+    def close_drawers(self):
+        # Sin proceso no hay cajones abiertos: el motor nuevo arranca con el núcleo.
+        with self._condition:
+            if self._runtime is None:
+                return {'ok': True}
+        return self._invoke('close_drawers')
+
     def extract_facts(self, text):
         return self._invoke('extract_facts', text)
 

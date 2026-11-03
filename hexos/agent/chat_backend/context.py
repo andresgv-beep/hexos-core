@@ -523,6 +523,9 @@ class ContextManager:
         nuevo = store.db.execute('SELECT COALESCE(MAX(rowid),0) FROM conversation '
                                  'WHERE id<>?', (turn_id,)).fetchone()[0]
         self.save_handoff(store, filas, nuevo)
+        # Se empieza limpio también en herramientas: el núcleo y lo que haga falta.
+        if hasattr(self.agent.runtime, 'close_drawers'):
+            self.agent.runtime.close_drawers()
         store.db.execute("INSERT INTO agent_state VALUES ('context_boundary',?) "
                          'ON CONFLICT(key) DO UPDATE SET value=excluded.value', (str(nuevo),))
         store.db.commit()
@@ -538,6 +541,8 @@ class ContextManager:
             raise RuntimeError('Ya hay un turno en curso')
         try:
             self.agent.runtime.call({'type': 'reset'})
+            if hasattr(self.agent.runtime, 'close_drawers'):
+                self.agent.runtime.close_drawers()
             with self.agent.store() as store:
                 boundary = store.db.execute('SELECT COALESCE(MAX(rowid),0) FROM conversation').fetchone()[0]
                 store.db.execute("INSERT INTO agent_state VALUES ('context_boundary',?) "
