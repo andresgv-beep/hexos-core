@@ -216,8 +216,15 @@ class ToolDispatcher:
             # Solo planifica: la ejecución la dispara la aprobación de la persona (/api/system).
             plan = system_packages.plan(args['action'], args['package'], args.get('manager'))
             self.session.system_request = plan
-            return dict(plan, status='pending_approval',
-                        note='Pendiente de que la persona lo apruebe en la interfaz. No está hecho.')
+            # Sin plan_id: el 03/11 el modelo lo llevó a media.start, que también recibe un
+            # plan_id, e intentó ejecutar él mismo un plan que solo aprueba la persona.
+            return dict({k: v for k, v in plan.items() if k not in ('plan_id', 'created')},
+                        status='pending_approval',
+                        note=('Pendiente: la persona lo aprueba o lo cancela en la tarjeta que le ha aparecido '
+                              'en la pantalla, no en el chat. No hay herramienta para ejecutarlo: no lo intentes '
+                              'con ninguna otra (media.start es solo para vídeos). Dile que lo apruebe en la '
+                              'tarjeta. Cuando lo haga, te llegará una nota «La persona aprobó en la interfaz…» '
+                              'con el resultado ya comprobado.'))
         if name.startswith('procedure.') or name in ('report.save', 'result.get'):
             return workflow.dispatch(store, name, args, turn_id)
         if name.startswith(('procedure.', 'report.', 'task.')):
