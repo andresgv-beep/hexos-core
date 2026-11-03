@@ -105,6 +105,15 @@ class AplicarTest(unittest.TestCase):
         self.assertEqual(r['refused'], 'protegido')
 
 
+class FiltroTest(unittest.TestCase):
+    def test_el_filtro_de_terminal_ignora_mayusculas_y_espacios(self):
+        from hexos.agent import terminal_read
+        salida = 'ii  nomachine   9.10.3-3   amd64   Fast and secure remote access system\nii  sl  5.02  amd64  tren\n'
+        r = terminal_read.read('dpkg -l', 'No Machine', runner=lambda partes: (0, salida))
+        self.assertEqual(r['lines'], 1)
+        self.assertIn('nomachine', r['output'])
+
+
 class AyudanteTest(unittest.TestCase):
     """runtime/hexos-paquetes: la puerta con root se defiende sola."""
 
@@ -163,6 +172,14 @@ class AprobacionTest(unittest.TestCase):
             return [fila[0] for fila in db.execute('SELECT text FROM conversation')]
         finally:
             db.close()
+
+    def test_el_modelo_no_recibe_plan_id_y_sabe_donde_se_aprueba(self):
+        plan = dict(AplicarTest.PLAN, created='x', affects=['nomachine'], affects_count=1)
+        with patch.object(system_packages, 'plan', return_value=plan):
+            salida = self.agent.dispatcher.dispatch(None, 'system.package_plan', dict(action='remove', package='nomachine'))
+        self.assertNotIn('plan_id', salida)
+        self.assertIn('tarjeta', salida['note'])
+        self.assertEqual(self.agent.system_request['plan_id'], 'p1')   # la sesión sí lo guarda
 
     def test_el_modelo_no_tiene_herramienta_para_aplicar(self):
         self.assertEqual([n for n in catalog.model_tools() if n.startswith('system.')], ['system.package_plan'])
