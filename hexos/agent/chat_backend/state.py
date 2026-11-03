@@ -65,6 +65,8 @@ class SessionState:
     progress: dict = field(default_factory=lambda: {'turn_id': None, 'messages': []})
     active_tools: list = field(default_factory=list)
     credential_request: dict | None = None
+    # Plan de system.package_plan esperando la aprobación de la persona en la interfaz.
+    system_request: dict | None = None
     context_cut: dict | None = None
     # Última lectura de red: sirve para nombrar «la que termina en 129» sin
     # convertir cada vecino observado en inventario persistente.

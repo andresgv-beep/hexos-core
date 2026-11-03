@@ -5,7 +5,7 @@ import json
 import time
 from typing import TYPE_CHECKING
 from uuid import uuid4
-from .. import catalog, devices, entorno, hosts, notes, core, pc_status, terminal_read, workflow, procedures
+from .. import catalog, devices, entorno, hosts, notes, core, pc_status, terminal_read, workflow, procedures, system_packages
 from ..continuity import history_tool
 from ..progress import announcement
 from ..work import now
@@ -212,6 +212,12 @@ class ToolDispatcher:
             return pc_status.estado()
         if name == 'system.toolchain':
             return entorno.reconocer()
+        if name == 'system.package_plan':
+            # Solo planifica: la ejecución la dispara la aprobación de la persona (/api/system).
+            plan = system_packages.plan(args['action'], args['package'], args.get('manager'))
+            self.session.system_request = plan
+            return dict(plan, status='pending_approval',
+                        note='Pendiente de que la persona lo apruebe en la interfaz. No está hecho.')
         if name.startswith('procedure.') or name in ('report.save', 'result.get'):
             return workflow.dispatch(store, name, args, turn_id)
         if name.startswith(('procedure.', 'report.', 'task.')):

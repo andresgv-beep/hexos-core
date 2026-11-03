@@ -1,0 +1,111 @@
+#!/usr/bin/python3 -I
+"""Ayudante de HexOS para instalar y quitar programas en este PC. Corre como root.
+
+Lo instala `runtime/instalar-ayudante-paquetes.sh` en /usr/local/libexec/hexos-paquetes,
+con una regla de sudoers que deja a la cuenta de Helios ejecutarlo sin contraseña. Solo
+eso: el modelo no tiene herramienta para llamarlo. HexOS lo invoca cuando la persona
+aprueba un plan en la interfaz (docs/PAQUETES_CON_APROBACION.md).
+
+Por eso es la puerta y tiene que bastarse sola, sin fiarse de quien la llama:
+- lista cerrada: apt, flatpak (flathub, sistema) y snap; instalar o quitar; un paquete;
+- nombres validados con la gramática de cada gestor, sin opciones ni rutas;
+- paquetes protegidos que nunca se quitan (sistema, acceso remoto, Python de HexOS…);
+- una desinstalación de apt que arrastra demasiados paquetes o alguno protegido se rechaza
+  antes de ejecutarla, mirando la simulación;
+- sin shell: cada orden es una lista de argumentos.
+
+uso: hexos-paquetes {apt|flatpak|snap} {instalar|quitar} NOMBRE
+Escribe una línea JSON con el resultado y sale con 0 si la orden terminó bien.
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+
+NOMBRES = {
+    'apt': re.compile(r'^[a-z0-9][a-z0-9+.-]{0,99}$'),
+    'flatpak': re.compile(r'^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+){2,}$'),
+    'snap': re.compile(r'^[a-z0-9][a-z0-9-]{0,39}$'),
+}
+ACCIONES = ('instalar', 'quitar')
+# Nunca se quitan: sin ellos el equipo no arranca, no se administra o se pierde el acceso
+# remoto, o HexOS deja de correr. Prefijos con «*».
+PROTEGIDOS = {'apt', 'dpkg', 'sudo', 'systemd', 'systemd-sysv', 'init', 'libc6', 'bash', 'coreutils',
+              'login', 'passwd', 'gdm3', 'gnome-shell', 'mutter', 'network-manager', 'openssh-server',
+              'tailscale', 'python3', 'python3-minimal', 'ubuntu-minimal', 'grub-efi-amd64', 'grub-pc',
+              'linux-image-*', 'linux-modules-*', 'nvidia-*', 'cuda-*', 'libnvidia-*', 'snapd', 'flatpak'}
+MAXIMO_ARRASTRADOS = 15
+SEGUNDOS = 900
+ENTORNO = dict(PATH='/usr/sbin:/usr/bin:/sbin:/bin', LC_ALL='C.UTF-8', DEBIAN_FRONTEND='noninteractive',
+               HOME='/root')
+
+
+def protegido(paquete):
+    base = paquete.split(':')[0]
+    return any(base == p or (p.endswith('*') and base.startswith(p[:-1])) for p in PROTEGIDOS)
+
+
+def correr(orden, segundos=SEGUNDOS):
+    try:
+        hecho = subprocess.run(orden, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                               text=True, errors='replace', timeout=segundos, env=ENTORNO)
+        return hecho.returncode, hecho.stdout
+    except subprocess.TimeoutExpired:
+        return 124, 'superó ' + str(segundos) + ' s'
+
+
+def arrastrados_por_apt(nombre):
+    """Lo que apt quitaría de verdad, desde su simulación (líneas «Remv paquete …»)."""
+    codigo, salida = correr(['apt-get', '-s', 'remove', nombre], 120)
+    if codigo != 0:
+        raise ValueError('apt no puede simular la desinstalación: ' + salida.strip()[-300:])
+    return [linea.split()[1] for linea in salida.splitlines() if linea.startswith('Remv ')]
+
+
+def orden_para(gestor, accion, nombre):
+    if gestor == 'apt':
+        if accion == 'quitar':
+            arrastra = arrastrados_por_apt(nombre)
+            malos = [p for p in arrastra if protegido(p)]
+            if malos:
+                raise ValueError('quitar ' + nombre + ' arrastraría paquetes protegidos: ' + ', '.join(malos))
+            if len(arrastra) > MAXIMO_ARRASTRADOS:
+                raise ValueError('quitar ' + nombre + ' arrastraría ' + str(len(arrastra)) +
+                                 ' paquetes; el máximo es ' + str(MAXIMO_ARRASTRADOS))
+            return ['apt-get', 'remove', '-y', nombre]
+        return ['apt-get', 'install', '-y', nombre]
+    if gestor == 'flatpak':
+        if accion == 'quitar':
+            return ['flatpak', 'uninstall', '-y', '--noninteractive', '--system', nombre]
+        return ['flatpak', 'install', '-y', '--noninteractive', '--system', 'flathub', nombre]
+    return ['snap', 'remove', nombre] if accion == 'quitar' else ['snap', 'install', nombre]
+
+
+def principal(argumentos):
+    if len(argumentos) != 3:
+        raise ValueError('uso: hexos-paquetes {apt|flatpak|snap} {instalar|quitar} NOMBRE')
+    gestor, accion, nombre = argumentos
+    if gestor not in NOMBRES:
+        raise ValueError('gestor no admitido: ' + gestor)
+    if accion not in ACCIONES:
+        raise ValueError('acción no admitida: ' + accion)
+    if not NOMBRES[gestor].fullmatch(nombre):
+        raise ValueError('nombre de paquete no válido para ' + gestor + ': ' + repr(nombre))
+    if accion == 'quitar' and protegido(nombre):
+        raise ValueError(nombre + ' está protegido: no se quita desde HexOS')
+    orden = orden_para(gestor, accion, nombre)
+    codigo, salida = correr(orden)
+    return dict(ok=codigo == 0, gestor=gestor, accion=accion, paquete=nombre, orden=' '.join(orden),
+                codigo=codigo, salida=salida.strip()[-2000:])
+
+
+if __name__ == '__main__':
+    try:
+        if os.geteuid() != 0:
+            raise ValueError('hexos-paquetes tiene que correr como root (lo lanza HexOS con sudo -n)')
+        resultado = principal(sys.argv[1:])
+    except ValueError as error:
+        resultado = dict(ok=False, rechazado=str(error))
+    print(json.dumps(resultado, ensure_ascii=False))
+    sys.exit(0 if resultado.get('ok') else 1)
