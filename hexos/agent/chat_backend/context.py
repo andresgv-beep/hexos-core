@@ -242,14 +242,17 @@ class ContextManager:
         if pegajosos is None:
             pegajosos = self.agent.grupos = tool_groups.Pegajosos()
         pegajosos.nuevo_turno()
+        ventana = getattr(self.agent, 'window', None) or catalog.DEFAULT_WINDOW
         ultimo = next((m.get('content') or '' for m in reversed(getattr(runtime, 'messages', []) or [])
                        if m.get('role') == 'assistant' and m.get('content')), '')
-        elegidos = tool_groups.elegir(runtime, ultimo, turn.prompt_text or '')
+        elegidos = tool_groups.elegir(runtime, ultimo, turn.prompt_text or '', ventana)
         if elegidos is None:
-            runtime.active_groups = None
+            # No se pudo fiar: todo lo que la ventana permite, no el catálogo entero.
+            runtime.active_groups = list(catalog.groups_in(ventana))
             return
         pegajosos.pedir(elegidos)
-        runtime.active_groups = pegajosos.activos()
+        runtime.active_groups = [g for g in pegajosos.activos()
+                                 if g in catalog.groups_in(ventana)]
 
     def prepare(self, store, turn: TurnState) -> None:
         """Guarda la entrada y construye exactamente el contexto del flujo original."""

@@ -30,9 +30,9 @@ INSTRUCCION = (
 )
 
 
-def _prompt(runtime, ultimo_asistente, mensaje):
-    grupos = '\n'.join(f'- {g}: {d}' for g, d in catalog.GROUP_GUIDANCE.items()
-                       if g != catalog.ALWAYS)
+def _prompt(runtime, ultimo_asistente, mensaje, ventana):
+    permitidos = catalog.groups_in(ventana)
+    grupos = '\n'.join(f'- {g}: {catalog.GROUP_GUIDANCE[g]}' for g in permitidos)
     messages = [
         {'role': 'system', 'content': INSTRUCCION + '\n\nGrupos:\n' + grupos},
         {'role': 'user', 'content': json.dumps(
@@ -43,11 +43,12 @@ def _prompt(runtime, ultimo_asistente, mensaje):
                                    add_generation_prompt=True, enable_thinking=False)
 
 
-def interpretar(raw):
+def interpretar(raw, ventana=None):
     """La salida del selector a lista de grupos, o None si no vale.
 
-    None significa «no sé»: quien llama ofrece el catálogo entero. Un grupo inventado
-    invalida la respuesta completa en vez de colarse a medias.
+    None significa «no sé»: quien llama ofrece todo lo que la ventana permite. Un grupo
+    inventado, o uno de la otra ventana, invalida la respuesta completa en vez de
+    colarse a medias.
     """
     if not isinstance(raw, str):
         return None
@@ -60,25 +61,31 @@ def interpretar(raw):
         return None
     if not isinstance(elegidos, list) or len(elegidos) > len(catalog.GROUPS):
         return None
+    permitidos = catalog.groups_in(ventana) if ventana else tuple(
+        g for g in catalog.GROUPS if g != catalog.ALWAYS)
     limpio = []
     for g in elegidos:
-        if not isinstance(g, str) or g not in catalog.GROUPS or g == catalog.ALWAYS:
+        if not isinstance(g, str) or g not in permitidos:
             return None
         if g not in limpio:
             limpio.append(g)
     return limpio
 
 
-def elegir(runtime, ultimo_asistente, mensaje):
-    """Pregunta a la sesión auxiliar qué grupos hacen falta. None si no se puede fiar."""
+def elegir(runtime, ultimo_asistente, mensaje, ventana=catalog.DEFAULT_WINDOW):
+    """Pregunta a la sesión auxiliar qué grupos hacen falta. None si no se puede fiar.
+
+    Solo se le ofrecen los grupos de la ventana: en una charla no puede pedir el NAS
+    aunque se lo invente, porque ni siquiera se le nombra.
+    """
     try:
-        runtime.send(_prompt(runtime, ultimo_asistente, mensaje), auxiliar=True)
+        runtime.send(_prompt(runtime, ultimo_asistente, mensaje, ventana), auxiliar=True)
         header, raw = runtime.event()
     except Exception:
         return None
     if header[4] != 'eos':
         return None
-    return interpretar(raw)
+    return interpretar(raw, ventana)
 
 
 class Pegajosos:
@@ -120,6 +127,14 @@ class Pegajosos:
         return sorted(g for g, visto in self._visto.items()
                       if self._turno - visto <= self.olvido)
 
-    def herramientas(self):
-        """Las declaraciones que toca ofrecer en este turno."""
-        return catalog.tools_for(self.activos())
+    def herramientas(self, ventana=None):
+        """Las declaraciones que toca ofrecer en este turno.
+
+        Con ventana, lo que quedó vivo de la otra no se declara: cambiar de espacio no
+        arrastra las herramientas del anterior.
+        """
+        activos = self.activos()
+        if ventana is not None:
+            permitidos = set(catalog.groups_in(ventana))
+            activos = [g for g in activos if g in permitidos]
+        return catalog.tools_for(activos)

@@ -422,13 +422,13 @@ def model_tools():
 # lo pide, que es lo que evita declarar las 50 cada vez: hoy son 6.491 tokens de
 # declaraciones, y el núcleo solo son unos 800.
 #
-# `terminal.read` no existía cuando se escribió el plan. Va en el núcleo porque es la
-# herramienta de diagnóstico de esta máquina y una pregunta sobre un fallo no debería
-# depender de que el selector acierte el grupo. A revisar.
+# `terminal.read` no existía cuando se escribió el plan y tiene grupo propio, `sistema`:
+# mirar esta máquina es trabajo de agente, no de una charla.
 GROUPS = {
     'nucleo': ('history.recent', 'history.search', 'history.read', 'profile.recall',
                'core.overview', 'task.current', 'task.focus', 'result.get',
-               'web.search', 'web.read', 'terminal.read'),
+               'web.search', 'web.read'),
+    'sistema': ('terminal.read',),
     'archivos': ('nas.locations', 'nas.directories', 'nas.directory_page', 'nas.shares',
                  'nas.find', 'nas.search', 'nas.browse', 'nas.file_open', 'nas.file_read'),
     'equipos': ('device.list', 'device.connect', 'device.forget', 'device.remote',
@@ -449,7 +449,8 @@ GROUP_REQUIRES = {'multimedia': ('archivos',)}
 # para qué sirve el grupo, porque elegir por nombres de función es lo que hacía fallar al
 # modelo pequeño.
 GROUP_GUIDANCE = {
-    'nucleo': 'Conversar, recordar lo hablado, buscar en la web y mirar esta máquina.',
+    'nucleo': 'Conversar, recordar lo hablado y buscar en la web.',
+    'sistema': 'Mirar esta máquina: procesos, servicios, discos y registros.',
     'archivos': 'Buscar y leer ficheros y carpetas del NAS.',
     'equipos': 'Ordenadores y NAS de la casa: listarlos, conectarse y mirar la red.',
     'multimedia': 'Convertir o comprimir vídeo y audio, y seguir esos trabajos.',
@@ -458,6 +459,23 @@ GROUP_GUIDANCE = {
 }
 
 ALWAYS = 'nucleo'
+
+# Dos espacios de trabajo, como dos ventanas. La ventana la elige la persona y acota qué
+# grupos puede pedir el selector: es mecánico y no se equivoca nunca, que es lo que este
+# tamaño de modelo necesita. El núcleo va en las dos, así que la memoria es la misma en
+# ambas y no acabas con dos asistentes que no se conocen.
+WINDOWS = {
+    'chat': ('notas', 'informes'),
+    'agente': ('sistema', 'equipos', 'archivos', 'multimedia'),
+}
+DEFAULT_WINDOW = 'chat'
+
+
+def groups_in(window):
+    """Los grupos que una ventana permite pedir, sin el núcleo, que va siempre."""
+    if window not in WINDOWS:
+        raise ValueError(f'ventana inexistente: {window}')
+    return WINDOWS[window]
 
 
 def group_of(name):

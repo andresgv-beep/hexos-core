@@ -99,8 +99,12 @@ class SelectorTest(unittest.TestCase):
 
     def test_pregunta_en_la_sesion_auxiliar(self):
         r = self.Falso('["archivos"]')
-        self.assertEqual(tool_groups.elegir(r, 'hola', 'busca el pdf'), ['archivos'])
+        self.assertEqual(tool_groups.elegir(r, 'hola', 'busca el pdf', 'agente'), ['archivos'])
         self.assertTrue(r.enviado[1], 'la elección no puede ensuciar la conversación')
+
+    def test_un_grupo_de_la_otra_ventana_no_cuela(self):
+        """Por defecto se conversa: pedir el NAS en charla no se da por bueno."""
+        self.assertIsNone(tool_groups.elegir(self.Falso('["archivos"]'), '', 'busca el pdf'))
 
     def test_si_se_corta_la_generacion_no_se_fia(self):
         self.assertIsNone(tool_groups.elegir(self.Falso('["archivos"]', finish='max_tokens'), '', 'x'))
@@ -110,6 +114,43 @@ class SelectorTest(unittest.TestCase):
             def send(self, *a, **k):
                 raise RuntimeError('sin modelo')
         self.assertIsNone(tool_groups.elegir(Rota('[]'), '', 'x'))
+
+
+class VentanasTest(unittest.TestCase):
+    """Dos espacios de trabajo. La ventana la elige la persona y acota lo que el selector
+    puede pedir: es mecánico y no se equivoca, que es lo que este modelo necesita."""
+
+    def test_los_grupos_se_reparten_entre_las_dos_sin_dejar_ninguno(self):
+        en_ventanas = {g for grupos in catalog.WINDOWS.values() for g in grupos}
+        self.assertEqual(en_ventanas | {catalog.ALWAYS}, set(catalog.GROUPS))
+
+    def test_ninguna_ventana_repite_grupo_de_la_otra(self):
+        chat, agente = set(catalog.WINDOWS['chat']), set(catalog.WINDOWS['agente'])
+        self.assertEqual(chat & agente, set())
+
+    def test_en_charla_no_se_puede_pedir_el_nas_ni_inventandolo(self):
+        self.assertIsNone(tool_groups.interpretar('["archivos"]', 'chat'))
+        self.assertEqual(tool_groups.interpretar('["archivos"]', 'agente'), ['archivos'])
+
+    def test_la_terminal_es_de_la_ventana_de_agente(self):
+        self.assertEqual(catalog.group_of('terminal.read'), 'sistema')
+        self.assertIn('sistema', catalog.WINDOWS['agente'])
+        self.assertNotIn('terminal.read', catalog.tools_for([]))
+
+    def test_la_memoria_esta_en_las_dos(self):
+        """Si no, serían dos asistentes que no se conocen."""
+        for herramienta in ('history.recent', 'profile.recall'):
+            self.assertIn(herramienta, catalog.tools_for([]))
+
+    def test_lo_vivo_de_la_otra_ventana_no_se_declara(self):
+        p = tool_groups.Pegajosos()
+        p.pedir(['archivos'])
+        self.assertIn('nas.find', p.herramientas('agente'))
+        self.assertNotIn('nas.find', p.herramientas('chat'))
+
+    def test_una_ventana_inventada_se_rechaza(self):
+        with self.assertRaises(ValueError):
+            catalog.groups_in('inventada')
 
 
 if __name__ == '__main__':

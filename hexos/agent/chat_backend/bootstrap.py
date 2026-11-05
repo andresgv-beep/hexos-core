@@ -59,6 +59,7 @@ def main():
                   HeraProfile(args.hera, args.memory_home) if args.hera else None)
     # Lo que la persona dejó puesto manda sobre el flag con que se arrancó.
     agent.restore_thinking()
+    agent.restore_window()
     system_telemetry = SystemTelemetry()
     allowed_origins = {'http://127.0.0.1:%d' % args.port, 'http://localhost:%d' % args.port,
                        'http://[::1]:%d' % args.port}

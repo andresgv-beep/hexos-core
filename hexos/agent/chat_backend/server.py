@@ -44,6 +44,7 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                                    'active_tools':[dict(item) for item in agent.active_tools],
                                    'credential_request': agent.credential_request,
                                    'thinking': agent.thinking(),
+                                   'window': getattr(agent, 'window', None),
                                    'model': (agent.runtime.status()
                                              if hasattr(agent.runtime, 'status') else
                                              {'state':'ready', 'ready':True}),
@@ -118,7 +119,7 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                 self.respond(404, {'error':'ruta inexistente'})
 
         def do_POST(self):
-            if self.path not in ('/api/chat', '/api/work', '/api/context/reset', '/api/credentials',
+            if self.path not in ('/api/chat', '/api/work', '/api/context/reset', '/api/window', '/api/credentials',
                                  '/api/thinking', '/api/cancel', '/api/model/warmup', '/api/media/control'):
                 self.respond(404, {'error':'ruta inexistente'})
                 return
@@ -169,6 +170,11 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                     if set(payload) != {'enabled'}:
                         raise ValueError('se espera {"enabled": true|false}')
                     self.respond(200, agent.set_thinking(payload['enabled']))
+                elif self.path == '/api/window':
+                    payload = strict_json(data.decode('utf-8'))
+                    if set(payload) != {'window'}:
+                        raise ValueError('se espera {"window": "chat"|"agente"}')
+                    self.respond(200, agent.set_window(payload['window']))
                 elif self.path == '/api/context/reset':
                     if strict_json(data.decode('utf-8')) != {}:
                         raise ValueError('Se espera {}')

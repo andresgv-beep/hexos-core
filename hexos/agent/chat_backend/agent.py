@@ -17,6 +17,7 @@ from .state import AgentDependencies, Environment, SessionState
 from .tools import ToolDispatcher
 from .turn import TurnRunner
 from .verification import VerificationService
+from .. import catalog
 
 
 class Agent:
@@ -283,6 +284,41 @@ class Agent:
         if not hasattr(self.runtime, 'thinking'):
             return None
         return bool(self.runtime.thinking)
+
+    def set_window(self, window):
+        """La ventana de trabajo: «chat» o «agente».
+
+        No es una preferencia de estilo: decide qué grupos de herramientas puede pedir
+        el selector, así que en una charla el NAS y la terminal ni se nombran. Mecánico y
+        elegido por la persona, que es lo que este tamaño de modelo necesita: con 50
+        herramientas delante pierde el hilo, y el catálogo entero son 6.491 tokens en
+        cada turno contra los 939 del núcleo.
+
+        Se guarda en agent_state, como el canal de pensamiento: una preferencia de la
+        persona no debe morir en un reinicio.
+        """
+        if window not in catalog.WINDOWS:
+            raise ValueError('ventana desconocida: ' + ', '.join(catalog.WINDOWS))
+        self.window = window
+        if getattr(self, 'grupos', None) is not None:
+            # Lo que quedó vivo de la otra ventana no se arrastra.
+            self.grupos.reset()
+        with self.store() as store:
+            store.db.execute("INSERT INTO agent_state VALUES ('window',?) "
+                             'ON CONFLICT(key) DO UPDATE SET value=excluded.value', (window,))
+            store.db.commit()
+        return dict(window=window, persisted=True, groups=list(catalog.groups_in(window)))
+
+    def restore_window(self):
+        """La ventana guardada, o chat si no hay ninguna."""
+        try:
+            with self.store() as store:
+                fila = store.db.execute("SELECT value FROM agent_state WHERE key='window'").fetchone()
+        except Exception:
+            fila = None
+        guardada = fila[0] if fila and fila[0] in catalog.WINDOWS else catalog.DEFAULT_WINDOW
+        self.window = guardada
+        return guardada
 
     def set_thinking(self, enabled):
         """El canal se decide por render, así que se puede cambiar en caliente.
