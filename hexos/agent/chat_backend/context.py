@@ -7,7 +7,7 @@ import os
 from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import uuid4
-from .. import catalog, procedures, reproche, sin_resolver, task_notices, tool_digest
+from .. import catalog, procedures, reproche, sin_resolver, task_notices, tool_digest, tool_groups
 from ..native_transport import AudioClip
 from ..context import native_messages
 from ..work import now
@@ -228,6 +228,29 @@ class ContextManager:
             store.db.execute('DELETE FROM agent_state WHERE key=?', (HANDOFF_KEY,))
             store.db.commit()
 
+    def _elegir_grupos(self, turn) -> None:
+        """Qué grupos de herramientas se declaran en este turno.
+
+        Al empezar el turno y nunca a mitad: el conjunto va en el bloque de sistema, y
+        cambiarlo obliga a reprocesar la conversación entera. Si el selector no se puede
+        fiar, se ofrece el catálogo completo: su fallo no deja al modelo sin herramientas.
+        """
+        runtime = self.agent.runtime
+        if not hasattr(runtime, 'active_groups'):
+            return                      # un motor que no declara herramientas por grupos
+        pegajosos = getattr(self.agent, 'grupos', None)
+        if pegajosos is None:
+            pegajosos = self.agent.grupos = tool_groups.Pegajosos()
+        pegajosos.nuevo_turno()
+        ultimo = next((m.get('content') or '' for m in reversed(getattr(runtime, 'messages', []) or [])
+                       if m.get('role') == 'assistant' and m.get('content')), '')
+        elegidos = tool_groups.elegir(runtime, ultimo, turn.prompt_text or '')
+        if elegidos is None:
+            runtime.active_groups = None
+            return
+        pegajosos.pedir(elegidos)
+        runtime.active_groups = pegajosos.activos()
+
     def prepare(self, store, turn: TurnState) -> None:
         """Guarda la entrada y construye exactamente el contexto del flujo original."""
         from .profile_context import availability
@@ -243,6 +266,7 @@ class ContextManager:
                          and AFIRMACION.search(turn.text or ''))
         if hasattr(self.agent.runtime, 'harvest_pending') or cosechara:
             self.agent.runtime.harvest_pending = cosechara
+        self._elegir_grupos(turn)
         nota_imagen = ''
         if isinstance(turn.image, AudioClip):
             if not hasattr(self.agent.runtime, 'attach_audio'):
@@ -538,6 +562,11 @@ class ContextManager:
             raise RuntimeError('Ya hay un turno en curso')
         try:
             self.agent.runtime.call({'type': 'reset'})
+            # Los grupos son estado de la conversación: si se borra, se borran.
+            if getattr(self.agent, 'grupos', None) is not None:
+                self.agent.grupos.reset()
+            if hasattr(self.agent.runtime, 'active_groups'):
+                self.agent.runtime.active_groups = None
             with self.agent.store() as store:
                 boundary = store.db.execute('SELECT COALESCE(MAX(rowid),0) FROM conversation').fetchone()[0]
                 store.db.execute("INSERT INTO agent_state VALUES ('context_boundary',?) "

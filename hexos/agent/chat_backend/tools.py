@@ -249,6 +249,12 @@ class ToolExecutor:
         if set(output) != {'tool', 'arguments'}:
             raise ValueError('Llamada de herramienta inválida')
         self.agent.state = 'tool'
+        # Vía de escape de los grupos: si llama a una herramienta de un grupo que ya no
+        # se declara —pasa, porque el historial reinyecta llamadas viejas— su grupo
+        # vuelve a estar vivo. Ofrecer no es autorizar: la validación es la de siempre.
+        grupos = getattr(self.agent, 'grupos', None)
+        if grupos is not None:
+            grupos.usada(output['tool'])
         effect = catalog.TOOLS.get(output['tool'], {}).get('effect', 'read')
         try:
             catalog.validate(output['tool'], output['arguments'])

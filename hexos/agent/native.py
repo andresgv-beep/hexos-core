@@ -193,6 +193,8 @@ class NativeRuntime:
         self.qwen = '<|im_start|>' in source and '<tool_call>' in source
         self.template=env.from_string(source)
         self.thinking = thinking
+        # None: se declaran todas. context.py lo fija en cada turno con los grupos vivos.
+        self.active_groups = None
         offered = catalog.model_tools()
         self.names={name.replace('.','_'):name for name in offered}
         if len(self.names)!=len(offered):raise ValueError('alias de herramientas duplicados')
@@ -432,8 +434,20 @@ class NativeRuntime:
             if required_read:
                 prefix += '{"name": ' + json.dumps(required_read) + ', "arguments": '
         self.repair_call = False
+        # Grupos activos: el conjunto se fija al empezar el turno y aquí solo se aplica,
+        # porque cambiarlo a mitad invalida el prefijo KV de todo lo que viene detrás.
+        # None es el catálogo entero, que es lo que queda si el selector no se pudo
+        # fiar: su fallo no puede dejar al modelo sin herramientas. Y `self.names` sigue
+        # completo, así que una llamada a una herramienta no declarada se valida igual;
+        # ofrecer no es autorizar.
+        declarables = self.tools
+        grupos = getattr(self, 'active_groups', None)
+        if grupos is not None:
+            permitidas = catalog.tools_for(grupos)
+            declarables = [t for t in declarables
+                           if self.names[t['function']['name']] in permitidas]
         # Recuperar el protocolo no concede una autorización de escritura.
-        tools = [t for t in self.tools if catalog.TOOLS[self.names[t['function']['name']]]['effect']=='read'] if repairing else self.tools
+        tools = [t for t in declarables if catalog.TOOLS[self.names[t['function']['name']]]['effect']=='read'] if repairing else declarables
         # Si HexOS ya va a cosechar el dato al cerrar el turno, la herramienta sobra:
         # ofrecerla cuesta una generación entera y guarda lo mismo dos veces. Pedírselo
         # por prompt no bastó, así que se le retira del alcance.
