@@ -445,6 +445,18 @@ GROUPS = {
 # `nas.find`, así que multimedia sin archivos no sirve de nada.
 GROUP_REQUIRES = {'multimedia': ('archivos',)}
 
+# Una línea por grupo, que es lo que ve el selector. No describe herramientas: describe
+# para qué sirve el grupo, porque elegir por nombres de función es lo que hacía fallar al
+# modelo pequeño.
+GROUP_GUIDANCE = {
+    'nucleo': 'Conversar, recordar lo hablado, buscar en la web y mirar esta máquina.',
+    'archivos': 'Buscar y leer ficheros y carpetas del NAS.',
+    'equipos': 'Ordenadores y NAS de la casa: listarlos, conectarse y mirar la red.',
+    'multimedia': 'Convertir o comprimir vídeo y audio, y seguir esos trabajos.',
+    'notas': 'Notas de la persona: guardarlas, listarlas y marcarlas.',
+    'informes': 'Informes, trabajos, procedimientos y documentos propios.',
+}
+
 ALWAYS = 'nucleo'
 
 
