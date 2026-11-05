@@ -297,9 +297,12 @@ class Agent:
         Se guarda en agent_state, como el canal de pensamiento: una preferencia de la
         persona no debe morir en un reinicio.
         """
+        # El atributo se llama `ventana` y no `window` porque `window()` ya es el método
+        # que recorta el historial: asignarle una cadena lo deja inservible y el turno
+        # entero muere en `context.prepare`.
         if window not in catalog.WINDOWS:
             raise ValueError('ventana desconocida: ' + ', '.join(catalog.WINDOWS))
-        self.window = window
+        self.ventana = window
         if getattr(self, 'grupos', None) is not None:
             # Lo que quedó vivo de la otra ventana no se arrastra.
             self.grupos.reset()
@@ -317,7 +320,7 @@ class Agent:
         except Exception:
             fila = None
         guardada = fila[0] if fila and fila[0] in catalog.WINDOWS else catalog.DEFAULT_WINDOW
-        self.window = guardada
+        self.ventana = guardada
         return guardada
 
     def set_thinking(self, enabled):

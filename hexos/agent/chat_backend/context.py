@@ -242,7 +242,7 @@ class ContextManager:
         if pegajosos is None:
             pegajosos = self.agent.grupos = tool_groups.Pegajosos()
         pegajosos.nuevo_turno()
-        ventana = getattr(self.agent, 'window', None) or catalog.DEFAULT_WINDOW
+        ventana = getattr(self.agent, 'ventana', None) or catalog.DEFAULT_WINDOW
         ultimo = next((m.get('content') or '' for m in reversed(getattr(runtime, 'messages', []) or [])
                        if m.get('role') == 'assistant' and m.get('content')), '')
         elegidos = tool_groups.elegir(runtime, ultimo, turn.prompt_text or '', ventana)

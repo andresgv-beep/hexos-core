@@ -153,5 +153,22 @@ class VentanasTest(unittest.TestCase):
             catalog.groups_in('inventada')
 
 
+class AtributosDelAgenteTest(unittest.TestCase):
+    """La ventana se guarda en el agente, y el agente ya tiene nombres ocupados.
+
+    Pasó: `self.window = 'chat'` se comió el método `window()` que recorta el historial,
+    y el primer turno moría en `context.prepare` con «'str' object is not callable». El
+    estado respondía igual, así que no se notaba hasta escribir un mensaje.
+    """
+
+    def test_la_ventana_no_pisa_ningun_metodo_del_agente(self):
+        from hexos.agent.chat_backend.agent import Agent
+        self.assertTrue(callable(getattr(Agent, 'window', None)),
+                        'window() es el recorte de historial y tiene que seguir siendo un método')
+        for nombre in ('ventana', 'grupos'):
+            self.assertFalse(hasattr(Agent, nombre),
+                             f'{nombre} ya existe en Agent: elige otro nombre o lo rompes')
+
+
 if __name__ == '__main__':
     unittest.main()

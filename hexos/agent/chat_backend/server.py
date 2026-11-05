@@ -44,7 +44,7 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                                    'active_tools':[dict(item) for item in agent.active_tools],
                                    'credential_request': agent.credential_request,
                                    'thinking': agent.thinking(),
-                                   'window': getattr(agent, 'window', None),
+                                   'window': getattr(agent, 'ventana', None),
                                    'model': (agent.runtime.status()
                                              if hasattr(agent.runtime, 'status') else
                                              {'state':'ready', 'ready':True}),
