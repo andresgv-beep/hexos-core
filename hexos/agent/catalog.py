@@ -417,6 +417,61 @@ def model_tools():
             if name not in HIDDEN_TOOLS}
 
 
+# Reparto de docs/CATALOGO_POR_GRUPOS_PLAN.md. Cada herramienta ofrecida pertenece a un
+# solo grupo; las ocultas no entran. El núcleo va siempre y el resto solo cuando el turno
+# lo pide, que es lo que evita declarar las 50 cada vez: hoy son 6.491 tokens de
+# declaraciones, y el núcleo solo son unos 800.
+#
+# `terminal.read` no existía cuando se escribió el plan. Va en el núcleo porque es la
+# herramienta de diagnóstico de esta máquina y una pregunta sobre un fallo no debería
+# depender de que el selector acierte el grupo. A revisar.
+GROUPS = {
+    'nucleo': ('history.recent', 'history.search', 'history.read', 'profile.recall',
+               'core.overview', 'task.current', 'task.focus', 'result.get',
+               'web.search', 'web.read', 'terminal.read'),
+    'archivos': ('nas.locations', 'nas.directories', 'nas.directory_page', 'nas.shares',
+                 'nas.find', 'nas.search', 'nas.browse', 'nas.file_open', 'nas.file_read'),
+    'equipos': ('device.list', 'device.connect', 'device.forget', 'device.remote',
+                'device.identify', 'network.local', 'nas.read', 'nas.container'),
+    'multimedia': ('media.options', 'media.prepare', 'media.start', 'media.control',
+                   'media.jobs', 'media.job'),
+    'notas': ('note.save', 'note.list', 'note.get', 'note.show', 'note.hide', 'note.mark'),
+    'informes': ('report.save', 'report.list', 'report.get', 'work.list', 'work.get',
+                 'procedure.list', 'procedure.get', 'procedure.run',
+                 'document.read', 'document.search'),
+}
+
+# Grupos que uno arrastra consigo: `media.prepare` trabaja con el `scan_id` que devuelve
+# `nas.find`, así que multimedia sin archivos no sirve de nada.
+GROUP_REQUIRES = {'multimedia': ('archivos',)}
+
+ALWAYS = 'nucleo'
+
+
+def group_of(name):
+    """El grupo de una herramienta ofrecida, o None si está oculta."""
+    for grupo, herramientas in GROUPS.items():
+        if name in herramientas:
+            return grupo
+    return None
+
+
+def tools_for(groups):
+    """Las declaraciones de los grupos pedidos más el núcleo, en el orden del catálogo.
+
+    El orden importa: el mismo conjunto tiene que producir el mismo prompt byte a byte,
+    o cada turno invalida el prefijo KV aunque las herramientas sean las mismas.
+    """
+    activos = {ALWAYS}
+    for g in groups:
+        if g not in GROUPS:
+            raise ValueError(f'grupo inexistente: {g}')
+        activos.add(g)
+        activos.update(GROUP_REQUIRES.get(g, ()))
+    nombres = {h for g in activos for h in GROUPS[g]}
+    return {name: definition for name, definition in model_tools().items() if name in nombres}
+
+
 def validate(name, args):
     if not isinstance(name, str) or name not in TOOLS:
         raise ValueError('herramienta inexistente')

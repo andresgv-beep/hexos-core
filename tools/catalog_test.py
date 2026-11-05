@@ -89,5 +89,41 @@ class VerbosDeclaradosTest(unittest.TestCase):
             catalog.spec('x', effect='write', announces=(('abrir', 'abiert'),))
 
 
+class GruposTest(unittest.TestCase):
+    """Sin esto, una herramienta nueva sin grupo desaparecería en silencio: el modelo
+    dejaría de verla y nadie se enteraría hasta que fallara una conversación."""
+
+    def test_cada_herramienta_ofrecida_esta_en_un_solo_grupo(self):
+        ofrecidas = set(catalog.model_tools())
+        agrupadas = [h for grupo in catalog.GROUPS.values() for h in grupo]
+        self.assertEqual(sorted(ofrecidas), sorted(agrupadas),
+                         'hay herramientas ofrecidas sin grupo, o agrupadas y no ofrecidas')
+        self.assertEqual(len(agrupadas), len(set(agrupadas)), 'alguna está en dos grupos')
+
+    def test_los_grupos_que_arrastran_otro_existen(self):
+        for grupo, arrastra in catalog.GROUP_REQUIRES.items():
+            self.assertIn(grupo, catalog.GROUPS)
+            for otro in arrastra:
+                self.assertIn(otro, catalog.GROUPS)
+
+    def test_el_nucleo_va_siempre_y_el_orden_es_el_del_catalogo(self):
+        solo_nucleo = catalog.tools_for([])
+        self.assertEqual(sorted(solo_nucleo), sorted(catalog.GROUPS[catalog.ALWAYS]))
+        con_archivos = catalog.tools_for(['archivos'])
+        self.assertTrue(set(solo_nucleo) < set(con_archivos))
+        # Mismo conjunto, mismo orden: si no, cada turno rompe el prefijo KV.
+        self.assertEqual(list(con_archivos), list(catalog.tools_for(['archivos'])))
+        self.assertEqual(list(con_archivos),
+                         [n for n in catalog.model_tools() if n in con_archivos])
+
+    def test_multimedia_arrastra_archivos(self):
+        """media.prepare usa el scan_id de nas.find: multimedia sin archivos no sirve."""
+        self.assertIn('nas.find', catalog.tools_for(['multimedia']))
+
+    def test_un_grupo_que_no_existe_se_rechaza(self):
+        with self.assertRaises(ValueError):
+            catalog.tools_for(['inventado'])
+
+
 if __name__ == '__main__':
     unittest.main()
