@@ -48,6 +48,9 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   // null = el motor no tiene canal de pensamiento; entonces no se ofrece el botón.
   const [thinking, setThinking] = useState<boolean | null>(null);
   const [thinkingBusy, setThinkingBusy] = useState(false);
+  // El espacio de trabajo: decide qué herramientas se le declaran al modelo.
+  const [ventana, setVentana] = useState<"chat" | "agente" | null>(null);
+  const [ventanaBusy, setVentanaBusy] = useState(false);
   const [contextCut, setContextCut] = useState<ContextCut | null>(null);
   const [access, setAccess] = useState<CredentialRequest | null>(null);
   const [accessForm, setAccessForm] = useState({ user: "", password: "", host: "", port: "22" });
@@ -332,6 +335,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       if (disposed) return;
       setConnection("ready");
       setThinking(estado.thinking);
+      setVentana(estado.window);
       setMetrics(estado.metrics);
       // Lo que Helios dice que va a hacer, mientras lo hace. Sin esto la ventana
       // se quedaba en «pensando…» y lo anunciado —que lo escribe el modelo, no
@@ -427,6 +431,19 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       setAccessError(error instanceof Error ? error.message : "No se pudo guardar el acceso.");
     } finally {
       setAccessSaving(false);
+    }
+  }
+
+  async function toggleVentana() {
+    if (ventana === null || ventanaBusy) return;
+    setVentanaBusy(true);
+    try {
+      setVentana(await transport.setWindow(ventana === "chat" ? "agente" : "chat"));
+    } catch {
+      // Si HexOS no lo confirma, el botón no debe mentir sobre el estado real.
+      try { setVentana((await transport.status()).window); } catch { setVentana(null); }
+    } finally {
+      setVentanaBusy(false);
     }
   }
 
@@ -756,7 +773,8 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     {tasksOpen && !mobile && <TasksPanel media={mediaJobs} onControl={controlMedia} onClose={() => setTasksOpen(false)} />}
     {systemOpen && !mobile && <div className="vision-system" role="dialog" aria-label="Estado del sistema">
       <button type="button" className="icon-button vision-system-close" aria-label="Cerrar estado del sistema" onClick={() => setSystemOpen(false)}><X size={16} /></button>
-      <SystemMonitor autoEnabled={null} onToggleAuto={() => void toggleThinking()} />
+      <SystemMonitor autoEnabled={null} onToggleAuto={() => void toggleThinking()}
+        ventana={ventana} ventanaBusy={ventanaBusy} onToggleVentana={() => void toggleVentana()} />
     </div>}
     <section className="floating-workspace" aria-label="Notas e informes abiertos">
       {windows.filter(item => !item.minimized && (mobile || item.id === floatingNote)).map(item => <NoteWindow key={item.id} state={item}

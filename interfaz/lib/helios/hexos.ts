@@ -74,9 +74,14 @@ function parseChatReply(data: unknown): ChatReply {
            document: data.document, contextCut, closure, cancelled: data.cancelled === true,
            incomplete: data.incomplete === true };
 }
+/** Los dos espacios de trabajo del agente. */
+export type HeliosWindow = "chat" | "agente";
+
 export interface HeliosTransport {
-  /** `thinking` es null cuando el motor no tiene canal de pensamiento. */
+  /** `thinking` es null cuando el motor no tiene canal de pensamiento.
+   *  `window` es null si el agente no reparte las herramientas por ventana. */
   status(signal?: AbortSignal): Promise<{ phase: HeliosPhase; mode: string; thinking: boolean | null;
+    window: HeliosWindow | null;
     tools: ToolActivity[]; credentialRequest: CredentialRequest | null; progress: Progress; generation?: Generation; metrics?: InferenceMetrics }>;
   /** Guarda el acceso de un equipo. `host` fija su dirección: sin ella se busca
    *  entre los vecinos de la red, que solo sirve estando en la misma. */
@@ -86,6 +91,9 @@ export interface HeliosTransport {
   dismissAccess(device: string, signal?: AbortSignal): Promise<void>;
   /** Enciende o apaga el canal de pensamiento de Gemma. HexOS lo recuerda. */
   setThinking(enabled: boolean, signal?: AbortSignal): Promise<boolean>;
+  /** Cambia el espacio de trabajo. Decide qué herramientas se le declaran al modelo:
+   *  en «chat» no ve el NAS ni la terminal. HexOS lo recuerda entre reinicios. */
+  setWindow(window: HeliosWindow, signal?: AbortSignal): Promise<HeliosWindow>;
   /** Avisa a HexOS al empezar a escribir. Inicia la carga, pero no bloquea la UI. */
   warmup(signal?: AbortSignal): Promise<"unloaded" | "loading" | "ready" | "unloading" | "error" | "closed">;
   history(signal?: AbortSignal): Promise<HistoryMessage[]>;
@@ -116,6 +124,8 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
       const data = await request("status", { signal });
       if (!isRecord(data) || typeof data.mode !== "string") throw new Error("Modo de HexOS no válido");
       const thinking = typeof data.thinking === "boolean" ? data.thinking : null;
+      // `ventana`, no `window`: dentro de esta función taparía el objeto del navegador.
+      const ventana = data.window === "chat" || data.window === "agente" ? data.window : null;
       const r = data.credential_request;
       const g = data.generation;
       const generation = isRecord(g) && typeof g.request_id === "string" && typeof g.text === "string"
@@ -131,7 +141,7 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
             user: typeof r.user === "string" ? r.user : undefined,
             requestedAt: typeof r.requested_at === "string" ? r.requested_at : undefined }
         : null;
-      return { phase: phaseFromHexos(data.state), mode: data.mode, thinking,
+      return { phase: phaseFromHexos(data.state), mode: data.mode, thinking, window: ventana,
                tools: parseToolActivities(data.active_tools, "running"), credentialRequest,
                progress: parseProgress(data.progress), generation, metrics: parseInferenceMetrics(data.metrics) };
     },
@@ -162,6 +172,14 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
         body: JSON.stringify({ enabled }), signal });
       if (!isRecord(data) || typeof data.thinking !== "boolean") throw new Error("HexOS no confirmó el cambio");
       return data.thinking;
+    },
+    async setWindow(ventana, signal) {
+      const data = await request("window", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ window: ventana }), signal });
+      if (!isRecord(data) || (data.window !== "chat" && data.window !== "agente")) {
+        throw new Error("HexOS no confirmó el espacio de trabajo");
+      }
+      return data.window;
     },
     async warmup(signal) {
       const data = await request("model/warmup", { method: "POST",

@@ -1,14 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Activity, Boxes, Brain } from "lucide-react";
+import { Activity, Boxes, Brain, MessageSquare, Wrench } from "lucide-react";
 import { SystemGauges } from "./SystemGauges";
 import { parseTelemetry, type SystemTelemetry } from "@/lib/helios/telemetry";
 
-export function SystemMonitor({ autoEnabled, autoBusy = false, onToggleAuto, coreTotal, coreOpen = false, onToggleCore }: {
+export function SystemMonitor({ autoEnabled, autoBusy = false, onToggleAuto, coreTotal, coreOpen = false, onToggleCore,
+                                ventana = null, ventanaBusy = false, onToggleVentana }: {
   autoEnabled: boolean | null;
   autoBusy?: boolean;
   onToggleAuto: () => void;
+  /** El espacio de trabajo. `null` cuando el agente no reparte por ventana: no se pinta. */
+  ventana?: "chat" | "agente" | null;
+  ventanaBusy?: boolean;
+  onToggleVentana?: () => void;
   /** Cuántas notas guarda el núcleo. `null` cuando aún no se sabe: no es cero. */
   coreTotal?: number | null;
   coreOpen?: boolean;
@@ -59,6 +64,21 @@ export function SystemMonitor({ autoEnabled, autoBusy = false, onToggleAuto, cor
         aria-label={coreOpen ? "Cerrar el núcleo" : "Abrir el núcleo"}>
         <Boxes size={29} strokeWidth={1.45} aria-hidden="true" />
         <span><strong>NÚCLEO</strong><small>{coreTotal === null || coreTotal === undefined ? "—" : `${coreTotal} notas`}</small></span>
+        <i aria-hidden="true" />
+      </button>
+    </div>}
+    {ventana !== null && onToggleVentana && <div className="monitor-auto">
+      <button className={`auto-thinking${ventana === "agente" ? " active" : ""}`} type="button"
+        aria-pressed={ventana === "agente"} disabled={ventanaBusy} onClick={onToggleVentana}
+        aria-label={ventana === "agente" ? "Cambiar a conversación" : "Cambiar a modo agente"}
+        title={ventana === "agente"
+          ? "Modo agente: terminal, equipos, NAS y multimedia"
+          : "Conversación: memoria, notas, informes y web"}>
+        {ventana === "agente"
+          ? <Wrench size={29} strokeWidth={1.45} aria-hidden="true" />
+          : <MessageSquare size={29} strokeWidth={1.45} aria-hidden="true" />}
+        <span><strong>{ventana === "agente" ? "AGENTE" : "CHAT"}</strong>
+          <small>{ventanaBusy ? "Cambiando" : ventana === "agente" ? "Herramientas de sistema" : "Conversación"}</small></span>
         <i aria-hidden="true" />
       </button>
     </div>}
