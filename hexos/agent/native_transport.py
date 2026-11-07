@@ -7,6 +7,8 @@ import threading
 from typing import NamedTuple
 from uuid import uuid4
 
+from .control_markers import quoted, restore
+
 
 # Capacidad de la sesión auxiliar (anuncios, extracción de hechos, transcripción).
 # Una transcripción lleva hasta 752 tokens de audio (30 s) más prompt y texto; la
@@ -55,6 +57,7 @@ def visible_preview(text, open_thought=False):
         if end < 0:
             return ''
         text = text[end + len('<channel|>'):].lstrip()
+    text = quoted(text)
     # A tool call may follow a preamble. Clear the provisional response; the
     # validated preamble will be published through Agent's existing progress.
     if '<|tool_' in text or '<tool_' in text:
@@ -67,7 +70,7 @@ def visible_preview(text, open_thought=False):
             if text.endswith(marker[:n]):
                 text = text[:-n]
                 break
-    return text
+    return restore(text)
 
 
 class NativeTransport:
