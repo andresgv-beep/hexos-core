@@ -13,6 +13,7 @@ from ..context import native_messages
 from ..work import now
 from .memory import AFIRMACION
 from .settings import PROMPT
+from .document_reading import document_lines
 from .state import TurnState
 
 if TYPE_CHECKING:
@@ -37,11 +38,17 @@ def hora_local(momento=None):
 # turno anterior sigue en el historial, así que el modelo no la pierde.
 PAUSA_HORA = 20 * 60
 
-# Un mensaje de más de 6.000 caracteres se guarda como documento y el modelo ve
-# un extracto. Solo el principio dejaba fuera la pregunta, que casi siempre va
+# Un mensaje de más de 6.000 caracteres se guarda como documento y el historial
+# solo conserva un extracto. El turno actual lo recibe entero si cabe; si no, ve
+# el extracto. Solo el principio dejaba fuera la pregunta, que casi siempre va
 # DEBAJO de lo pegado: el 29/10 contestó «¿qué hago con este texto?».
 VISTA_PRINCIPIO = 800
 VISTA_FINAL = 1500
+
+# Lo que se deja libre para que el modelo conteste tras leer el mensaje, y una
+# estimación prudente para texto con código o JSON, que tokeniza peor que la prosa.
+RESERVA_RESPUESTA = 2048
+CARACTERES_POR_TOKEN = 3
 
 
 def vista_parcial(texto, documento):
@@ -58,9 +65,10 @@ def vista_parcial(texto, documento):
     omitidos = len(texto) - len(principio) - len(final)
     return (principio + '\n[… ' + str(omitidos) + ' caracteres omitidos. Ves el principio y el '
             'final del mensaje; el texto completo está guardado como documento: ' +
-            json.dumps(documento) + '. Usa document.read o document.search si la petición '
-            'necesita el resto. Si el mensaje no pide nada concreto, pregunta qué desea hacer '
-            'con él.]\n' + final)
+            json.dumps(documento) + '. Para resumir, analizar o responder sobre el contenido, '
+            'léelo antes con document.read o document.search: no afirmes nada de lo que no '
+            'hayas visto, y di qué parte has leído si no lo lees entero. Si el mensaje no pide '
+            'nada concreto, pregunta qué desea hacer con él.]\n' + final)
 
 
 def hora_activa():
@@ -227,6 +235,7 @@ class ContextManager:
         turn.uid = uuid4().hex
         self.agent.progress = {'turn_id':turn.uid, 'messages':[]}
         turn.document = None
+        turn.archived_text = ''
         turn.prompt_text = turn.model_request or turn.text
         # Si el mensaje trae un dato suyo, la cosecha lo guardará al cerrar
         # el turno: se le retira la herramienta para que no lo haga él también.
@@ -253,15 +262,21 @@ class ContextManager:
                            'La estás viendo ahora; en turnos posteriores solo quedará '
                            'lo que digas de ella.]\n' % (width, height))
         if len(turn.prompt_text) > 6000:
-            digest = hashlib.sha256(turn.prompt_text.encode()).hexdigest()
-            turn.document = dict(id=uuid4().hex, bytes=len(turn.prompt_text.encode()),
-                            lines=len(turn.prompt_text.splitlines()), sha256=digest)
+            entero = turn.prompt_text
+            digest = hashlib.sha256(entero.encode()).hexdigest()
+            turn.document = dict(id=uuid4().hex, bytes=len(entero.encode()),
+                                 lines=len(document_lines(entero)), sha256=digest)
             store.db.execute('INSERT INTO documents VALUES (?,?,?,?)',
-                             (turn.document['id'], now(), turn.prompt_text, digest))
-            turn.prompt_text = vista_parcial(turn.prompt_text, turn.document)
+                             (turn.document['id'], now(), entero, digest))
+            # El archivo guarda siempre el extracto: si no, cada turno posterior
+            # arrastraría el documento entero.
+            turn.archived_text = vista_parcial(entero, turn.document)
+            if len(entero) > self.message_room():
+                turn.prompt_text = turn.archived_text
         turn.prompt_text = nota_imagen + turn.prompt_text
+        turn.archived_text = nota_imagen + (turn.archived_text or turn.prompt_text[len(nota_imagen):])
         store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
-                         (turn.uid, now(), 'user', nota_imagen + turn.text, turn.prompt_text))
+                         (turn.uid, now(), 'user', nota_imagen + turn.text, turn.archived_text))
         store.db.commit()
         # Si la pregunta mira al pasado, el archivo se consulta ahora y el
         # resultado entra en el turno como dato, no como orden.
@@ -427,6 +442,19 @@ class ContextManager:
         # buscaba y el turno cerraba con fragmentos, que es lo que se quería evitar.
         turn.trace = [paso for paso in (recuerdo, actual) if paso]
 
+    def message_room(self):
+        """Cuántos caracteres puede tener el mensaje de este turno si entra entero.
+
+        Mide contra lo que el motor tiene ocupado de verdad, no contra la ventana:
+        en una conversación larga el mismo adjunto puede caber o no.
+        """
+        ctx = getattr(self.agent.runtime, 'ctx', None)
+        if not ctx:
+            return 6000
+        ocupado = getattr(self.agent.runtime, 'kv_position', 0) or 0
+        libre = (ctx - ocupado - RESERVA_RESPUESTA) * CARACTERES_POR_TOKEN
+        return min(self.history_budget(), libre)
+
     def history_budget(self):
         """Cuántos caracteres de conversación caben antes de tener que cortar.
 
@@ -495,6 +523,9 @@ class ContextManager:
         nuevo = store.db.execute('SELECT COALESCE(MAX(rowid),0) FROM conversation '
                                  'WHERE id<>?', (turn_id,)).fetchone()[0]
         self.save_handoff(store, filas, nuevo)
+        # Se empieza limpio también en herramientas: el núcleo y lo que haga falta.
+        if hasattr(self.agent.runtime, 'close_drawers'):
+            self.agent.runtime.close_drawers()
         store.db.execute("INSERT INTO agent_state VALUES ('context_boundary',?) "
                          'ON CONFLICT(key) DO UPDATE SET value=excluded.value', (str(nuevo),))
         store.db.commit()
@@ -510,6 +541,8 @@ class ContextManager:
             raise RuntimeError('Ya hay un turno en curso')
         try:
             self.agent.runtime.call({'type': 'reset'})
+            if hasattr(self.agent.runtime, 'close_drawers'):
+                self.agent.runtime.close_drawers()
             with self.agent.store() as store:
                 boundary = store.db.execute('SELECT COALESCE(MAX(rowid),0) FROM conversation').fetchone()[0]
                 store.db.execute("INSERT INTO agent_state VALUES ('context_boundary',?) "

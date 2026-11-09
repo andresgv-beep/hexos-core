@@ -71,6 +71,10 @@ def compact_live(messages, names, effects, now=None):
             if is_stub(body) or _small(body):
                 continue
             alias = response.get('name', 'herramienta')
+            # Lo que trae tools_open son las declaraciones de un cajón abierto: si se
+            # resumiera, seguiría abierto pero sin decir cómo se usan sus herramientas.
+            if alias == 'tools_open':
+                continue
             effect = effects.get(names.get(alias, alias.replace('_', '.', 1)), 'read')
             response['response'] = stub(alias, effect, response.get('ts'), now)
             changed += 1

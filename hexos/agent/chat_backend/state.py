@@ -65,6 +65,8 @@ class SessionState:
     progress: dict = field(default_factory=lambda: {'turn_id': None, 'messages': []})
     active_tools: list = field(default_factory=list)
     credential_request: dict | None = None
+    # Plan de system.package_plan esperando la aprobación de la persona en la interfaz.
+    system_request: dict | None = None
     context_cut: dict | None = None
     # Última lectura de red: sirve para nombrar «la que termina en 129» sin
     # convertir cada vecino observado en inventario persistente.
@@ -81,6 +83,7 @@ class RetryState:
     coverage_mark: int = -1
     context_retries: int = 0
     format_retries: int = 0
+    drawer_retries: int = 0
     web_evidence_retries: int = 0
     web_read_guided: bool = False
     read_claim_checked: bool = False
@@ -96,6 +99,7 @@ class TurnState:
     uid: str = ''
     document: dict | None = None
     prompt_text: str = ''
+    archived_text: str = ''  # lo que queda en el historial, sin el documento entero
     pointed_note: dict | None = None
     task_notices: list = field(default_factory=list)
     transcript: str | None = None

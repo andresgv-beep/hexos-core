@@ -5,11 +5,12 @@ import json
 import time
 from typing import TYPE_CHECKING
 from uuid import uuid4
-from .. import catalog, devices, hosts, notes, core, terminal_read, workflow, procedures
+from .. import catalog, devices, hosts, notes, core, terminal_read, workflow, procedures, system_packages
 from ..continuity import history_tool
 from ..progress import announcement
 from ..work import now
 from .state import Environment, SessionState, TurnState
+from .document_reading import document_lines
 from .reading_budget import exhausted, READ_TOOLS
 from .ledger import completed_call, completed_registration, failed_call
 from .file_requests import validate_file_request
@@ -202,6 +203,19 @@ class ToolDispatcher:
             return self.env.dependencies.web_read(args['url'])
         if name == 'terminal.read':
             return terminal_read.read(args['command'], args.get('filter'))
+        if name == 'system.package_plan':
+            # Solo planifica: la ejecución la dispara la aprobación de la persona (/api/system).
+            plan = system_packages.plan(args['action'], args['package'], args.get('manager'))
+            self.session.system_request = plan
+            # Sin plan_id: el 03/11 el modelo lo llevó a media.start, que también recibe un
+            # plan_id, e intentó ejecutar él mismo un plan que solo aprueba la persona.
+            return dict({k: v for k, v in plan.items() if k not in ('plan_id', 'created')},
+                        status='pending_approval',
+                        note=('Pendiente: la persona lo aprueba o lo cancela en la tarjeta que le ha aparecido '
+                              'en la pantalla, no en el chat. No hay herramienta para ejecutarlo: no lo intentes '
+                              'con ninguna otra (media.start es solo para vídeos). Dile que lo apruebe en la '
+                              'tarjeta. Cuando lo haga, te llegará una nota «La persona aprobó en la interfaz…» '
+                              'con el resultado ya comprobado.'))
         if name.startswith('procedure.') or name in ('report.save', 'result.get'):
             return workflow.dispatch(store, name, args, turn_id)
         if name.startswith(('procedure.', 'report.', 'task.')):
@@ -213,13 +227,16 @@ class ToolDispatcher:
         row = store.db.execute('SELECT content FROM documents WHERE id=?', (args.get('id'),)).fetchone()
         if row is None:
             raise ValueError('documento inexistente')
-        lines = row['content'].splitlines()
+        lines = document_lines(row['content'])
         if name == 'document.search':
             query_text = args.get('query')
             if not isinstance(query_text, str) or not query_text:
                 raise ValueError('consulta vacía')
-            hits = [{'line': i, 'text': line[:300]} for i, line in enumerate(lines, 1)
-                    if query_text.casefold() in line.casefold()]
+            hits = []
+            for i, line in enumerate(lines, 1):
+                found = line.casefold().find(query_text.casefold())
+                if found >= 0:
+                    hits.append({'line': i, 'text': line[max(0, found - 120):found + 180]})
             return dict(matches=hits[:20], total_matches=len(hits), excerpts=True)
         start, count = args.get('start', 1), args.get('count', 40)
         if type(start) is not int or start < 1 or type(count) is not int or not 1 <= count <= 80:

@@ -4,9 +4,10 @@ from __future__ import annotations
 from pathlib import Path
 import threading
 from uuid import uuid4
+from .. import catalog
 from ..native_transport import TurnCancelled
 from .live import LiveGeneration
-from ..work import WorkStore
+from ..work import WorkStore, now
 from .access import CredentialService
 from .completion import ReplyPolicy
 from .context import ContextManager
@@ -38,6 +39,10 @@ class Agent:
                                dependencies or AgentDependencies())
         self.session = SessionState()
         self.live_lock = threading.Lock()
+        # La interfaz se ve a la vez en varias pantallas (monitor, móvil): dos pueden
+        # aprobar el mismo plan casi a la vez. Solo una lo toma. No es self.lock, que
+        # está ocupado durante todo un turno y no dejaría aprobar mientras Helios habla.
+        self.system_lock = threading.Lock()
         self.live = None
         self.runtime_turn_acquired = False
         with self.store() as store:
@@ -116,6 +121,41 @@ class Agent:
         self.session.credential_request = value
 
     @property
+    def system_request(self):
+        return self.session.system_request
+
+    def decide_system(self, payload, *, apply=None):
+        """La persona aprueba o rechaza el plan pendiente de system.package_plan.
+
+        Es el único camino a la ejecución: viene de la interfaz, no de la conversación. Se
+        ejecuta solo el plan que está pendiente, y una vez: se retira antes de lanzarlo.
+        """
+        from .. import system_packages
+        if set(payload) != {'plan_id', 'approve'} or not isinstance(payload['approve'], bool):
+            raise ValueError('se espera {"plan_id": "...", "approve": true|false}')
+        with self.system_lock:
+            pending = self.session.system_request
+            if not pending or pending['plan_id'] != payload['plan_id']:
+                raise ValueError('Ese plan ya no está pendiente: lo decidió otra pantalla o caducó')
+            self.session.system_request = None
+        if payload['approve']:
+            result = (apply or system_packages.apply)(pending)
+            estado = ('hecho y comprobado' if result['executed'] and result['verified'] else
+                      'ejecutado, pero la comprobación no cuadra' if result['executed'] else
+                      'no se ejecutó: ' + (result['refused'] or 'error del gestor'))
+            note = ('[La persona aprobó en la interfaz: ' + pending['summary'] + '. HexOS lo ejecutó: ' +
+                    estado + ' (' + result['check'] + ').]')
+        else:
+            result = dict(plan_id=pending['plan_id'], summary=pending['summary'], executed=False, cancelled=True)
+            note = '[La persona rechazó en la interfaz: ' + pending['summary'] + '. No se ha cambiado nada.]'
+        # Como al guardar un acceso: sin esta nota el modelo seguiría creyendo que espera aprobación.
+        with self.store() as store:
+            store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
+                             (uuid4().hex, now(), 'user', note, note))
+            store.db.commit()
+        return dict(result, note=note)
+
+    @property
     def context_cut(self):
         return self.session.context_cut
 
@@ -163,6 +203,12 @@ class Agent:
         return self.memory.harvest_facts(store, text, turn_id, trace)
 
     def tool(self, store, name, args, *, turn_id=None):
+        if name == 'tools.open':
+            # Los cajones son de lo que el modelo tiene a la vista: viven en el motor.
+            catalog.validate(name, args)
+            if not hasattr(self.runtime, 'open_drawer'):
+                raise ValueError('este motor ve todas las herramientas: no hay cajones que abrir')
+            return self.runtime.open_drawer(args['drawer'])
         return self.dispatcher.dispatch(store, name, args, turn_id=turn_id)
 
     def chat(self, text, image=None, *, thinking=None, display_text=None, request_id=None):

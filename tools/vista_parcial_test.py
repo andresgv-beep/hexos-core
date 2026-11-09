@@ -82,5 +82,51 @@ class VistaParcialTest(unittest.TestCase):
         self.assertNotIn('guardado como documento', visto)
 
 
+class VentanaRuntime(Runtime):
+    """Un motor con ventana real: lo que decide si un mensaje cabe entero."""
+    native = False
+
+    def __init__(self, ctx, kv_position=0):
+        super().__init__()
+        self.ctx = ctx
+        self.kv_position = kv_position
+
+
+ADJUNTO = 'Lee esto.\n\n[{"name":"a.md","content":"' + 'S_e/n es segundo momento.\\n' * 500 + '"}]'
+
+
+class MensajeEnteroTest(unittest.TestCase):
+    def enviar(self, runtime, texto):
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(tmp, runtime)
+            agent.chat(texto)
+            with agent.store() as store:
+                archivado = store.db.execute(
+                    "SELECT model_text FROM conversation WHERE role='user'").fetchone()[0]
+                documento = store.db.execute('SELECT content FROM documents').fetchone()[0]
+        visto = '\n'.join(m['content'] for m in runtime.prompts[0] if isinstance(m.get('content'), str))
+        return visto, archivado, documento
+
+    def test_un_adjunto_que_cabe_llega_entero_y_el_historial_no_lo_arrastra(self):
+        visto, archivado, documento = self.enviar(VentanaRuntime(16384), ADJUNTO)
+        self.assertIn(ADJUNTO, visto)
+        self.assertNotIn('caracteres omitidos', visto)
+        self.assertIn('caracteres omitidos', archivado, 'el historial guarda el extracto')
+        self.assertLess(len(archivado), 3500)
+        self.assertEqual(documento, ADJUNTO)
+
+    def test_si_la_ventana_esta_ocupada_ve_el_extracto_y_la_orden_de_leerlo(self):
+        visto, _, documento = self.enviar(VentanaRuntime(16384, kv_position=13000), ADJUNTO)
+        self.assertNotIn(ADJUNTO, visto)
+        self.assertIn('léelo antes con document.read', visto)
+        self.assertEqual(documento, ADJUNTO)
+
+    def test_una_sola_linea_gigante_se_puede_leer_entera(self):
+        from hexos.agent.chat_backend.document_reading import DOCUMENT_LINE_CHARS, document_lines
+        lineas = document_lines(ADJUNTO)
+        self.assertEqual('\n'.join(lineas).replace('\n', ''), ADJUNTO.replace('\n', ''))
+        self.assertLessEqual(max(map(len, lineas)), DOCUMENT_LINE_CHARS)
+
+
 if __name__ == '__main__':
     unittest.main()

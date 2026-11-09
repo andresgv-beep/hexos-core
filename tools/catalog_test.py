@@ -1,5 +1,6 @@
 """El catálogo declarado al motor: si un tipo no se sabe traducir, el servidor
 no arranca. Eso tiene que fallar aquí, no delante de la persona."""
+import json
 from pathlib import Path
 import sys
 import unittest
@@ -28,9 +29,13 @@ class DeclarablesTest(unittest.TestCase):
 
     def test_el_contrato_nativo_cabe_sin_duplicar_el_manual(self):
         from hexos.agent.native import POLICY
-        descriptions = [catalog.model_description(name) for name in catalog.model_tools()]
+        # Lo que va en cada turno es el núcleo; un cajón llega solo cuando se abre.
+        descriptions = [catalog.model_description(name) for name in catalog.core_tools()]
         self.assertLess(len(POLICY), 2000)
-        self.assertLess(sum(map(len, descriptions)), 7000)
+        self.assertLess(sum(map(len, descriptions)), 2500)
+        for cajon in catalog.DRAWERS:
+            with self.subTest(cajon=cajon):
+                self.assertLess(len(json.dumps(catalog.drawer_contents(cajon), ensure_ascii=False)), 4500)
         self.assertNotIn('profile.remember', catalog.model_tools())
 
     def test_detalles_operativos_viven_en_la_herramienta(self):

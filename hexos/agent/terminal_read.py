@@ -138,7 +138,13 @@ def read(command, filter=None, *, runner=ejecutar):
     lineas = salida.splitlines()
     total = len(lineas)
     if filter:
-        lineas = [l for l in lineas if filter.casefold() in l.casefold()]
+        # Sin distinguir mayúsculas ni espacios: la persona dice «no machine» y el
+        # paquete se llama nomachine. El 03/11 el filtro literal no lo encontró y el
+        # modelo concluyó que no estaba instalado.
+        buscado = filter.casefold()
+        junto = ''.join(buscado.split())
+        lineas = [l for l in lineas if buscado in l.casefold() or
+                  (junto and junto in ''.join(l.casefold().split()))]
     texto = '\n'.join(lineas)
     respuesta = dict(command=command, exit_code=codigo, lines=len(lineas), output=texto[:MAX_SALIDA])
     if filter:
