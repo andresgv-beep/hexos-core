@@ -460,6 +460,15 @@ def dispatch(store, name, args, turn_id=None, observation=None):
                       note='Registrado con dirección fija: no se busca en los vecinos de la red y '
                            'sigue valiendo desde cualquier sitio. Esto no comprueba que se llegue a '
                            'él ni concede acceso; las credenciales se piden aparte por la ventana.')
+        # Decirlo aquí evita el «guardado» que no cambiaba nada: el registro quedaba
+        # corregido y las lecturas seguían saliendo hacia la dirección del acceso.
+        caducado = hosts.stale_access(store.root, etiqueta)
+        if caducado:
+            salida['access_conflict'] = dict(
+                saved_for=caducado['saved_for'], registered_now=destino,
+                note='Este equipo tenía un acceso guardado para la dirección anterior. No se '
+                     'reutiliza con la nueva: la próxima lectura abrirá la ventana para '
+                     'confirmarlo. Díselo a la persona al confirmar el registro.')
         if literal != original:
             salida.update(written_as=literal, correction=(
                 'La persona escribió «' + literal + '» y se ha leído como «' + original +

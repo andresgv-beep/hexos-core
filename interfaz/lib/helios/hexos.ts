@@ -19,8 +19,11 @@ export interface Progress { turnId: string | null; messages: { id: string; text:
  *  y va directa a HexOS: no pasa por la conversación ni la ve el modelo. */
 export interface CredentialRequest {
   device: string; host?: string; mac?: string; pinned?: boolean;
-  /** 'rejected' cuando ya había un acceso guardado y el equipo lo rechazó. */
+  /** 'rejected' cuando ya había un acceso guardado y el equipo lo rechazó.
+   *  'address_changed' cuando se guardó para una dirección que ya no es la registrada. */
   reason?: string; port?: number; user?: string;
+  /** Con 'address_changed': la dirección para la que estaba guardado el acceso. */
+  previousHost?: string;
   /** Marca de la petición. Cambia cada vez que se pide de nuevo, y es lo que
    *  distingue «la misma que ya descarté» de «me lo está pidiendo otra vez». */
   requestedAt?: string;
@@ -137,6 +140,7 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
         ? { device: r.device, host: typeof r.host === "string" ? r.host : undefined,
             mac: typeof r.mac === "string" ? r.mac : undefined, pinned: r.pinned === true,
             reason: typeof r.reason === "string" ? r.reason : undefined,
+            previousHost: typeof r.access_stale === "string" ? r.access_stale : undefined,
             port: typeof r.port === "number" ? r.port : undefined,
             user: typeof r.user === "string" ? r.user : undefined,
             requestedAt: typeof r.requested_at === "string" ? r.requested_at : undefined }

@@ -799,8 +799,14 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         <h2 id="access-title" className="panel-title">
           {access.reason === "rejected"
             ? <>{access.device} rechazó el acceso guardado</>
+            : access.reason === "address_changed"
+            ? <>La dirección de {access.device} ha cambiado</>
             : <>Helios pide acceso a {access.device}</>}
         </h2>
+        {access.reason === "address_changed" && <p className="access-warn" role="alert">
+          El acceso guardado era para {access.previousHost ?? "la dirección anterior"} y no se ha
+          enviado a la nueva. Confirma usuario, contraseña y puerto para guardarlo en esta.
+        </p>}
         {access.reason === "rejected" && <p className="access-warn" role="alert">
           El equipo dijo que no. Revisa usuario, contraseña y puerto: un puerto reenviado
           a otra máquina da exactamente este error.

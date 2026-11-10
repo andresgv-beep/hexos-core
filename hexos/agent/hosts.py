@@ -32,6 +32,16 @@ class AccessNeeded(ValueError):
                              'Revisa también el usuario y el puerto: un puerto reenviado a otra '
                              'máquina da exactamente este error. Esto no dice nada sobre su salud.')
             return
+        # 'address_changed' cuando el acceso se guardó para una dirección y después
+        # se registró otra: la contraseña no viaja a la nueva sin que la persona lo
+        # confirme en la ventana.
+        if reason == 'address_changed':
+            anterior = (located or {}).get('access_stale')
+            super().__init__('La dirección de ' + repr(device) + ' cambió después de guardar su acceso' +
+                             (' (era ' + anterior + ')' if anterior else '') +
+                             '. El acceso guardado no se envía a la nueva: la interfaz lo volverá a '
+                             'pedir; no pidas la contraseña por el chat. Esto no dice nada sobre su salud.')
+            return
         super().__init__('Helios no tiene todavía el acceso de ' + repr(device) +
                          '. La interfaz lo pedirá; no pidas la contraseña por el chat ni la escribas en él. '
                          'Esto no significa que el equipo esté sano.')
@@ -89,6 +99,60 @@ def card(workspace, name):
     return cards(workspace).get((name or '').casefold())
 
 
+def registered(workspace, name):
+    """La dirección fija que el inventario tiene para ese nombre, o None.
+
+    Es la que escribe device_remote. Vive en work.sqlite, aparte de la ficha de
+    acceso, y por eso hay que poder compararlas.
+    """
+    database = Path(workspace) / 'work.sqlite'
+    if not database.exists():
+        return None
+    try:
+        connection = sqlite3.connect('file:' + str(database) + '?mode=ro', uri=True)
+        try:
+            rows = [json.loads(body) for _, body in
+                    connection.execute('SELECT id, body FROM network_devices')]
+        finally:
+            connection.close()
+    except (sqlite3.Error, ValueError):
+        return None
+    wanted = (name or '').casefold()
+    matches = [row for row in rows
+               if (row.get('identity') or {}).get('name', '').casefold() == wanted]
+    if len(matches) != 1 or not matches[0].get('pinned_host'):
+        return None
+    device = matches[0]
+    return dict(host=device['pinned_host'], port=device.get('pinned_port'),
+                original_address=device.get('pinned_original'),
+                scheme=device.get('pinned_scheme'))
+
+
+def stale_access(workspace, name):
+    """Acceso guardado para una dirección que ya no es la registrada, o None.
+
+    El 10/11 la persona registró «servisor…» por una errata, guardó el acceso y
+    después corrigió la dirección con device_remote. El inventario quedó bien, pero
+    la ficha de acceso conservó la errata y, como manda sobre el inventario, todas
+    las lecturas siguieron saliendo hacia la dirección mala mientras device_remote
+    respondía «guardado». Solo funcionó dando de alta el equipo con otro nombre.
+
+    Se compara con la dirección registrada que había al guardar el acceso, no con
+    la de conexión: quien escribe en la ventana una dirección distinta de la del
+    inventario lo ha decidido así, y eso no es un acceso caducado.
+    """
+    ficha = cards(workspace).get((name or '').casefold()) or {}
+    if not ficha.get('host'):
+        return None
+    actual = registered(workspace, name)
+    if not actual:
+        return None
+    confirmada = ficha.get('registered_host') or ficha['host']
+    if actual['host'].casefold() == confirmada.casefold():
+        return None
+    return dict(saved_for=ficha['host'], registered=actual)
+
+
 def migrate(workspace):
     """Pasa el formato viejo —credencial por nombre con usuario y puerto dentro— al
     nuevo: ficha con todo, y en el archivo de secretos solo la contraseña, por id."""
@@ -143,6 +207,15 @@ def save(workspace, name, user, password, port=22, host=None, original_address=N
         raise ValueError('Puerto no válido')
     if host is not None:
         host = address(host)
+    else:
+        # Guardar de nuevo es la confirmación de la persona: el acceso pasa a la
+        # dirección registrada ahora. Sin esto se conservaba la anterior y la
+        # ventana se volvía a abrir sin fin.
+        caducado = stale_access(workspace, name)
+        if caducado:
+            host = caducado['registered']['host']
+            if original_address is None:
+                original_address = caducado['registered'].get('original_address')
     scheme = None
     if original_address is not None:
         if not isinstance(original_address, str) or not original_address.strip():
@@ -160,8 +233,12 @@ def save(workspace, name, user, password, port=22, host=None, original_address=N
     # equipo. Guardarlo por nombre dejaba la contraseña huérfana al renombrarlo.
     identificador = anterior.get('id') or ('equipo/' + uuid4().hex[:12])
     conserva_original = not host or host == anterior.get('host')
+    # La dirección que el inventario tenía al guardar: es contra la que se
+    # comprueba después si el acceso sigue siendo para el mismo sitio.
+    vigente = registered(workspace, name)
     fichas[clave] = dict(
         anterior, id=identificador, name=clave, user=user, port=port,
+        registered_host=vigente['host'] if vigente else None,
         host=host or anterior.get('host'),
         original_address=(original_address if original_address is not None else
                           anterior.get('original_address') if conserva_original else None),
@@ -421,7 +498,11 @@ def resolve(workspace, name):
         raise ValueError('Nombre de equipo no válido')
     acceso = credentials(workspace, name) or {}
     fijada = acceso.get('host')
-    if fijada:
+    # Salvo que esa credencial se guardara para una dirección que ya no es la
+    # registrada. Entonces se devuelve la del inventario, marcada: quien conecta
+    # tiene que pedir el acceso otra vez en lugar de mandar la contraseña ahí.
+    caducado = stale_access(workspace, name)
+    if fijada and not caducado:
         return dict(name=name.casefold(), host=fijada, mac=None,
                     observed_at=None, reachable=None, pinned=True,
                     original_address=acceso.get('original_address'),
@@ -508,7 +589,8 @@ def resolve(workspace, name):
                          'dirección fija con device_remote')
     return dict(name=wanted, mac=device.get('mac'), **orden[0],
                 original_address=device.get('pinned_original'),
-                scheme=device.get('pinned_scheme'), alternatives=orden[1:])
+                scheme=device.get('pinned_scheme'), alternatives=orden[1:],
+                **({'access_stale': caducado['saved_for']} if caducado else {}))
 
 
 def main():

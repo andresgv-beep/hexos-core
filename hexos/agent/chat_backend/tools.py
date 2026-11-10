@@ -172,6 +172,11 @@ class ToolDispatcher:
                                          'ha vuelto a abrir para corregir usuario, contraseña o puerto, y que '
                                          'un puerto reenviado a otra máquina da este mismo error. '
                                          if needed.reason == 'rejected' else
+                                         'La dirección de este equipo se cambió después de guardar su '
+                                         'acceso, y el acceso guardado era para la anterior. No se ha '
+                                         'conectado a ningún sitio. Dile que se ha abierto la ventana para '
+                                         'confirmar usuario, contraseña y puerto de la dirección nueva. '
+                                         if needed.reason == 'address_changed' else
                                          'Dile a la persona que Helios ha pedido el acceso y que aparece una '
                                          'ventana en la interfaz para rellenarlo. ') +
                                         'No pidas la contraseña por el chat ni la aceptes si la escribe: no '

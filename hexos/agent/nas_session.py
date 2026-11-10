@@ -622,6 +622,10 @@ def execute_remote(workspace, device, remote, section, disk=None, container=None
     """
     deadline = time.monotonic() + timeout_seconds if timeout_seconds is not None else None
     located = hosts.resolve(workspace, device)
+    # El acceso se guardó para otra dirección. Se pide de nuevo antes de abrir la
+    # conexión: aquí todavía no se ha enviado nada a ningún sitio.
+    if located.get('access_stale'):
+        raise hosts.AccessNeeded(device, located, reason='address_changed')
     account = hosts.credentials(workspace, device)
     if not account:
         raise ValueError('No hay credenciales guardadas para ' + repr(device) + '. Guárdalas con: '
