@@ -66,10 +66,10 @@ FRAGMENTOS = ('responde con lo que dicen los fragmentos del buscador, diciendo q
               'y que no se ha podido abrir ninguna página. ')
 
 
-SIN_LLAMADA_CHAT = ('AVISO DE HEXOS (no es la persona): la respuesta anterior no ejecutó ninguna '
-                    'herramienta, así que no se ha guardado ni consultado nada. Si la persona pidió '
-                    'apuntar, ver o buscar algo, llama ahora a la herramienta; si no pidió nada de '
-                    'eso, contesta sin decir que lo has hecho. No menciones este aviso.')
+SIN_LLAMADA_CHAT = ('AVISO DE HEXOS (no es la persona): la respuesta anterior dice haber guardado algo, '
+                    'pero en este turno no se ejecutó ninguna escritura: no se ha guardado nada. Si la '
+                    'persona pidió apuntarlo, llama ahora a la herramienta; si no lo pidió, contesta '
+                    'de nuevo sin decir que lo has hecho. No menciones este aviso.')
 SIN_LLAMADA = ('AVISO DE HEXOS (no es la persona): la respuesta anterior no consultó nada. '
                'Haz ahora la lectura que responde a la petición y contesta con lo que salga. '
                'No menciones este aviso.')
@@ -196,13 +196,19 @@ class RecoveryController:
             if self.agent.runtime.require_check():
                 turn.messages = [dict(role='user', content=SIN_LLAMADA)]
                 return True
-        # En el chat la misma señal, sin forzar el arranque: allí lo pedido suele ser
-        # apuntar una nota, que es una escritura, y el arranque forzado solo deja leer.
-        # Medido el 11/11: «apunta que el viernes tengo dentista» -> «He apuntado…» sin
-        # una sola llamada. Una vez; si no había nada que hacer, que conteste sin más.
-        if (not turn.trace and turn.grupos_pedidos and not turn.retries.sin_llamada_devuelto
+        # En el chat no vale la señal del selector: allí se habla DE las notas sin pedir
+        # nada («y notas tienes, ¿verdad?»), y devolver ese turno cambió una respuesta
+        # buena por «Entendido. Estoy atento a cualquier instrucción…» el 11/11. Solo se
+        # devuelve lo que se puede contrastar con la traza: la respuesta afirma haber
+        # guardado algo y en el turno no consta ninguna escritura («apunta que el viernes
+        # tengo dentista» -> «He apuntado…» sin una llamada). Sin forzar el arranque,
+        # que solo deja leer; y una vez.
+        if (not turn.retries.sin_llamada_devuelto
                 and getattr(self.agent, 'ventana', None) == catalog.DEFAULT_WINDOW
-                and getattr(self.agent.runtime, 'native', False)):
+                and getattr(self.agent.runtime, 'native', False)
+                and ReplyPolicy.ESCRITURA_DICHA.search(output.get('reply') or '')
+                and not any(catalog.TOOLS.get(paso.get('tool'), {}).get('effect') != 'read'
+                            for paso in turn.trace)):
             turn.retries.sin_llamada_devuelto = True
             turn.messages = [dict(role='user', content=SIN_LLAMADA_CHAT)]
             return True

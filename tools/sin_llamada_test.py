@@ -50,20 +50,28 @@ class SinLlamadaTest(unittest.TestCase):
         self.assertFalse(devuelto)
         self.assertEqual(runtime.checks, 0)
 
-    def test_en_el_chat_se_devuelve_sin_forzar_una_lectura(self):
-        # «He apuntado que tienes dentista» sin una sola llamada. Apuntar es escribir,
-        # y el arranque forzado solo deja leer: se avisa y el modelo elige.
+    def chat(self, respuesta, traza=()):
         runtime = Runtime(); runtime.native = True
-        runtime, turn, devuelto, otra = self.cierre(ventana='chat', pedidos=('notas',), runtime=runtime)
+        return self.cierre(ventana='chat', pedidos=('notas',), runtime=runtime,
+                           respuesta=respuesta, traza=traza)
+
+    def test_en_el_chat_se_devuelve_lo_que_dice_haber_guardado_sin_guardar(self):
+        # Apuntar es escribir, y el arranque forzado solo deja leer: se avisa y elige.
+        runtime, turn, devuelto, otra = self.chat('He apuntado que tienes dentista el viernes.')
         self.assertTrue(devuelto)
         self.assertEqual(runtime.checks, 0)
-        self.assertIn('no se ha guardado', turn.messages[0]['content'])
+        self.assertIn('no se ha guardado nada', turn.messages[0]['content'])
         turn.messages = []
         self.assertFalse(otra())
 
-    def test_una_charla_en_el_chat_no_se_devuelve(self):
-        runtime = Runtime(); runtime.native = True
-        self.assertFalse(self.cierre(ventana='chat', pedidos=(), runtime=runtime)[2])
+    def test_hablar_de_las_notas_en_el_chat_no_se_devuelve(self):
+        # «a okey, y notas tienes verdad?»: el selector pidió notas, la respuesta era
+        # buena y la devolución la cambió por una contestación al aviso.
+        self.assertFalse(self.chat('Sí, tengo la capacidad de gestionar notas. Puedo crear una si me lo pides.')[2])
+
+    def test_si_la_nota_se_guardo_no_se_devuelve(self):
+        traza = [dict(tool='note.save', arguments={}, result={'id': 'n1'}, failed=False)]
+        self.assertFalse(self.chat('He apuntado la nota.', traza)[2])
 
     def test_con_alguna_llamada_hecha_no_se_toca(self):
         traza = [dict(tool='system.status', arguments={}, result={'cpu': {}}, failed=False)]
