@@ -9,6 +9,7 @@ puerta no puede cambiar nada aunque se obedezca.
 from __future__ import annotations
 
 import os
+import re
 import shlex
 import socket
 import subprocess
@@ -46,6 +47,19 @@ ORDENES = {
 
 GESTORES = {'dpkg': 'apt', 'dpkg-query': 'apt', 'apt-cache': 'apt', 'apt': 'apt', 'apt-mark': 'apt',
             'flatpak': 'flatpak', 'snap': 'snap'}
+
+# El listado de lo instalado en cada gestor: lo que se lanza al buscar una aplicación.
+LISTADOS = {'apt': 'apt list --installed', 'snap': 'snap list', 'flatpak': 'flatpak list'}
+# Dónde dejan su lanzador las aplicaciones, vengan de donde vengan. Solo se miran los
+# nombres de archivo: lista y estado, no contenidos.
+LANZADORES = ('/usr/share/applications', '/usr/local/share/applications', '~/.local/share/applications',
+              '/var/lib/snapd/desktop/applications', '/var/lib/flatpak/exports/share/applications',
+              '~/.local/share/flatpak/exports/share/applications')
+MAX_COINCIDENCIAS = 12
+# Lo que apt escribe alrededor de su listado y no es ningún paquete.
+RUIDO_APT = ('WARNING: apt does not have a stable CLI interface', 'Listing...')
+PARA_BUSCAR = ('Esto es el listado entero. Para saber si una aplicación está instalada repite la orden '
+               'con filter="parte del nombre": la búsqueda mira sola en apt, snap, flatpak y los lanzadores.')
 
 
 def este_pc():
@@ -123,6 +137,9 @@ def falta_tras(ordenes, respuesta):
     En el chat real miró el estado, copió de su historial que no tenía acceso a los
     registros y atribuyó el fallo a una base de datos corrupta sin haberlos leído.
     """
+    # Una búsqueda ya miró en todos los gestores: no queda ninguno que señalar.
+    if 'encontrado_en' in respuesta:
+        return []
     partes = ordenes[-1].split()
     if (partes[0] == 'systemctl' and 'status' in partes and respuesta['exit_code'] != 0
             and not any(orden.startswith('journalctl') for orden in ordenes)):
@@ -131,10 +148,106 @@ def falta_tras(ordenes, respuesta):
     return sin_mirar(ordenes)
 
 
-def read(command, filter=None, *, runner=ejecutar):
+# «orden | grep texto», con -i o sin él y el texto entre comillas o no. Nada más.
+GREP = re.compile(r"""^(?P<orden>[^|;&<>`$]+?)\s*\|\s*grep\s+(?:-i\s+)?(?P<c>['"]?)(?P<texto>[^\s|;&<>`$'"-][^\s|;&<>`$'"]*)(?P=c)\s*$""")
+
+
+def sin_grep(command, filter):
+    """`orden | grep texto` es lo que escribe quien conoce una terminal: se lee como filter.
+
+    Sigue sin haber shell ni tubería. El 11/11, midiendo con el E4B, cuatro de cada
+    cinco búsquedas empezaban así y se rechazaban una tras otra —hasta seis seguidas
+    en un turno— antes de que probara filter; a veces no llegaba a probarlo. Se
+    traduce solo esa forma exacta y la orden que queda pasa por la misma lista de
+    siempre: cualquier otra tubería se sigue rechazando.
+    """
+    encontrada = GREP.match(command) if isinstance(command, str) else None
+    if not encontrada or (filter and filter.casefold() != encontrada['texto'].casefold()):
+        return command, filter, None
+    return (encontrada['orden'].strip(), encontrada['texto'],
+            'No hay tuberías: «| grep ' + encontrada['texto'] + '» se ha leído como filter="' +
+            encontrada['texto'] + '». La próxima vez usa filter.')
+
+
+def es_listado(partes):
+    """¿La orden lista lo instalado en un gestor? Con filter, eso es buscar una aplicación."""
+    programa, resto = partes[0], partes[1:]
+    if programa in ('dpkg', 'dpkg-query'):
+        return '-l' in resto or '-W' in resto
+    if programa == 'apt':
+        # Sin --installed lista lo disponible en los repositorios, que no es lo instalado.
+        return 'list' in resto and '--installed' in resto
+    return programa in ('snap', 'flatpak') and 'list' in resto
+
+
+def lanzadores(texto, carpetas=LANZADORES):
+    """Lanzadores de escritorio cuyo nombre contiene el texto, los instalara quien los instalara."""
+    vistos = []
+    for carpeta in carpetas:
+        carpeta = os.path.expanduser(carpeta)
+        try:
+            nombres = sorted(os.listdir(carpeta))
+        except OSError:
+            continue
+        vistos += [os.path.join(carpeta, nombre) for nombre in nombres
+                   if nombre.endswith('.desktop') and texto.casefold() in nombre.casefold()]
+    return vistos
+
+
+def buscar(partes, filtro, propias, *, runner=ejecutar, escritorio=lanzadores):
+    """Buscar una aplicación es mirar en todos los sitios, no en el primero que se ocurra.
+
+    El 10/11 se le pidió encontrar ChatGPT. Dijo que no podía buscarla en dpkg, miró
+    snap entero sin filtrar, propuso flatpak, y solo dio con ella en apt cuando la
+    persona lo sugirió: cuatro turnos para algo que es una pregunta. `falta_por_mirar`
+    ya le decía qué gestores quedaban, pero encadenarlos seguía siendo cosa suya y un
+    modelo de este tamaño se pierde por el camino. Ahora la cadena la hace la
+    herramienta: un listado con filter mira también en los otros gestores y en los
+    lanzadores, y devuelve dónde está y dónde no.
+    """
+    propio = GESTORES[partes[0]]
+    instaladas = propias
+    if partes[0] in ('dpkg', 'dpkg-query') and '-l' in partes:
+        # `rc` es un paquete desinstalado del que queda la configuración.
+        instaladas = [linea for linea in propias if linea[:2] in ('ii', 'hi')]
+    hallado = {propio: instaladas}
+    otros = {}
+    for gestor, orden in LISTADOS.items():
+        if gestor == propio:
+            continue
+        codigo, salida = runner(trocear(orden))
+        if codigo == 127:
+            otros[gestor] = 'este equipo no tiene ' + gestor
+            continue
+        lineas = [linea for linea in salida.splitlines()
+                  if filtro.casefold() in linea.casefold() and not linea.startswith(RUIDO_APT)]
+        hallado[gestor] = lineas
+        otros[gestor] = (lineas[:MAX_COINCIDENCIAS] if lineas else
+                         'sin coincidencias' if codigo == 0 else
+                         'no se pudo leer (exit_code ' + str(codigo) + ')')
+    iconos = escritorio(filtro)
+    otros['lanzadores'] = iconos[:MAX_COINCIDENCIAS] or 'sin coincidencias'
+    encontrado = [gestor for gestor in ('apt', 'snap', 'flatpak') if hallado.get(gestor)]
+    if iconos:
+        encontrado.append('lanzadores')
+    resultado = dict(tambien_mirado=otros, encontrado_en=encontrado)
+    if propias and not instaladas:
+        resultado['solo_restos'] = ('En dpkg solo queda su configuración (estado rc): '
+                                    'por apt está desinstalada.')
+    if not encontrado:
+        resultado['sin_rastro'] = (
+            '«' + filtro + '» no aparece en apt, snap ni flatpak, ni entre los lanzadores. Prueba con otra '
+            'parte del nombre antes de decir que no está: un AppImage o un programa copiado a mano no '
+            'deja rastro en ningún gestor.')
+    return resultado
+
+
+def read(command, filter=None, *, runner=ejecutar, escritorio=lanzadores):
     if filter and filter.startswith('-'):
         raise ValueError('filter es un texto que deben contener las líneas; las opciones van en command')
-    codigo, salida = runner(trocear(command))
+    command, filter, leida = sin_grep(command, filter)
+    partes = trocear(command)
+    codigo, salida = runner(partes)
     lineas = salida.splitlines()
     total = len(lineas)
     if filter:
@@ -145,4 +258,15 @@ def read(command, filter=None, *, runner=ejecutar):
         respuesta.update(filter=filter, lines_before_filter=total)
     if len(texto) > MAX_SALIDA:
         respuesta['truncated'] = True
+    if leida:
+        respuesta['nota'] = leida
+    if es_listado(partes):
+        if filter:
+            hallazgo = buscar(partes, filter, lineas, runner=runner, escritorio=escritorio)
+            # Dónde está va delante de la salida: `lines: 0` en el gestor preguntado se
+            # leía como «no está», aunque estuviera en otro.
+            respuesta = dict(command=command, encontrado_en=hallazgo.pop('encontrado_en'),
+                             **{k: v for k, v in respuesta.items() if k != 'command'}, **hallazgo)
+        else:
+            respuesta['para_buscar'] = PARA_BUSCAR
     return respuesta
