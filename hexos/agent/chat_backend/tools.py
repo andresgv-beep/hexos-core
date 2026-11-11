@@ -5,7 +5,7 @@ import json
 import time
 from typing import TYPE_CHECKING
 from uuid import uuid4
-from .. import catalog, devices, hosts, notes, core, terminal_read, workflow, procedures
+from .. import catalog, devices, hosts, notes, core, pc_status, terminal_read, workflow, procedures
 from ..continuity import history_tool
 from ..progress import announcement
 from ..work import now
@@ -208,6 +208,8 @@ class ToolDispatcher:
             return self.env.dependencies.web_read(args['url'])
         if name == 'terminal.read':
             return terminal_read.read(args['command'], args.get('filter'))
+        if name == 'system.status':
+            return pc_status.estado()
         if name.startswith('procedure.') or name in ('report.save', 'result.get'):
             return workflow.dispatch(store, name, args, turn_id)
         if name.startswith(('procedure.', 'report.', 'task.')):

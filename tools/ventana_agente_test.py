@@ -43,7 +43,7 @@ class VentanaAgenteTest(unittest.TestCase):
         # «¿Podrías encontrar la app de ChatGPT?» no pedía el grupo y la terminal ni se ofrecía.
         guia = catalog.GROUP_GUIDANCE['sistema']
         self.assertIn('instalado', guia)
-        self.assertIn('aplicación', guia)
+        self.assertIn('aplicaciones', guia)
 
 
 if __name__ == '__main__':

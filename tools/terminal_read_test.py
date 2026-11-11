@@ -189,6 +189,50 @@ class BuscarAplicacionTest(unittest.TestCase):
         self.assertIn('completa', r['para_buscar'])
         self.assertEqual(terminal_read.falta_tras(['dpkg -l'], r), [])
 
+    def test_filtrar_por_juego_devuelve_los_juegos_del_menu(self):
+        # «que juegos tengo instalados» llegó como filter="juego": cero líneas, «no tienes juegos».
+        menu = {'sistema': ['Steam (juego)', 'Vim'], 'propias': ['My Summer Car (juego)']}
+        for palabra in ('juego', 'Juegos', 'game'):
+            runner, _ = equipo(dpkg='ii  gamemode  1.8  amd64  optimiza juegos')
+            r = terminal_read.read('dpkg -l', filter=palabra, runner=runner, escritorio=lambda t: [],
+                                   menu=lambda: menu)
+            self.assertEqual(list(r)[:2], ['command', 'juegos'], palabra)
+            self.assertEqual(r['juegos'], ['My Summer Car', 'Steam'], palabra)
+        runner, _ = equipo(dpkg='ii  vlc  3  amd64  x')
+        r = terminal_read.read('dpkg -l', filter='vlc', runner=runner, escritorio=lambda t: [], menu=lambda: menu)
+        self.assertNotIn('juegos', r)
+
+    def test_status_sin_servicio_y_con_filter_da_el_estado_real(self):
+        # Dijo «el servicio SSH está activo»: no existía, y el filtro había casado con ssh-agent
+        # en el árbol de procesos.
+        sistema = ('cups.service       loaded    active   running CUPS Scheduler\n'
+                   'sshd.service       not-found inactive dead    sshd.service\n'
+                   'sssd-ssh.service   loaded    inactive dead    SSSD SSH\n'
+                   'roto-ssh.service   loaded    failed   failed  Roto')
+        sesion = 'ssh-agent.service  loaded    active   running OpenSSH Agent'
+        vistas = []
+        def runner(partes):
+            vistas.append(' '.join(partes))
+            return 0, sesion if '--user' in partes else sistema
+        r = terminal_read.read('systemctl status', filter='ssh', runner=runner)
+        self.assertTrue(all('list-units' in v for v in vistas), vistas)      # el árbol entero no se pide
+        self.assertEqual(r['servicios'], [
+            dict(servicio='sshd.service', estado='no existe en este equipo', ambito='sistema'),
+            dict(servicio='sssd-ssh.service', estado='parado', ambito='sistema'),
+            dict(servicio='roto-ssh.service', estado='falló', ambito='sistema'),
+            dict(servicio='ssh-agent.service', estado='en marcha', ambito='sesión')])
+        self.assertNotIn('output', r)
+        self.assertEqual(terminal_read.falta_tras(['systemctl status'], r), [])
+        r = terminal_read.read('systemctl is-active', filter='docker', runner=runner)
+        self.assertIn('ningún servicio', r['servicios'])
+
+    def test_status_de_un_servicio_concreto_no_cambia(self):
+        vistas = []
+        r = terminal_read.read('systemctl status cups', filter='Active',
+                               runner=lambda p: (vistas.append(p), (0, 'Active: active (running)'))[1])
+        self.assertEqual(vistas, [['systemctl', 'status', 'cups']])
+        self.assertNotIn('servicios', r)
+
     def test_listado_corto_conserva_su_salida(self):
         runner, _ = equipo(snap=SNAPS)
         r = terminal_read.read('snap list', runner=runner, menu=lambda: {})

@@ -65,6 +65,11 @@ ORIGENES = (('/usr/share/applications', 'sistema'), ('/usr/local/share/applicati
             ('~/.local/share/applications', 'propias'), ('/var/lib/snapd/desktop/applications', 'snap'),
             ('/var/lib/flatpak/exports/share/applications', 'flatpak'),
             ('~/.local/share/flatpak/exports/share/applications', 'flatpak'))
+# «¿Qué juegos tengo?» llega como filter="juego" o "game": no es el nombre de ningún
+# programa, es una clase, y solo el lanzador dice cuáles lo son.
+ES_JUEGO = {'juego', 'juegos', 'game', 'games', 'videojuego', 'videojuegos'}
+SON_JUEGOS = ('juegos son los programas que su lanzador declara como juego; es la respuesta a qué juegos hay. '
+              'Las líneas de output son paquetes cuyo nombre contiene el filtro, no juegos.')
 YA_ESTAN = ('aplicaciones son los programas con icono en el menú, de todos los gestores (apt, snap, '
             'flatpak y los instalados a mano): la lista está completa, no hace falta otra orden. '
             'Las demás líneas del gestor son paquetes del sistema. ')
@@ -147,7 +152,7 @@ def falta_tras(ordenes, respuesta):
     """
     # Una búsqueda, o el listado de aplicaciones, ya miró en todos los gestores: no
     # queda ninguno que señalar.
-    if 'encontrado_en' in respuesta or 'aplicaciones' in respuesta:
+    if 'encontrado_en' in respuesta or 'aplicaciones' in respuesta or 'servicios' in respuesta:
         return []
     partes = ordenes[-1].split()
     if (partes[0] == 'systemctl' and 'status' in partes and respuesta['exit_code'] != 0
@@ -299,11 +304,53 @@ def buscar(partes, filtro, propias, *, runner=ejecutar, escritorio=lanzadores):
     return resultado
 
 
+ESTADOS = {'running': 'en marcha', 'exited': 'terminó bien', 'dead': 'parado', 'failed': 'falló',
+           'auto-restart': 'reiniciándose'}
+SON_SERVICIOS = ('servicios es el estado real de cada servicio cuyo nombre contiene el filtro, del sistema y de '
+                 'la sesión de la persona.')
+
+
+def servicios(filtro, *, runner=ejecutar):
+    """Estado de los servicios cuyo nombre contiene el texto.
+
+    «¿Está activo ssh?» llegó como `systemctl status` con filter="ssh": el árbol de
+    procesos de la máquina entera, donde «ssh» coincide con ssh-agent y con cualquier
+    orden que lo nombre. El modelo contestó que estaba activo, y no existía.
+    """
+    hallados = []
+    for ambito, opcion in (('sistema', []), ('sesión', ['--user'])):
+        codigo, salida = runner(['systemctl', *opcion, 'list-units', '--type=service', '--all',
+                                 '--no-pager', '--plain', '--no-legend'])
+        if codigo != 0:
+            continue
+        for linea in salida.splitlines():
+            campos = linea.split(None, 4)
+            if len(campos) < 4 or filtro.casefold() not in campos[0].casefold():
+                continue
+            if campos[1] == 'not-found':
+                estado = 'no existe en este equipo'
+            else:
+                estado = ESTADOS.get(campos[3], campos[3])
+            hallados.append(dict(servicio=campos[0], estado=estado, ambito=ambito))
+    return hallados[:MAX_COINCIDENCIAS]
+
+
+def sin_unidad(partes):
+    """`systemctl status` o `is-active` sin decir de qué servicio."""
+    return (partes[0] == 'systemctl' and len([p for p in partes[1:] if not p.startswith('-')]) == 1
+            and partes[1:] and next(p for p in partes[1:] if not p.startswith('-')) in ('status', 'is-active'))
+
+
 def read(command, filter=None, *, runner=ejecutar, escritorio=lanzadores, menu=aplicaciones):
     if filter and filter.startswith('-'):
         raise ValueError('filter es un texto que deben contener las líneas; las opciones van en command')
     command, filter, leida = sin_grep(command, filter)
     partes = trocear(command)
+    if filter and sin_unidad(partes):
+        vistos = servicios(filter, runner=runner)
+        return dict(command=command, filter=filter,
+                    servicios=vistos or 'ningún servicio con ese nombre, ni del sistema ni de la sesión',
+                    nota=SON_SERVICIOS)
     codigo, salida = runner(partes)
     lineas = salida.splitlines()
     total = len(lineas)
@@ -324,6 +371,12 @@ def read(command, filter=None, *, runner=ejecutar, escritorio=lanzadores, menu=a
             # leía como «no está», aunque estuviera en otro.
             respuesta = dict(command=command, encontrado_en=hallazgo.pop('encontrado_en'),
                              **{k: v for k, v in respuesta.items() if k != 'command'}, **hallazgo)
+            if filter.casefold() in ES_JUEGO:
+                juegos = sorted({nombre[:-len(' (juego)')] for nombres in menu().values()
+                                 for nombre in nombres if nombre.endswith(' (juego)')}, key=str.casefold)
+                respuesta = dict(command=command, juegos=juegos or 'ninguno con lanzador en el menú',
+                                 nota_juegos=SON_JUEGOS,
+                                 **{k: v for k, v in respuesta.items() if k != 'command'})
         else:
             # Pedir el listado entero es preguntar qué hay instalado: delante van los
             # programas, y la salida del gestor solo si cabe entera.
