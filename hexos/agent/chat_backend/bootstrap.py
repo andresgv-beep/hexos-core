@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 from http.server import ThreadingHTTPServer
+import os
 from pathlib import Path
 from ..continuity import HeraProfile
 from ..telemetry import SystemTelemetry
@@ -43,6 +44,11 @@ def main():
         parser.error('--multimodal requiere --native-template')
     if bool(args.hera) != bool(args.memory_home):
         parser.error('--hera y --memory-home deben indicarse juntos')
+    # Sin el programa, cada lectura y cada guardado del perfil fallaba en silencio:
+    # el servicio estuvo dos meses diciendo que recordaba sin recordar nada.
+    if args.hera and not (Path(args.hera).is_file() and os.access(args.hera, os.X_OK)):
+        parser.error('Falta el programa de memoria ' + args.hera +
+                     ': compílalo con «make -C ' + str(Path(args.hera).parent.parent) + '»')
     Path(args.workspace).mkdir(parents=True, exist_ok=True)
     if args.native_template:
         from ..native import NativeRuntime

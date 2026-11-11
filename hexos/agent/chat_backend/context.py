@@ -264,7 +264,7 @@ class ContextManager:
     def prepare(self, store, turn: TurnState) -> None:
         """Guarda la entrada y construye exactamente el contexto del flujo original."""
         from .profile_context import availability
-        profile = availability(self.agent.profile)
+        profile = availability(self.agent.profile, getattr(self.agent, 'ventana', None))
         turn.uid = uuid4().hex
         self.agent.progress = {'turn_id':turn.uid, 'messages':[]}
         turn.document = None

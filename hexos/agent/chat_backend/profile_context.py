@@ -2,10 +2,41 @@
 import unicodedata
 
 
-def availability(profile):
-    return ('MEMORIA PERSONAL: disponible mediante profile_recall con una consulta concreta. '
-            'No es una fuente del informe técnico salvo que el encargo necesite ese dato.\n'
-            if profile else '')
+SIEMPRE_DELANTE = 1500
+
+
+A_DEMANDA = ('MEMORIA PERSONAL: disponible mediante profile_recall con una consulta concreta. '
+             'No es una fuente del informe técnico salvo que el encargo necesite ese dato.\n')
+
+
+def availability(profile, ventana=None):
+    """Lo que la persona ha confirmado de sí misma.
+
+    En el chat va delante desde el primer turno. Antes solo se anunciaba que había
+    memoria y el modelo tenía que ir a buscarla: para un dato suelto vale, pero «no me
+    hables como un asistente telefónico» es un trato, se aplica siempre, y nadie
+    consulta el perfil antes de cada frase. Un perfil es corto: entra entero hasta un
+    tope y el resto sigue en profile_recall.
+
+    En el agente sigue a demanda: sus informes del NAS no deben recibir datos
+    personales que nadie pidió (tools/report_context_test.py).
+    """
+    if not profile:
+        return ''
+    if ventana != 'chat':
+        return A_DEMANDA
+    try:
+        texto = profile.read()
+    except Exception:
+        return A_DEMANDA                # ilegible ahora: que al menos sepa que existe
+    if not texto:
+        return ('MEMORIA PERSONAL: todavía no hay nada guardado de la persona. '
+                'Lo que cuente de sí misma lo guarda HexOS al cerrar el turno.\n')
+    recortado = len(texto) > SIEMPRE_DELANTE
+    return ('MEMORIA PERSONAL: lo ha dicho la persona en otras conversaciones y sigue valiendo. '
+            'Si dice cómo quiere que le hables, háblale así desde la primera frase.\n'
+            + texto[:SIEMPRE_DELANTE]
+            + ('\n[Hay más: profile_recall con una consulta concreta.]' if recortado else '') + '\n')
 
 
 def recall(profile, query):

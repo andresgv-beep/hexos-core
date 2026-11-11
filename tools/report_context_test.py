@@ -96,4 +96,43 @@ class ReportContextTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.agent.dispatcher.dispatch(store,'nas.read',dict(device='fixture',section='containers',scope='all',container='plex'))
 
+
+class PerfilEnElChatTest(unittest.TestCase):
+    """En el chat lo que la persona ha dicho de sí misma va delante; en el agente, no."""
+    class Perfil:
+        def read(self): return 'PERFIL DE LA PERSONA ACTUAL:\n- Su nombre es Andrés\n- Su trato es de colega, sin fórmulas'
+        def keys(self): return {'yo/nombre': 'Andrés'}
+
+    def contexto(self, ventana, perfil=None):
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        agent = Agent(tmp.name, Runtime(), perfil or self.Perfil())
+        agent.set_window(ventana)
+        with agent.store() as store:
+            turn = TurnState(text='hola')
+            agent.context.prepare(store, turn)
+            return json.dumps(turn.messages, ensure_ascii=False)
+
+    def test_el_chat_tiene_nombre_y_trato_desde_el_primer_turno(self):
+        texto = self.contexto('chat')
+        self.assertIn('Su nombre es Andrés', texto)
+        self.assertIn('de colega, sin fórmulas', texto)
+        self.assertIn('háblale así desde la primera frase', texto)
+
+    def test_el_agente_lo_sigue_teniendo_a_demanda(self):
+        texto = self.contexto('agente')
+        self.assertNotIn('Su nombre es Andrés', texto)
+        self.assertIn('profile_recall', texto)
+
+    def test_un_perfil_ilegible_no_tumba_el_turno(self):
+        class Roto(self.Perfil):
+            def read(self): raise FileNotFoundError('hera')
+        self.assertIn('profile_recall', self.contexto('chat', Roto()))
+
+    def test_un_perfil_largo_se_recorta_y_lo_dice(self):
+        class Largo(self.Perfil):
+            def read(self): return 'x' * 5000
+        texto = self.contexto('chat', Largo())
+        self.assertIn('Hay más: profile_recall', texto)
+        self.assertLess(texto.count('x'), 1600)
+
 if __name__ == '__main__': unittest.main()

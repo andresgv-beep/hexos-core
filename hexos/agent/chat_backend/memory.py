@@ -27,7 +27,7 @@ AFIRMACION = re.compile(
     r'|me gustar[ií]a|prefiero que|quiero que (?:seas|me)'
     r'|tr[aá]tame|h[aá]blame|no me (?:hables|trates|contestes|respondas)'
     r'|no seas|s[eé] m[aá]s|te pido que'
-    r'|recuerda que|apunta que|no olvides que|que lo recuerdes'
+    r'|recuerda que|recuerda mi|apunta que|no olvides que|que lo recuerdes'
     # Pedírselo con todas las letras. «memoriza que tengo dos hijos» no pasaba:
     # el portón solo conocía «recuerda» y «apunta».
     r'|memoriza|memor[íi]zalo|guarda que|gu[áa]rdalo|que sepas que|ten en cuenta que'
