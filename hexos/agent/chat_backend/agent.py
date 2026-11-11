@@ -309,6 +309,7 @@ class Agent:
         try:
             cambia = getattr(self, 'ventana', None) != window
             self.ventana = window
+            self.runtime.ventana = window
             if getattr(self, 'grupos', None) is not None:
                 # Lo que quedó vivo de la otra ventana no se arrastra.
                 self.grupos.reset()
@@ -335,6 +336,7 @@ class Agent:
             fila = None
         guardada = fila[0] if fila and fila[0] in catalog.WINDOWS else catalog.DEFAULT_WINDOW
         self.ventana = guardada
+        self.runtime.ventana = guardada
         return guardada
 
     def set_thinking(self, enabled):

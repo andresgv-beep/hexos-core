@@ -50,8 +50,20 @@ class SinLlamadaTest(unittest.TestCase):
         self.assertFalse(devuelto)
         self.assertEqual(runtime.checks, 0)
 
-    def test_en_la_ventana_chat_no_se_fuerza(self):
-        self.assertFalse(self.cierre(ventana='chat')[2])
+    def test_en_el_chat_se_devuelve_sin_forzar_una_lectura(self):
+        # «He apuntado que tienes dentista» sin una sola llamada. Apuntar es escribir,
+        # y el arranque forzado solo deja leer: se avisa y el modelo elige.
+        runtime = Runtime(); runtime.native = True
+        runtime, turn, devuelto, otra = self.cierre(ventana='chat', pedidos=('notas',), runtime=runtime)
+        self.assertTrue(devuelto)
+        self.assertEqual(runtime.checks, 0)
+        self.assertIn('no se ha guardado', turn.messages[0]['content'])
+        turn.messages = []
+        self.assertFalse(otra())
+
+    def test_una_charla_en_el_chat_no_se_devuelve(self):
+        runtime = Runtime(); runtime.native = True
+        self.assertFalse(self.cierre(ventana='chat', pedidos=(), runtime=runtime)[2])
 
     def test_con_alguna_llamada_hecha_no_se_toca(self):
         traza = [dict(tool='system.status', arguments={}, result={'cpu': {}}, failed=False)]

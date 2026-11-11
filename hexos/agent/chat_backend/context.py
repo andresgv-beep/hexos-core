@@ -104,16 +104,6 @@ HANDOFF_LAST = 4_000
 HANDOFF_LISTING = 4_000
 
 
-# En la ventana Agente la persona ha elegido que Helios actúe. El 11/11, midiendo con el
-# E4B, tres de siete «¿está instalado X?» acababan sin una sola llamada: preguntaba si
-# la aplicación era de móvil o de web, o qué gestor de paquetes mirar, con la terminal
-# delante. Va por turno y no en el bloque de sistema porque las dos ventanas comparten
-# todavía conversación y prefijo KV; cuando tengan cada una el suyo, esto es su sistema.
-AGENTE = ('\nVENTANA AGENTE (regla de HexOS, no la ha dicho la persona): si lo que pide se puede '
-          'averiguar con una lectura, llámala ahora con lo más probable en vez de preguntar, y cuenta '
-          'lo que salga.\n')
-
-
 class ContextManager:
     def __init__(self, agent: Agent):
         self.agent = agent
@@ -248,6 +238,8 @@ class ContextManager:
         fiar, se ofrece el catálogo completo: su fallo no deja al modelo sin herramientas.
         """
         runtime = self.agent.runtime
+        # El sistema también es de la ventana: se le dice al motor antes de montar nada.
+        runtime.ventana = getattr(self.agent, 'ventana', None)
         if not hasattr(runtime, 'active_groups'):
             return                      # un motor que no declara herramientas por grupos
         pegajosos = getattr(self.agent, 'grupos', None)
@@ -257,7 +249,9 @@ class ContextManager:
         ventana = getattr(self.agent, 'ventana', None) or catalog.DEFAULT_WINDOW
         ultimo = next((m.get('content') or '' for m in reversed(getattr(runtime, 'messages', []) or [])
                        if m.get('role') == 'assistant' and m.get('content')), '')
-        elegidos = tool_groups.elegir(runtime, ultimo, turn.prompt_text or '', ventana)
+        propio = getattr(runtime, 'elegir_grupos', None)
+        elegidos = (propio(ultimo, turn.prompt_text or '', ventana) if propio else
+                    tool_groups.elegir(runtime, ultimo, turn.prompt_text or '', ventana))
         if elegidos is None:
             # No se pudo fiar: todo lo que la ventana permite, no el catálogo entero.
             runtime.active_groups = list(catalog.groups_in(ventana))
@@ -365,8 +359,6 @@ class ContextManager:
         turn.reproche = bool(aviso_reproche)
         bloque_recuerdo += aviso_reproche
         bloque_recuerdo += sin_resolver.bloque(store, turn.uid)
-        if getattr(self.agent, 'ventana', None) == 'agente':
-            bloque_recuerdo += AGENTE
         # Lo que acabó en segundo plano se cuenta en el primer turno que llegue,
         # aunque sea un saludo: Helios no puede escribir por su cuenta.
         workspace = getattr(self.agent, 'workspace', None)
@@ -412,7 +404,10 @@ class ContextManager:
                 (turn.boundary,)).fetchone()[0]
             turn.metadata = bloque_recuerdo
             turn.metadata += handoff
-            saved_task = procedures.state(store) or {}
+            # El encargo activo es cosa del agente: en el chat ni se nombra, y las
+            # herramientas que lo leen tampoco se le declaran.
+            saved_task = ({} if getattr(self.agent, 'ventana', None) == catalog.DEFAULT_WINDOW
+                          else procedures.state(store) or {})
             references = {key:saved_task[key] for key in ('result_id','report_id') if key in saved_task}
             if references:
                 turn.metadata += '\nREFERENCIAS PARA HERRAMIENTAS (solo si la petición las necesita):\n' + json.dumps(references)

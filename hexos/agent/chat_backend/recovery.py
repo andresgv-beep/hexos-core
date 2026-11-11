@@ -66,6 +66,10 @@ FRAGMENTOS = ('responde con lo que dicen los fragmentos del buscador, diciendo q
               'y que no se ha podido abrir ninguna página. ')
 
 
+SIN_LLAMADA_CHAT = ('AVISO DE HEXOS (no es la persona): la respuesta anterior no ejecutó ninguna '
+                    'herramienta, así que no se ha guardado ni consultado nada. Si la persona pidió '
+                    'apuntar, ver o buscar algo, llama ahora a la herramienta; si no pidió nada de '
+                    'eso, contesta sin decir que lo has hecho. No menciones este aviso.')
 SIN_LLAMADA = ('AVISO DE HEXOS (no es la persona): la respuesta anterior no consultó nada. '
                'Haz ahora la lectura que responde a la petición y contesta con lo que salga. '
                'No menciones este aviso.')
@@ -192,6 +196,16 @@ class RecoveryController:
             if self.agent.runtime.require_check():
                 turn.messages = [dict(role='user', content=SIN_LLAMADA)]
                 return True
+        # En el chat la misma señal, sin forzar el arranque: allí lo pedido suele ser
+        # apuntar una nota, que es una escritura, y el arranque forzado solo deja leer.
+        # Medido el 11/11: «apunta que el viernes tengo dentista» -> «He apuntado…» sin
+        # una sola llamada. Una vez; si no había nada que hacer, que conteste sin más.
+        if (not turn.trace and turn.grupos_pedidos and not turn.retries.sin_llamada_devuelto
+                and getattr(self.agent, 'ventana', None) == catalog.DEFAULT_WINDOW
+                and getattr(self.agent.runtime, 'native', False)):
+            turn.retries.sin_llamada_devuelto = True
+            turn.messages = [dict(role='user', content=SIN_LLAMADA_CHAT)]
+            return True
         recoverable = {name for name, definition in catalog.TOOLS.items()
                        if definition['effect'] in ('read', 'result')}
         last = turn.trace[-1] if turn.trace else {}

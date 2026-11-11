@@ -45,6 +45,8 @@ class ModelLifecycle:
         self._harvest_pending = False
         self._pending_image = None
         self._on_update = None
+        self._active_groups = None
+        self._ventana = None
         self.inference_slot = InferenceSlot()
         self._chat_slot = None
         self._io_lock = threading.RLock()
@@ -61,6 +63,38 @@ class ModelLifecycle:
         with self._condition:
             if self._runtime is not None:
                 self._runtime.thinking = self._thinking
+
+    # Grupos y ventana se deciden fuera, con el modelo quizá descargado: se guardan
+    # aquí y se le ponen al motor cuando existe. Sin estas dos propiedades el agente
+    # no veía `active_groups`, el selector no llegaba a ejecutarse y en servicio se
+    # declaraba el catálogo entero en cada turno.
+    @property
+    def active_groups(self):
+        return self._active_groups
+
+    @active_groups.setter
+    def active_groups(self, value):
+        with self._condition:
+            self._active_groups = value
+            if self._runtime is not None:
+                self._runtime.active_groups = value
+
+    @property
+    def ventana(self):
+        return self._ventana
+
+    @ventana.setter
+    def ventana(self, value):
+        with self._condition:
+            self._ventana = value
+            if self._runtime is not None:
+                self._runtime.ventana = value
+
+    def elegir_grupos(self, ultimo_asistente, mensaje, ventana):
+        """El selector usa la sesión auxiliar: pregunta y respuesta van en una sola toma."""
+        from .. import tool_groups
+        with self._io_lock, self._use() as runtime:
+            return tool_groups.elegir(runtime, ultimo_asistente, mensaje, ventana)
 
     @property
     def progressive(self):
@@ -150,6 +184,8 @@ class ModelLifecycle:
                 runtime.harvest_pending = self._harvest_pending
                 runtime.pending_image = self._pending_image
                 runtime.on_update = self._on_update
+                runtime.active_groups = self._active_groups
+                runtime.ventana = self._ventana
                 self._runtime = runtime
                 self._state = 'ready'
                 self._last_activity = time.monotonic()

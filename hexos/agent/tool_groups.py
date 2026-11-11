@@ -137,4 +137,4 @@ class Pegajosos:
         if ventana is not None:
             permitidos = set(catalog.groups_in(ventana))
             activos = [g for g in activos if g in permitidos]
-        return catalog.tools_for(activos)
+        return catalog.tools_for(activos, ventana)

@@ -505,11 +505,16 @@ def group_of(name):
     return None
 
 
-def tools_for(groups):
+# Del núcleo, lo que es maquinaria de encargos: el chat conversa, no lleva trabajos.
+NUCLEO_SOLO_AGENTE = ('task.current', 'task.focus', 'result.get')
+
+
+def tools_for(groups, window=None):
     """Las declaraciones de los grupos pedidos más el núcleo, en el orden del catálogo.
 
     El orden importa: el mismo conjunto tiene que producir el mismo prompt byte a byte,
     o cada turno invalida el prefijo KV aunque las herramientas sean las mismas.
+    Con ventana «chat» el núcleo va sin las herramientas de encargos.
     """
     activos = {ALWAYS}
     for g in groups:
@@ -518,6 +523,8 @@ def tools_for(groups):
         activos.add(g)
         activos.update(GROUP_REQUIRES.get(g, ()))
     nombres = {h for g in activos for h in GROUPS[g]}
+    if window == DEFAULT_WINDOW:
+        nombres -= set(NUCLEO_SOLO_AGENTE)
     return {name: definition for name, definition in model_tools().items() if name in nombres}
 
 
