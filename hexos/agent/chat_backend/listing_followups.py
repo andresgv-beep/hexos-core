@@ -23,7 +23,7 @@ def listing_followup(store, turn_id, text):
     current = store.db.execute('SELECT rowid FROM conversation WHERE id=?', (turn_id,)).fetchone()
     if not current:
         return None
-    users = store.db.execute("SELECT id,text FROM conversation WHERE role='user' AND rowid<? "
+    users = store.db.execute("SELECT id,text FROM esta_ventana WHERE role='user' AND rowid<? "
                              'ORDER BY rowid DESC LIMIT 8', (current[0],)).fetchall()
     candidates = []
     for user in users:

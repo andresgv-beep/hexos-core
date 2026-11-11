@@ -94,7 +94,7 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                     self.respond(400, {'error': str(exc)})
             elif self.path == '/api/history':
                 with agent.store() as store:
-                    rows = [dict(r) for r in store.db.execute('SELECT * FROM conversation ORDER BY rowid DESC LIMIT 100')][::-1]
+                    rows = [dict(r) for r in store.db.execute('SELECT * FROM esta_ventana ORDER BY rowid DESC LIMIT 100')][::-1]
                     for row in rows:
                         if row['role'] != 'user':
                             row['progress'] = []

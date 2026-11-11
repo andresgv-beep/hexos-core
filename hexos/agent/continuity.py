@@ -126,14 +126,14 @@ class HeraProfile:
 
 def history_tool(store, name, args):
     if name == 'history.recent':
-        rows = store.db.execute('SELECT id,ts,role,text FROM conversation ORDER BY rowid DESC LIMIT 20').fetchall()[::-1]
+        rows = store.db.execute('SELECT id,ts,role,text FROM esta_ventana ORDER BY rowid DESC LIMIT 20').fetchall()[::-1]
         return {'messages': [dict(id=r['id'], ts=r['ts'], role=r['role'], excerpt=r['text'][:500])
                              for r in rows], 'historical_data': True, 'order':'oldest_to_newest'}
     if name == 'history.search':
         query = args['query']
         # LIKE literal: ni comodines ni SQL aportado por el modelo.
         query = query.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
-        rows = store.db.execute("SELECT id,ts,role,text FROM conversation "
+        rows = store.db.execute("SELECT id,ts,role,text FROM esta_ventana "
             "WHERE text LIKE ? ESCAPE '\\' ORDER BY rowid DESC LIMIT 20",
             ('%' + query + '%',)).fetchall()[::-1]
         return {'matches': [dict(id=r['id'], ts=r['ts'], role=r['role'],

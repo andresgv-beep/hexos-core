@@ -12,6 +12,7 @@ class SinResolverTest(unittest.TestCase):
         db = sqlite3.connect(':memory:')
         db.row_factory = sqlite3.Row
         db.executescript('CREATE TABLE conversation(id,role);'
+                         'CREATE VIEW esta_ventana AS SELECT rowid AS rowid, id, role FROM conversation;'
                          'CREATE TABLE tool_events(seq INTEGER PRIMARY KEY, turn_id, body);')
         self.store = SimpleNamespace(db=db)
 

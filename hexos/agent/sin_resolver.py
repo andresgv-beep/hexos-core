@@ -8,7 +8,7 @@ import json
 
 
 def bloque(store, turno):
-    previo = store.db.execute("SELECT id FROM conversation WHERE role='user' AND id<>? "
+    previo = store.db.execute("SELECT id FROM esta_ventana WHERE role='user' AND id<>? "
                               'ORDER BY rowid DESC LIMIT 1', (turno,)).fetchone()
     if previo is None:
         return ''

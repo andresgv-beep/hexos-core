@@ -147,7 +147,7 @@ class ReferenceResolver:
             actual = store.db.execute('SELECT rowid FROM conversation WHERE id=?',
                                       (turn_id,)).fetchone()
             anterior = store.db.execute(
-                "SELECT id FROM conversation WHERE role='user' AND rowid<? "
+                "SELECT id FROM esta_ventana WHERE role='user' AND rowid<? "
                 'ORDER BY rowid DESC LIMIT 1', (actual['rowid'],)).fetchone() if actual else None
             evento = store.db.execute(
                 'SELECT body FROM tool_events WHERE turn_id=? ORDER BY seq DESC LIMIT 1',
@@ -218,7 +218,7 @@ class ReferenceResolver:
             return None
         # Lo último que se enseñó o listó, de más reciente a más antiguo.
         filas = store.db.execute(
-            'SELECT e.body FROM tool_events e JOIN conversation c ON c.id=e.turn_id '
+            'SELECT e.body FROM tool_events e JOIN esta_ventana c ON c.id=e.turn_id '
             'WHERE c.id<>? ORDER BY e.seq DESC LIMIT 12', (turn_id,)).fetchall()
         for fila in filas:
             paso = json.loads(fila['body'])

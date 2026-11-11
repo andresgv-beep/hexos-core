@@ -15,6 +15,7 @@ from .memory import AFIRMACION
 from .settings import PROMPT
 from .document_reading import document_lines
 from .state import TurnState
+from .persistence import clave
 
 if TYPE_CHECKING:
     from .agent import Agent
@@ -79,7 +80,7 @@ def hora_activa():
 
 
 def tras_pausa(store, turn_id, ahora=None):
-    fila = store.db.execute("SELECT ts FROM conversation WHERE role='user' AND id<>? "
+    fila = store.db.execute("SELECT ts FROM esta_ventana WHERE role='user' AND id<>? "
                             'ORDER BY rowid DESC LIMIT 1', (turn_id,)).fetchone()
     if fila is None:
         return False  # conversación nueva: entra al reconstruir el contexto
@@ -92,6 +93,7 @@ def tras_pausa(store, turn_id, ahora=None):
 
 
 HANDOFF_KEY = 'context_handoff'
+CORTE = 'context_boundary'
 HANDOFF_MESSAGES = 4
 HANDOFF_CHARS = 6_000
 HANDOFF_EACH = 900
@@ -159,7 +161,7 @@ class ContextManager:
                        last_listing=self._last_listing(store))
         store.db.execute("INSERT INTO agent_state VALUES (?,?) "
                          'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
-                         (HANDOFF_KEY, json.dumps(handoff, ensure_ascii=False)))
+                         (clave(store, HANDOFF_KEY), json.dumps(handoff, ensure_ascii=False)))
         store.db.commit()
         return handoff
 
@@ -198,7 +200,7 @@ class ContextManager:
 
     @staticmethod
     def load_handoff(store):
-        row = store.db.execute("SELECT value FROM agent_state WHERE key=?", (HANDOFF_KEY,)).fetchone()
+        row = store.db.execute("SELECT value FROM agent_state WHERE key=?", (clave(store, HANDOFF_KEY),)).fetchone()
         if row is None:
             return None
         try:
@@ -235,7 +237,7 @@ class ContextManager:
     def consume_handoff(store, handoff):
         """Tras una respuesta final válida, el nuevo bloque ya contiene continuidad."""
         if handoff is not None:
-            store.db.execute('DELETE FROM agent_state WHERE key=?', (HANDOFF_KEY,))
+            store.db.execute('DELETE FROM agent_state WHERE key=?', (clave(store, HANDOFF_KEY),))
             store.db.commit()
 
     def _elegir_grupos(self, turn) -> None:
@@ -392,7 +394,7 @@ class ContextManager:
              r['text'][:700] + '\n[Vista parcial; history.read con este id recupera el mensaje completo]')
             for r in turn.history)
         last_tool = store.db.execute('SELECT e.ts,e.body FROM tool_events e '
-            'JOIN conversation c ON c.id=e.turn_id WHERE c.rowid>? '
+            'JOIN esta_ventana c ON c.id=e.turn_id WHERE c.rowid>? '
             'ORDER BY e.seq DESC LIMIT 1', (turn.boundary,)).fetchone()
         evidence = 'Ninguna herramienta registrada.'
         if last_tool:
@@ -406,7 +408,7 @@ class ContextManager:
         # Multimedia is discovered on demand through media.options, never injected
         # into unrelated turns or retained repeatedly in the native prefix.
         if getattr(self.agent.runtime, 'native', False):
-            archived = store.db.execute('SELECT COUNT(*) FROM conversation WHERE rowid<=?',
+            archived = store.db.execute('SELECT COUNT(*) FROM esta_ventana WHERE rowid<=?',
                 (turn.boundary,)).fetchone()[0]
             turn.metadata = bloque_recuerdo
             turn.metadata += handoff
@@ -438,7 +440,7 @@ class ContextManager:
                     tool_history[row['id']] = [json.loads(r['body']) for r in store.db.execute(
                         'SELECT body FROM tool_events WHERE turn_id=? ORDER BY seq', (row['id'],))]
             turn.memory_evidence = store.db.execute(
-                "SELECT id,model_text AS text FROM conversation WHERE role='user' AND id<>? "
+                "SELECT id,model_text AS text FROM esta_ventana WHERE role='user' AND id<>? "
                 'ORDER BY rowid DESC LIMIT 8', (turn.uid,)).fetchall()[::-1]
             # Mientras el prefijo siga vivo se añaden solo los datos de ESTE
             # turno. Volver a pasar el historial entero lo duplicaba en el
@@ -538,13 +540,13 @@ class ContextManager:
         Devuelve (corte, mensajes). La ruta JSON antigua conserva su ventana de
         ocho: no reaprovecha KV y su prompt es de un solo mensaje.
         """
-        fila = store.db.execute("SELECT value FROM agent_state WHERE key='context_boundary'").fetchone()
+        fila = store.db.execute('SELECT value FROM agent_state WHERE key=?', (clave(store, CORTE),)).fetchone()
         corte = int(fila[0]) if fila else 0
         if not native:
-            filas = store.db.execute('SELECT id,ts,role,model_text AS text FROM conversation '
+            filas = store.db.execute('SELECT id,ts,role,model_text AS text FROM esta_ventana '
                 'WHERE id<>? AND rowid>? ORDER BY rowid DESC LIMIT 8', (turn_id, corte)).fetchall()
             return corte, filas[::-1]
-        filas = store.db.execute('SELECT rowid,id,ts,role,model_text AS text FROM conversation '
+        filas = store.db.execute('SELECT rowid,id,ts,role,model_text AS text FROM esta_ventana '
             'WHERE id<>? AND rowid>? ORDER BY rowid', (turn_id, corte)).fetchall()
         # Dos medidas, y manda la peor. Los caracteres estiman lo que va a ocupar la
         # conversación; la posición del KV es lo que el motor tiene ocupado DE VERDAD,
@@ -560,11 +562,11 @@ class ContextManager:
         # mensaje más viejo dejaría el prompt cambiando por delante en cada turno,
         # que es justo lo que impide reaprovechar nada. El archivo no se toca:
         # sigue entero en la base y history_search lo alcanza.
-        nuevo = store.db.execute('SELECT COALESCE(MAX(rowid),0) FROM conversation '
+        nuevo = store.db.execute('SELECT COALESCE(MAX(rowid),0) FROM esta_ventana '
                                  'WHERE id<>?', (turn_id,)).fetchone()[0]
         self.save_handoff(store, filas, nuevo)
-        store.db.execute("INSERT INTO agent_state VALUES ('context_boundary',?) "
-                         'ON CONFLICT(key) DO UPDATE SET value=excluded.value', (str(nuevo),))
+        store.db.execute("INSERT INTO agent_state VALUES (?,?) "
+                         'ON CONFLICT(key) DO UPDATE SET value=excluded.value', (clave(store, CORTE), str(nuevo)))
         store.db.commit()
         self.agent.context_cut = dict(at=now(), messages=len(filas),
                                 characters=sum(len(f['text']) for f in filas),
@@ -584,9 +586,9 @@ class ContextManager:
             if hasattr(self.agent.runtime, 'active_groups'):
                 self.agent.runtime.active_groups = None
             with self.agent.store() as store:
-                boundary = store.db.execute('SELECT COALESCE(MAX(rowid),0) FROM conversation').fetchone()[0]
-                store.db.execute("INSERT INTO agent_state VALUES ('context_boundary',?) "
-                                 'ON CONFLICT(key) DO UPDATE SET value=excluded.value', (str(boundary),))
+                boundary = store.db.execute('SELECT COALESCE(MAX(rowid),0) FROM esta_ventana').fetchone()[0]
+                store.db.execute("INSERT INTO agent_state VALUES (?,?) "
+                                 'ON CONFLICT(key) DO UPDATE SET value=excluded.value', (clave(store, CORTE), str(boundary)))
                 store.db.commit()
             return {'ok': True, 'history_preserved': True, 'reports_preserved': True}
         finally:

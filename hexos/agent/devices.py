@@ -392,7 +392,7 @@ def dispatch(store, name, args, turn_id=None, observation=None):
         # sin protocolo»: mirar solo ese turno obligaba a reescribirla. Cuentan sus
         # mensajes recientes, nunca los del asistente.
         mensajes = [fila] + list(store.db.execute(
-            "SELECT id,text,rowid FROM conversation WHERE role='user' AND rowid<? "
+            "SELECT id,text,rowid FROM esta_ventana WHERE role='user' AND rowid<? "
             'ORDER BY rowid DESC LIMIT ?', (fila['rowid'], MENSAJES_EVIDENCIA - 1)))
         candidatos = []
         for orden, mensaje in enumerate(mensajes):
@@ -502,7 +502,7 @@ def dispatch(store, name, args, turn_id=None, observation=None):
     kind = args.get('kind', '')
     if kind:
         string(kind, 'kind', 60)
-    source = source or next((r for r in store.db.execute("SELECT id,text FROM conversation WHERE role='user' ORDER BY rowid DESC LIMIT 8")
+    source = source or next((r for r in store.db.execute("SELECT id,text FROM esta_ventana WHERE role='user' ORDER BY rowid DESC LIMIT 8")
                    if quote in r['text']), None)
     if not source:
         raise ValueError('La evidencia debe ser una cita literal de un mensaje reciente del usuario.')

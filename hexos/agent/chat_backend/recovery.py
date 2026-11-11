@@ -10,6 +10,7 @@ from ..native_transport import GenerationInterrupted
 from ..work import now
 from .settings import PROMPT
 from .state import TurnState
+from .persistence import clave
 from .ledger import checkpoint_messages
 from .completion import ReplyPolicy
 
@@ -120,11 +121,11 @@ class RecoveryController:
             turn.checkpointed_steps = len(turn.trace)
             self.agent.runtime.call({'type': 'reset'})
             nuevo_corte = store.db.execute(
-                'SELECT COALESCE(MAX(rowid),0) FROM conversation WHERE id<>?', (turn.uid,)).fetchone()[0]
+                'SELECT COALESCE(MAX(rowid),0) FROM esta_ventana WHERE id<>?', (turn.uid,)).fetchone()[0]
             turn.handoff = self.agent.context.save_handoff(store, turn.history, nuevo_corte)
-            store.db.execute("INSERT INTO agent_state VALUES ('context_boundary',?) "
+            store.db.execute('INSERT INTO agent_state VALUES (?,?) '
                              'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
-                             (str(nuevo_corte),))
+                             (clave(store, 'context_boundary'), str(nuevo_corte)))
             store.db.commit()
             self.agent.context_cut = dict(at=now(), messages=len(turn.history),
                                     characters=sum(len(f['text']) for f in turn.history),

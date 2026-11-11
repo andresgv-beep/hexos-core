@@ -302,14 +302,28 @@ class Agent:
         # entero muere en `context.prepare`.
         if window not in catalog.WINDOWS:
             raise ValueError('ventana desconocida: ' + ', '.join(catalog.WINDOWS))
-        self.ventana = window
-        if getattr(self, 'grupos', None) is not None:
-            # Lo que quedó vivo de la otra ventana no se arrastra.
-            self.grupos.reset()
-        with self.store() as store:
-            store.db.execute("INSERT INTO agent_state VALUES ('window',?) "
-                             'ON CONFLICT(key) DO UPDATE SET value=excluded.value', (window,))
-            store.db.commit()
+        # Cada ventana tiene su conversación y su contexto. A mitad de turno no se
+        # cambia: el turno escribiría su respuesta en la conversación de la otra.
+        if not self.lock.acquire(blocking=False):
+            raise RuntimeError('Ya hay un turno en curso')
+        try:
+            cambia = getattr(self, 'ventana', None) != window
+            self.ventana = window
+            if getattr(self, 'grupos', None) is not None:
+                # Lo que quedó vivo de la otra ventana no se arrastra.
+                self.grupos.reset()
+            with self.store() as store:
+                store.db.execute("INSERT INTO agent_state VALUES ('window',?) "
+                                 'ON CONFLICT(key) DO UPDATE SET value=excluded.value', (window,))
+                store.db.commit()
+            if cambia:
+                # El modelo tiene delante la conversación de la otra ventana: se vacía,
+                # y el turno siguiente la reconstruye desde el archivo de esta.
+                self.runtime.call({'type': 'reset'})
+                if hasattr(self.runtime, 'active_groups'):
+                    self.runtime.active_groups = None
+        finally:
+            self.lock.release()
         return dict(window=window, persisted=True, groups=list(catalog.groups_in(window)))
 
     def restore_window(self):

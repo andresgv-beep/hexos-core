@@ -164,6 +164,8 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const [historyError, setHistoryError] = useState("");
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyNext, setHistoryNext] = useState<number | null>(null);
+  // Cada ventana tiene su conversación: al cambiar se vuelve a pedir el historial.
+  const [conversacion, setConversacion] = useState(0);
   const [olderLoading, setOlderLoading] = useState(false);
   const olderBusy = useRef(false);
   async function loadOlderHistory() {
@@ -325,7 +327,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       if (!disposed) setHistoryLoading(false);
     });
     return () => { disposed = true; controller.abort(); clearTimeout(timeout); };
-  }, [transport]);
+  }, [transport, conversacion]);
   useEffect(() => {
     let disposed = false;
     const controller = new AbortController();
@@ -441,6 +443,9 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     setVentanaBusy(true);
     try {
       setVentana(await transport.setWindow(destino));
+      // Lo que hay en pantalla es de la otra ventana: fuera, y se carga lo de esta.
+      setTurns([]); setPrevious([]); setHistoryNext(null); setHistoryError("");
+      setHistoryLoading(true); setConversacion(n => n + 1);
     } catch {
       // Si HexOS no lo confirma, el botón no debe mentir sobre el estado real.
       try { setVentana((await transport.status()).window); } catch { setVentana(null); }
