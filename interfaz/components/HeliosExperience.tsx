@@ -5,7 +5,7 @@ import { InferenceFooter } from "./InferenceFooter";
 import { type InferenceMetrics } from "@/lib/helios/metrics";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
-import { Activity, ArrowRight, Brain, Code2, HardDrive, History, ListChecks, MessageCircle, NotebookText, Square, Wrench, X } from "lucide-react";
+import { Activity, ArrowRight, Brain, Code2, Eraser, HardDrive, History, ListChecks, MessageCircle, NotebookText, Square, Wrench, X } from "lucide-react";
 import { AttachmentButton, ChatAttachments, type Attachment } from "./ChatAttachments";
 import { VoiceButton } from "./VoiceButton";
 import { VoiceMode } from "./VoiceMode";
@@ -166,6 +166,8 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const [historyNext, setHistoryNext] = useState<number | null>(null);
   // Cada ventana tiene su conversación: al cambiar se vuelve a pedir el historial.
   const [conversacion, setConversacion] = useState(0);
+  const [limpiando, setLimpiando] = useState(false);
+  const [limpio, setLimpio] = useState(false);
   const [olderLoading, setOlderLoading] = useState(false);
   const olderBusy = useRef(false);
   async function loadOlderHistory() {
@@ -436,6 +438,22 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     }
   }
 
+  // Empezar de cero en esta ventana. La pantalla se vacía porque Helios ya no tiene eso
+  // delante; lo anterior sigue en el archivo y vuelve al recargar o desde Historial.
+  async function limpiarContexto() {
+    if (!transport.clearContext || sending || limpiando) return;
+    setLimpiando(true);
+    try {
+      await transport.clearContext();
+      setTurns([]); setPrevious([]); setLimpio(true);
+    } catch {
+      setHistoryError("No se pudo limpiar el contexto. Helios sigue con la conversación anterior.");
+    } finally {
+      setLimpiando(false);
+      inputRef.current?.focus();
+    }
+  }
+
   // Chat y Agente son dos sitios del raíl, no un interruptor: se va a uno o al otro.
   async function irAVentana(destino: "chat" | "agente") {
     inputRef.current?.focus();
@@ -445,7 +463,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       setVentana(await transport.setWindow(destino));
       // Lo que hay en pantalla es de la otra ventana: fuera, y se carga lo de esta.
       setTurns([]); setPrevious([]); setHistoryNext(null); setHistoryError("");
-      setHistoryLoading(true); setConversacion(n => n + 1);
+      setHistoryLoading(true); setConversacion(n => n + 1); setLimpio(false);
     } catch {
       // Si HexOS no lo confirma, el botón no debe mentir sobre el estado real.
       try { setVentana((await transport.status()).window); } catch { setVentana(null); }
@@ -500,7 +518,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     setTurnTools([]);
     // El turno anterior se va de la columna solo; las ventanas abiertas se quedan,
     // que para eso son notas y no conversación.
-    setTurns(items => [...items, { id, text, pending: true }]);
+    setTurns(items => [...items, { id, text, pending: true }]); setLimpio(false);
     setRevealing(false);
     attachments.forEach(file => removeAttachment(file.id));
     setAttachmentError("");
@@ -729,6 +747,12 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         {thinking !== null && <button className="vision-chip" type="button" aria-pressed={thinking}
           disabled={thinkingBusy} onClick={() => void toggleThinking()}>
           <Brain size={15} aria-hidden="true" /> Razonamiento: {thinkingBusy ? "…" : thinking ? "automático" : "apagado"}
+        </button>}
+        {transport.clearContext && <button className="vision-chip" type="button"
+          disabled={sending || limpiando || historyLoading}
+          title="Helios deja de tener delante la conversación de esta ventana. No se borra: sigue en el historial."
+          onClick={() => void limpiarContexto()}>
+          <Eraser size={15} aria-hidden="true" /> {limpiando ? "Limpiando…" : limpio ? "Contexto limpio" : "Limpiar contexto"}
         </button>}
         <button ref={historyButton} className="vision-chip" type="button" onClick={() => setHistoryOpen(true)}>
           <History size={15} aria-hidden="true" /> Historial</button>

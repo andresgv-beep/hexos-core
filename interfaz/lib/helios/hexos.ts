@@ -97,6 +97,9 @@ export interface HeliosTransport {
   /** Cambia el espacio de trabajo. Decide qué herramientas se le declaran al modelo:
    *  en «chat» no ve el NAS ni la terminal. HexOS lo recuerda entre reinicios. */
   setWindow(window: HeliosWindow, signal?: AbortSignal): Promise<HeliosWindow>;
+  /** Empieza de cero el contexto de la ventana actual. El archivo no se borra: lo
+   *  anterior sigue en el historial y Helios puede consultarlo, pero ya no lo tiene delante. */
+  clearContext?(signal?: AbortSignal): Promise<void>;
   /** Avisa a HexOS al empezar a escribir. Inicia la carga, pero no bloquea la UI. */
   warmup(signal?: AbortSignal): Promise<"unloaded" | "loading" | "ready" | "unloading" | "error" | "closed">;
   history(signal?: AbortSignal): Promise<HistoryMessage[]>;
@@ -184,6 +187,11 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
         throw new Error("HexOS no confirmó el espacio de trabajo");
       }
       return data.window;
+    },
+    async clearContext(signal) {
+      const data = await request("context/reset", { method: "POST",
+        headers: { "Content-Type": "application/json" }, body: "{}", signal });
+      if (!isRecord(data) || data.ok !== true) throw new Error("HexOS no confirmó la limpieza");
     },
     async warmup(signal) {
       const data = await request("model/warmup", { method: "POST",
