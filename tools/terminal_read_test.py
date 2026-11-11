@@ -148,6 +148,17 @@ class BuscarAplicacionTest(unittest.TestCase):
         self.assertIn('desinstalada', r['solo_restos'])
         self.assertEqual(r['lines'], 1)          # la línea rc se sigue enseñando tal cual
 
+    def test_apt_list_sin_installed_separa_lo_instalado_de_lo_disponible(self):
+        # Ofreció instalar ChatGPT, que ya estaba instalada, al leer `apt list` a secas.
+        r, _ = self.buscar('apt list', 'gimp', snap=SNAPS,
+                           apt='gimp/stable 3.0 amd64\ngimp-data/stable 3.0 all')
+        self.assertEqual(r['encontrado_en'], [])
+        self.assertIn('sin instalar', r['solo_disponible'])
+        r, _ = self.buscar('apt list', 'gimp', snap=SNAPS,
+                           apt='gimp/stable,now 3.0 amd64 [installed]\ngimp-data/stable 3.0 all')
+        self.assertEqual(r['encontrado_en'], ['apt'])
+        self.assertNotIn('solo_disponible', r)
+
     def test_el_ruido_de_apt_no_se_cuenta_como_coincidencia(self):
         r, _ = self.buscar('snap list', 'list', snap=SNAPS, apt='vim/stable 9 amd64 [installed]')
         self.assertEqual(r['tambien_mirado']['apt'], 'sin coincidencias')
@@ -166,7 +177,7 @@ class BuscarAplicacionTest(unittest.TestCase):
         self.assertEqual(terminal_read.falta_tras(['snap list'], r), ['apt', 'flatpak'])
 
     def test_lo_que_no_es_un_listado_de_instaladas_no_encadena(self):
-        for orden in ('apt-cache search video', 'apt list', 'dpkg -s vim', 'snap info vlc', 'df -h',
+        for orden in ('apt-cache search video', 'apt show vim', 'dpkg -s vim', 'snap info vlc', 'df -h',
                       'journalctl -u ssh -n 20'):
             vistas = []
             r = terminal_read.read(orden, filter='x', runner=lambda p: (vistas.append(p), (0, 'x'))[1])

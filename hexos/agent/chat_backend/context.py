@@ -102,6 +102,16 @@ HANDOFF_LAST = 4_000
 HANDOFF_LISTING = 4_000
 
 
+# En la ventana Agente la persona ha elegido que Helios actúe. El 11/11, midiendo con el
+# E4B, tres de siete «¿está instalado X?» acababan sin una sola llamada: preguntaba si
+# la aplicación era de móvil o de web, o qué gestor de paquetes mirar, con la terminal
+# delante. Va por turno y no en el bloque de sistema porque las dos ventanas comparten
+# todavía conversación y prefijo KV; cuando tengan cada una el suyo, esto es su sistema.
+AGENTE = ('\nVENTANA AGENTE (regla de HexOS, no la ha dicho la persona): si lo que pide se puede '
+          'averiguar con una lectura, llámala ahora con lo más probable en vez de preguntar, y cuenta '
+          'lo que salga.\n')
+
+
 class ContextManager:
     def __init__(self, agent: Agent):
         self.agent = agent
@@ -352,6 +362,8 @@ class ContextManager:
         turn.reproche = bool(aviso_reproche)
         bloque_recuerdo += aviso_reproche
         bloque_recuerdo += sin_resolver.bloque(store, turn.uid)
+        if getattr(self.agent, 'ventana', None) == 'agente':
+            bloque_recuerdo += AGENTE
         # Lo que acabó en segundo plano se cuenta en el primer turno que llegue,
         # aunque sea un saludo: Helios no puede escribir por su cuenta.
         workspace = getattr(self.agent, 'workspace', None)

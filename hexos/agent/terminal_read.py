@@ -175,8 +175,7 @@ def es_listado(partes):
     if programa in ('dpkg', 'dpkg-query'):
         return '-l' in resto or '-W' in resto
     if programa == 'apt':
-        # Sin --installed lista lo disponible en los repositorios, que no es lo instalado.
-        return 'list' in resto and '--installed' in resto
+        return 'list' in resto
     return programa in ('snap', 'flatpak') and 'list' in resto
 
 
@@ -210,6 +209,11 @@ def buscar(partes, filtro, propias, *, runner=ejecutar, escritorio=lanzadores):
     if partes[0] in ('dpkg', 'dpkg-query') and '-l' in partes:
         # `rc` es un paquete desinstalado del que queda la configuración.
         instaladas = [linea for linea in propias if linea[:2] in ('ii', 'hi')]
+    disponible = partes[0] == 'apt' and '--installed' not in partes
+    if disponible:
+        # `apt list` a secas enseña también lo que hay en los repositorios sin instalar.
+        # El 11/11 leyó una de esas líneas y ofreció instalar lo que ya estaba instalado.
+        instaladas = [linea for linea in propias if '[installed' in linea]
     hallado = {propio: instaladas}
     otros = {}
     for gestor, orden in LISTADOS.items():
@@ -231,7 +235,10 @@ def buscar(partes, filtro, propias, *, runner=ejecutar, escritorio=lanzadores):
     if iconos:
         encontrado.append('lanzadores')
     resultado = dict(tambien_mirado=otros, encontrado_en=encontrado)
-    if propias and not instaladas:
+    if propias and not instaladas and disponible:
+        resultado['solo_disponible'] = ('Está en los repositorios de apt, sin instalar: '
+                                        'las líneas instaladas llevan [installed].')
+    elif propias and not instaladas:
         resultado['solo_restos'] = ('En dpkg solo queda su configuración (estado rc): '
                                     'por apt está desinstalada.')
     if not encontrado:
