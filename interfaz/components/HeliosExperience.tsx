@@ -5,7 +5,7 @@ import { InferenceFooter } from "./InferenceFooter";
 import { type InferenceMetrics } from "@/lib/helios/metrics";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
-import { Activity, ArrowRight, Brain, Code2, HardDrive, History, ListChecks, MessageCircle, NotebookText, Square, X } from "lucide-react";
+import { Activity, ArrowRight, Brain, Code2, HardDrive, History, ListChecks, MessageCircle, NotebookText, Square, Wrench, X } from "lucide-react";
 import { AttachmentButton, ChatAttachments, type Attachment } from "./ChatAttachments";
 import { VoiceButton } from "./VoiceButton";
 import { VoiceMode } from "./VoiceMode";
@@ -434,11 +434,13 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     }
   }
 
-  async function toggleVentana() {
-    if (ventana === null || ventanaBusy) return;
+  // Chat y Agente son dos sitios del raíl, no un interruptor: se va a uno o al otro.
+  async function irAVentana(destino: "chat" | "agente") {
+    inputRef.current?.focus();
+    if (ventana === null || ventanaBusy || ventana === destino) return;
     setVentanaBusy(true);
     try {
-      setVentana(await transport.setWindow(ventana === "chat" ? "agente" : "chat"));
+      setVentana(await transport.setWindow(destino));
     } catch {
       // Si HexOS no lo confirma, el botón no debe mentir sobre el estado real.
       try { setVentana((await transport.status()).window); } catch { setVentana(null); }
@@ -698,7 +700,12 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       onOpenFiles={() => setFileViewer({})}
       onPreview={previewCode} turnExtras={turnExtras} />}
     <nav className="vision-rail" aria-label="Secciones">
-      <button type="button" aria-label="Conversación" aria-current="page" onClick={() => inputRef.current?.focus()}><MessageCircle size={21} /></button>
+      <button type="button" aria-label="Conversación" title="Chat: memoria, notas, informes y web"
+        aria-current={ventana !== "agente" ? "page" : undefined} disabled={ventanaBusy}
+        onClick={() => void irAVentana("chat")}><MessageCircle size={21} /></button>
+      {ventana !== null && <button type="button" aria-label="Modo agente" title="Agente: este PC, equipos, NAS y multimedia"
+        aria-current={ventana === "agente" ? "page" : undefined} disabled={ventanaBusy}
+        onClick={() => void irAVentana("agente")}><Wrench size={21} /></button>}
       <button type="button" aria-label="Notas" aria-pressed={coreOpen} onClick={() => setCoreOpen(true)}><NotebookText size={21} /></button>
       <button type="button" aria-label="Archivos del NAS" onClick={() => setFileFloating({})}><HardDrive size={21} /></button>
       <button type="button" aria-label="Implementación" aria-pressed={codeOpen} disabled={!ultimaImplementacion && !fileViewer}
@@ -773,8 +780,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     {tasksOpen && !mobile && <TasksPanel media={mediaJobs} onControl={controlMedia} onClose={() => setTasksOpen(false)} />}
     {systemOpen && !mobile && <div className="vision-system" role="dialog" aria-label="Estado del sistema">
       <button type="button" className="icon-button vision-system-close" aria-label="Cerrar estado del sistema" onClick={() => setSystemOpen(false)}><X size={16} /></button>
-      <SystemMonitor autoEnabled={null} onToggleAuto={() => void toggleThinking()}
-        ventana={ventana} ventanaBusy={ventanaBusy} onToggleVentana={() => void toggleVentana()} />
+      <SystemMonitor autoEnabled={null} onToggleAuto={() => void toggleThinking()} />
     </div>}
     <section className="floating-workspace" aria-label="Notas e informes abiertos">
       {windows.filter(item => !item.minimized && (mobile || item.id === floatingNote)).map(item => <NoteWindow key={item.id} state={item}
