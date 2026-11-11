@@ -85,6 +85,9 @@ class RetryState:
     web_read_guided: bool = False
     read_claim_checked: bool = False
     sin_llamada_devuelto: bool = False
+    # La respuesta que se devolvió en el chat, por si repetir no sirve de nada.
+    respuesta_devuelta: str | None = None
+    traza_al_devolver: int = 0
 
 
 @dataclass

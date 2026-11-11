@@ -210,8 +210,20 @@ class RecoveryController:
                 and not any(catalog.TOOLS.get(paso.get('tool'), {}).get('effect') != 'read'
                             for paso in turn.trace)):
             turn.retries.sin_llamada_devuelto = True
+            turn.retries.respuesta_devuelta = output.get('reply') or ''
+            turn.retries.traza_al_devolver = len(turn.trace)
             turn.messages = [dict(role='user', content=SIN_LLAMADA_CHAT)]
             return True
+        # Se devolvió y la repetición tampoco hizo nada: lo que sale entonces es una
+        # contestación al aviso («Entendido. No he guardado nada en este turno»), peor
+        # que la primera, que solía ser buena. Se entrega la primera, y el contexto del
+        # modelo se vacía para que el aviso y su contestación no se queden en la
+        # conversación: el turno siguiente la reconstruye desde el archivo.
+        if (turn.retries.respuesta_devuelta is not None
+                and len(turn.trace) == turn.retries.traza_al_devolver):
+            output['reply'] = turn.retries.respuesta_devuelta
+            turn.retries.respuesta_devuelta = None
+            self.agent.runtime.call({'type': 'reset'})
         recoverable = {name for name, definition in catalog.TOOLS.items()
                        if definition['effect'] in ('read', 'result')}
         last = turn.trace[-1] if turn.trace else {}

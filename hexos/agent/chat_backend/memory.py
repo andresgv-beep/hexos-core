@@ -108,12 +108,21 @@ def recall_terms(text, limite=3):
     terminos.sort(key=len, reverse=True)
     return terminos[:limite]
 
+# Segunda persona dentro de un dato: se refiere a quien escucha, que es Helios.
+A_HELIOS = re.compile(r'\b(?:tu|tus|tú|ti|te|contigo|tuyo|tuya|tuyos|tuyas)\b', re.I)
+
+
 def frase_del_hecho(clave, valor):
     """La frase que verá el modelo en el perfil. HERA imprime este texto literal,
     así que es aquí donde el sujeto tiene que quedar dicho: «Su hermana se llama
     Lucía», no «Su nombre es Lucía», que valdría igual para la hermana que para
     el ordenador."""
     sujeto, _, atributo = clave.partition('/')
+    # El valor son sus palabras, y las dijo hablándole a Helios: «soy tu creador» se
+    # guardaba como «Su rol es tu creador» y al leerlo contestó «como tu creador,
+    # espero que…». Las comillas y la aclaración dejan dicho a quién se lo decía.
+    if A_HELIOS.search(valor):
+        valor = '«' + valor + '» (lo dijo hablándote a ti, Helios)'
     if sujeto == 'yo':
         return 'Su ' + atributo + ' es ' + valor
     if atributo == 'nombre':

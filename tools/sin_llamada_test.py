@@ -64,6 +64,29 @@ class SinLlamadaTest(unittest.TestCase):
         turn.messages = []
         self.assertFalse(otra())
 
+    def test_si_repetir_no_hace_nada_se_entrega_la_primera_respuesta(self):
+        # «Mil disculpas, lo he anotado mal: tú eres mi creador» se devolvió, y lo que
+        # salió fue «Entendido. No he guardado nada en este turno».
+        tmp = tempfile.TemporaryDirectory(prefix='hexos-sin-llamada-'); self.addCleanup(tmp.cleanup)
+        runtime = Runtime(); runtime.native = True
+        llamadas = []
+        runtime.call = llamadas.append
+        agent = Agent(tmp.name, runtime); agent.ventana = 'chat'
+        turn = TurnState(text='soy tu creador', image=None, model_request='soy tu creador', transcript=None)
+        salida = dict(reply='Tienes razón, lo he anotado mal: tú eres mi creador.', work=None)
+        self.assertTrue(agent.runner.recovery.before_completion(None, turn, salida))
+        salida['reply'] = 'Entendido. No he guardado nada en este turno.'
+        self.assertFalse(agent.runner.recovery.before_completion(None, turn, salida))
+        self.assertEqual(salida['reply'], 'Tienes razón, lo he anotado mal: tú eres mi creador.')
+        self.assertIn({'type': 'reset'}, llamadas)      # el aviso no se queda en la conversación
+
+    def test_si_al_repetir_guarda_la_nota_vale_la_segunda(self):
+        runtime, turn, devuelto, otra = self.chat('He apuntado que tienes dentista el viernes.')
+        self.assertTrue(devuelto)
+        turn.trace.append(dict(tool='note.save', arguments={}, result={'id': 'n1'}, failed=False))
+        self.assertFalse(otra())
+        self.assertIsNotNone(turn.retries.respuesta_devuelta)   # no se restauró la primera
+
     def test_hablar_de_las_notas_en_el_chat_no_se_devuelve(self):
         # «a okey, y notas tienes verdad?»: el selector pidió notas, la respuesta era
         # buena y la devolución la cambió por una contestación al aviso.

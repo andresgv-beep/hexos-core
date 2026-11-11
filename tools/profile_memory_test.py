@@ -274,6 +274,16 @@ class ProfileMemoryTest(unittest.TestCase):
         self.assertIn('Antes de preguntar un dato de la persona', POLICY)
 
 
+
+class SegundaPersonaTest(unittest.TestCase):
+    def test_un_dato_dicho_a_helios_lo_deja_claro(self):
+        # «yo soy tu creador» -> «Su rol es tu creador» -> «como tu creador, espero que…».
+        from hexos.agent.chat_backend.memory import frase_del_hecho
+        frase = frase_del_hecho('yo/rol', 'tu creador')
+        self.assertIn('«tu creador»', frase)
+        self.assertIn('hablándote a ti, Helios', frase)
+        self.assertEqual(frase_del_hecho('yo/nombre', 'andres'), 'Su nombre es andres')
+
 if __name__ == '__main__':
     unittest.main()
 

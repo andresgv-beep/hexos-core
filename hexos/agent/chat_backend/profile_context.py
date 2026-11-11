@@ -34,7 +34,8 @@ def availability(profile, ventana=None):
                 'Lo que cuente de sí misma lo guarda HexOS al cerrar el turno.\n')
     recortado = len(texto) > SIEMPRE_DELANTE
     return ('MEMORIA PERSONAL: lo ha dicho la persona en otras conversaciones y sigue valiendo. '
-            'Si dice cómo quiere que le hables, háblale así desde la primera frase.\n'
+            'Si dice cómo quiere que le hables, háblale así desde la primera frase. Son sus palabras '
+            'dichas a ti: donde ponga «tu» o «ti», eres tú, Helios.\n'
             + texto[:SIEMPRE_DELANTE]
             + ('\n[Hay más: profile_recall con una consulta concreta.]' if recortado else '') + '\n')
 
