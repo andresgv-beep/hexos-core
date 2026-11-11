@@ -34,7 +34,7 @@ class TerminalReadTest(unittest.TestCase):
         self.assertEqual((r['lines'], r['lines_before_filter']), (2, 3))
 
     def test_salida_larga_se_recorta_y_lo_dice(self):
-        r = terminal_read.read('dpkg -l', runner=lambda p: (0, 'x' * 9000))
+        r = terminal_read.read('journalctl -u ssh -n 500', runner=lambda p: (0, 'x' * 9000))
         self.assertEqual(len(r['output']), terminal_read.MAX_SALIDA)
         self.assertTrue(r['truncated'])
 
@@ -170,11 +170,49 @@ class BuscarAplicacionTest(unittest.TestCase):
 
     def test_listado_sin_filter_no_encadena_y_dice_como_buscar(self):
         runner, vistas = equipo(snap=SNAPS)
-        r = terminal_read.read('snap list', runner=runner)
+        r = terminal_read.read('snap list', runner=runner, menu=lambda: {'snap': ['Firefox']})
         self.assertEqual(vistas, ['snap list'])
         self.assertIn('filter=', r['para_buscar'])
         self.assertNotIn('encontrado_en', r)
-        self.assertEqual(terminal_read.falta_tras(['snap list'], r), ['apt', 'flatpak'])
+
+    def test_listado_sin_filter_lleva_delante_las_aplicaciones(self):
+        # «qué programas tengo»: listó dpkg -l, resumió acl, apport y bash, y anunció
+        # que miraría snap y flatpak sin hacerlo.
+        runner, _ = equipo(dpkg='\n'.join('ii  paquete%04d  1.0  amd64  relleno de sistema' % i for i in range(400)))
+        menu = {'sistema': ['Steam'], 'snap': ['Spotify'], 'flatpak': ['HandBrake']}
+        r = terminal_read.read('dpkg -l', runner=runner, menu=lambda: menu)
+        self.assertEqual(list(r)[:2], ['command', 'aplicaciones'])
+        self.assertEqual(r['aplicaciones'], menu)
+        self.assertEqual(r['lines'], 400)
+        self.assertNotIn('output', r)       # cortado no sirve: eran los primeros paquetes de sistema
+        self.assertNotIn('truncated', r)
+        self.assertIn('completa', r['para_buscar'])
+        self.assertEqual(terminal_read.falta_tras(['dpkg -l'], r), [])
+
+    def test_listado_corto_conserva_su_salida(self):
+        runner, _ = equipo(snap=SNAPS)
+        r = terminal_read.read('snap list', runner=runner, menu=lambda: {})
+        self.assertEqual(r['output'], SNAPS)
+
+    def test_aplicaciones_son_los_lanzadores_visibles_por_origen(self):
+        import os, tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            def lanzador(carpeta, nombre, cuerpo):
+                os.makedirs(os.path.join(tmp, carpeta), exist_ok=True)
+                with open(os.path.join(tmp, carpeta, nombre), 'w', encoding='utf-8') as f:
+                    f.write('[Desktop Entry]\n' + cuerpo)
+            lanzador('sis', 'vlc.desktop', 'Type=Application\nName=VLC media player\nName[es]=Reproductor VLC\n')
+            lanzador('sis', 'oculto.desktop', 'Type=Application\nName=Oculto\nNoDisplay=true\n')
+            lanzador('sis', 'borrado.desktop', 'Type=Application\nName=Borrado\nHidden=true\n')
+            lanzador('sis', 'enlace.desktop', 'Type=Link\nName=Enlace\n')
+            lanzador('sis', 'accion.desktop', 'Type=Application\nName=Navegador\n[Desktop Action nueva]\nName=Ventana nueva\n')
+            lanzador('sis', 'notas.txt', 'Name=No es un lanzador\n')
+            lanzador('snap', 'spotify_spotify.desktop', 'Name=Spotify\n')
+            lanzador('snap', 'carrera.desktop', 'Name=Carrera\nCategories=Game;Simulation;\n')
+            lanzador('snap', 'spotify_otro.desktop', 'Name=Spotify\n')
+            r = terminal_read.aplicaciones(((os.path.join(tmp, 'sis'), 'sistema'), (os.path.join(tmp, 'snap'), 'snap'),
+                                            (os.path.join(tmp, 'no-existe'), 'flatpak')))
+        self.assertEqual(r, {'sistema': ['Navegador', 'Reproductor VLC'], 'snap': ['Carrera (juego)', 'Spotify']})
 
     def test_lo_que_no_es_un_listado_de_instaladas_no_encadena(self):
         for orden in ('apt-cache search video', 'apt show vim', 'dpkg -s vim', 'snap info vlc', 'df -h',

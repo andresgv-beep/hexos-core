@@ -58,8 +58,16 @@ LANZADORES = ('/usr/share/applications', '/usr/local/share/applications', '~/.lo
 MAX_COINCIDENCIAS = 12
 # Lo que apt escribe alrededor de su listado y no es ningún paquete.
 RUIDO_APT = ('WARNING: apt does not have a stable CLI interface', 'Listing...')
-PARA_BUSCAR = ('Esto es el listado entero. Para saber si una aplicación está instalada repite la orden '
-               'con filter="parte del nombre": la búsqueda mira sola en apt, snap, flatpak y los lanzadores.')
+PARA_BUSCAR = ('Para saber si una aplicación concreta está instalada repite la orden con '
+               'filter="parte del nombre": la búsqueda mira sola en apt, snap, flatpak y los lanzadores.')
+# Quién puso cada lanzador, por la carpeta donde está.
+ORIGENES = (('/usr/share/applications', 'sistema'), ('/usr/local/share/applications', 'sistema'),
+            ('~/.local/share/applications', 'propias'), ('/var/lib/snapd/desktop/applications', 'snap'),
+            ('/var/lib/flatpak/exports/share/applications', 'flatpak'),
+            ('~/.local/share/flatpak/exports/share/applications', 'flatpak'))
+YA_ESTAN = ('aplicaciones son los programas con icono en el menú, de todos los gestores (apt, snap, '
+            'flatpak y los instalados a mano): la lista está completa, no hace falta otra orden. '
+            'Las demás líneas del gestor son paquetes del sistema. ')
 
 
 def este_pc():
@@ -137,8 +145,9 @@ def falta_tras(ordenes, respuesta):
     En el chat real miró el estado, copió de su historial que no tenía acceso a los
     registros y atribuyó el fallo a una base de datos corrupta sin haberlos leído.
     """
-    # Una búsqueda ya miró en todos los gestores: no queda ninguno que señalar.
-    if 'encontrado_en' in respuesta:
+    # Una búsqueda, o el listado de aplicaciones, ya miró en todos los gestores: no
+    # queda ninguno que señalar.
+    if 'encontrado_en' in respuesta or 'aplicaciones' in respuesta:
         return []
     partes = ordenes[-1].split()
     if (partes[0] == 'systemctl' and 'status' in partes and respuesta['exit_code'] != 0
@@ -191,6 +200,47 @@ def lanzadores(texto, carpetas=LANZADORES):
         vistos += [os.path.join(carpeta, nombre) for nombre in nombres
                    if nombre.endswith('.desktop') and texto.casefold() in nombre.casefold()]
     return vistos
+
+
+def aplicaciones(origenes=ORIGENES):
+    """Los programas que la persona ve en su menú, por quién los instaló.
+
+    «¿Qué programas tengo?» no lo contesta `dpkg -l`: son miles de paquetes de sistema,
+    cortados a los primeros, y el modelo resumía `acl`, `apport` y `bash`. Lo que la
+    persona llama programa es lo que tiene lanzador visible.
+    """
+    hallados = {}
+    for carpeta, origen in origenes:
+        carpeta = os.path.expanduser(carpeta)
+        try:
+            nombres = sorted(os.listdir(carpeta))
+        except OSError:
+            continue
+        for nombre in nombres:
+            if not nombre.endswith('.desktop'):
+                continue
+            campos, seccion = {}, None
+            try:
+                with open(os.path.join(carpeta, nombre), encoding='utf-8', errors='replace') as f:
+                    for linea in f:
+                        linea = linea.strip()
+                        if linea.startswith('['):
+                            seccion = linea
+                        elif seccion == '[Desktop Entry]' and '=' in linea:
+                            clave, valor = linea.split('=', 1)
+                            campos.setdefault(clave.strip(), valor.strip())
+            except OSError:
+                continue
+            if (campos.get('Type', 'Application') != 'Application'
+                    or 'true' in (campos.get('NoDisplay'), campos.get('Hidden'))):
+                continue
+            visible = campos.get('Name[es]') or campos.get('Name') or nombre[:-len('.desktop')]
+            # El lanzador dice si es un juego; el nombre solo no lo dice.
+            if 'Game' in campos.get('Categories', '').split(';'):
+                visible += ' (juego)'
+            if visible not in hallados.setdefault(origen, []):
+                hallados[origen].append(visible)
+    return {origen: sorted(lista, key=str.casefold) for origen, lista in hallados.items()}
 
 
 def buscar(partes, filtro, propias, *, runner=ejecutar, escritorio=lanzadores):
@@ -249,7 +299,7 @@ def buscar(partes, filtro, propias, *, runner=ejecutar, escritorio=lanzadores):
     return resultado
 
 
-def read(command, filter=None, *, runner=ejecutar, escritorio=lanzadores):
+def read(command, filter=None, *, runner=ejecutar, escritorio=lanzadores, menu=aplicaciones):
     if filter and filter.startswith('-'):
         raise ValueError('filter es un texto que deben contener las líneas; las opciones van en command')
     command, filter, leida = sin_grep(command, filter)
@@ -275,5 +325,11 @@ def read(command, filter=None, *, runner=ejecutar, escritorio=lanzadores):
             respuesta = dict(command=command, encontrado_en=hallazgo.pop('encontrado_en'),
                              **{k: v for k, v in respuesta.items() if k != 'command'}, **hallazgo)
         else:
-            respuesta['para_buscar'] = PARA_BUSCAR
+            # Pedir el listado entero es preguntar qué hay instalado: delante van los
+            # programas, y la salida del gestor solo si cabe entera.
+            if respuesta.pop('truncated', False):
+                respuesta.pop('output')
+            respuesta = dict(command=command, aplicaciones=menu(),
+                             **{k: v for k, v in respuesta.items() if k != 'command'},
+                             para_buscar=YA_ESTAN + PARA_BUSCAR)
     return respuesta
