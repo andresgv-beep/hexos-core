@@ -736,13 +736,15 @@ class NativeRuntime:
             # Sin ejemplos el E4B devolvía [{"nombre": "Andrés"}] y, para una petición de
             # trato, []: dos meses «recordando» sin guardar nada. La forma se le enseña;
             # copiar un valor de aquí no cuela, porque tiene que estar en el mensaje.
-            'Cómo quiere que se le hable también es un dato suyo: clave yo/trato y como valor '
-            'su frase tal cual.\n'
+            'Cómo quiere que se le hable, y cómo quiere que seas o te comportes tú, también es '
+            'un dato suyo: clave yo/trato y como valor su frase tal cual.\n'
             'Ejemplos de la forma exacta:\n'
             'Mensaje: me llamo Marta y vivo en Vigo\n'
             '[{"key": "yo/nombre", "value": "Marta"}, {"key": "yo/ciudad", "value": "Vigo"}]\n'
             'Mensaje: no me trates de usted, háblame claro y corto\n'
             '[{"key": "yo/trato", "value": "no me trates de usted, háblame claro y corto"}]\n'
+            'Mensaje: recuerda que eres mi socio, no un robot de atención al cliente\n'
+            '[{"key": "yo/trato", "value": "eres mi socio, no un robot de atención al cliente"}]\n'
             'Mensaje: mi perra se llama Kira\n'
             '[{"key": "perra/nombre", "value": "Kira"}]\n'
             'Mensaje: mira a ver cuánto disco queda\n'

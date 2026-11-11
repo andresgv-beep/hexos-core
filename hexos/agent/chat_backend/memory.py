@@ -28,6 +28,11 @@ AFIRMACION = re.compile(
     r'|tr[aá]tame|h[aá]blame|no me (?:hables|trates|contestes|respondas)'
     r'|no seas|s[eé] m[aá]s|te pido que'
     r'|recuerda que|recuerda mi|apunta que|no olvides que|que lo recuerdes'
+    # Cómo quiere que SEA Helios. «necesito que recuerdes que eres compañero, no un
+    # asistente» y «recuerda no ofrecerte como asistente» no pasaban: el portón solo
+    # miraba frases sobre la persona, contestó «sí, lo he recordado» y no guardó nada.
+    r'|eres|recuerd[ae]s?|necesito que|quiero que|no te (?:ofrezcas|presentes|comportes|portes)'
+    r'|comp[oó]rtate|deja de|no hace falta que|no (?:uses|pongas|digas|termines|acabes)'
     # Pedírselo con todas las letras. «memoriza que tengo dos hijos» no pasaba:
     # el portón solo conocía «recuerda» y «apunta».
     r'|memoriza|memor[íi]zalo|guarda que|gu[áa]rdalo|que sepas que|ten en cuenta que'
@@ -121,6 +126,9 @@ def frase_del_hecho(clave, valor):
     # El valor son sus palabras, y las dijo hablándole a Helios: «soy tu creador» se
     # guardaba como «Su rol es tu creador» y al leerlo contestó «como tu creador,
     # espero que…». Las comillas y la aclaración dejan dicho a quién se lo decía.
+    if sujeto == 'yo' and atributo.startswith('trato'):
+        # Varias peticiones conviven (trato, trato 2…): se leen como lo que son.
+        return 'Te pidió: «' + valor + '»'
     if A_HELIOS.search(valor):
         valor = '«' + valor + '» (lo dijo hablándote a ti, Helios)'
     if sujeto == 'yo':
@@ -168,6 +176,15 @@ class MemoryService:
         # cambia es si ya había un hecho vigente. HERA reemplaza de forma atómica
         # y conserva la cadena en `hera historial <clave>`.
         confirmados = self.env.profile.keys()
+        # El trato se acumula. «háblame como un colega» y después «no uses emojis» son
+        # dos peticiones, no una corrección: la segunda se descartaba por no citar la
+        # primera. Cada una ocupa su hueco (trato, trato 2…) salvo que ya esté dicha.
+        if clave == 'yo/trato' and confirmados.get(clave) not in (None, value):
+            dichos = {k: v for k, v in confirmados.items() if k.startswith('yo/trato')}
+            repetido = next((k for k, v in dichos.items() if v.casefold() == value.casefold()), None)
+            clave = repetido or next('yo/trato %d' % n for n in range(2, 40)
+                                     if 'yo/trato %d' % n not in dichos)
+            texto = frase_del_hecho(clave, value)
         anterior = confirmados.get(clave)
         if anterior is None and getattr(self.env.profile, 'unreadable', None):
             # Tratar un hecho ilegible como ausente lo duplicaría en vez de
@@ -330,7 +347,8 @@ class MemoryService:
             sujeto, _, atributo = resultado['key'].partition('/')
             # Con «yo» basta el atributo; con otro sujeto hay que nombrarlo, o
             # hermana/nombre y ordenador/nombre se leen los dos como «nombre».
-            etiqueta = atributo if sujeto == 'yo' else resultado['key'].replace('/', ' · ')
+            etiqueta = (atributo.rstrip(' 0123456789') if sujeto == 'yo'
+                        else resultado['key'].replace('/', ' · '))
             guardados.append(resultado['key'] + ' = ' + resultado['value'])
             anotado.append(('He corregido' if resultado.get('corrected') else 'He anotado')
                            + ' ' + etiqueta + ': ' + resultado['value']
