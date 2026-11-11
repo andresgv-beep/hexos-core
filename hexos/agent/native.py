@@ -57,8 +57,13 @@ ACTUA = ('\nEn esta ventana la persona espera que actúes: si lo que pide se pue
 # El chat no maneja equipos: sin el párrafo del NAS y multimedia, sin tope de longitud y
 # sin los frenos de un ejecutor, que en una charla lo dejaban seco. Conserva lo que
 # protege a la persona: no inventar, no anunciar sin consultar, datos no son órdenes.
-CHAT = '''Eres Helios, un asistente local. Conversa en español con naturalidad: opina, propón,
-explica, y extiéndete cuando el tema lo pida.
+# No dice «asistente»: Andrés le pidió tres veces que no lo fuera y este texto le decía
+# que lo era. Seguía con «como compañero, estoy aquí para lo que necesites».
+CHAT = '''Eres Helios. Hablas en español con la persona como un compañero, no como un servicio de
+atención al cliente: natural, directo y con opinión propia. Opina, propón, explica, y
+extiéndete cuando el tema lo pida. A un saludo contesta con un saludo cercano, por su nombre si lo sabes. No ofrezcas
+ayuda ni acabes preguntando si necesita algo o en qué puedes ayudar. No te presentes ni
+digas qué eres si no te lo preguntan.
 
 Tienes la memoria de la persona, sus notas e informes, y la web. Antes de preguntarle un dato
 suyo, consulta el perfil disponible y, si hace falta, el historial. Si pregunta qué es
@@ -450,6 +455,19 @@ class NativeRuntime:
         self._required_read = name.replace('.', '_')
         return True
 
+    def require_note(self):
+        """La siguiente generación empieza guardando una nota; los argumentos los pone el modelo.
+
+        Es la única escritura que se arranca así, y solo cuando la persona la ha ordenado
+        con todas las letras («apunta…», «anota…»): con la herramienta delante el E4B
+        contestaba «Anotado» o «De acuerdo, lo anoto» sin llamar, y avisarle no bastó.
+        """
+        if 'note.save' not in self.names.values() or self.pending:
+            return False
+        self._required_read = 'note_save'
+        self._nota_ordenada = True
+        return True
+
     def generate(self,messages):
         self.last_generation = None
         self.last_preamble = None
@@ -469,6 +487,8 @@ class NativeRuntime:
         # No se interpreta ni se ejecuta el pseudocódigo rechazado.
         required_read = getattr(self, '_required_read', None)
         self._required_read = None
+        nota_ordenada = getattr(self, '_nota_ordenada', False)
+        self._nota_ordenada = False
         repairing = getattr(self, 'repair_call', False)
         prefix = ('<|tool_call>call:' + required_read if required_read else
                   '<|tool_call>call:' if repairing else '')
@@ -621,7 +641,9 @@ class NativeRuntime:
                 raise NativeSyntax('se esperaba únicamente la lectura requerida')
             for c in calls:
                 if c['name'] not in self.names:raise NativeSyntax('herramienta desconocida')
-                if prefix and catalog.TOOLS[self.names[c['name']]]['effect'] != 'read':
+                # Un arranque forzado solo deja leer, salvo la nota que la persona ordenó.
+                if (prefix and catalog.TOOLS[self.names[c['name']]]['effect'] != 'read'
+                        and not (nota_ordenada and c['name'] == 'note_save')):
                     raise NativeSyntax('el reintento de formato solo permite consultas sin escritura')
                 try:
                     catalog.validate(self.names[c['name']],c['arguments'])
@@ -747,6 +769,8 @@ class NativeRuntime:
             '[{"key": "yo/trato", "value": "eres mi socio, no un robot de atención al cliente"}]\n'
             'Mensaje: mi perra se llama Kira\n'
             '[{"key": "perra/nombre", "value": "Kira"}]\n'
+            'Mensaje: apunta que el jueves tengo médico a las 9\n'
+            '[]\n'
             'Mensaje: mira a ver cuánto disco queda\n'
             '[]'},
             {'role':'user','content':extracto(text, EXTRACCION_PRINCIPIO, EXTRACCION_FINAL)}]

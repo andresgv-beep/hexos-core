@@ -87,6 +87,38 @@ class SinLlamadaTest(unittest.TestCase):
         self.assertFalse(otra())
         self.assertIsNotNone(turn.retries.respuesta_devuelta)   # no se restauró la primera
 
+    def orden(self, texto, respuesta='De acuerdo, lo anoto.', pedidos=('notas',), traza=()):
+        tmp = tempfile.TemporaryDirectory(prefix='hexos-sin-llamada-'); self.addCleanup(tmp.cleanup)
+        runtime = Runtime(); runtime.native = True; runtime.notas = 0
+        def require_note(): runtime.notas += 1; return True
+        runtime.require_note = require_note
+        agent = Agent(tmp.name, runtime); agent.ventana = 'chat'
+        turn = TurnState(text=texto, image=None, model_request=texto, transcript=None)
+        turn.grupos_pedidos, turn.trace = list(pedidos), list(traza)
+        devuelto = agent.runner.recovery.before_completion(None, turn, dict(reply=respuesta, work=None))
+        return runtime, turn, devuelto
+
+    def test_si_ordeno_apuntar_y_no_se_guardo_se_arranca_en_la_nota(self):
+        # «apúntame que mañana llamo a mamá» -> «De acuerdo, lo anoto.» y ninguna llamada.
+        for texto in ('apunta que el viernes tengo dentista', 'anota: comprar pan',
+                      'oye helios, apúntame que mañana llamo a mamá'):
+            runtime, turn, devuelto = self.orden(texto)
+            self.assertTrue(devuelto, texto)
+            self.assertEqual(runtime.notas, 1)
+            self.assertIn('todavía no se ha guardado nada', turn.messages[0]['content'])
+
+    def test_si_la_nota_ya_esta_guardada_no_se_repite(self):
+        traza = [dict(tool='note.save', arguments={}, result={'id': 'n1'}, failed=False)]
+        runtime, _, devuelto = self.orden('apunta que tengo dentista', 'Anotado.', traza=traza)
+        self.assertFalse(devuelto)
+        self.assertEqual(runtime.notas, 0)
+
+    def test_hablar_de_apuntar_no_es_una_orden(self):
+        for texto in ('a okey, y notas tienes verdad?', 'me gusta apuntar cosas en papel', 'que notas tengo?'):
+            runtime, _, devuelto = self.orden(texto, 'Sí, puedo llevar tus notas.')
+            self.assertFalse(devuelto, texto)
+            self.assertEqual(runtime.notas, 0)
+
     def test_hablar_de_las_notas_en_el_chat_no_se_devuelve(self):
         # «a okey, y notas tienes verdad?»: el selector pidió notas, la respuesta era
         # buena y la devolución la cambió por una contestación al aviso.

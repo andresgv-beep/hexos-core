@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import TYPE_CHECKING
 from .. import catalog
 from ..context import native_messages
@@ -66,6 +67,11 @@ FRAGMENTOS = ('responde con lo que dicen los fragmentos del buscador, diciendo q
               'y que no se ha podido abrir ninguna página. ')
 
 
+# La orden de la persona, no una frase del modelo: «apunta», «anótame», «toma nota».
+ORDEN_DE_APUNTAR = re.compile(r'^\W*(?:\w+[,!. ]+){0,3}(?:ap[uú]nta(?:me|lo)?|an[oó]ta(?:me|lo)?|toma nota)\b', re.I)
+APUNTALO = ('AVISO DE HEXOS (no es la persona): todavía no se ha guardado nada. Guarda ahora la nota '
+            'con lo que ha pedido, con sus palabras y sin quitarle el día ni la hora, y después '
+            'confírmaselo en una frase. No menciones este aviso.')
 SIN_LLAMADA_CHAT = ('AVISO DE HEXOS (no es la persona): la respuesta anterior dice haber guardado algo, '
                     'pero en este turno no se ejecutó ninguna escritura: no se ha guardado nada. Si la '
                     'persona pidió apuntarlo, llama ahora a la herramienta; si no lo pidió, contesta '
@@ -196,6 +202,19 @@ class RecoveryController:
             if self.agent.runtime.require_check():
                 turn.messages = [dict(role='user', content=SIN_LLAMADA)]
                 return True
+        # La persona ordenó apuntar algo, el selector declaró las notas y el turno acaba
+        # sin guardar nada. Aquí no se mira la respuesta sino la orden, que es suya, y la
+        # traza. Se arranca directamente en la escritura: es lo que ha pedido.
+        if (not turn.retries.sin_llamada_devuelto
+                and getattr(self.agent, 'ventana', None) == catalog.DEFAULT_WINDOW
+                and 'notas' in (turn.grupos_pedidos or ())
+                and ORDEN_DE_APUNTAR.search(turn.text or '')
+                and not any(paso.get('tool') == 'note.save' for paso in turn.trace)
+                and hasattr(self.agent.runtime, 'require_note')):
+            turn.retries.sin_llamada_devuelto = True
+            if self.agent.runtime.require_note():
+                turn.messages = [dict(role='user', content=APUNTALO)]
+                return True
         # En el chat no vale la señal del selector: allí se habla DE las notas sin pedir
         # nada («y notas tienes, ¿verdad?»), y devolver ese turno cambió una respuesta
         # buena por «Entendido. Estoy atento a cualquier instrucción…» el 11/11. Solo se
@@ -212,6 +231,11 @@ class RecoveryController:
             turn.retries.sin_llamada_devuelto = True
             turn.retries.respuesta_devuelta = output.get('reply') or ''
             turn.retries.traza_al_devolver = len(turn.trace)
+            # Si el selector no pidió las notas, la herramienta ni estaba declarada y
+            # repetir no podía servir: «Anotado. Te he apuntado…» dos veces sin llamar.
+            # Para la repetición se declara todo lo que el chat permite.
+            if hasattr(self.agent.runtime, 'active_groups'):
+                self.agent.runtime.active_groups = list(catalog.groups_in(catalog.DEFAULT_WINDOW))
             turn.messages = [dict(role='user', content=SIN_LLAMADA_CHAT)]
             return True
         # Se devolvió y la repetición tampoco hizo nada: lo que sale entonces es una

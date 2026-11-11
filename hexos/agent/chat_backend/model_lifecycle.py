@@ -345,6 +345,9 @@ class ModelLifecycle:
     def require_check(self):
         return self._invoke('require_check')
 
+    def require_note(self):
+        return self._invoke('require_note')
+
     def extract_facts(self, text):
         return self._invoke('extract_facts', text)
 
