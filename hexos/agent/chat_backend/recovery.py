@@ -65,6 +65,11 @@ FRAGMENTOS = ('responde con lo que dicen los fragmentos del buscador, diciendo q
               'y que no se ha podido abrir ninguna página. ')
 
 
+SIN_LLAMADA = ('AVISO DE HEXOS (no es la persona): la respuesta anterior no consultó nada. '
+               'Haz ahora la lectura que responde a la petición y contesta con lo que salga. '
+               'No menciones este aviso.')
+
+
 class RecoveryController:
     def __init__(self, agent: Agent):
         self.agent = agent
@@ -173,6 +178,19 @@ class RecoveryController:
             turn.messages = [dict(role='user', content='AVISO DE HEXOS (no es la persona): '
                 + ReplyPolicy.unsupported_claim(output['reply'], []) + ' No menciones este aviso.')]
             return True
+        # El selector dijo que este mensaje necesitaba herramientas y el turno acaba sin
+        # llamar a ninguna. No se mira qué dice la respuesta: esa vía, la de las frases,
+        # se retiró a propósito. La señal es de estructura, y solo en la ventana Agente,
+        # donde lo pedido es actuar. Con historial delante el E4B cerraba así 3 de 9
+        # turnos («usaré journalctl…») que en limpio resolvía. Una vez, y arrancando en
+        # una lectura: decirle que llame no bastaba.
+        if (not turn.trace and turn.grupos_pedidos and not turn.retries.sin_llamada_devuelto
+                and getattr(self.agent, 'ventana', None) == 'agente'
+                and hasattr(self.agent.runtime, 'require_check')):
+            turn.retries.sin_llamada_devuelto = True
+            if self.agent.runtime.require_check():
+                turn.messages = [dict(role='user', content=SIN_LLAMADA)]
+                return True
         recoverable = {name for name, definition in catalog.TOOLS.items()
                        if definition['effect'] in ('read', 'result')}
         last = turn.trace[-1] if turn.trace else {}

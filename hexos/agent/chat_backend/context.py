@@ -260,6 +260,7 @@ class ContextManager:
             # No se pudo fiar: todo lo que la ventana permite, no el catálogo entero.
             runtime.active_groups = list(catalog.groups_in(ventana))
             return
+        turn.grupos_pedidos = list(elegidos)
         pegajosos.pedir(elegidos)
         runtime.active_groups = [g for g in pegajosos.activos()
                                  if g in catalog.groups_in(ventana)]

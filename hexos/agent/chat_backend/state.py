@@ -84,6 +84,7 @@ class RetryState:
     web_evidence_retries: int = 0
     web_read_guided: bool = False
     read_claim_checked: bool = False
+    sin_llamada_devuelto: bool = False
 
 
 @dataclass
@@ -103,6 +104,8 @@ class TurnState:
     listing_followup: bool = False
     # «Pero no me habías dicho…»: antes de contestar, una lectura de verdad.
     reproche: bool = False
+    # Grupos que el selector pidió para ESTE mensaje, sin los que se arrastran de antes.
+    grupos_pedidos: list = field(default_factory=list)
     reading_started: float | None = None
     document_read_mark: tuple | None = None
     document_read_retries: int = 0
