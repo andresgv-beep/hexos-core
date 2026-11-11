@@ -389,7 +389,10 @@ NATIVE_DESCRIPTIONS = {
     'network.local': ('Observar ahora direcciones y vecinos de la red local de forma pasiva. No guarda IPs '
                       'ni descubre toda la LAN; STALE no confirma conexión actual. Para lo guardado '
                       'usa device_list. Sin argumentos.'),
-    'core.overview': 'Resumir qué conserva Helios localmente: notas, informes, trabajos y perfil.',
+    # Decía «resumir qué conserva Helios localmente» y hacía de imán: a «¿qué tengo en el
+    # pc?» o «¿tengo algún juego?» el E4B la llamaba aun teniendo la terminal delante.
+    'core.overview': ('Solo lo que la persona ha guardado en Helios: cuántas notas, informes y trabajos hay. '
+                      'No sabe nada del ordenador, sus programas ni sus archivos.'),
     'note.save': ('Crear una nota con title y body, o actualizarla con id y revision. Solo cuando la '
                   'persona pide anotar o guardar.'),
     'note.list': ('Listar notas; query, state (pendiente, hecha o descartada), favorite y limit filtran. '
@@ -404,7 +407,7 @@ NATIVE_DESCRIPTIONS = {
                    'limita a lo reciente cuando pidan lo último.'),
     'terminal.read': 'Este PC Linux, no el NAS: orden de lectura con dpkg, apt, flatpak, snap, systemctl, journalctl. Sin shell. '
                      'Buscar una aplicación: command "dpkg -l" y filter con su nombre; mira también snap y flatpak. '
-                     'Un servicio: command "systemctl status nombre".',
+                     'Qué programas o juegos hay: command "dpkg -l" sin filter. Un servicio: command "systemctl status nombre".',
     'system.status': 'Cómo va este PC ahora: qué programas gastan más procesador y memoria, RAM, gráfica y quién la '
                      'ocupa, disco libre, temperatura y batería. Sin argumentos. No dice qué hay instalado ni el '
                      'estado de un servicio: eso es terminal_read.',
