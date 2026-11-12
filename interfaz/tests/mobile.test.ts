@@ -15,3 +15,13 @@ test('mobile presents the supplied single conversation and four panels', () => {
   assert.ok(!html.includes('mobile-heading'));
   assert.ok(!html.includes('Tu única conversación'));
 });
+
+test('con dos ventanas, el móvil deja elegir entre Chat y Agente y marca la que es', () => {
+  const html = renderToStaticMarkup(createElement(MobileWorkspace, {
+    previous: [], turns: [], notes: [], artifact: null, busy: false, error: '',
+    onBrowseNotes() {}, onPreview() {}, ventana: 'agente', onVentana() {},
+  }));
+  assert.match(html, /<button[^>]*aria-current="page"[^>]*>Agente<\/button>/);
+  assert.doesNotMatch(html, /<button[^>]*aria-current="page"[^>]*>Chat<\/button>/);
+  assert.ok(html.includes('Conversación con el agente'));
+});

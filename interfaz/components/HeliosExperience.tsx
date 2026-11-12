@@ -51,6 +51,9 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   // El espacio de trabajo: decide qué herramientas se le declaran al modelo.
   const [ventana, setVentana] = useState<"chat" | "agente" | null>(null);
   const [ventanaBusy, setVentanaBusy] = useState(false);
+  // La ventana es del servidor, no de esta pestaña: otro dispositivo puede cambiarla.
+  const ventanaVista = useRef<"chat" | "agente" | null>(null);
+  const cambiandoVentana = useRef(false);
   const [contextCut, setContextCut] = useState<ContextCut | null>(null);
   const [access, setAccess] = useState<CredentialRequest | null>(null);
   const [accessForm, setAccessForm] = useState({ user: "", password: "", host: "", port: "22" });
@@ -340,6 +343,16 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       setConnection("ready");
       setThinking(estado.thinking);
       setVentana(estado.window);
+      // Si la cambió otro dispositivo, lo que hay en pantalla es de la otra ventana:
+      // sin recargar, el siguiente mensaje caía debajo de una conversación ajena.
+      if (!cambiandoVentana.current) {
+        const antes = ventanaVista.current;
+        ventanaVista.current = estado.window;
+        if (antes !== null && estado.window !== null && antes !== estado.window && ventanaEnCurso.current === null) {
+          setTurns([]); setPrevious([]); setHistoryNext(null); setHistoryError("");
+          setHistoryLoading(true); setConversacion(n => n + 1); setLimpio(false);
+        }
+      }
       setMetrics(estado.metrics);
       // Lo que Helios dice que va a hacer, mientras lo hace. Sin esto la ventana
       // se quedaba en «pensando…» y lo anunciado —que lo escribe el modelo, no
@@ -459,8 +472,11 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     inputRef.current?.focus();
     if (ventana === null || ventanaBusy || ventana === destino) return;
     setVentanaBusy(true);
+    cambiandoVentana.current = true;
     try {
-      setVentana(await transport.setWindow(destino));
+      const puesta = await transport.setWindow(destino);
+      ventanaVista.current = puesta;
+      setVentana(puesta);
       // Lo que hay en pantalla es de la otra ventana: fuera, y se carga lo de esta.
       setTurns([]); setPrevious([]); setHistoryNext(null); setHistoryError("");
       setHistoryLoading(true); setConversacion(n => n + 1); setLimpio(false);
@@ -468,6 +484,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       // Si HexOS no lo confirma, el botón no debe mentir sobre el estado real.
       try { setVentana((await transport.status()).window); } catch { setVentana(null); }
     } finally {
+      cambiandoVentana.current = false;
       setVentanaBusy(false);
     }
   }
@@ -721,7 +738,8 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       busy={sending} error={historyError} onBrowseNotes={() => setCoreOpen(true)}
       hasEarlier={historyNext !== null} olderLoading={olderLoading} onLoadEarlier={loadOlderHistory}
       onOpenFiles={() => setFileViewer({})}
-      onPreview={previewCode} turnExtras={turnExtras} />}
+      onPreview={previewCode} turnExtras={turnExtras}
+      ventana={ventana} ventanaBusy={ventanaBusy || sending} onVentana={destino => void irAVentana(destino)} />}
     <nav className="vision-rail" aria-label="Secciones">
       <button type="button" aria-label="Conversación" title="Chat: memoria, notas, informes y web"
         aria-current={ventana !== "agente" ? "page" : undefined} disabled={ventanaBusy}
