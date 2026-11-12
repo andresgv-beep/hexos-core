@@ -104,6 +104,38 @@ class NotasTest(unittest.TestCase):
         self.assertIn('hay 2', str(e.exception))
         self.assertEqual(notes.dispatch(self.store, 'note.show', dict(id=a['id']), 't')['title'], 'Primera')
 
+    def test_el_número_es_el_de_la_lista_que_acaba_de_ver(self):
+        # Tras buscar «cena», la 1 es la de la cena. Antes se resolvía contra la lista
+        # completa y la 1 era la nota más reciente: otra.
+        self.crear(title='Cena con Marta')
+        self.crear(title='Comprar pan')
+        lista = notes.dispatch(self.store, 'note.list', dict(query='cena'), 't')['notes']
+        self.assertEqual([f['title'] for f in lista], ['Cena con Marta'])
+        self.assertEqual(notes.dispatch(self.store, 'note.show', dict(n=1), 't')['title'], 'Cena con Marta')
+
+    def test_se_borra_por_su_número_y_no_otra(self):
+        self.crear(title='Cena con Marta')
+        self.crear(title='Comprar pan')
+        notes.dispatch(self.store, 'note.list', dict(query='cena'), 't')
+        r = notes.dispatch(self.store, 'note.mark', dict(n=1, state='descartada'), 't')
+        self.assertEqual((r['title'], r['state'], r['outcome']), ('Cena con Marta', 'descartada', 'hecho'))
+        self.assertEqual([f['title'] for f in notes.dispatch(self.store, 'note.list', {}, 't')['notes']],
+                         ['Comprar pan'])
+
+    def test_tras_una_búsqueda_vacía_no_hay_número_uno(self):
+        # Sin esto la 1 caía en la lista completa: se descartaba una nota cualquiera.
+        self.crear(title='Comprar pan')
+        self.assertEqual(notes.dispatch(self.store, 'note.list', dict(query='boda'), 't')['total'], 0)
+        with self.assertRaises(ValueError) as e:
+            notes.dispatch(self.store, 'note.mark', dict(n=1, state='descartada'), 't')
+        self.assertIn('hay 0', str(e.exception))
+        self.assertEqual(notes.dispatch(self.store, 'note.list', {}, 't')['total'], 1)
+
+    def test_marcar_sin_decir_cuál_no_marca_ninguna(self):
+        self.crear(title='Comprar pan')
+        with self.assertRaises(ValueError):
+            notes.dispatch(self.store, 'note.mark', dict(state='descartada'), 't')
+
     def test_buscar_mira_titulo_cuerpo_y_etiquetas(self):
         self.crear()
         notes.dispatch(self.store, 'note.save',

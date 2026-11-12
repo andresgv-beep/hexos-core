@@ -455,16 +455,19 @@ class NativeRuntime:
         self._required_read = name.replace('.', '_')
         return True
 
-    def require_note(self):
+    def require_note(self, name='note.save'):
         """La siguiente generación empieza guardando una nota; los argumentos los pone el modelo.
+
+        Con name='note.mark' empieza marcándola: es el «borra la nota» que se quedaba en
+        buscarla y decir «voy a descartarla».
 
         Es la única escritura que se arranca así, y solo cuando la persona la ha ordenado
         con todas las letras («apunta…», «anota…»): con la herramienta delante el E4B
         contestaba «Anotado» o «De acuerdo, lo anoto» sin llamar, y avisarle no bastó.
         """
-        if 'note.save' not in self.names.values() or self.pending:
+        if name not in ('note.save', 'note.mark') or name not in self.names.values() or self.pending:
             return False
-        self._required_read = 'note_save'
+        self._required_read = name.replace('.', '_')
         self._nota_ordenada = True
         return True
 
@@ -496,6 +499,11 @@ class NativeRuntime:
             prefix = '<tool_call>\n'
             if required_read:
                 prefix += '{"name": ' + json.dumps(required_read) + ', "arguments": '
+        # Al descartar por orden, la llamada empieza ya en `n`: la nota es la de la lista
+        # que acaba de ver. Dejándole elegir el argumento ponía el id de la última nota
+        # que guardó y descartaba esa, que era otra (medido 3 de 3 con el E4B).
+        if nota_ordenada and required_read == 'note_mark':
+            prefix += '{"n": ' if getattr(self, 'qwen', False) else '{n:'
         self.repair_call = False
         # Grupos activos: el conjunto se fija al empezar el turno y aquí solo se aplica,
         # porque cambiarlo a mitad invalida el prefijo KV de todo lo que viene detrás.
@@ -643,8 +651,10 @@ class NativeRuntime:
                 if c['name'] not in self.names:raise NativeSyntax('herramienta desconocida')
                 # Un arranque forzado solo deja leer, salvo la nota que la persona ordenó.
                 if (prefix and catalog.TOOLS[self.names[c['name']]]['effect'] != 'read'
-                        and not (nota_ordenada and c['name'] == 'note_save')):
+                        and not (nota_ordenada and c['name'] == required_read)):
                     raise NativeSyntax('el reintento de formato solo permite consultas sin escritura')
+                if nota_ordenada and c['name'] == 'note_mark' and 'id' in c['arguments']:
+                    raise NativeSyntax('la nota ordenada se señala con n, el número de la lista')
                 try:
                     catalog.validate(self.names[c['name']],c['arguments'])
                 except ValueError as exc:

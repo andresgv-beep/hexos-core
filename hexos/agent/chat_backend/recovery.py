@@ -72,6 +72,12 @@ ORDEN_DE_APUNTAR = re.compile(r'^\W*(?:\w+[,!. ]+){0,3}(?:ap[uú]nta(?:me|lo)?|a
 APUNTALO = ('AVISO DE HEXOS (no es la persona): todavía no se ha guardado nada. Guarda ahora la nota '
             'con lo que ha pedido, con sus palabras y sin quitarle el día ni la hora, y después '
             'confírmaselo en una frase. No menciones este aviso.')
+# También la orden de la persona: «borra la nota de la cena», «elimina esa». No «quita»,
+# que igual pide cerrarla en pantalla.
+ORDEN_DE_BORRAR = re.compile(r'^\W*(?:\w+[,!. ]+){0,3}(?:b[oó]rra|elim[ií]na|desc[aá]rta)(?:me|la|lo|las|los)?\b', re.I)
+BORRALA = ('AVISO DE HEXOS (no es la persona): la nota sigue ahí, todavía no se ha descartado. '
+           'Descártala ahora: n es su número en la lista que acabas de ver y state es descartada. '
+           'Después confírmaselo en una frase. No menciones este aviso.')
 SIN_LLAMADA_CHAT = ('AVISO DE HEXOS (no es la persona): la respuesta anterior dice haber guardado algo, '
                     'pero en este turno no se ejecutó ninguna escritura: no se ha guardado nada. Si la '
                     'persona pidió apuntarlo, llama ahora a la herramienta; si no lo pidió, contesta '
@@ -221,6 +227,23 @@ class RecoveryController:
             turn.retries.sin_llamada_devuelto = True
             if self.agent.runtime.require_note():
                 turn.messages = [dict(role='user', content=APUNTALO)]
+                return True
+        # Lo mismo con borrar: la persona lo ordenó, el modelo buscó la nota, la encontró y
+        # cerró el turno con «Voy a descartar la nota…» sin descartarla (medido 3 de 3 con
+        # el E4B). Solo si en este turno hay una lista con algo: sin nota a la vista no se
+        # arranca una escritura a ciegas.
+        if (not turn.retries.sin_llamada_devuelto
+                and getattr(self.agent, 'ventana', None) == catalog.DEFAULT_WINDOW
+                and 'notas' in (turn.grupos_pedidos or ())
+                and ORDEN_DE_BORRAR.search(turn.text or '')
+                and not any(paso.get('tool') == 'note.mark' for paso in turn.trace)
+                and any(paso.get('tool') == 'note.list' and not paso.get('failed')
+                        and isinstance(paso.get('result'), dict) and paso['result'].get('total')
+                        for paso in turn.trace)
+                and hasattr(self.agent.runtime, 'require_note')):
+            turn.retries.sin_llamada_devuelto = True
+            if self.agent.runtime.require_note('note.mark'):
+                turn.messages = [dict(role='user', content=BORRALA)]
                 return True
         # En el chat no vale la señal del selector: allí se habla DE las notas sin pedir
         # nada («y notas tienes, ¿verdad?»), y devolver ese turno cambió una respuesta

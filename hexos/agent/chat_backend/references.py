@@ -240,9 +240,9 @@ class ReferenceResolver:
                 if elegida.get('id'):
                     return elegida
                 posicion = elegida.get('n')
-                filas = notes.listing(store, limit=200)
-                if isinstance(posicion, int) and 1 <= posicion <= len(filas):
-                    return filas[posicion - 1]
+                ids = notes.ultima_lista(store)
+                if isinstance(posicion, int) and 1 <= posicion <= len(ids):
+                    return notes.get(store, ids[posicion - 1])
                 continue
                 # Con varias y sin ordinal, la lista no señala a ninguna en concreto.
                 continue

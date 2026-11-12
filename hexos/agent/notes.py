@@ -160,18 +160,44 @@ def resolve_ref(store, args):
     if args.get('id'):
         return args['id']
     posicion = args.get('n')
-    if not isinstance(posicion, int):
+    if not isinstance(posicion, int) or isinstance(posicion, bool):
         raise ValueError('di qué nota: id, o n con el número de la lista')
-    filas = listing(store, limit=200)
-    if not 1 <= posicion <= len(filas):
-        raise ValueError('no hay una nota número ' + str(posicion) + '; hay ' + str(len(filas)))
-    return filas[posicion - 1]['id']
+    ids = ultima_lista(store)
+    if not 1 <= posicion <= len(ids):
+        raise ValueError('no hay una nota número ' + str(posicion) + '; hay ' + str(len(ids)))
+    return ids[posicion - 1]
+
+
+def _recordar_lista(store, filas):
+    store.db.execute('CREATE TABLE IF NOT EXISTS notes_ultima_lista (n INTEGER PRIMARY KEY, id TEXT NOT NULL)')
+    store.db.execute('DELETE FROM notes_ultima_lista')
+    # La fila 0 dice «hubo una lista», aunque saliera vacía: sin ella, una búsqueda
+    # sin resultados caería en la lista completa y la 1 sería una nota cualquiera.
+    store.db.executemany('INSERT INTO notes_ultima_lista VALUES (?,?)',
+                         [(0, '')] + [(i, f['id']) for i, f in enumerate(filas, 1)])
+    store.db.commit()
+
+
+def ultima_lista(store):
+    """Los ids de la última lista que se le dio, en su orden.
+
+    `n` numera ESA lista, no la de todas las notas: tras buscar «cena», la número 1
+    es la de la cena. Resolverlo contra la lista completa abría —o descartaba— la
+    nota más reciente, que es otra. Sin lista previa vale la completa, que es la que
+    la persona tiene delante en el panel.
+    """
+    store.db.execute('CREATE TABLE IF NOT EXISTS notes_ultima_lista (n INTEGER PRIMARY KEY, id TEXT NOT NULL)')
+    filas = store.db.execute('SELECT n, id FROM notes_ultima_lista ORDER BY n').fetchall()
+    if not filas:
+        return [f['id'] for f in listing(store, limit=200)]
+    return [row[1] for row in filas if row[0] > 0]
 
 
 def dispatch(store, name, args, turn_id):
     if name == 'note.list':
         filas = listing(store, args.get('query', ''), args.get('state'),
                         args.get('favorite'), args.get('limit', 50))
+        _recordar_lista(store, filas)
         # Sin ids ni fechas: se le pidió por texto que no los volcara y los volcó
         # igual, con «Creada: 2026-09-14T19:51:58.563781+00:00» incluido. Lo que no
         # ve no lo puede pegar. Para abrir una basta el número que ella tiene delante.
@@ -180,7 +206,8 @@ def dispatch(store, name, args, turn_id):
                            for i, f in enumerate(filas, 1)],
                     total=len(filas),
                     note='La lista está en su pantalla. Di cuántas hay y sus títulos. '
-                         'Para abrirle una usa note_show con n, el número de esta lista.')
+                         'Para abrirle una usa note_show con n, el número de esta lista; '
+                         'para borrarla, note_mark con n y state descartada.')
     if name == 'note.get':
         return dict(get(store, args['id']),
                     note='Las versiones anteriores están en el histórico de la nota.')
@@ -200,5 +227,5 @@ def dispatch(store, name, args, turn_id):
         return dict(hidden=note_id or 'todas',
                     note='Cerrada en su pantalla.' if note_id else 'Cerradas todas en su pantalla.')
     if name == 'note.mark':
-        return mark(store, args['id'], state=args.get('state'), favorite=args.get('favorite'))
+        return mark(store, resolve_ref(store, args), state=args.get('state'), favorite=args.get('favorite'))
     raise ValueError('operación de notas no soportada')

@@ -106,7 +106,7 @@ class SinLlamadaTest(unittest.TestCase):
     def orden(self, texto, respuesta='De acuerdo, lo anoto.', pedidos=('notas',), traza=()):
         tmp = tempfile.TemporaryDirectory(prefix='hexos-sin-llamada-'); self.addCleanup(tmp.cleanup)
         runtime = Runtime(); runtime.native = True; runtime.notas = 0
-        def require_note(): runtime.notas += 1; return True
+        def require_note(name='note.save'): runtime.notas += 1; runtime.pedida = name; return True
         runtime.require_note = require_note
         agent = Agent(tmp.name, runtime); agent.ventana = 'chat'
         turn = TurnState(text=texto, image=None, model_request=texto, transcript=None)
@@ -128,6 +128,36 @@ class SinLlamadaTest(unittest.TestCase):
         runtime, _, devuelto = self.orden('apunta que tengo dentista', 'Anotado.', traza=traza)
         self.assertFalse(devuelto)
         self.assertEqual(runtime.notas, 0)
+
+    LISTA = dict(tool='note.list', arguments={'query': 'cena'}, failed=False,
+                 result={'notes': [{'n': 1, 'title': 'Cena con Marta', 'state': 'pendiente'}], 'total': 1})
+
+    def test_si_ordeno_borrar_y_solo_la_busco_se_arranca_en_descartarla(self):
+        # «borra la nota de la cena» -> note.list y «Voy a descartar la nota de la cena».
+        for texto in ('borra la nota de la cena', 'elimina la de las plantas', 'helios, bórrame esa nota'):
+            runtime, turn, devuelto = self.orden(texto, 'Voy a descartar la nota.', traza=[self.LISTA])
+            self.assertTrue(devuelto, texto)
+            self.assertEqual((runtime.notas, runtime.pedida), (1, 'note.mark'))
+            self.assertIn('todavía no se ha descartado', turn.messages[0]['content'])
+
+    def test_si_ya_la_descarto_no_se_repite(self):
+        traza = [self.LISTA, dict(tool='note.mark', arguments={'n': 1, 'state': 'descartada'},
+                                  result={'state': 'descartada'}, failed=False)]
+        runtime, _, devuelto = self.orden('borra la nota de la cena', 'Descartada.', traza=traza)
+        self.assertFalse(devuelto)
+        self.assertEqual(runtime.notas, 0)
+
+    def test_sin_una_nota_a_la_vista_no_se_arranca_un_borrado(self):
+        vacia = dict(tool='note.list', arguments={'query': 'boda'}, failed=False, result={'notes': [], 'total': 0})
+        for traza in ([], [vacia]):
+            runtime, _, devuelto = self.orden('borra la nota de la boda', 'No encuentro esa nota.', traza=traza)
+            self.assertFalse(devuelto)
+            self.assertEqual(runtime.notas, 0)
+
+    def test_quitar_o_hablar_de_borrar_no_es_la_orden(self):
+        for texto in ('quita esa nota de la pantalla', 'se pueden borrar las notas?', 'no borres nada'):
+            runtime, _, devuelto = self.orden(texto, 'Hecho.', traza=[self.LISTA])
+            self.assertFalse(devuelto, texto)
 
     def test_hablar_de_apuntar_no_es_una_orden(self):
         for texto in ('a okey, y notas tienes verdad?', 'me gusta apuntar cosas en papel', 'que notas tengo?'):
