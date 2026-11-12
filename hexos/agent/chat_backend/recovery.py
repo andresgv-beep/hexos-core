@@ -76,9 +76,10 @@ SIN_LLAMADA_CHAT = ('AVISO DE HEXOS (no es la persona): la respuesta anterior di
                     'pero en este turno no se ejecutó ninguna escritura: no se ha guardado nada. Si la '
                     'persona pidió apuntarlo, llama ahora a la herramienta; si no lo pidió, contesta '
                     'de nuevo sin decir que lo has hecho. No menciones este aviso.')
-SIN_LLAMADA = ('AVISO DE HEXOS (no es la persona): la respuesta anterior no consultó nada. '
-               'Haz ahora la lectura que responde a la petición y contesta con lo que salga. '
-               'No menciones este aviso.')
+SIN_LLAMADA = ('AVISO DE HEXOS (no es la persona): la respuesta anterior no consultó nada. Si la '
+               'petición se contesta mirando algo de este PC o de los equipos, haz ahora esa lectura y '
+               'contesta con lo que salga. Si era conversación y no había nada que mirar, repite tu '
+               'respuesta anterior tal cual. No menciones este aviso.')
 
 
 class RecoveryController:
@@ -199,9 +200,15 @@ class RecoveryController:
                 and getattr(self.agent, 'ventana', None) == 'agente'
                 and hasattr(self.agent.runtime, 'require_check')):
             turn.retries.sin_llamada_devuelto = True
-            if self.agent.runtime.require_check():
-                turn.messages = [dict(role='user', content=SIN_LLAMADA)]
-                return True
+            # Sin forzar el arranque en una lectura. Forzado, una charla en la ventana
+            # Agente («¿y qué echas en falta?» -> «¿por ejemplo?») perdía su respuesta:
+            # obligado a llamar a algo llamaba a task_current y contestaba «No tengo un
+            # encargo activo». Ahora se le avisa y elige; si tampoco consulta nada, más
+            # abajo se entrega la primera respuesta.
+            turn.retries.respuesta_devuelta = output.get('reply') or ''
+            turn.retries.traza_al_devolver = len(turn.trace)
+            turn.messages = [dict(role='user', content=SIN_LLAMADA)]
+            return True
         # La persona ordenó apuntar algo, el selector declaró las notas y el turno acaba
         # sin guardar nada. Aquí no se mira la respuesta sino la orden, que es suya, y la
         # traza. Se arranca directamente en la escritura: es lo que ha pedido.

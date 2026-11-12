@@ -30,15 +30,31 @@ class SinLlamadaTest(unittest.TestCase):
         primera = agent.runner.recovery.before_completion(None, turn, salida)
         return runtime, turn, primera, lambda: agent.runner.recovery.before_completion(None, turn, salida)
 
-    def test_se_devuelve_una_vez_y_arranca_en_una_lectura(self):
+    def test_se_devuelve_una_vez_y_sin_forzar_una_lectura(self):
         # Con el historial real delante: «usaré journalctl. Voy a buscar…» y fin del turno.
         runtime, turn, devuelto, otra = self.cierre()
         self.assertTrue(devuelto)
-        self.assertEqual(runtime.checks, 1)
+        self.assertEqual(runtime.checks, 0)           # forzado, una charla llamaba a task_current
         self.assertIn('AVISO DE HEXOS', turn.messages[0]['content'])
+        turn.trace.append(dict(tool='terminal.read', arguments={}, result={}, failed=False))
         turn.messages = []
-        self.assertFalse(otra())                      # si insiste, no se le vuelve a pedir
-        self.assertEqual(runtime.checks, 1)
+        self.assertFalse(otra())                      # consultó: vale lo que diga ahora
+        self.assertIsNotNone(turn.retries.respuesta_devuelta)
+
+    def test_una_charla_en_el_agente_conserva_su_respuesta(self):
+        # «¿y qué echas en falta?» -> «¿por ejemplo?»: la respuesta buena se cambió por
+        # «No tengo un encargo activo en este momento».
+        tmp = tempfile.TemporaryDirectory(prefix='hexos-sin-llamada-'); self.addCleanup(tmp.cleanup)
+        runtime = Runtime(); llamadas = []; runtime.call = llamadas.append
+        agent = Agent(tmp.name, runtime); agent.ventana = 'agente'
+        turn = TurnState(text='por ejemplo?', image=None, model_request='por ejemplo?', transcript=None)
+        turn.grupos_pedidos = ['sistema']
+        salida = dict(reply='Por ejemplo, una herramienta para cambiar un servicio.', work=None)
+        self.assertTrue(agent.runner.recovery.before_completion(None, turn, salida))
+        salida['reply'] = 'Entendido.'
+        self.assertFalse(agent.runner.recovery.before_completion(None, turn, salida))
+        self.assertEqual(salida['reply'], 'Por ejemplo, una herramienta para cambiar un servicio.')
+        self.assertIn({'type': 'reset'}, llamadas)
 
     def test_no_depende_de_lo_que_diga_la_respuesta(self):
         # Las frases no cuentan, ni para bien ni para mal: es una señal de estructura.
@@ -131,11 +147,6 @@ class SinLlamadaTest(unittest.TestCase):
     def test_con_alguna_llamada_hecha_no_se_toca(self):
         traza = [dict(tool='system.status', arguments={}, result={'cpu': {}}, failed=False)]
         self.assertFalse(self.cierre(traza=traza, respuesta='Va bien.')[2])
-
-    def test_si_el_motor_no_puede_abrir_la_llamada_no_se_insiste(self):
-        runtime, turn, devuelto, _ = self.cierre(runtime=Runtime(acepta=False))
-        self.assertFalse(devuelto)
-        self.assertEqual(turn.messages, [])
 
     def test_la_instruccion_ya_no_pide_anunciar(self):
         self.assertNotIn('anuncia brevemente', native.POLICY)
