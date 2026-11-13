@@ -29,6 +29,8 @@ MAX_LINEAS = 250                     # por lectura; se sigue con start
 MAX_CARACTERES = 9000
 MAX_LINEA = 400                      # una línea más larga se corta
 MAX_FICHEROS = 200                   # entradas de un listado
+MAX_PLANO = 60                       # con más ficheros que estos, el listado va por carpetas
+MAX_CANDIDATOS = 8                   # rutas que se proponen cuando la pedida no existe
 MAX_COINCIDENCIAS = 40
 MAX_RECORRIDOS = 3000                # ficheros que mira una búsqueda antes de parar
 MAX_BUSCADO = 1024 * 1024            # la búsqueda no entra en ficheros mayores
@@ -82,6 +84,53 @@ def dentro(base, ruta):
     return resuelta, relativa
 
 
+def _carpetas(base, desde):
+    """Las carpetas bajo `desde` que se recorren, relativas al proyecto."""
+    for carpeta, subcarpetas, _ in os.walk(desde, followlinks=False):
+        subcarpetas[:] = sorted(d for d in subcarpetas if d not in SALTAR and d not in CARPETAS_SECRETAS
+                                and not os.path.islink(os.path.join(carpeta, d)))
+        for nombre in subcarpetas:
+            yield Path(carpeta) / nombre, (Path(carpeta) / nombre).relative_to(base)
+
+
+def localizar(base, ruta, carpeta=False):
+    """La ruta pedida o, si no existe tal cual, la única del proyecto que acaba igual.
+
+    El 13/11 el proyecto «hector» tenía el repositorio dentro de una subcarpeta. Pedido
+    `tests/test_kernels.cu`, que era `Hector-engine/tests/test_kernels.cu`, la respuesta fue
+    «no existe»; la carpeta `tests`, lo mismo. Sin más datos, el modelo acabó dando por
+    buena una ruta que no había visto. Ahora una ruta que no existe se busca dentro del
+    proyecto: si solo hay una que termine así, es esa, y se dice; si hay varias, se enseñan.
+    Devuelve (completa, relativa, aviso).
+    """
+    completa, relativa = dentro(base, ruta)
+    if completa.is_dir() if carpeta else completa.is_file():
+        return completa, relativa, None
+    if completa.exists():
+        return completa, relativa, None                 # existe, pero es de la otra clase: lo dice quien llama
+    cola = relativa.parts
+    candidatos, por_nombre = [], []
+    for otra, rel in (_carpetas(base, base) if carpeta else _recorrer(base, base)):
+        if rel.parts[-len(cola):] == cola:
+            candidatos.append((otra, rel))
+        elif rel.name.casefold() == cola[-1].casefold():
+            por_nombre.append((otra, rel))
+        if len(candidatos) + len(por_nombre) > 400:
+            break
+    hallados = candidatos or por_nombre
+    que = 'la carpeta' if carpeta else 'el fichero'
+    if len(hallados) == 1:
+        otra, rel = hallados[0]
+        return otra, rel, 'No hay ' + str(relativa) + ' en la raíz del proyecto; es ' + str(rel) + '. Usa esa ruta.'
+    if hallados:
+        raise ValueError('No existe ' + que + ' ' + str(relativa) + ' tal cual. Con ese nombre hay: ' +
+                         ', '.join(str(rel) for _, rel in hallados[:MAX_CANDIDATOS]) +
+                         (' y %d más' % (len(hallados) - MAX_CANDIDATOS) if len(hallados) > MAX_CANDIDATOS else '') +
+                         '. Repite con la ruta entera de la que quieras.')
+    raise ValueError('No existe ' + que + ' ' + str(relativa) + ' en el proyecto, ni nada con ese nombre en sus '
+                     'subcarpetas. Mira qué hay con project_files antes de dar una ruta por buena.')
+
+
 def tamano(numero):
     for unidad, paso in (('MB', 1 << 20), ('KB', 1 << 10)):
         if numero >= paso:
@@ -103,31 +152,77 @@ def _recorrer(base, desde):
 
 
 def files(store, path=None, pattern=None):
-    """El árbol de ficheros del proyecto, o de una de sus carpetas."""
+    """El árbol de ficheros del proyecto, o de una de sus carpetas.
+
+    Un proyecto pequeño se enseña entero. Uno grande, por carpetas: cuántos ficheros tiene
+    cada una y los que hay sueltos en la que se mira. El 13/11, con 657 ficheros, se
+    enseñaban los 200 primeros por orden alfabético, casi todos de `informes/`: el modelo
+    no llegó a ver que existían `kernels/`, `src/` ni `tests/`.
+    """
     proyecto, base = proyecto_activo(store)
-    desde, relativa = dentro(base, path) if path else (base, Path('.'))
-    if not desde.is_dir():
-        raise ValueError(str(relativa) + ' no es una carpeta. Para leer un fichero usa project_read.')
+    aviso = None
+    desde, relativa = (base, Path('.'))
+    if path:
+        desde, relativa, aviso = localizar(base, path, carpeta=True)
+        if not desde.is_dir():
+            raise ValueError(str(relativa) + ' no es una carpeta. Para leer un fichero usa project_read.')
     if pattern is not None and (not isinstance(pattern, str) or len(pattern) > 100):
         raise ValueError('pattern es un texto que debe contener el nombre del fichero')
     buscado = pattern.casefold() if pattern else None
-    vistos, total = [], 0
-    for completa, rel in _recorrer(base, desde):
-        if buscado and buscado not in rel.name.casefold():
-            continue
-        total += 1
-        if len(vistos) < MAX_FICHEROS:
-            vistos.append(dict(path=str(rel), size=tamano(completa.stat().st_size)))
-    saltadas = sorted(d.name + '/' for d in desde.iterdir()
-                      if d.is_dir() and (d.name in SALTAR or d.name in CARPETAS_SECRETAS))
-    resultado = dict(project=proyecto['name'], folder=str(base), path=str(relativa), files=vistos, total=total)
-    if total > len(vistos):
-        resultado['truncated'] = 'Hay %d; se enseñan %d. Acota con path (una carpeta) o pattern (parte del nombre).' % (
-            total, len(vistos))
-    if saltadas:
-        resultado['not_listed'] = saltadas
+    saltadas = lambda carpeta: sorted(d.name + '/' for d in carpeta.iterdir()
+                                      if d.is_dir() and (d.name in SALTAR or d.name in CARPETAS_SECRETAS))
+    no_listadas = saltadas(desde)
+    # Una carpeta que solo contiene otra (el proyecto con el repositorio dentro) se atraviesa:
+    # lo que interesa ver es lo de dentro.
+    while not buscado:
+        hijos = [h for h in desde.iterdir() if not es_secreto(h.relative_to(base))]
+        carpetas = [h for h in hijos if h.is_dir() and not h.is_symlink() and h.name not in SALTAR]
+        if len(carpetas) != 1 or any(h.is_file() for h in hijos):
+            break
+        desde = carpetas[0]
+        relativa = desde.relative_to(base)
+        no_listadas += [str(relativa) + '/' + n for n in saltadas(desde)]
+    todos = [(completa, rel) for completa, rel in _recorrer(base, desde)
+             if not buscado or buscado in rel.name.casefold()]
+    total = len(todos)
+    resultado = dict(project=proyecto['name'], folder=str(base), path=str(relativa), total=total)
+    if aviso:
+        resultado['resolved'] = aviso
+    entrada = lambda completa, rel: dict(path=str(rel), size=tamano(completa.stat().st_size))
+    if buscado or total <= MAX_PLANO:
+        resultado['files'] = [entrada(c, r) for c, r in todos[:MAX_FICHEROS]]
+        if total > MAX_FICHEROS:
+            resultado['truncated'] = 'Hay %d; se enseñan %d. Acota con path o con un pattern más concreto.' % (
+                total, MAX_FICHEROS)
+    else:
+        cuenta, sueltos = {}, []
+        for completa, rel in todos:
+            dentro_de = rel.relative_to(relativa) if relativa != Path('.') else rel
+            if len(dentro_de.parts) == 1:
+                sueltos.append((completa, rel))
+            else:
+                carpeta = str(relativa / dentro_de.parts[0]) if relativa != Path('.') else dentro_de.parts[0]
+                cuenta[carpeta] = cuenta.get(carpeta, 0) + 1
+        resultado['folders'] = [dict(path=nombre + '/', files=n) for nombre, n in sorted(cuenta.items())]
+        resultado['files'] = [entrada(c, r) for c, r in sueltos[:MAX_PLANO]]
+        resultado['overview'] = ('Son %d ficheros: se enseñan las carpetas con cuántos tiene cada una, y los ficheros '
+                                 'sueltos de %s. Para ver una carpeta, project_files con su path; para dar con un '
+                                 'fichero por su nombre, pattern.' % (total, str(relativa) if str(relativa) != '.' else 'la raíz'))
+        if len(sueltos) > MAX_PLANO:
+            resultado['truncated'] = 'Hay %d ficheros sueltos; se enseñan %d. Acota con pattern.' % (len(sueltos), MAX_PLANO)
+    if no_listadas:
+        resultado['not_listed'] = no_listadas
     if not total:
         resultado['note'] = ('Ningún fichero con ese nombre.' if buscado else 'La carpeta está vacía.')
+        if buscado and desde != base:
+            # Buscar un nombre en la carpeta donde se estaba mirando y no dar con él no es
+            # que no exista: el E4B buscó test_kernels.cu dentro de kernels/, que era de
+            # donde venía, y contestó que no estaba. Estaba en tests/.
+            fuera = [str(rel) for _, rel in _recorrer(base, base) if buscado in rel.name.casefold()][:MAX_CANDIDATOS]
+            if fuera:
+                resultado['note'] = 'En ' + str(relativa) + ' no hay ninguno con ese nombre, pero en el proyecto sí.'
+                resultado['elsewhere'] = fuera
+                resultado['next'] = 'Para leer uno, project_read con su ruta entera.'
     return resultado
 
 
@@ -148,11 +243,9 @@ def _texto(completa, limite=MAX_BYTES):
 def read(store, path, start=1):
     """Un tramo de un fichero de texto, con el número de cada línea."""
     proyecto, base = proyecto_activo(store)
-    completa, relativa = dentro(base, path)
+    completa, relativa, aviso = localizar(base, path)
     if completa.is_dir():
         raise ValueError(str(relativa) + ' es una carpeta. Para ver lo que hay dentro usa project_files.')
-    if not completa.is_file():
-        raise ValueError('No existe ' + str(relativa) + ' en el proyecto. Mira los nombres con project_files.')
     # El E4B cuenta desde cero, como en la lectura del NAS: 0 es «desde el principio».
     if start == 0 and type(start) is int:
         start = 1
@@ -178,6 +271,8 @@ def read(store, path, start=1):
     fin = start + len(tramo) - 1
     resultado = dict(path=str(relativa), lines=len(lineas), start=start, end=max(fin, 0),
                      content='\n'.join(tramo), note=DATO)
+    if aviso:
+        resultado['resolved'] = aviso
     if fin < len(lineas):
         resultado['next_start'] = fin + 1
         resultado['truncated'] = 'Faltan %d líneas: sigue con start=%d.' % (len(lineas) - fin, fin + 1)
@@ -189,7 +284,10 @@ def search(store, query, path=None):
     proyecto, base = proyecto_activo(store)
     if not isinstance(query, str) or not query.strip() or len(query) > 200:
         raise ValueError('query es el texto que se busca, hasta 200 caracteres')
-    desde, relativa = dentro(base, path) if path else (base, Path('.'))
+    desde, relativa, aviso = (base, Path('.'), None)
+    if path:
+        completa, _ = dentro(base, path)
+        desde, relativa, aviso = localizar(base, path, carpeta=not completa.is_file())
     buscado = query.casefold()
     hallados, mirados, total, parado = [], 0, 0, False
     candidatos = [(desde, relativa)] if desde.is_file() else _recorrer(base, desde)
@@ -208,6 +306,8 @@ def search(store, query, path=None):
                 if len(hallados) < MAX_COINCIDENCIAS:
                     hallados.append(dict(path=str(rel), line=numero, text=linea.strip()[:240]))
     resultado = dict(query=query, path=str(relativa), matches=hallados, total=total, files_searched=mirados, note=DATO)
+    if aviso:
+        resultado['resolved'] = aviso
     if total > len(hallados):
         resultado['truncated'] = 'Hay %d coincidencias; se enseñan %d. Acota con path o con un texto más concreto.' % (
             total, len(hallados))

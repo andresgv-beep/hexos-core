@@ -65,12 +65,88 @@ class ListarTest(Base):
         self.assertEqual([f['path'] for f in self.llamar('project.files', pattern='ATENC')['files']], ['kernels/atencion.cu'])
         self.assertIn('Ningún fichero', self.llamar('project.files', pattern='zzz')['note'])
 
-    def test_muchos_ficheros_se_cortan_y_lo_dice(self):
+    def test_un_proyecto_grande_se_ensena_por_carpetas(self):
+        # Con 657 ficheros se enseñaban los 200 primeros por orden alfabético: el modelo no
+        # llegó a ver que existían kernels/, src/ ni tests/.
+        for i in range(120):
+            self.escribir('src/f%04d.txt' % i, 'x')
+        (self.repo / 'informes' / 'viejos').mkdir(parents=True)
+        for i in range(90):
+            self.escribir('informes/viejos/i%03d.md' % i, 'x')
+        r = self.llamar('project.files')
+        self.assertEqual(r['folders'], [dict(path='informes/', files=90), dict(path='kernels/', files=1),
+                                        dict(path='src/', files=121)])
+        self.assertEqual([f['path'] for f in r['files']], ['README.md'])           # los sueltos de la raíz
+        self.assertEqual(r['total'], 213)
+        self.assertIn('se enseñan las carpetas', r['overview'])
+        # Entrando en una, lo mismo un nivel más abajo; una pequeña se enseña entera.
+        self.assertEqual(self.llamar('project.files', path='informes')['path'], 'informes/viejos')
+        self.assertEqual([f['path'] for f in self.llamar('project.files', path='kernels')['files']], ['kernels/atencion.cu'])
+
+    def test_buscar_por_nombre_no_se_resume_y_tiene_tope(self):
         for i in range(project_files.MAX_FICHEROS + 30):
             self.escribir('src/f%04d.txt' % i, 'x')
-        r = self.llamar('project.files')
+        r = self.llamar('project.files', pattern='f0')
         self.assertEqual(len(r['files']), project_files.MAX_FICHEROS)
+        self.assertNotIn('folders', r)
         self.assertIn('Acota con path', r['truncated'])
+
+
+class RepoDentroTest(Base):
+    """El proyecto cuya carpeta contiene el repositorio dentro de otra: el caso de «hector»."""
+
+    def setUp(self):
+        super().setUp()
+        self.envuelto = self.casa / 'proyectos' / 'hector'
+        (self.envuelto / 'Hector-engine').mkdir(parents=True)
+        for carpeta in ('tests', 'kernels', 'src', 'build'):
+            (self.envuelto / 'Hector-engine' / carpeta).mkdir()
+        for ruta in ('CMakeLists.txt', 'tests/test_kernels.cu', 'kernels/attention.cu', 'src/engine.cpp',
+                     'src/util.cpp', 'tests/util.cpp', 'build/salida.o'):
+            (self.envuelto / 'Hector-engine' / ruta).write_text('// ' + ruta + '\n')
+        self.agente.create_project('hector', str(self.envuelto))
+
+    def test_el_listado_atraviesa_la_carpeta_que_solo_contiene_otra(self):
+        r = self.llamar('project.files')
+        self.assertEqual(r['path'], 'Hector-engine')
+        self.assertIn('Hector-engine/tests/test_kernels.cu', [f['path'] for f in r['files']])
+        self.assertEqual(r['not_listed'], ['Hector-engine/build/'])
+
+    def test_una_ruta_que_no_existe_tal_cual_se_localiza_si_solo_hay_una(self):
+        r = self.llamar('project.read', path='tests/test_kernels.cu')
+        self.assertEqual(r['path'], 'Hector-engine/tests/test_kernels.cu')
+        self.assertIn('es Hector-engine/tests/test_kernels.cu', r['resolved'])
+        self.assertEqual(self.llamar('project.read', path='test_kernels.cu')['path'], 'Hector-engine/tests/test_kernels.cu')
+        self.assertNotIn('resolved', self.llamar('project.read', path='Hector-engine/CMakeLists.txt'))
+
+    def test_las_carpetas_tambien(self):
+        r = self.llamar('project.files', path='tests')
+        self.assertEqual((r['path'], sorted(f['path'] for f in r['files'])),
+                         ('Hector-engine/tests', ['Hector-engine/tests/test_kernels.cu', 'Hector-engine/tests/util.cpp']))
+        self.assertIn('es Hector-engine/tests', r['resolved'])
+        self.assertEqual(self.llamar('project.search', query='kernels', path='tests')['path'], 'Hector-engine/tests')
+
+    def test_un_nombre_que_no_esta_en_esa_carpeta_dice_donde_si(self):
+        # El E4B buscó test_kernels.cu dentro de kernels/, de donde venía, y dijo que no existía.
+        r = self.llamar('project.files', path='Hector-engine/kernels', pattern='test_kernels.cu')
+        self.assertEqual((r['total'], r['elsewhere']), (0, ['Hector-engine/tests/test_kernels.cu']))
+        self.assertIn('en el proyecto sí', r['note'])
+        nada = self.llamar('project.files', path='Hector-engine/kernels', pattern='no-existe')
+        self.assertNotIn('elsewhere', nada)
+
+    def test_si_hay_varias_las_ensena_y_no_elige(self):
+        with self.assertRaises(ValueError) as e:
+            self.llamar('project.read', path='util.cpp')
+        self.assertIn('Hector-engine/src/util.cpp', str(e.exception))
+        self.assertIn('Hector-engine/tests/util.cpp', str(e.exception))
+
+    def test_si_no_hay_ninguna_lo_dice_sin_dar_pie_a_inventar(self):
+        with self.assertRaisesRegex(ValueError, 'ni nada con ese nombre'):
+            self.llamar('project.read', path='tests/no_existe.cu')
+        with self.assertRaisesRegex(ValueError, 'ni nada con ese nombre'):
+            self.llamar('project.files', path='documentos')
+        with self.assertRaisesRegex(ValueError, 'ni nada con ese nombre'):
+            self.llamar('project.read', path='salida.o')                      # lo de build no cuenta
 
 
 class LeerTest(Base):
