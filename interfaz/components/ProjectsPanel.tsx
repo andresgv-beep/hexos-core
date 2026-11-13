@@ -131,7 +131,7 @@ export function ProjectsPanel({ projects, active, busy, error, fixed, metrics, c
       </li>)}
     </ul>
     {!fixed && <p className="vision-tasks-empty">Cada proyecto tiene su carpeta y su conversación. Al cambiar, Helios deja de tener delante la del otro; no se borra nada.</p>}
-    {fixed && activity}
+    {fixed && <div className="vision-agent-scroll">{activity}</div>}
     {fixed && <AgentMeter metrics={metrics} action={meterAction} />}
   </Caja>;
 }

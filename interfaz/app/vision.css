@@ -722,3 +722,16 @@ button.vision-horizon-state:focus-visible { outline: 2px solid var(--v-gold); ou
   width: auto; display: inline-block; padding: 5px 12px; font: 600 12px var(--v-font); text-align: center;
 }
 .vision-project-list .vision-project-confirm .vision-project-danger { border-color: var(--hud-pink); color: var(--hud-pink); }
+/* El lateral mide lo que la pantalla y no más. Lo que crece (los proyectos, las herramientas
+   y los cambios) se desplaza por dentro; la tarjeta del contexto se queda siempre abajo. */
+.vision-agent-side { align-self: stretch; min-height: 0; max-height: 100svh; overflow: hidden; }
+.vision-agent-side > * { flex-shrink: 0; }
+.vision-agent-side .vision-project-list {
+  max-height: 30dvh; overflow-y: auto; padding-right: 4px;
+  scrollbar-width: thin; scrollbar-color: rgba(232, 176, 79, 0.45) transparent;
+}
+.vision-agent-scroll {
+  flex: 1 1 0; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding-right: 4px;
+  scrollbar-width: thin; scrollbar-color: rgba(232, 176, 79, 0.45) transparent;
+}
+.vision-agent-side .vision-agent-meter { margin-top: 0; }
