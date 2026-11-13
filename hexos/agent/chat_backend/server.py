@@ -5,7 +5,7 @@ import json
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
-from .. import core, notes, catalog
+from .. import actividad, core, notes, catalog
 from ..work import strict_json, string
 from .images import decode_image
 from .audio import decode_audio
@@ -55,6 +55,16 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                                    'mode':'native-experimental' if native_template else 'json'})
             elif self.path == '/api/projects':
                 self.respond(200, agent.projects())
+            elif self.path == '/api/activity':
+                # Lo hecho en la conversación puesta, para el lateral: llamadas y cambios.
+                with agent.store() as store:
+                    self.respond(200, actividad.reciente(store, {n: d.get('effect') for n, d in catalog.TOOLS.items()}))
+            elif self.path.startswith('/api/activity/'):
+                try:
+                    with agent.store() as store:
+                        self.respond(200, actividad.detalle(store, int(self.path.rsplit('/', 1)[1])))
+                except ValueError as exc:
+                    self.respond(404, {'error': str(exc)})
             elif self.path == '/api/core':
                 # El panel se pinta sin gastar un turno del modelo, pero del MISMO
                 # recuento que responde el chat: no puede haber dos verdades.

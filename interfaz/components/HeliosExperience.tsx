@@ -29,7 +29,8 @@ import { createMediaClient, isActive, type MediaControl, type MediaJob } from "@
 import { MediaCard } from "./MediaCard";
 import { TasksPanel } from "./TasksPanel";
 import { ProjectsPanel } from "./ProjectsPanel";
-import type { Project } from "@/lib/helios/hexos";
+import { AgentActivity, AgentNow } from "./AgentActivity";
+import type { Activity as AgentLog, Project } from "@/lib/helios/hexos";
 import { assessCodeRevision, codeRevisionPrompt, extractHtmlPreview, extractReplyArtifact, type ReplyArtifact } from "@/lib/helios/preview";
 
 const localTransport = createHexosTransport("/api/helios");
@@ -61,6 +62,9 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const [projectBusy, setProjectBusy] = useState(false);
   const [projectError, setProjectError] = useState("");
   const proyectoVisto = useRef<string | null | undefined>(undefined);
+  // Para el lateral: lo hecho en la conversación puesta y en qué etapa va el turno.
+  const [actividad, setActividad] = useState<AgentLog | null>(null);
+  const [etapa, setEtapa] = useState<{ clave: string; texto: string } | null>(null);
   // La ventana es del servidor, no de esta pestaña: otro dispositivo puede cambiarla.
   const ventanaVista = useRef<"chat" | "agente" | null>(null);
   const cambiandoVentana = useRef(false);
@@ -322,6 +326,8 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
               ? `Leyendo contexto: ${generation.processed} / ${generation.total} tokens`
               : "Leyendo contexto…")
             : generation.phase === "generating" ? "Generando respuesta…" : "Helios está en ello…";
+          // La clave no lleva los números del prefill: el contador del lateral cuenta la etapa entera.
+          setEtapa({ clave: generation.cancelling ? "cancelling" : generation.phase, texto: label });
           setTurns(items => items.map(item => item.id === target && item.pending
             ? { ...item, preview: generation.text, streamed: item.streamed || Boolean(generation.text), generationStatus: label } : item));
         }
@@ -858,6 +864,27 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   }
   // El lateral fijo del Agente, solo en escritorio y mientras no lo tape el espacio de código.
   const lateralAgente = !mobile && !workspaceOpen && ventana === "agente" && proyecto !== undefined && Boolean(transport.projects);
+  // Lo que Helios hace ahora, en una línea. Una tarjeta abierta manda sobre todo lo demás:
+  // mientras espera tu decisión, eso es lo que está pasando.
+  const ocupado = Boolean(systemPlan) || systemBusy || sending || Boolean(herramientaEnCurso);
+  const ahora = connection !== "ready" ? { clave: connection, texto: estado }
+    : systemPlan ? { clave: "plan", texto: "Esperando tu aprobación en la tarjeta" }
+    : systemBusy ? { clave: "sistema", texto: "HexOS está aplicando el cambio" }
+    : herramientaEnCurso ? { clave: `tool-${herramientaEnCurso.id}`, texto: `Ejecutando ${herramientaEnCurso.name.replace(".", "_")}` }
+    : sending ? (etapa ?? { clave: "thinking", texto: "Pensando…" })
+    : { clave: "idle", texto: "En reposo" };
+  // La actividad se relee al cambiar de conversación y al acabar cada turno; mientras
+  // trabaja, cada poco, para ver entrar las órdenes según las lanza.
+  useEffect(() => {
+    if (!lateralAgente || !transport.activity) return;
+    let vivo = true;
+    const leer = () => transport.activity!().then(a => { if (vivo) setActividad(a); })
+      .catch(() => { if (vivo) setActividad(null); });
+    void leer();
+    const reloj = sending ? setInterval(leer, 2500) : undefined;
+    return () => { vivo = false; clearInterval(reloj); };
+  }, [transport, lateralAgente, sending, conversacion, proyecto, systemBusy]);
+  useEffect(() => { if (!sending) setEtapa(null); }, [sending]);
   return <main className={`helios-app hud-layout vision-layout phase-${phase}${mobile ? ' mobile-layout' : ''}`} style={{ "--phase-color": active.color } as CSSProperties}>
     {mobile && <MobileWorkspace previous={previous} turns={turns} notes={windows.map(w => w.note)}
       artifact={codeArtifact ?? historicalArtifacts[historicalArtifacts.length - 1] ?? null}
@@ -971,6 +998,8 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         <button ref={historyButton} type="button" className="vision-side-button" aria-label="Historial" title="Historial"
           onClick={() => setHistoryOpen(true)}><History size={18} aria-hidden="true" /></button>
       </>}
+      now={<AgentNow label={ahora.texto} stage={ahora.clave} busy={ocupado} />}
+      activity={<AgentActivity activity={actividad} loadDetail={transport.activityDetail ? seq => transport.activityDetail!(seq) : undefined} />}
       meterAction={transport.clearContext && <button type="button" className="vision-meter-action"
         disabled={sending || limpiando || historyLoading}
         title="Helios deja de tener delante la conversación de este proyecto. No se borra: sigue en el historial."

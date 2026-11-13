@@ -673,3 +673,35 @@ button.vision-horizon-state:focus-visible { outline: 2px solid var(--v-gold); ou
 }
 .vision-meter-action:hover:not(:disabled) { border-color: var(--v-rim); }
 .vision-meter-action:disabled { opacity: .6; cursor: default; }
+/* Ahora mismo: una línea con el punto que late mientras Helios trabaja y el tiempo que lleva. */
+.vision-agent-now {
+  display: flex; align-items: center; gap: 9px; min-height: 34px; padding: 0 12px; border-radius: 9px;
+  border: 1px solid var(--v-line); background: rgba(255, 236, 208, 0.03); font: 12.5px var(--v-font); color: var(--v-muted);
+}
+.vision-agent-now > span { width: 7px; height: 7px; flex-shrink: 0; border-radius: 50%; background: var(--v-muted); }
+.vision-agent-now p { margin: 0; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vision-agent-now time { font: 11px var(--v-mono); font-variant-numeric: tabular-nums; }
+.vision-agent-now[data-busy] { color: var(--v-text); border-color: var(--v-rim); }
+.vision-agent-now[data-busy] > span { background: var(--v-gold); box-shadow: 0 0 10px rgba(244, 181, 68, 0.8); animation: vision-work 1.2s ease-in-out infinite; }
+/* Herramientas ejecutadas y cambios: listas compactas en el centro del lateral. */
+.vision-agent-log { display: grid; gap: 6px; min-width: 0; }
+.vision-agent-log h3 { margin: 4px 0 0; display: flex; gap: 8px; align-items: baseline; font: 600 11px var(--v-font); letter-spacing: .1em; text-transform: uppercase; color: var(--v-muted); }
+.vision-agent-log h3 span { font: 11px var(--v-mono); letter-spacing: 0; }
+.vision-agent-log ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.vision-agent-log li > button {
+  width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 1px 8px; text-align: left; padding: 6px 8px; cursor: pointer;
+  border: 0; border-radius: 7px; background: transparent; color: var(--v-text); font: 12px var(--v-mono);
+}
+.vision-agent-log li > button:hover, .vision-agent-log li > button[aria-expanded="true"] { background: rgba(255, 236, 208, 0.05); }
+.vision-agent-log li > button:focus-visible { outline: 2px solid var(--v-gold); outline-offset: 1px; }
+.vision-agent-tool i { font-style: normal; color: var(--v-muted); }
+.vision-agent-when { color: var(--v-muted); font-variant-numeric: tabular-nums; }
+.vision-agent-log li[data-failed] .vision-agent-when { color: var(--hud-pink); }
+.vision-agent-log code { grid-column: 1 / -1; color: var(--v-gold-soft); background: none; padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vision-agent-detail { margin: 2px 0 6px; padding: 8px; border-radius: 7px; background: rgba(0, 0, 0, 0.28); border: 1px solid var(--v-line); }
+.vision-agent-detail pre { margin: 0; max-height: 220px; overflow: auto; font: 11px/1.5 var(--v-mono); color: var(--v-text); white-space: pre-wrap; word-break: break-word; scrollbar-width: thin; }
+.vision-agent-detail p, .vision-agent-empty { margin: 0; font-size: 12px; color: var(--v-muted); }
+.vision-agent-change { display: grid; grid-template-columns: auto 1fr; gap: 8px; padding: 5px 8px; font-size: 12px; line-height: 1.45; }
+.vision-agent-change time { font: 11px var(--v-mono); color: var(--v-muted); }
+.vision-agent-change p { margin: 0; color: var(--v-text); }
+.vision-agent-change[data-kind="decision"] p { color: var(--v-gold-soft); }

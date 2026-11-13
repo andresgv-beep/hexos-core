@@ -32,7 +32,7 @@ function AgentMeter({ metrics, action }: { metrics?: InferenceMetrics; action?: 
 
 /** Los proyectos del Agente. Cada uno tiene su carpeta y su conversación: cambiar de
  *  proyecto es dejar una y seguir en otra, sin que Helios mezcle lo de las dos. */
-export function ProjectsPanel({ projects, active, busy, error, fixed, metrics, controls, meterAction, onSelect, onCreate, onClose }: {
+export function ProjectsPanel({ projects, active, busy, error, fixed, metrics, controls, meterAction, now, activity, onSelect, onCreate, onClose }: {
   projects: Project[];
   active: string | null;
   busy: boolean;
@@ -45,6 +45,10 @@ export function ProjectsPanel({ projects, active, busy, error, fixed, metrics, c
   controls?: ReactNode;
   /** Solo en el lateral fijo: lo que se puede hacer con el contexto, dentro de su tarjeta. */
   meterAction?: ReactNode;
+  /** Solo en el lateral fijo: lo que Helios está haciendo ahora, arriba del todo. */
+  now?: ReactNode;
+  /** Solo en el lateral fijo: herramientas ejecutadas y cambios, en el centro. */
+  activity?: ReactNode;
   onSelect: (id: string | null) => void;
   onCreate: (name: string, folder: string) => Promise<boolean>;
   onClose?: () => void;
@@ -61,6 +65,7 @@ export function ProjectsPanel({ projects, active, busy, error, fixed, metrics, c
   return <Caja className={fixed ? "vision-agent-side vision-projects" : "vision-tasks vision-projects"}
     role={fixed ? undefined : "dialog"} aria-labelledby="projects-title">
     {fixed && controls && <div className="vision-side-controls">{controls}</div>}
+    {fixed && now}
     <header className="vision-panel-heading">
       <FolderOpen size={17} aria-hidden="true" />
       <h2 id="projects-title">Proyectos</h2>
@@ -91,6 +96,7 @@ export function ProjectsPanel({ projects, active, busy, error, fixed, metrics, c
           <strong>{project.name}</strong><span title={project.folder}>{project.folder}</span></button></li>)}
     </ul>
     {!fixed && <p className="vision-tasks-empty">Cada proyecto tiene su carpeta y su conversación. Al cambiar, Helios deja de tener delante la del otro; no se borra nada.</p>}
+    {fixed && activity}
     {fixed && <AgentMeter metrics={metrics} action={meterAction} />}
   </Caja>;
 }

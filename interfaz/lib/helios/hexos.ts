@@ -95,6 +95,13 @@ export type HeliosWindow = "chat" | "agente";
 export interface Project { id: string; name: string; folder: string; used: string }
 export interface ProjectList { active: string | null; projects: Project[] }
 
+/** Una llamada a herramienta ya hecha, con una línea que dice qué se pidió. */
+export interface ActivityCall { seq: number; ts: string; tool: string; summary: string; failed: boolean; seconds: number | null }
+/** Algo que cambió: una herramienta con efecto o una decisión tomada en una tarjeta. */
+export interface ActivityChange { ts: string; kind: "tool" | "decision"; text: string }
+export interface Activity { tools: ActivityCall[]; changes: ActivityChange[] }
+export interface ActivityDetail { seq: number; tool: string; arguments: Record<string, unknown>; output: string; truncated: boolean; failed: boolean }
+
 function parseProject(value: unknown): Project | null {
   return isRecord(value) && typeof value.id === "string" && typeof value.name === "string" &&
     typeof value.folder === "string"
@@ -128,6 +135,10 @@ export interface HeliosTransport {
   /** Empieza de cero el contexto de la ventana actual. El archivo no se borra: lo
    *  anterior sigue en el historial y Helios puede consultarlo, pero ya no lo tiene delante. */
   clearContext?(signal?: AbortSignal): Promise<void>;
+  /** Lo hecho en la conversación puesta: llamadas y cambios, lo más nuevo primero. */
+  activity?(signal?: AbortSignal): Promise<Activity>;
+  /** Argumentos y salida de una llamada, con tope. */
+  activityDetail?(seq: number, signal?: AbortSignal): Promise<ActivityDetail>;
   /** Los proyectos del Agente y cuál está puesto. */
   projects?(signal?: AbortSignal): Promise<ProjectList>;
   /** Crea un proyecto con su carpeta y pasa a trabajar en él. Sin `folder` se crea una nueva. */
@@ -240,6 +251,23 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
         throw new Error("HexOS no confirmó el espacio de trabajo");
       }
       return data.window;
+    },
+    async activity(signal) {
+      const data = await request("activity", { signal });
+      if (!isRecord(data) || !Array.isArray(data.tools) || !Array.isArray(data.changes)) throw new Error("Actividad de HexOS no válida");
+      return {
+        tools: data.tools.flatMap(t => isRecord(t) && typeof t.seq === "number" && typeof t.tool === "string"
+          ? [{ seq: t.seq, ts: String(t.ts ?? ""), tool: t.tool, summary: typeof t.summary === "string" ? t.summary : "",
+               failed: t.failed === true, seconds: typeof t.seconds === "number" ? t.seconds : null }] : []),
+        changes: data.changes.flatMap(c => isRecord(c) && typeof c.text === "string"
+          ? [{ ts: String(c.ts ?? ""), kind: c.kind === "decision" ? "decision" as const : "tool" as const, text: c.text }] : []),
+      };
+    },
+    async activityDetail(seq, signal) {
+      const data = await request(`activity/${seq}`, { signal });
+      if (!isRecord(data) || typeof data.tool !== "string" || typeof data.output !== "string") throw new Error("Detalle de la llamada no válido");
+      return { seq, tool: data.tool, arguments: isRecord(data.arguments) ? data.arguments : {}, output: data.output,
+               truncated: data.truncated === true, failed: data.failed === true };
     },
     async projects(signal) {
       const data = await request("projects", { signal });
