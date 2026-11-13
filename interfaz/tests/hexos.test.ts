@@ -329,3 +329,35 @@ test('history pages preserve the earlier cursor and validate the response', asyn
     await assert.rejects(createHexosTransport('/api', fixture(data)).historyPage!(), /historial/);
   }
 });
+
+test('status tells apart no project, a project, and a HexOS without projects', async () => {
+  const base = { state: 'idle', mode: 'native-experimental', window: 'agente' };
+  assert.equal((await createHexosTransport('/api', fixture({ ...base, project: 'motor-cuda' })).status()).project, 'motor-cuda');
+  assert.equal((await createHexosTransport('/api', fixture({ ...base, project: null })).status()).project, null);
+  // Un HexOS anterior no manda el campo: la interfaz no debe enseñar proyectos.
+  assert.equal((await createHexosTransport('/api', fixture(base)).status()).project, undefined);
+});
+
+test('projects are listed, created and switched through their own routes', async () => {
+  const seen: Array<[string, unknown]> = [];
+  const fetcher = (async (url, init) => {
+    const body = init?.body ? JSON.parse(String(init.body)) : null;
+    seen.push([String(url), body]);
+    if (String(url).endsWith('/projects') && !body) {
+      return Response.json({ active: 'uno', projects: [
+        { id: 'uno', name: 'Uno', folder: '/home/x/Helios/proyectos/uno', created: 'a', used: 'b' }, { roto: true }] });
+    }
+    if (String(url).endsWith('/projects')) return Response.json({ active: 'dos', created: {} });
+    return Response.json({ active: body.id });
+  }) as typeof fetch;
+  const transport = createHexosTransport('/api', fetcher);
+  assert.deepEqual(await transport.projects?.(), { active: 'uno',
+    projects: [{ id: 'uno', name: 'Uno', folder: '/home/x/Helios/proyectos/uno', used: 'b' }] });
+  assert.equal(await transport.createProject?.('Dos'), 'dos');
+  assert.equal(await transport.createProject?.('Tres', ' ~/repo '), 'dos');
+  assert.equal(await transport.setProject?.('uno'), 'uno');
+  assert.equal(await transport.setProject?.(null), null);
+  assert.deepEqual(seen.slice(1), [['/api/projects', { name: 'Dos' }], ['/api/projects', { name: 'Tres', folder: '~/repo' }],
+    ['/api/project', { id: 'uno' }], ['/api/project', { id: null }]]);
+  await assert.rejects(async () => transport.createProject?.('   '), /nombre/);
+});

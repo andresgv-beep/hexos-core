@@ -5,7 +5,7 @@ import { InferenceFooter } from "./InferenceFooter";
 import { type InferenceMetrics } from "@/lib/helios/metrics";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
-import { Activity, ArrowRight, Brain, Code2, Eraser, HardDrive, History, ListChecks, MessageCircle, NotebookText, Square, Wrench, X } from "lucide-react";
+import { Activity, ArrowRight, Brain, Code2, Eraser, FolderOpen, HardDrive, History, ListChecks, MessageCircle, NotebookText, Square, Wrench, X } from "lucide-react";
 import { AttachmentButton, ChatAttachments, type Attachment } from "./ChatAttachments";
 import { VoiceButton } from "./VoiceButton";
 import { VoiceMode } from "./VoiceMode";
@@ -28,6 +28,8 @@ import { coreSectionForTools, createCoreClient, type NoteDetail } from "@/lib/he
 import { createMediaClient, isActive, type MediaControl, type MediaJob } from "@/lib/helios/media";
 import { MediaCard } from "./MediaCard";
 import { TasksPanel } from "./TasksPanel";
+import { ProjectsPanel } from "./ProjectsPanel";
+import type { Project } from "@/lib/helios/hexos";
 import { assessCodeRevision, codeRevisionPrompt, extractHtmlPreview, extractReplyArtifact, type ReplyArtifact } from "@/lib/helios/preview";
 
 const localTransport = createHexosTransport("/api/helios");
@@ -52,6 +54,13 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   // El espacio de trabajo: decide qué herramientas se le declaran al modelo.
   const [ventana, setVentana] = useState<"chat" | "agente" | null>(null);
   const [ventanaBusy, setVentanaBusy] = useState(false);
+  // El proyecto puesto en el Agente. `undefined`: este HexOS no tiene proyectos y no se enseña nada.
+  const [proyecto, setProyecto] = useState<string | null | undefined>(undefined);
+  const [proyectos, setProyectos] = useState<Project[]>([]);
+  const [projectsOpen, setProjectsOpen] = useState(false);
+  const [projectBusy, setProjectBusy] = useState(false);
+  const [projectError, setProjectError] = useState("");
+  const proyectoVisto = useRef<string | null | undefined>(undefined);
   // La ventana es del servidor, no de esta pestaña: otro dispositivo puede cambiarla.
   const ventanaVista = useRef<"chat" | "agente" | null>(null);
   const cambiandoVentana = useRef(false);
@@ -358,6 +367,17 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
           setHistoryLoading(true); setConversacion(n => n + 1); setLimpio(false);
         }
       }
+      // Lo mismo con el proyecto: si otro dispositivo lo cambió, la conversación en pantalla es de otro.
+      setProyecto(estado.project);
+      if (!cambiandoVentana.current) {
+        const antes = proyectoVisto.current;
+        proyectoVisto.current = estado.project;
+        if (antes !== undefined && estado.project !== undefined && antes !== estado.project &&
+            estado.window === "agente" && ventanaEnCurso.current === null) {
+          setTurns([]); setPrevious([]); setHistoryNext(null); setHistoryError("");
+          setHistoryLoading(true); setConversacion(n => n + 1); setLimpio(false);
+        }
+      }
       setMetrics(estado.metrics);
       // Lo que Helios dice que va a hacer, mientras lo hace. Sin esto la ventana
       // se quedaba en «pensando…» y lo anunciado —que lo escribe el modelo, no
@@ -550,6 +570,46 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     } finally {
       cambiandoVentana.current = false;
       setVentanaBusy(false);
+    }
+  }
+
+  // El nombre del proyecto puesto se enseña en la cabecera sin abrir el panel.
+  useEffect(() => {
+    if (proyecto === undefined || !transport.projects) return;
+    let vivo = true;
+    transport.projects().then(lista => { if (vivo) setProyectos(lista.projects); }).catch(() => {});
+    return () => { vivo = false; };
+  }, [transport, proyecto]);
+
+  async function abrirProyectos() {
+    setTasksOpen(false); setSystemOpen(false); setProjectError("");
+    setProjectsOpen(true);
+    try { setProyectos((await transport.projects?.())?.projects ?? []); }
+    catch (error) { setProjectError(error instanceof Error ? error.message : "No se pudo leer la lista de proyectos."); }
+  }
+
+  // Cambiar de proyecto es como cambiar de ventana: lo que hay en pantalla es del otro.
+  async function ponerProyecto(hacer: () => Promise<string | null>): Promise<boolean> {
+    if (projectBusy || sending) return false;
+    setProjectBusy(true); setProjectError("");
+    cambiandoVentana.current = true;
+    try {
+      const puesto = await hacer();
+      const cambia = proyectoVisto.current !== puesto;
+      proyectoVisto.current = puesto;
+      setProyecto(puesto);
+      setProyectos((await transport.projects?.())?.projects ?? []);
+      if (cambia) {
+        setTurns([]); setPrevious([]); setHistoryNext(null); setHistoryError("");
+        setHistoryLoading(true); setConversacion(n => n + 1); setLimpio(false);
+      }
+      return true;
+    } catch (error) {
+      setProjectError(error instanceof Error ? error.message : "HexOS no confirmó el cambio de proyecto.");
+      return false;
+    } finally {
+      cambiandoVentana.current = false;
+      setProjectBusy(false);
     }
   }
 
@@ -811,21 +871,29 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       {ventana !== null && <button type="button" aria-label="Modo agente" title="Agente: este PC, equipos, NAS y multimedia"
         aria-current={ventana === "agente" ? "page" : undefined} disabled={ventanaBusy}
         onClick={() => void irAVentana("agente")}><Wrench size={21} /></button>}
+      {ventana === "agente" && proyecto !== undefined && transport.projects && <button type="button" aria-label="Proyectos"
+        title="Proyectos: cada uno con su carpeta y su conversación" aria-pressed={projectsOpen}
+        onClick={() => { if (projectsOpen) setProjectsOpen(false); else void abrirProyectos(); }}><FolderOpen size={21} /></button>}
       <button type="button" aria-label="Notas" aria-pressed={coreOpen} onClick={() => setCoreOpen(true)}><NotebookText size={21} /></button>
       <button type="button" aria-label="Archivos del NAS" onClick={() => setFileFloating({})}><HardDrive size={21} /></button>
       <button type="button" aria-label="Implementación" aria-pressed={codeOpen} disabled={!ultimaImplementacion && !fileViewer}
         onClick={alternarImplementacion}><Code2 size={21} /></button>
       <button type="button" aria-label={tareasEnCurso ? `Tareas, ${tareasEnCurso} en curso` : "Tareas"} aria-pressed={tasksOpen}
-        onClick={() => { setSystemOpen(false); setTasksOpen(open => !open); }}>
+        onClick={() => { setSystemOpen(false); setProjectsOpen(false); setTasksOpen(open => !open); }}>
         <ListChecks size={21} />{tareasEnCurso > 0 && <span className="vision-rail-badge" aria-hidden="true">{tareasEnCurso}</span>}</button>
       <span className="vision-rail-gap" />
-      <button type="button" aria-label="Estado del sistema" aria-pressed={systemOpen} onClick={() => { setTasksOpen(false); setSystemOpen(open => !open); }}><Activity size={21} /></button>
+      <button type="button" aria-label="Estado del sistema" aria-pressed={systemOpen} onClick={() => { setTasksOpen(false); setProjectsOpen(false); setSystemOpen(open => !open); }}><Activity size={21} /></button>
     </nav>
     <div className="vision-main">
       <header className="vision-header">
         <span className="vision-emblem" aria-hidden="true"><span /></span>
         <div className="vision-brand"><strong>HELIOS</strong><span role="status">{estado}</span></div>
         <span className="vision-header-gap" />
+        {ventana === "agente" && proyecto !== undefined && transport.projects && <button className="vision-chip" type="button"
+          aria-pressed={projectsOpen} title="Cambiar de proyecto o crear uno" onClick={() => void abrirProyectos()}>
+          <FolderOpen size={15} aria-hidden="true" /> {proyecto === null ? "Sin proyecto"
+            : proyectos.find(p => p.id === proyecto)?.name ?? proyecto}
+        </button>}
         {thinking !== null && <button className="vision-chip" type="button" aria-pressed={thinking}
           disabled={thinkingBusy} onClick={() => void toggleThinking()}>
           <Brain size={15} aria-hidden="true" /> Razonamiento: {thinkingBusy ? "…" : thinking ? "automático" : "apagado"}
@@ -888,6 +956,10 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         void send({ preventDefault() {} } as FormEvent, "Escucha mi mensaje de voz y responde a lo que te pido.",
           { voice, displayText: `🎤 Mensaje de voz (${Math.max(1, Math.round(voice.seconds))} s)` });
       }} />}
+    {projectsOpen && ventana === "agente" && proyecto !== undefined && <ProjectsPanel projects={proyectos}
+      active={proyecto} busy={projectBusy || sending} error={projectError} onClose={() => setProjectsOpen(false)}
+      onSelect={id => void ponerProyecto(() => transport.setProject!(id))}
+      onCreate={(name, folder) => ponerProyecto(() => transport.createProject!(name, folder || undefined))} />}
     {tasksOpen && !mobile && <TasksPanel media={mediaJobs} onControl={controlMedia} onClose={() => setTasksOpen(false)} />}
     {systemOpen && !mobile && <div className="vision-system" role="dialog" aria-label="Estado del sistema">
       <button type="button" className="icon-button vision-system-close" aria-label="Cerrar estado del sistema" onClick={() => setSystemOpen(false)}><X size={16} /></button>

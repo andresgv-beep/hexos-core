@@ -91,12 +91,25 @@ function parseChatReply(data: unknown): ChatReply {
 }
 /** Los dos espacios de trabajo del agente. */
 export type HeliosWindow = "chat" | "agente";
+/** Un proyecto del Agente: su carpeta y su conversación propia. */
+export interface Project { id: string; name: string; folder: string; used: string }
+export interface ProjectList { active: string | null; projects: Project[] }
+
+function parseProject(value: unknown): Project | null {
+  return isRecord(value) && typeof value.id === "string" && typeof value.name === "string" &&
+    typeof value.folder === "string"
+    ? { id: value.id, name: value.name, folder: value.folder, used: typeof value.used === "string" ? value.used : "" }
+    : null;
+}
 
 export interface HeliosTransport {
   /** `thinking` es null cuando el motor no tiene canal de pensamiento.
    *  `window` es null si el agente no reparte las herramientas por ventana. */
   status(signal?: AbortSignal): Promise<{ phase: HeliosPhase; mode: string; thinking: boolean | null;
     window: HeliosWindow | null;
+    /** El proyecto puesto en el Agente; null si trabaja sin proyecto, y `undefined`
+     *  si este HexOS es anterior a los proyectos y no hay nada que enseñar. */
+    project?: string | null;
     tools: ToolActivity[]; credentialRequest: CredentialRequest | null; systemRequest: SystemRequest | null;
     progress: Progress; generation?: Generation; metrics?: InferenceMetrics }>;
   /** Aprueba o rechaza el plan pendiente. Aprobarlo lo ejecuta HexOS y lo comprueba. */
@@ -115,6 +128,12 @@ export interface HeliosTransport {
   /** Empieza de cero el contexto de la ventana actual. El archivo no se borra: lo
    *  anterior sigue en el historial y Helios puede consultarlo, pero ya no lo tiene delante. */
   clearContext?(signal?: AbortSignal): Promise<void>;
+  /** Los proyectos del Agente y cuál está puesto. */
+  projects?(signal?: AbortSignal): Promise<ProjectList>;
+  /** Crea un proyecto con su carpeta y pasa a trabajar en él. Sin `folder` se crea una nueva. */
+  createProject?(name: string, folder?: string, signal?: AbortSignal): Promise<string>;
+  /** Cambia de proyecto; null vuelve al Agente sin proyecto. Devuelve el que queda puesto. */
+  setProject?(id: string | null, signal?: AbortSignal): Promise<string | null>;
   /** Avisa a HexOS al empezar a escribir. Inicia la carga, pero no bloquea la UI. */
   warmup(signal?: AbortSignal): Promise<"unloaded" | "loading" | "ready" | "unloading" | "error" | "closed">;
   history(signal?: AbortSignal): Promise<HistoryMessage[]>;
@@ -171,7 +190,8 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
             affects: Array.isArray(sr.affects) ? sr.affects.filter((x): x is string => typeof x === "string") : [],
             affectsCount: typeof sr.affects_count === "number" ? sr.affects_count : 0 }
         : null;
-      return { phase: phaseFromHexos(data.state), mode: data.mode, thinking, window: ventana,
+      const project = typeof data.project === "string" ? data.project : data.project === null ? null : undefined;
+      return { phase: phaseFromHexos(data.state), mode: data.mode, thinking, window: ventana, project,
                tools: parseToolActivities(data.active_tools, "running"), credentialRequest, systemRequest,
                progress: parseProgress(data.progress), generation, metrics: parseInferenceMetrics(data.metrics) };
     },
@@ -220,6 +240,27 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
         throw new Error("HexOS no confirmó el espacio de trabajo");
       }
       return data.window;
+    },
+    async projects(signal) {
+      const data = await request("projects", { signal });
+      if (!isRecord(data) || !Array.isArray(data.projects)) throw new Error("Lista de proyectos de HexOS no válida");
+      return { active: typeof data.active === "string" ? data.active : null,
+               projects: data.projects.map(parseProject).filter((p): p is Project => p !== null) };
+    },
+    async createProject(name, folder, signal) {
+      if (!name.trim()) throw new Error("Ponle un nombre al proyecto");
+      const data = await request("projects", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(folder?.trim() ? { name, folder: folder.trim() } : { name }), signal });
+      if (!isRecord(data) || typeof data.active !== "string") throw new Error("HexOS no confirmó el proyecto");
+      return data.active;
+    },
+    async setProject(id, signal) {
+      const data = await request("project", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }), signal });
+      if (!isRecord(data) || !(data.active === null || typeof data.active === "string")) {
+        throw new Error("HexOS no confirmó el cambio de proyecto");
+      }
+      return data.active;
     },
     async clearContext(signal) {
       const data = await request("context/reset", { method: "POST",

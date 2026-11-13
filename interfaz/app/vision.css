@@ -600,3 +600,27 @@ button.vision-horizon-state:focus-visible { outline: 2px solid var(--v-gold); ou
 @media (max-width: 960px) {
   .vision-horizon .inference-footer > span:last-child { display: none; }
 }
+
+/* Proyectos del Agente: mismo cristal que el panel de tareas, con una lista para saltar
+   de uno a otro. El puesto se marca con el filete dorado, como el sitio activo del raíl. */
+.vision-project-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 6px; }
+.vision-project-list button {
+  width: 100%; display: grid; gap: 2px; text-align: left; padding: 9px 12px; cursor: pointer;
+  border: 1px solid var(--v-line); border-radius: 10px; background: rgba(255, 236, 208, 0.03); color: var(--v-text);
+}
+.vision-project-list button:hover:not(:disabled) { border-color: var(--v-rim); }
+.vision-project-list button:disabled { opacity: .6; cursor: default; }
+.vision-project-list button[aria-current="true"] { border-color: var(--v-gold); box-shadow: inset 2px 0 0 var(--v-gold); }
+.vision-project-list button:focus-visible { outline: 2px solid var(--v-gold); outline-offset: 2px; }
+.vision-project-list strong { font: 600 14px var(--v-font); }
+.vision-project-list span { font: 11px var(--v-mono); color: var(--v-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vision-project-new { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--v-line); display: grid; gap: 8px; }
+.vision-project-new > label:first-child { font: 600 11px var(--v-font); letter-spacing: .1em; text-transform: uppercase; color: var(--v-muted); }
+.vision-project-new > div { display: flex; gap: 8px; }
+.vision-project-new input:not([type="checkbox"]) {
+  flex: 1; min-width: 0; height: 36px; padding: 0 11px; font: 14px var(--v-font); color: var(--v-text);
+  border: 1px solid var(--v-line); border-radius: 9px; background: rgba(0, 0, 0, 0.22);
+}
+.vision-project-new input:not([type="checkbox"]):focus-visible { outline: 2px solid var(--v-gold); outline-offset: 1px; }
+.vision-project-check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--v-muted); cursor: pointer; }
+.vision-project-hint { margin: 0; font-size: 12px; color: var(--v-muted); }
