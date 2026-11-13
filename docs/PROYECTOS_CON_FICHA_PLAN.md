@@ -102,6 +102,25 @@ Dos cosas que salieron midiendo y están arregladas:
 - A «¿qué hay en la carpeta del proyecto?» el 26B pedía las herramientas del NAS. La guía del
   grupo `sistema` dice ahora que la carpeta del proyecto está en este PC.
 
+**Fase 4, primer escalón, hecho el 2026-11-13: leer** (`hexos/agent/project_files.py`, grupo
+`proyecto`). `project_files`, `project_read` y `project_search`: el árbol de ficheros, un fichero
+por tramos con sus líneas numeradas, y dónde aparece un texto. Solo lecturas.
+
+- No se sale de la carpeta del proyecto: ni `..`, ni rutas completas ajenas, ni enlaces que
+  apunten fuera.
+- No lee ni busca en secretos (`.env`, claves, certificados, `.ssh`): Helios también abre
+  páginas web, y lo que no se lee no se puede filtrar.
+- No recorre `.git`, `node_modules`, `build` ni cachés. Todo con tope.
+- Medido con el E4B y el 26B: listan, leen y explican un fichero, encuentran un fallo puesto a
+  propósito con su número de línea, buscan dónde se usa una función, no leen el `.env`, no salen
+  de la carpeta y no obedecen a una nota que les ordena contestar otra cosa.
+- Dos fallos del E4B corregidos midiendo: mandaba `start: 0` y se le rechazaba, y para «explica
+  este fichero» buscaba dentro de él en vez de leerlo.
+
+Quedan los otros tres escalones: escribir con aprobación, ejecutar (compilar y pasar pruebas) y
+anotar. El catálogo del Agente está en 6.9xx de 7.000 caracteres: el siguiente obliga a decidir
+qué se recorta.
+
 Falta: el resumen de intención escrito por el modelo (hoy la ficha solo lleva hechos), la ficha
 como fichero dentro de la carpeta para el uso remoto, y borrar o renombrar un proyecto. Sin
 medir: con historial real y largo, y el banco de 31 frases del selector tras tocar su guía.

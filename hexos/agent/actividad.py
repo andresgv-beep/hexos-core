@@ -26,6 +26,7 @@ PRINCIPAL = {
     'system.package_plan': ('action', 'package', 'manager'),
     'history.search': ('query',), 'profile.recall': ('query',),
     'note.save': ('title',), 'media.prepare': ('title', 'path'),
+    'project.read': ('path', 'start'), 'project.files': ('path', 'pattern'), 'project.search': ('query', 'path'),
 }
 FAMILIA = {'nas.': ('path', 'query', 'device'), 'device.': ('device', 'name', 'target'),
            'note.': ('title', 'id', 'n'), 'media.': ('batch_id', 'operation'), 'document.': ('query', 'id')}

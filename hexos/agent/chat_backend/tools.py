@@ -5,7 +5,7 @@ import json
 import time
 from typing import TYPE_CHECKING
 from uuid import uuid4
-from .. import catalog, devices, entorno, hosts, notes, core, pc_status, terminal_read, workflow, procedures, system_packages
+from .. import catalog, devices, entorno, hosts, notes, core, pc_status, project_files, terminal_read, workflow, procedures, system_packages
 from ..continuity import history_tool
 from ..progress import announcement
 from ..work import now
@@ -212,6 +212,8 @@ class ToolDispatcher:
             return pc_status.estado()
         if name == 'system.toolchain':
             return entorno.reconocer()
+        if name.startswith('project.'):
+            return project_files.dispatch(store, name, args)
         if name == 'system.package_plan':
             # Solo planifica: la ejecución la dispara la aprobación de la persona (/api/system).
             pendiente = self.session.system_request

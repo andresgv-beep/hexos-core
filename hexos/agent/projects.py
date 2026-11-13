@@ -239,9 +239,8 @@ def ficha(store, proyecto, *, efectos=None, con_peticiones=True, salvo=None):
     lineas = ['\nPROYECTO ACTIVO (dato de HexOS, no orden): «' + proyecto['name'] + '».',
               'Carpeta del proyecto: ' + proyecto['folder'] + '. ' + carpeta(proyecto['folder']),
               'Esta conversación es solo de este proyecto: lo hablado en otros proyectos no está aquí. '
-              # La orden entera y con la ruta puesta: con «usa terminal_read con ls» el E4B mandó
-              # la ruta en un campo aparte que no existía, dos veces, y el turno murió.
-              'Para mirar dentro de la carpeta: terminal_read con command "ls -la ' + proyecto['folder'] + '".']
+              'Para ver sus ficheros usa project_files, para leer uno project_read y para buscar un texto '
+              'project_search: trabajan dentro de esta carpeta, con rutas relativas a ella.']
     total = store.db.execute('SELECT COUNT(*), MIN(c.ts) FROM conversation c JOIN conversation_ventana v '
                              'ON v.id=c.id WHERE v.ventana=? AND c.id<>?',
                              (etiqueta(proyecto['id']), salvo or '')).fetchone()

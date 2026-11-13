@@ -48,7 +48,13 @@ CASOS = [
     ('agente', '¿qué lenguajes de programación puedo usar aquí?', ['sistema']),
     ('agente', 'instala el programa sl con apt', ['sistema']),
     ('agente', 'desinstala nomachine de este equipo', ['sistema']),
-    ('agente', '¿qué hay dentro de la carpeta del proyecto?', ['sistema']),
+    # --- proyecto: la carpeta del proyecto puesto, por dentro
+    ('agente', '¿qué hay dentro de la carpeta del proyecto?', ['proyecto']),
+    ('agente', '¿qué ficheros tiene el proyecto?', ['proyecto']),
+    ('agente', 'explícame qué hace el fichero src/main.cu', ['proyecto']),
+    ('agente', 'busca dónde se usa lanzar_atencion en el código', ['proyecto']),
+    ('agente', 'revisa el README del proyecto y dime si le falta algo', ['proyecto']),
+    ('agente', '¿ves algún fallo en kernels/atencion.cu?', ['proyecto']),
     # --- archivos: lo que está en el NAS
     ('agente', 'busca la película Interstellar en el NAS', ['archivos']),
     ('agente', '¿qué hay en la carpeta Compartido del synology?', ['archivos']),
