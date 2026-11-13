@@ -58,6 +58,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   // El proyecto puesto en el Agente. `undefined`: este HexOS no tiene proyectos y no se enseña nada.
   const [proyecto, setProyecto] = useState<string | null | undefined>(undefined);
   const [proyectos, setProyectos] = useState<Project[]>([]);
+  const [raizProyectos, setRaizProyectos] = useState("~/Helios/proyectos");
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [projectBusy, setProjectBusy] = useState(false);
   const [projectError, setProjectError] = useState("");
@@ -583,7 +584,11 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   useEffect(() => {
     if (proyecto === undefined || !transport.projects) return;
     let vivo = true;
-    transport.projects().then(lista => { if (vivo) setProyectos(lista.projects); }).catch(() => {});
+    transport.projects().then(lista => {
+      if (!vivo) return;
+      setProyectos(lista.projects);
+      if (lista.root) setRaizProyectos(lista.root);
+    }).catch(() => {});
     return () => { vivo = false; };
   }, [transport, proyecto]);
 
@@ -989,6 +994,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     {/* En el escritorio el Agente lleva su lateral fijo a la derecha: es su sitio de trabajo, no un
         panel que se abre. Cede el hueco al espacio de código mientras ese está abierto. */}
     {(mobile ? projectsOpen : lateralAgente) && ventana === "agente" && proyecto !== undefined && transport.projects && <ProjectsPanel projects={proyectos}
+      root={raizProyectos}
       fixed={!mobile} metrics={connection === "ready" ? metrics : undefined}
       controls={<>
         {thinking !== null && <button type="button" className="vision-side-button" aria-pressed={thinking} disabled={thinkingBusy}

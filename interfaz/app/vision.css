@@ -735,3 +735,20 @@ button.vision-horizon-state:focus-visible { outline: 2px solid var(--v-gold); ou
   scrollbar-width: thin; scrollbar-color: rgba(232, 176, 79, 0.45) transparent;
 }
 .vision-agent-side .vision-agent-meter { margin-top: 0; }
+/* Renombrar: los dos botones del formulario son iconos, no filas de la lista. Sin esto
+   heredaban el ancho completo de los botones de proyecto y la tarjeta se desbordaba. */
+.vision-agent-side .vision-project-list, .vision-project-list { overflow-x: hidden; }
+.vision-project-list .vision-project-edit .icon-button {
+  width: 30px; height: 36px; flex-shrink: 0; display: grid; place-items: center; padding: 0; gap: 0;
+  border: 1px solid var(--v-line); border-radius: 9px; background: rgba(255, 236, 208, 0.03);
+}
+.vision-project-list .vision-project-row > .icon-button { display: grid; place-items: center; padding: 0; gap: 0; border: 0; background: transparent; }
+/* La carpeta de destino del proyecto nuevo. */
+.vision-project-new .vision-project-sub { font: 11px var(--v-font); color: var(--v-muted); letter-spacing: 0; text-transform: none; margin-top: 2px; }
+.vision-project-new input#project-folder { font: 12px var(--v-mono); height: 32px; }
+.vision-project-hint button { border: 0; background: none; padding: 0; color: var(--v-gold-soft); font: inherit; cursor: pointer; text-decoration: underline; }
+/* La lista es una rejilla: sin esto, una fila con un campo de texto ensancha la columna
+   más allá del lateral en vez de encogerse. */
+.vision-project-list { grid-template-columns: minmax(0, 1fr); }
+.vision-project-list > li { min-width: 0; }
+.vision-project-edit input { width: 0; }

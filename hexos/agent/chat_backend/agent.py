@@ -371,7 +371,11 @@ class Agent:
         from .. import projects
         with self.store() as store:
             puesto = projects.activo(store)
-            return dict(active=puesto['id'] if puesto else None, projects=projects.listar(store))
+            # `root` es donde se crean las carpetas nuevas: la interfaz la enseña ya escrita
+            # para que el destino se vea y se pueda cambiar antes de crear.
+            raiz, casa = str(projects.raiz()), str(Path.home())
+            return dict(active=puesto['id'] if puesto else None, projects=projects.listar(store),
+                        root='~' + raiz[len(casa):] if raiz.startswith(casa) else raiz)
 
     def set_project(self, project_id):
         """Cambiar de proyecto, o salir de todos con None.

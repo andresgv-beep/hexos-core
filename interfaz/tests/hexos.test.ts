@@ -344,14 +344,14 @@ test('projects are listed, created and switched through their own routes', async
     const body = init?.body ? JSON.parse(String(init.body)) : null;
     seen.push([String(url), body]);
     if (String(url).endsWith('/projects') && !body) {
-      return Response.json({ active: 'uno', projects: [
+      return Response.json({ active: 'uno', root: '~/Helios/proyectos', projects: [
         { id: 'uno', name: 'Uno', folder: '/home/x/Helios/proyectos/uno', created: 'a', used: 'b' }, { roto: true }] });
     }
     if (String(url).endsWith('/projects')) return Response.json({ active: 'dos', created: {} });
     return Response.json({ active: body.id });
   }) as typeof fetch;
   const transport = createHexosTransport('/api', fetcher);
-  assert.deepEqual(await transport.projects?.(), { active: 'uno',
+  assert.deepEqual(await transport.projects?.(), { active: 'uno', root: '~/Helios/proyectos',
     projects: [{ id: 'uno', name: 'Uno', folder: '/home/x/Helios/proyectos/uno', used: 'b' }] });
   assert.equal(await transport.createProject?.('Dos'), 'dos');
   assert.equal(await transport.createProject?.('Tres', ' ~/repo '), 'dos');

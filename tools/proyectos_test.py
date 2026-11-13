@@ -118,7 +118,7 @@ class RegistroTest(Base):
         r = self.agente.remove_project('motor')
         self.assertEqual((r['active'], r['folder_kept']), (None, True))
         self.assertEqual(self.runtime.llamadas, [{'type': 'reset'}])       # era el puesto: se vacía el contexto
-        self.assertEqual(self.agente.projects(), dict(active=None, projects=[]))
+        self.assertEqual(self.agente.projects(), dict(active=None, projects=[], root='~/proyectos'))
         self.assertEqual((carpeta / 'main.c').read_text(), 'int main(){}')
         self.assertEqual(self.textos(), [])                                # se vuelve a «sin proyecto»
         # Lo hablado no se pierde: creando otro con el mismo nombre, vuelve.
@@ -390,7 +390,7 @@ class ServidorTest(Base):
                 return error.code, json.loads(error.read())
 
     def test_crear_listar_cambiar_y_salir(self):
-        self.assertEqual(self.pedir('/api/projects'), (200, dict(active=None, projects=[])))
+        self.assertEqual(self.pedir('/api/projects'), (200, dict(active=None, projects=[], root='~/proyectos')))
         codigo, creado = self.pedir('/api/projects', dict(name='Motor CUDA'))
         self.assertEqual((codigo, creado['active']), (200, 'motor-cuda'))
         self.pedir('/api/projects', dict(name='Películas'))

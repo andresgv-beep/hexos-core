@@ -5,6 +5,13 @@ import { Check, FolderOpen, Pencil, Plus, Trash2, X } from "lucide-react";
 import type { Project } from "@/lib/helios/hexos";
 import type { InferenceMetrics } from "@/lib/helios/metrics";
 
+/** La misma regla que HexOS para sacar del nombre el identificador y la carpeta: sin acentos,
+ *  en minúsculas y con guiones. Solo sirve para enseñar la propuesta; quien decide es HexOS. */
+function etiqueta(nombre: string): string {
+  return nombre.normalize("NFKD").replace(/[^ -~]/g, "").toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48).replace(/-+$/, "");
+}
+
 const integer = new Intl.NumberFormat("es-ES");
 const decimal = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 1 });
 
@@ -32,8 +39,10 @@ function AgentMeter({ metrics, action }: { metrics?: InferenceMetrics; action?: 
 
 /** Los proyectos del Agente. Cada uno tiene su carpeta y su conversación: cambiar de
  *  proyecto es dejar una y seguir en otra, sin que Helios mezcle lo de las dos. */
-export function ProjectsPanel({ projects, active, busy, error, fixed, metrics, controls, meterAction, now, activity, onSelect, onCreate, onRename, onRemove, onClose }: {
+export function ProjectsPanel({ projects, root = "~/Helios/proyectos", active, busy, error, fixed, metrics, controls, meterAction, now, activity, onSelect, onCreate, onRename, onRemove, onClose }: {
   projects: Project[];
+  /** Dónde se crean las carpetas nuevas si no se indica otra. */
+  root?: string;
   active: string | null;
   busy: boolean;
   error: string;
@@ -56,8 +65,12 @@ export function ProjectsPanel({ projects, active, busy, error, fixed, metrics, c
   onClose?: () => void;
 }) {
   const [name, setName] = useState("");
+  // La carpeta se enseña ya escrita, calculada con el nombre, hasta que la persona la toca:
+  // así se ve dónde va a ir y se puede cambiar el destino o apuntar a una que ya existe.
   const [folder, setFolder] = useState("");
-  const [conCarpeta, setConCarpeta] = useState(false);
+  const [carpetaTocada, setCarpetaTocada] = useState(false);
+  const propuesta = name.trim() && etiqueta(name) ? `${root}/${etiqueta(name)}` : "";
+  const carpeta = carpetaTocada ? folder : propuesta;
   // Un proyecto a la vez en edición o pendiente de confirmar que se quita.
   const [editando, setEditando] = useState<{ id: string; name: string } | null>(null);
   const [quitando, setQuitando] = useState<string | null>(null);
@@ -69,7 +82,8 @@ export function ProjectsPanel({ projects, active, busy, error, fixed, metrics, c
   async function crear(event: FormEvent) {
     event.preventDefault();
     if (busy || !name.trim()) return;
-    if (await onCreate(name, conCarpeta ? folder : "")) { setName(""); setFolder(""); setConCarpeta(false); }
+    // Sin tocar, decide HexOS con su misma regla; tocada, se le manda la que se ha escrito.
+    if (await onCreate(name, carpetaTocada ? folder.trim() : "")) { setName(""); setFolder(""); setCarpetaTocada(false); }
   }
   const Caja = fixed ? "aside" : "div";
   return <Caja className={fixed ? "vision-agent-side vision-projects" : "vision-tasks vision-projects"}
@@ -89,11 +103,14 @@ export function ProjectsPanel({ projects, active, busy, error, fixed, metrics, c
           disabled={busy} onChange={event => setName(event.target.value)} />
         <button type="submit" className="icon-button" aria-label="Crear proyecto" disabled={busy || !name.trim()}><Plus size={16} /></button>
       </div>
-      <label className="vision-project-check"><input type="checkbox" checked={conCarpeta} disabled={busy}
-        onChange={event => setConCarpeta(event.target.checked)} /> Usar una carpeta que ya existe</label>
-      {conCarpeta && <input aria-label="Ruta de la carpeta" value={folder} placeholder="~/Documentos/GitHub/mi-repo"
-        autoComplete="off" spellCheck={false} disabled={busy} onChange={event => setFolder(event.target.value)} />}
-      {!conCarpeta && <p className="vision-project-hint">Se creará una carpeta nueva con ese nombre.</p>}
+      <label htmlFor="project-folder" className="vision-project-sub">Carpeta</label>
+      <input id="project-folder" value={carpeta} placeholder={`${root}/…`} autoComplete="off" spellCheck={false}
+        disabled={busy} title={carpeta}
+        onChange={event => { setCarpetaTocada(true); setFolder(event.target.value); }} />
+      <p className="vision-project-hint">{carpetaTocada
+        ? <>Se usará esa ruta: si ya existe, tal cual; si no, se crea. <button type="button" disabled={busy}
+            onClick={() => { setCarpetaTocada(false); setFolder(""); }}>Volver a la propuesta</button></>
+        : "Se crea ahí si no existe. Cámbiala para elegir otro destino o usar una carpeta que ya tienes."}</p>
       {error && <p className="attachment-error" role="alert">{error}</p>}
     </form>
     <ul className="vision-project-list">

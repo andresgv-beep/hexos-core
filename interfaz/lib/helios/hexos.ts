@@ -93,7 +93,9 @@ function parseChatReply(data: unknown): ChatReply {
 export type HeliosWindow = "chat" | "agente";
 /** Un proyecto del Agente: su carpeta y su conversación propia. */
 export interface Project { id: string; name: string; folder: string; used: string }
-export interface ProjectList { active: string | null; projects: Project[] }
+export interface ProjectList { active: string | null; projects: Project[];
+  /** Dónde se crean las carpetas de los proyectos nuevos, para enseñar el destino antes de crear. */
+  root?: string }
 
 /** Una llamada a herramienta ya hecha, con una línea que dice qué se pidió. */
 export interface ActivityCall { seq: number; ts: string; tool: string; summary: string; failed: boolean; seconds: number | null }
@@ -277,7 +279,8 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
       const data = await request("projects", { signal });
       if (!isRecord(data) || !Array.isArray(data.projects)) throw new Error("Lista de proyectos de HexOS no válida");
       return { active: typeof data.active === "string" ? data.active : null,
-               projects: data.projects.map(parseProject).filter((p): p is Project => p !== null) };
+               projects: data.projects.map(parseProject).filter((p): p is Project => p !== null),
+               ...(typeof data.root === "string" ? { root: data.root } : {}) };
     },
     async createProject(name, folder, signal) {
       if (!name.trim()) throw new Error("Ponle un nombre al proyecto");
