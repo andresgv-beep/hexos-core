@@ -1,19 +1,53 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { FolderOpen, Plus, X } from "lucide-react";
 import type { Project } from "@/lib/helios/hexos";
+import type { InferenceMetrics } from "@/lib/helios/metrics";
+
+const integer = new Intl.NumberFormat("es-ES");
+const decimal = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 1 });
+
+/** Contexto y velocidad, al fondo del lateral: en el Agente salen de debajo del chat para
+ *  dejar limpia la zona de escribir. */
+function AgentMeter({ metrics, action }: { metrics?: InferenceMetrics; action?: ReactNode }) {
+  const used = metrics?.contextUsed;
+  const capacity = metrics?.contextCapacity;
+  const percent = used != null && capacity != null ? used / capacity * 100 : null;
+  const speed = metrics?.tokensPerSecond;
+  return <section className="vision-agent-meter" aria-label="Contexto y velocidad" data-full={percent != null && percent >= 90}>
+    <div><span>Contexto</span><strong>{percent == null ? "—" : `${Math.round(percent)} %`}</strong></div>
+    <span className="inference-track" role="meter" aria-label="Ocupación del contexto"
+      aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent == null ? undefined : Math.min(100, percent)}
+      aria-valuetext={percent == null ? "Sin medición" : `${integer.format(used!)} de ${integer.format(capacity!)} tokens`}
+      title="Tokens en la caché del modelo; el historial visible puede ser más largo.">
+      <span style={{ width: `${Math.min(100, percent ?? 0)}%` }} />
+    </span>
+    <p>{percent == null ? "Sin medición todavía" : `${integer.format(used!)} de ${integer.format(capacity!)} tokens`}</p>
+    <div title="Media del turno: tokens / tiempo de decodificación. Se actualiza tras cada generación; excluye prefill y herramientas.">
+      <span>Generación</span><strong>{speed == null ? "—" : `${decimal.format(speed)} tok/s`}</strong></div>
+    {action}
+  </section>;
+}
 
 /** Los proyectos del Agente. Cada uno tiene su carpeta y su conversación: cambiar de
  *  proyecto es dejar una y seguir en otra, sin que Helios mezcle lo de las dos. */
-export function ProjectsPanel({ projects, active, busy, error, onSelect, onCreate, onClose }: {
+export function ProjectsPanel({ projects, active, busy, error, fixed, metrics, controls, meterAction, onSelect, onCreate, onClose }: {
   projects: Project[];
   active: string | null;
   busy: boolean;
   error: string;
+  /** En el escritorio es el lateral fijo del Agente; en el móvil, un panel que se abre y se cierra. */
+  fixed?: boolean;
+  /** Solo en el lateral fijo: la tarjeta de contexto y velocidad del fondo. */
+  metrics?: InferenceMetrics;
+  /** Solo en el lateral fijo: los botones de arriba (razonamiento, historial). */
+  controls?: ReactNode;
+  /** Solo en el lateral fijo: lo que se puede hacer con el contexto, dentro de su tarjeta. */
+  meterAction?: ReactNode;
   onSelect: (id: string | null) => void;
   onCreate: (name: string, folder: string) => Promise<boolean>;
-  onClose: () => void;
+  onClose?: () => void;
 }) {
   const [name, setName] = useState("");
   const [folder, setFolder] = useState("");
@@ -23,23 +57,16 @@ export function ProjectsPanel({ projects, active, busy, error, onSelect, onCreat
     if (busy || !name.trim()) return;
     if (await onCreate(name, conCarpeta ? folder : "")) { setName(""); setFolder(""); setConCarpeta(false); }
   }
-  return <div className="vision-tasks vision-projects" role="dialog" aria-labelledby="projects-title">
+  const Caja = fixed ? "aside" : "div";
+  return <Caja className={fixed ? "vision-agent-side vision-projects" : "vision-tasks vision-projects"}
+    role={fixed ? undefined : "dialog"} aria-labelledby="projects-title">
+    {fixed && controls && <div className="vision-side-controls">{controls}</div>}
     <header className="vision-panel-heading">
       <FolderOpen size={17} aria-hidden="true" />
       <h2 id="projects-title">Proyectos</h2>
-      <span>{projects.length ? `${projects.length} en este equipo` : "ninguno todavía"}</span>
-      <button type="button" className="icon-button" aria-label="Cerrar proyectos" onClick={onClose}><X size={16} /></button>
+      <span>{projects.length === 1 ? "1 proyecto" : projects.length ? `${projects.length} proyectos` : "ninguno todavía"}</span>
+      {!fixed && <button type="button" className="icon-button" aria-label="Cerrar proyectos" onClick={onClose}><X size={16} /></button>}
     </header>
-    <p className="vision-tasks-empty">Cada proyecto tiene su carpeta y su conversación. Al cambiar, Helios deja de tener delante la del otro; no se borra nada.</p>
-    <ul className="vision-project-list">
-      <li><button type="button" disabled={busy} aria-current={active === null ? "true" : undefined}
-        onClick={() => onSelect(null)}>
-        <strong>Sin proyecto</strong><span>La conversación general del Agente</span></button></li>
-      {projects.map(project => <li key={project.id}>
-        <button type="button" disabled={busy} aria-current={active === project.id ? "true" : undefined}
-          onClick={() => onSelect(project.id)}>
-          <strong>{project.name}</strong><span title={project.folder}>{project.folder}</span></button></li>)}
-    </ul>
     <form className="vision-project-new" onSubmit={event => void crear(event)}>
       <label htmlFor="project-name">Proyecto nuevo</label>
       <div>
@@ -54,5 +81,16 @@ export function ProjectsPanel({ projects, active, busy, error, onSelect, onCreat
       {!conCarpeta && <p className="vision-project-hint">Se creará una carpeta nueva con ese nombre.</p>}
       {error && <p className="attachment-error" role="alert">{error}</p>}
     </form>
-  </div>;
+    <ul className="vision-project-list">
+      <li><button type="button" disabled={busy} aria-current={active === null ? "true" : undefined}
+        onClick={() => onSelect(null)}>
+        <strong>Sin proyecto</strong><span>La conversación general del Agente</span></button></li>
+      {projects.map(project => <li key={project.id}>
+        <button type="button" disabled={busy} aria-current={active === project.id ? "true" : undefined}
+          onClick={() => onSelect(project.id)}>
+          <strong>{project.name}</strong><span title={project.folder}>{project.folder}</span></button></li>)}
+    </ul>
+    {!fixed && <p className="vision-tasks-empty">Cada proyecto tiene su carpeta y su conversación. Al cambiar, Helios deja de tener delante la del otro; no se borra nada.</p>}
+    {fixed && <AgentMeter metrics={metrics} action={meterAction} />}
+  </Caja>;
 }

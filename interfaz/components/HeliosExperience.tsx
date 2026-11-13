@@ -856,6 +856,8 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     if (codeArtifact) setCodeOpen(true);
     else if (ultimaImplementacion) openHistoricalArtifact(ultimaImplementacion);
   }
+  // El lateral fijo del Agente, solo en escritorio y mientras no lo tape el espacio de código.
+  const lateralAgente = !mobile && !workspaceOpen && ventana === "agente" && proyecto !== undefined && Boolean(transport.projects);
   return <main className={`helios-app hud-layout vision-layout phase-${phase}${mobile ? ' mobile-layout' : ''}`} style={{ "--phase-color": active.color } as CSSProperties}>
     {mobile && <MobileWorkspace previous={previous} turns={turns} notes={windows.map(w => w.note)}
       artifact={codeArtifact ?? historicalArtifacts[historicalArtifacts.length - 1] ?? null}
@@ -871,9 +873,6 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       {ventana !== null && <button type="button" aria-label="Modo agente" title="Agente: este PC, equipos, NAS y multimedia"
         aria-current={ventana === "agente" ? "page" : undefined} disabled={ventanaBusy}
         onClick={() => void irAVentana("agente")}><Wrench size={21} /></button>}
-      {ventana === "agente" && proyecto !== undefined && transport.projects && <button type="button" aria-label="Proyectos"
-        title="Proyectos: cada uno con su carpeta y su conversación" aria-pressed={projectsOpen}
-        onClick={() => { if (projectsOpen) setProjectsOpen(false); else void abrirProyectos(); }}><FolderOpen size={21} /></button>}
       <button type="button" aria-label="Notas" aria-pressed={coreOpen} onClick={() => setCoreOpen(true)}><NotebookText size={21} /></button>
       <button type="button" aria-label="Archivos del NAS" onClick={() => setFileFloating({})}><HardDrive size={21} /></button>
       <button type="button" aria-label="Implementación" aria-pressed={codeOpen} disabled={!ultimaImplementacion && !fileViewer}
@@ -889,11 +888,13 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         <span className="vision-emblem" aria-hidden="true"><span /></span>
         <div className="vision-brand"><strong>HELIOS</strong><span role="status">{estado}</span></div>
         <span className="vision-header-gap" />
-        {ventana === "agente" && proyecto !== undefined && transport.projects && <button className="vision-chip" type="button"
+        {mobile && ventana === "agente" && proyecto !== undefined && transport.projects && <button className="vision-chip" type="button"
           aria-pressed={projectsOpen} title="Cambiar de proyecto o crear uno" onClick={() => void abrirProyectos()}>
           <FolderOpen size={15} aria-hidden="true" /> {proyecto === null ? "Sin proyecto"
             : proyectos.find(p => p.id === proyecto)?.name ?? proyecto}
         </button>}
+        {/* En el Agente de escritorio estos tres viven en el lateral: la cabecera queda limpia. */}
+        {!lateralAgente && <>
         {thinking !== null && <button className="vision-chip" type="button" aria-pressed={thinking}
           disabled={thinkingBusy} onClick={() => void toggleThinking()}>
           <Brain size={15} aria-hidden="true" /> Razonamiento: {thinkingBusy ? "…" : thinking ? "automático" : "apagado"}
@@ -906,6 +907,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         </button>}
         <button ref={historyButton} className="vision-chip" type="button" onClick={() => setHistoryOpen(true)}>
           <History size={15} aria-hidden="true" /> Historial</button>
+        </>}
       </header>
       <section className="vision-conversation" aria-label="Conversación">
         <ContinuousChat previous={previous} turns={turns} historyError={historyError}
@@ -939,7 +941,8 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
           : <span className="vision-horizon-state" data-busy={sending || undefined}><span aria-hidden="true" />
               {herramientaEnCurso ? herramientaEnCurso.name : sending ? "Helios está trabajando" : "Todo en calma"}</span>}
         <span className="vision-horizon-line" aria-hidden="true" />
-        <InferenceFooter metrics={connection === "ready" ? metrics : undefined} />
+        {/* Con el lateral del Agente a la vista, el contexto y la velocidad van en su tarjeta. */}
+        {!lateralAgente && <InferenceFooter metrics={connection === "ready" ? metrics : undefined} />}
       </footer>
     </div>
     {workspaceOpen && <aside className="vision-workspace" aria-label="Espacio de trabajo">
@@ -956,7 +959,24 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         void send({ preventDefault() {} } as FormEvent, "Escucha mi mensaje de voz y responde a lo que te pido.",
           { voice, displayText: `🎤 Mensaje de voz (${Math.max(1, Math.round(voice.seconds))} s)` });
       }} />}
-    {projectsOpen && ventana === "agente" && proyecto !== undefined && <ProjectsPanel projects={proyectos}
+    {/* En el escritorio el Agente lleva su lateral fijo a la derecha: es su sitio de trabajo, no un
+        panel que se abre. Cede el hueco al espacio de código mientras ese está abierto. */}
+    {(mobile ? projectsOpen : lateralAgente) && ventana === "agente" && proyecto !== undefined && transport.projects && <ProjectsPanel projects={proyectos}
+      fixed={!mobile} metrics={connection === "ready" ? metrics : undefined}
+      controls={<>
+        {thinking !== null && <button type="button" className="vision-side-button" aria-pressed={thinking} disabled={thinkingBusy}
+          aria-label={`Razonamiento: ${thinking ? "automático" : "apagado"}`}
+          title={`Razonamiento: ${thinkingBusy ? "…" : thinking ? "automático" : "apagado"}`}
+          onClick={() => void toggleThinking()}><Brain size={18} aria-hidden="true" /></button>}
+        <button ref={historyButton} type="button" className="vision-side-button" aria-label="Historial" title="Historial"
+          onClick={() => setHistoryOpen(true)}><History size={18} aria-hidden="true" /></button>
+      </>}
+      meterAction={transport.clearContext && <button type="button" className="vision-meter-action"
+        disabled={sending || limpiando || historyLoading}
+        title="Helios deja de tener delante la conversación de este proyecto. No se borra: sigue en el historial."
+        onClick={() => void limpiarContexto()}>
+        <Eraser size={14} aria-hidden="true" /> {limpiando ? "Limpiando…" : limpio ? "Contexto limpio" : "Limpiar contexto"}
+      </button>}
       active={proyecto} busy={projectBusy || sending} error={projectError} onClose={() => setProjectsOpen(false)}
       onSelect={id => void ponerProyecto(() => transport.setProject!(id))}
       onCreate={(name, folder) => ponerProyecto(() => transport.createProject!(name, folder || undefined))} />}

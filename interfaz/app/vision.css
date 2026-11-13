@@ -624,3 +624,52 @@ button.vision-horizon-state:focus-visible { outline: 2px solid var(--v-gold); ou
 .vision-project-new input:not([type="checkbox"]):focus-visible { outline: 2px solid var(--v-gold); outline-offset: 1px; }
 .vision-project-check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--v-muted); cursor: pointer; }
 .vision-project-hint { margin: 0; font-size: 12px; color: var(--v-muted); }
+/* En el móvil no hay raíl del que colgar el panel: ocupa el ancho, por encima de la
+   conversación y por debajo de las tarjetas que piden algo. Más opaco, que detrás hay texto. */
+.vision-layout.mobile-layout .vision-projects {
+  position: fixed; left: 10px; right: 10px; top: 112px; bottom: 84px; width: auto; z-index: 30;
+  background: linear-gradient(180deg, rgba(34, 30, 24, 0.97), rgba(14, 13, 12, 0.97));
+}
+/* El lateral del Agente: fijo a la derecha, una columna más de la pantalla y no un panel
+   flotante. Aquí irán también lo que está haciendo, el contexto y lo hecho en la sesión. */
+.vision-agent-side {
+  width: 300px; flex-shrink: 0; box-sizing: border-box; padding: 88px 18px 20px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 14px; border-left: 1px solid var(--v-line);
+  scrollbar-width: thin; scrollbar-color: rgba(232, 176, 79, 0.45) transparent;
+}
+.vision-agent-side .vision-tasks-empty { margin: 0; font-size: 13px; }
+.vision-agent-side .vision-project-list { margin-top: 0; }
+@media (max-width: 1100px) { .vision-agent-side { width: 240px; padding-left: 14px; padding-right: 14px; } }
+.vision-project-new > * { min-width: 0; }
+.vision-agent-side .vision-panel-heading > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* La tarjeta del fondo del lateral: contexto y velocidad, fuera de debajo del chat. */
+.vision-agent-meter {
+  margin-top: auto; padding: 12px 14px; display: grid; gap: 8px; border: 1px solid var(--v-line); border-radius: 10px;
+  background: rgba(255, 236, 208, 0.03); font: 12px var(--v-mono); color: var(--v-muted); font-variant-numeric: tabular-nums;
+}
+.vision-agent-meter > div { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.vision-agent-meter strong { color: var(--v-text); font-weight: 500; }
+.vision-agent-meter p { margin: 0; font-size: 11px; }
+.vision-agent-meter .inference-track { width: 100%; height: 4px; border-radius: 2px; background: var(--v-line); }
+.vision-agent-meter .inference-track > span { background: var(--v-gold); border-radius: 2px; }
+.vision-agent-meter[data-full="true"] strong { color: var(--hud-pink); }
+.vision-agent-meter[data-full="true"] .inference-track > span { background: var(--hud-pink); }
+.vision-agent-side .vision-project-new { margin-top: 0; padding-top: 0; border-top: 0; padding-bottom: 14px; border-bottom: 1px solid var(--v-line); }
+/* Arriba del lateral, a la altura de la cabecera: razonamiento e historial como botones
+   cuadrados. Con ellos aquí, los proyectos suben y el centro del lateral queda libre. */
+.vision-agent-side { padding-top: 16px; }
+.vision-side-controls { display: flex; justify-content: flex-end; gap: 8px; min-height: 40px; align-items: center; }
+.vision-side-button {
+  width: 38px; height: 38px; display: grid; place-items: center; cursor: pointer; color: var(--v-muted);
+  border: 1px solid var(--v-line); border-radius: 9px; background: rgba(255, 236, 208, 0.03);
+}
+.vision-side-button:hover:not(:disabled) { border-color: var(--v-rim); color: var(--v-text); }
+.vision-side-button[aria-pressed="true"] { color: var(--v-gold); border-color: var(--v-gold); }
+.vision-side-button:disabled { opacity: .6; cursor: default; }
+.vision-side-button:focus-visible, .vision-meter-action:focus-visible { outline: 2px solid var(--v-gold); outline-offset: 2px; }
+.vision-meter-action {
+  margin-top: 4px; height: 32px; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;
+  font: 600 12px var(--v-font); color: var(--v-text); border: 1px solid var(--v-line); border-radius: 8px; background: transparent;
+}
+.vision-meter-action:hover:not(:disabled) { border-color: var(--v-rim); }
+.vision-meter-action:disabled { opacity: .6; cursor: default; }
