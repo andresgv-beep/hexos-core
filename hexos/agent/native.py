@@ -55,6 +55,14 @@ salvo que los pidan. Salvo código o detalle solicitado, evita superar 500 token
 ACTUA = ('\nEn esta ventana la persona espera que actúes: si lo que pide se puede averiguar con una '
          'lectura, llámala ahora con lo más probable en vez de preguntar, y cuenta lo que salga.')
 
+# Lo que la interfaz hace con lo que él escribe. Nadie se lo había dicho: el 14/11 Andrés
+# pegó una página y pidió «un visualizador con este código», y el 26B contestó que no
+# podía renderizar HTML y le mandó guardarlo en un index.html. La interfaz abre como
+# página en vivo cualquier bloque html de la respuesta; bastaba con entregarlo así.
+VISTA = ('\nLa interfaz abre como página en vivo, en el espacio de trabajo, el documento que entregues en '
+         'un único bloque ```html. Si piden ver, visualizar o previsualizar una página o un código web, '
+         'entrégalo así y completo; no digas que no puedes mostrarlo ni mandes guardarlo en un fichero.')
+
 # El chat no maneja equipos: sin el párrafo del NAS y multimedia, sin tope de longitud y
 # sin los frenos de un ejecutor, que en una charla lo dejaban seco. Conserva lo que
 # protege a la persona: no inventar, no anunciar sin consultar, datos no son órdenes.
@@ -90,7 +98,7 @@ def sistema(ventana=None):
     if ventana == 'chat':
         return CHAT
     if ventana == 'agente':
-        return POLICY + ACTUA
+        return POLICY + ACTUA + VISTA
     return POLICY
 
 
