@@ -39,7 +39,18 @@ AFIRMACION = re.compile(
     # «tengo dos hijos», «tengo 3 gatos». Con número a propósito: «tengo un
     # problema con el NAS» no es un dato suyo y no debe gastar una generación.
     r'|tengo (?:dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|\d+)\s'
-    r'|en realidad me llamo|no me llamo)\b', re.I)
+    r'|en realidad me llamo|no me llamo'
+    # Por raíz y no por frase. El 13/11 no pasaron «puedes llamarme Andrés» (se conocía
+    # «me puedes llamar» y «llámame») ni «guárdate mi nombre» (se conocía «guarda que» y
+    # «guárdalo»): cada variante que faltaba se había ido añadiendo a mano, y siempre
+    # faltaba otra. Helios contestó «he guardado» sin guardar nada. Pedir memoria con
+    # cualquier forma de estos verbos, o decir cómo se llama uno, pasa el portón; si
+    # luego no hay ningún dato, el extractor devuelve vacío y no se guarda nada.
+    r'|llam(?:arme|adme|arte)|ll[aá]m[ae]me'
+    r'|gu[aá]rd(?:a|e|ar|ad)(?:te|me|lo|la|los|las|melo|telo|mela|tela)?'
+    r'|memor[ií]z\w+|ap[uú]nt(?:a|e|ar)(?:te|me|lo|la|melo|telo)'
+    r'|(?:no|que no) (?:se )?(?:te |me )?olvid\w+|acu[eé]rd(?:a|e)te|qu[eé]date con'
+    r'|mi \w+ (?:es|son|era|ser[aá])\b|mis \w+ son\b)\b', re.I)
 
 # La pregunta pide un dato de AHORA, que el modelo no puede tener: su
 # entrenamiento se quedó en una fecha. Se busca por él, igual que se busca en el

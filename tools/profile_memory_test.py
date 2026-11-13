@@ -1,5 +1,6 @@
 """Guardar en el perfil solo lo que la persona acaba de decir, con su mensaje como evidencia."""
 from pathlib import Path
+import json
 import sys
 import tempfile
 import unittest
@@ -286,6 +287,37 @@ class SegundaPersonaTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ConsultaTest(unittest.TestCase):
+    """profile_recall busca por palabras: una consulta con dos datos no es cero datos."""
+
+    class Perfil:
+        def __init__(self, datos): self.datos = datos
+        def keys(self): return dict(self.datos)
+
+    def consultar(self, consulta, datos=None):
+        from hexos.agent.chat_backend.profile_context import recall
+        return recall(self.Perfil(datos if datos is not None else {
+            'yo/nombre': 'Baltasar', 'yo/instrumento': 'clavicordio', 'yo/trato': 'socio', 'gato/nombre': 'Turbo'}), consulta)
+
+    def test_una_consulta_con_dos_datos_trae_los_dos(self):
+        # Del 13/11: el E4B preguntó «nombre e instrumento» y recibió cero.
+        r = self.consultar('nombre e instrumento')
+        self.assertEqual({f['key'] for f in r['facts']}, {'yo/nombre', 'yo/instrumento', 'gato/nombre'})
+        self.assertEqual(self.consultar('Instrumento')['facts'], [dict(key='yo/instrumento', value='clavicordio')])
+        self.assertEqual(self.consultar('clavicordio')['total'], 1)            # también por el valor
+
+    def test_sin_coincidencias_dice_de_que_hay_algo_guardado(self):
+        r = self.consultar('profesión')
+        self.assertEqual((r['facts'], r['saved_about']), ([], ['instrumento', 'nombre', 'trato']))
+        self.assertIn('antes de decir que no lo sabes', r['note'])
+        self.assertNotIn('Baltasar', json.dumps(r, ensure_ascii=False))        # los temas, no los valores
+
+    def test_un_perfil_vacio_lo_dice(self):
+        r = self.consultar('nombre', {})
+        self.assertEqual(r['facts'], [])
+        self.assertIn('Todavía no hay nada guardado', r['note'])
 
 
 class TratoTest(unittest.TestCase):

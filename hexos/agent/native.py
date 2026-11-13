@@ -782,6 +782,16 @@ class NativeRuntime:
             '[{"key": "yo/trato", "value": "no me trates de usted, háblame claro y corto"}]\n'
             'Mensaje: recuerda que eres mi socio, no un robot de atención al cliente\n'
             '[{"key": "yo/trato", "value": "eres mi socio, no un robot de atención al cliente"}]\n'
+            # «Puedes llamarme X» es un nombre, no un trato: el E4B guardaba «Baltasar socio»
+            # como yo/trato y luego no sabía cómo se llamaba la persona (13/11).
+            # La palabra con la que se dirige a ti («socio», «tío») no es un dato: el E4B
+            # se quedaba con ella como trato y perdía el nombre que venía delante.
+            'Mensaje: puedes llamarme Pablo socio\n'
+            '[{"key": "yo/nombre", "value": "Pablo"}]\n'
+            'Mensaje: me puedes llamar Lucía, tío\n'
+            '[{"key": "yo/nombre", "value": "Lucía"}]\n'
+            'Mensaje: guárdate que mi coche es un Seat León\n'
+            '[{"key": "yo/coche", "value": "Seat León"}]\n'
             'Mensaje: mi perra se llama Kira\n'
             '[{"key": "perra/nombre", "value": "Kira"}]\n'
             'Mensaje: apunta que el jueves tengo médico a las 9\n'

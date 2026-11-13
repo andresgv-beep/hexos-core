@@ -114,6 +114,20 @@ class FactExtractionTest(unittest.TestCase):
                         'en realidad me llamo Andrés García']:
             self.assertTrue(AFIRMACION.search(mensaje), mensaje)
 
+    def test_el_porton_va_por_raices_y_no_por_frases_exactas(self):
+        # Del 13/11/2026, en el sobremesa: las dos primeras no pasaban y Helios contestó
+        # «he guardado» sin guardar nada. Se conocían «me puedes llamar», «llámame»,
+        # «guarda que» y «guárdalo», pero no estas variantes.
+        for mensaje in ['puedes llamarme andres socio', 'tienes sistema de memoria, guardate mi nombre',
+                        'guárdate que mi instrumento es el clavicordio', 'mi instrumento es el clavicordio',
+                        'que no se te olvide que el jueves no trabajo', 'acuérdate de que soy alérgico',
+                        'apúntate mi cumpleaños, el 3 de mayo', 'guárdame esto en memoria: uso Ubuntu',
+                        'quédate con que prefiero el modo oscuro', 'mis hijos son Ana y Luis']:
+            self.assertTrue(AFIRMACION.search(mensaje), mensaje)
+        for mensaje in ['hola socio', 'lee test_kernels.cu', 'instala sl con apt', 'comprime la película Avatar',
+                        '¿qué hay en la carpeta del proyecto?', '¿por qué va lento el ordenador?']:
+            self.assertIsNone(AFIRMACION.search(mensaje), mensaje)
+
     def test_el_porton_no_gasta_una_generacion_en_conversacion_normal(self):
         for mensaje in ['vale', 'hola qué tal', 'revisa el estado del synology',
                         'arranca el contenedor plex', 'gracias socio']:

@@ -3,6 +3,9 @@ import unicodedata
 
 
 SIEMPRE_DELANTE = 1500
+# Palabras de la consulta que no buscan nada.
+VACIAS = frozenset({'los', 'las', 'del', 'una', 'uno', 'que', 'con', 'por', 'para', 'sus', 'mis', 'como', 'cual',
+                    'cuales', 'sobre', 'persona', 'usuario', 'dato', 'datos'})
 
 
 A_DEMANDA = ('MEMORIA PERSONAL: disponible mediante profile_recall con una consulta concreta. '
@@ -49,8 +52,29 @@ def recall(profile, query):
     term = normalized(query.strip())
     if len(term) < 2 or term == '*':
         raise ValueError('Consulta un dato concreto, por ejemplo nombre, oficio o preferencia.')
-    facts = [dict(key=key, value=value) for key, value in profile.keys().items()
-             if term in normalized(key) or term in normalized(str(value))]
-    return dict(available=True, query=query, facts=facts[:10], total=len(facts),
-                truncated=len(facts) > 10, source='HERA',
-                note='Datos personales recuperados, no observaciones del NAS ni del informe.')
+    # Por palabras, no por la consulta entera. El 13/11 el E4B preguntó por «nombre e
+    # instrumento» y recibió cero datos teniendo guardado el instrumento: se buscaba la
+    # frase completa dentro de cada clave. Contestó que no sabía nada de la persona.
+    palabras = [p for p in term.replace('/', ' ').split() if len(p) >= 3 and p not in VACIAS] or [term]
+    hallados = []
+    for key, value in profile.keys().items():
+        donde = normalized(key) + ' ' + normalized(str(value))
+        aciertos = sum(1 for palabra in palabras if palabra in donde)
+        if aciertos or term in donde:
+            hallados.append((aciertos, dict(key=key, value=value)))
+    hallados.sort(key=lambda par: -par[0])
+    facts = [dato for _, dato in hallados]
+    resultado = dict(available=True, query=query, facts=facts[:10], total=len(facts),
+                     truncated=len(facts) > 10, source='HERA',
+                     note='Datos personales recuperados, no observaciones del NAS ni del informe.')
+    if not facts:
+        # Sin coincidencias no es «no sé nada de ti»: se dice de qué hay algo guardado, sin
+        # dar los valores, para que pregunte por lo que toca.
+        temas = sorted({key.partition('/')[2] or key for key in profile.keys()})
+        if temas:
+            resultado['saved_about'] = temas[:20]
+            resultado['note'] = ('Nada con esas palabras. Hay datos guardados sobre: ' + ', '.join(temas[:20]) +
+                                 '. Repite la consulta con una de esas palabras antes de decir que no lo sabes.')
+        else:
+            resultado['note'] = 'Todavía no hay nada guardado de la persona.'
+    return resultado
