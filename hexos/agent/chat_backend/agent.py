@@ -366,6 +366,49 @@ class Agent:
             self.lock.release()
         return dict(window=window, persisted=True, groups=list(catalog.groups_in(window)))
 
+    def projects(self):
+        """Los proyectos y cuál está puesto; None si el Agente trabaja sin proyecto."""
+        from .. import projects
+        with self.store() as store:
+            puesto = projects.activo(store)
+            return dict(active=puesto['id'] if puesto else None, projects=projects.listar(store))
+
+    def set_project(self, project_id):
+        """Cambiar de proyecto, o salir de todos con None.
+
+        Como cambiar de ventana: cada proyecto tiene su conversación y su contexto, así
+        que el del modelo se vacía y el turno siguiente lo reconstruye desde el archivo
+        del proyecto. Es cosa del Agente; en el Chat no hay proyectos.
+        """
+        from .. import projects
+        if getattr(self, 'ventana', None) != 'agente':
+            raise ValueError('Los proyectos son de la ventana Agente: cambia a ella primero')
+        if not self.lock.acquire(blocking=False):
+            raise RuntimeError('Ya hay un turno en curso')
+        try:
+            with self.store() as store:
+                antes = projects.activo(store)
+                puesto = projects.poner(store, project_id)
+            self.proyecto = puesto['id'] if puesto else None
+            if (antes or {}).get('id') != (puesto or {}).get('id'):
+                if getattr(self, 'grupos', None) is not None:
+                    self.grupos.reset()
+                self.runtime.call({'type': 'reset'})
+                if hasattr(self.runtime, 'active_groups'):
+                    self.runtime.active_groups = None
+        finally:
+            self.lock.release()
+        return dict(active=puesto['id'] if puesto else None, project=puesto)
+
+    def create_project(self, name, folder=None):
+        """Crear un proyecto con su carpeta y pasar a trabajar en él."""
+        from .. import projects
+        if getattr(self, 'ventana', None) != 'agente':
+            raise ValueError('Los proyectos son de la ventana Agente: cambia a ella primero')
+        with self.store() as store:
+            creado = projects.crear(store, name, folder)
+        return dict(self.set_project(creado['id']), created=creado)
+
     def restore_window(self):
         """La ventana guardada, o chat si no hay ninguna."""
         try:
@@ -376,6 +419,13 @@ class Agent:
         guardada = fila[0] if fila and fila[0] in catalog.WINDOWS else catalog.DEFAULT_WINDOW
         self.ventana = guardada
         self.runtime.ventana = guardada
+        try:
+            from .. import projects
+            with self.store() as store:
+                puesto = projects.activo(store)
+        except Exception:
+            puesto = None
+        self.proyecto = puesto['id'] if puesto else None
         return guardada
 
     def set_thinking(self, enabled):

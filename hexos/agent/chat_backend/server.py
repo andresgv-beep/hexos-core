@@ -46,12 +46,15 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                                    'system_request': agent.system_request,
                                    'thinking': agent.thinking(),
                                    'window': getattr(agent, 'ventana', None),
+                                   'project': getattr(agent, 'proyecto', None),
                                    'model': (agent.runtime.status()
                                              if hasattr(agent.runtime, 'status') else
                                              {'state':'ready', 'ready':True}),
                                    'generation': agent.generation_snapshot(),
                                    'metrics': agent.metrics_snapshot(),
                                    'mode':'native-experimental' if native_template else 'json'})
+            elif self.path == '/api/projects':
+                self.respond(200, agent.projects())
             elif self.path == '/api/core':
                 # El panel se pinta sin gastar un turno del modelo, pero del MISMO
                 # recuento que responde el chat: no puede haber dos verdades.
@@ -121,6 +124,7 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
 
         def do_POST(self):
             if self.path not in ('/api/chat', '/api/work', '/api/context/reset', '/api/window', '/api/credentials', '/api/system',
+                                 '/api/projects', '/api/project',
                                  '/api/thinking', '/api/cancel', '/api/model/warmup', '/api/media/control'):
                 self.respond(404, {'error':'ruta inexistente'})
                 return
@@ -178,6 +182,17 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                     if set(payload) != {'window'}:
                         raise ValueError('se espera {"window": "chat"|"agente"}')
                     self.respond(200, agent.set_window(payload['window']))
+                elif self.path == '/api/projects':
+                    # Crear un proyecto: su carpeta y su conversación, y pasar a él.
+                    payload = strict_json(data.decode('utf-8'))
+                    if not isinstance(payload, dict) or not {'name'} <= set(payload) <= {'name', 'folder'}:
+                        raise ValueError('se espera {"name": "...", "folder": "/ruta/opcional"}')
+                    self.respond(200, agent.create_project(payload['name'], payload.get('folder')))
+                elif self.path == '/api/project':
+                    payload = strict_json(data.decode('utf-8'))
+                    if not isinstance(payload, dict) or set(payload) != {'id'}:
+                        raise ValueError('se espera {"id": "proyecto"} o {"id": null} para salir de todos')
+                    self.respond(200, agent.set_project(payload['id']))
                 elif self.path == '/api/context/reset':
                     if strict_json(data.decode('utf-8')) != {}:
                         raise ValueError('Se espera {}')

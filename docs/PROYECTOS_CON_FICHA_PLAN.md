@@ -61,6 +61,24 @@ Cambiar de proyecto y recuperarse de un corte de contexto son la misma operació
 Las tres primeras no añaden herramientas, que es lo acordado: afinar antes de ampliar. La
 cuarta es el ciclo leer-cambiar-compilar-probar-anotar y va después.
 
+## Estado
+
+**Fase 1, hecha el 2026-11-13** (`hexos/agent/projects.py`, `tools/proyectos_test.py`):
+
+- La etiqueta de la conversación es `agente:<proyecto>`; sin proyecto sigue siendo `agente`,
+  así que lo que ya había se queda donde estaba. Un almacén anterior se actualiza solo.
+- Registro de proyectos con su carpeta. Las carpetas nuevas van a `~/Helios/proyectos/<id>`
+  (o a `HEXOS_PROJECTS_HOME`); también se puede apuntar a una carpeta que ya exista, siempre
+  dentro de la carpeta personal. Nada borra carpetas.
+- `Agent.create_project`, `set_project` y `projects`; por HTTP, `GET` y `POST /api/projects`
+  y `POST /api/project`. `/api/status` dice el proyecto puesto.
+- Medido con el E4B, una pasada: en un proyecto nuevo no sabe nada del anterior, y al volver
+  recupera el dato y el fichero de los que se habló. El cambio es instantáneo y el primer
+  turno tarda lo normal, 1,3 s.
+
+Falta: no hay nada en la interfaz todavía (fase 3), no hay ficha (fase 2: hoy al volver lee el
+archivo del proyecto, no un resumen), y no se puede borrar ni renombrar un proyecto.
+
 ## Decisiones tomadas
 
 - **Un solo chat**, no un entorno de chat por proyecto.
