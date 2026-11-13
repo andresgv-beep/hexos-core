@@ -31,7 +31,7 @@ const SALIDA_MS = 420;
  *  Un turno entra, el anterior se va. Lo que se fue no se pierde —está en el
  *  historial, tras la esfera—, pero deja de ocupar la pantalla, porque lo que
  *  uno quiere tener delante son las notas y los informes, no lo ya leído. */
-export function ConversationStream({ turn, onReplyComplete, onPreviewCode }:
+export function ConversationStream({ turn, onReplyComplete, onPreviewCode, previewHtmlOnly }:
   { turn: Turn | null; onReplyComplete?: (id: number) => void } & CodeActions) {
   const [saliente, setSaliente] = useState<Turn | null>(null);
   const anterior = useRef<Turn | null>(null);
@@ -46,13 +46,13 @@ export function ConversationStream({ turn, onReplyComplete, onPreviewCode }:
 
   if (!turn && !saliente) return null;
   return <section className="conversation-stream" aria-label="Conversación con Helios" aria-live="polite">
-    {saliente && <TurnoVisible turn={saliente} saliendo onPreviewCode={onPreviewCode} />}
+    {saliente && <TurnoVisible turn={saliente} saliendo onPreviewCode={onPreviewCode} previewHtmlOnly={previewHtmlOnly} />}
     {turn && <TurnoVisible key={turn.id} turn={turn} onReplyComplete={onReplyComplete}
-      onPreviewCode={onPreviewCode} />}
+      onPreviewCode={onPreviewCode} previewHtmlOnly={previewHtmlOnly} />}
   </section>;
 }
 
-export function TurnoVisible({ turn, saliendo, settled = false, extra, onReplyComplete, onPreviewCode }:
+export function TurnoVisible({ turn, saliendo, settled = false, extra, onReplyComplete, onPreviewCode, previewHtmlOnly }:
   { turn: Turn; saliendo?: boolean; settled?: boolean; extra?: ReactNode; onReplyComplete?: (id: number) => void } & CodeActions) {
   return <article className={`stream-turn${saliendo ? " leaving" : ""}`} aria-hidden={saliendo || undefined}>
     <p className="stream-question"><span className="message-author">TÚ</span>{turn.text}</p>
@@ -68,12 +68,12 @@ export function TurnoVisible({ turn, saliendo, settled = false, extra, onReplyCo
         {turn.generationStatus || (turn.progress?.length ? "Helios está en ello…" : "Helios está pensando…")}
       </p>}
       {(turn.preview || turn.reply) && (saliendo || settled
-        ? <ReplyMarkdown text={turn.reply || turn.preview || ""} onPreviewCode={onPreviewCode} />
+        ? <ReplyMarkdown text={turn.reply || turn.preview || ""} onPreviewCode={onPreviewCode} previewHtmlOnly={previewHtmlOnly} />
         : <div className={turn.pending ? "reply-preview" : undefined}
             aria-label={turn.pending ? "Respuesta en generación" : undefined}>
           <ProgressiveReply text={turn.reply || turn.preview || ""} live={Boolean(turn.pending)}
             onComplete={() => onReplyComplete?.(turn.id)}
-            onPreviewCode={onPreviewCode} />
+            onPreviewCode={onPreviewCode} previewHtmlOnly={previewHtmlOnly} />
         </div>)}
       {extra}
       {/* El reparo viaja pegado a la respuesta: es lo que evita creerse lo que no pasó. */}

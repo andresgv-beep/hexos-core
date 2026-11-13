@@ -752,7 +752,10 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
           }
           else setAnnouncement("Helios respondió, pero no entregó un bloque HTML que se pueda visualizar");
         } else if (!result.cancelled && !result.incomplete) {
-          const artifact = extractReplyArtifact(result.reply);
+          // En el Chat el código se queda dentro de la respuesta, como ejemplo: no se saca
+          // al espacio de trabajo. Así se ve igual en vivo que al recargar el historial;
+          // antes el mismo mensaje salía en el lateral o dentro del chat según el caso.
+          const artifact = ventana === "chat" ? null : extractReplyArtifact(result.reply);
           if (artifact) {
             reparo = undefined;
             const baseline = editingArtifact;
@@ -948,7 +951,8 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       <section className="vision-conversation" aria-label="Conversación">
         <ContinuousChat previous={previous} turns={turns} historyError={historyError}
           hasEarlier={historyNext !== null} olderLoading={olderLoading} onLoadEarlier={loadOlderHistory}
-          onReplyComplete={() => setRevealing(false)} onPreviewCode={previewCode} turnExtras={turnExtras} />
+          onReplyComplete={() => setRevealing(false)} onPreviewCode={previewCode}
+          previewHtmlOnly={ventana === "chat"} turnExtras={turnExtras} />
     <section className="conversation" aria-label="Chat con Helios">
       {!!attachments.length && <ChatAttachments files={attachments} onRemove={removeAttachment} />}
       {attachmentError && <p className="attachment-error" role="alert">{attachmentError}</p>}

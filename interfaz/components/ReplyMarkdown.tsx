@@ -7,14 +7,20 @@ import { CodeText } from "./CodeText";
 
 export interface CodeActions {
   onPreviewCode?: (code: string, language?: string) => void;
+  /** En la ventana Chat: el código es un ejemplo dentro de la conversación. Solo se ofrece
+   *  ver lo que ya es HTML; «Crear vista» le pediría a Helios, sin que se vea, que lo
+   *  convierta en una página. */
+  previewHtmlOnly?: boolean;
 }
 
-export function ReplyMarkdown({ text, onPreviewCode }: { text: string } & CodeActions) {
+export function ReplyMarkdown({ text, onPreviewCode, previewHtmlOnly }: { text: string } & CodeActions) {
   const bloques = parseReply(text);
   return <div className="helios-answer">{bloques.map((bloque, indice) => {
     if (bloque.kind === "code") {
       const codigo = bloque.lines.map(linea => linea.map(parte => parte.text).join("")).join("\n");
-      return <ReplyCode key={indice} code={codigo} language={bloque.language} onPreview={onPreviewCode} />;
+      const esHtml = ["html", "htm"].includes((bloque.language ?? "").toLowerCase());
+      return <ReplyCode key={indice} code={codigo} language={bloque.language}
+        onPreview={previewHtmlOnly && !esHtml ? undefined : onPreviewCode} />;
     }
     if (bloque.kind === "p") return <p key={indice}>{bloque.lines[0].map((parte, i) => <InlinePart key={i} part={parte} />)}</p>;
     if (bloque.kind === "h") {

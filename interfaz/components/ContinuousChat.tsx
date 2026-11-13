@@ -7,7 +7,7 @@ import { ReplyMarkdown, type CodeActions } from './ReplyMarkdown';
 
 /** A single scroll surface; incoming text follows only while the reader is at the bottom. */
 export function ContinuousChat({ previous, turns, historyError, hasEarlier, olderLoading, onLoadEarlier,
-  onReplyComplete, onPreviewCode, turnExtras }: {
+  onReplyComplete, onPreviewCode, previewHtmlOnly, turnExtras }: {
   previous: HistoryMessage[]; turns: Turn[]; historyError: string;
   /** Tarjetas vivas que acompañan a un turno concreto, por id. */
   turnExtras?: Record<number, ReactNode>;
@@ -48,11 +48,11 @@ export function ContinuousChat({ previous, turns, historyError, hasEarlier, olde
       {historyError && <p role="status">{historyError}</p>}
       {previous.map((message, index) => <article key={`saved-${index}`} className={`hud-saved-message ${message.role}`}>
         <span className="message-author">{message.role === 'user' ? 'TÚ' : 'HELIOS'}</span>
-        <ReplyMarkdown text={message.text} onPreviewCode={onPreviewCode} />
+        <ReplyMarkdown text={message.text} onPreviewCode={onPreviewCode} previewHtmlOnly={previewHtmlOnly} />
       </article>)}
       {turns.map((turn, index) => <TurnoVisible key={turn.id} turn={turn} settled={index < turns.length - 1} extra={turnExtras?.[turn.id]}
         onReplyComplete={index === turns.length - 1 ? onReplyComplete : undefined}
-        onPreviewCode={onPreviewCode} />)}
+        onPreviewCode={onPreviewCode} previewHtmlOnly={previewHtmlOnly} />)}
       {!previous.length && !turns.length && <div className="hud-welcome"><h2>Hablemos, socio.</h2>
         <p>Escribe a Helios o abre el historial para retomar una conversación.</p></div>}
     </div>
