@@ -52,6 +52,17 @@ class PlanTest(unittest.TestCase):
             system_packages.plan('remove', 'libfoo', runner=sistema(instalados={'libfoo'}, simulacion=arrastra))
         self.assertIn('gdm3', str(e.exception))
 
+    def test_instalar_algo_que_quitaria_otro_paquete_no_llega_a_plan(self):
+        pc = sistema(simulacion='Remv docker.io [27]\nInst podman-docker (5 Ubuntu)\n')
+        with self.assertRaises(ValueError) as e:
+            system_packages.plan('install', 'podman-docker', 'apt', runner=pc)
+        self.assertIn('docker.io', str(e.exception))
+
+    def test_instalar_ensena_lo_que_entra(self):
+        pc = sistema(simulacion='Inst libsl0 (5 Ubuntu)\nInst sl (5 Ubuntu)\nConf sl (5 Ubuntu)\n')
+        plan = system_packages.plan('install', 'sl', 'apt', runner=pc)
+        self.assertEqual(plan['affects'], ['libsl0', 'sl'])
+
     def test_quitar_lo_que_no_esta_lo_dice_sin_planificar(self):
         with self.assertRaises(ValueError) as e:
             system_packages.plan('remove', 'gimp', runner=sistema())
@@ -144,7 +155,15 @@ class AyudanteTest(unittest.TestCase):
         self.assertEqual(AYUDANTE.orden_para('flatpak', 'quitar', 'org.gimp.GIMP'),
                          ['flatpak', 'uninstall', '-y', '--noninteractive', '--system', 'org.gimp.GIMP'])
         self.assertEqual(AYUDANTE.orden_para('snap', 'instalar', 'vlc'), ['snap', 'install', 'vlc'])
-        self.assertEqual(AYUDANTE.orden_para('apt', 'instalar', 'gimp'), ['apt-get', 'install', '-y', 'gimp'])
+        with patch.object(AYUDANTE, 'correr', return_value=(0, 'Inst gimp (3.0 Ubuntu)\n')):
+            self.assertEqual(AYUDANTE.orden_para('apt', 'instalar', 'gimp'), ['apt-get', 'install', '-y', 'gimp'])
+
+    def test_una_instalacion_que_quita_algo_se_rechaza_antes(self):
+        # apt resuelve un conflicto desinstalando lo que estorba: instalar no es inofensivo.
+        simulacion = 'Remv nvidia-driver-570 [570]\nInst nvidia-driver-470 (470 Ubuntu)\n'
+        with patch.object(AYUDANTE, 'correr', return_value=(0, simulacion)), self.assertRaises(ValueError) as e:
+            AYUDANTE.principal(['apt', 'instalar', 'nvidia-driver-470'])
+        self.assertIn('quitaría paquetes: nvidia-driver-570', str(e.exception))
 
 
 class FakeRuntime:
@@ -182,7 +201,10 @@ class AprobacionTest(unittest.TestCase):
         self.assertEqual(self.agent.system_request['plan_id'], 'p1')   # la sesión sí lo guarda
 
     def test_el_modelo_no_tiene_herramienta_para_aplicar(self):
-        self.assertEqual([n for n in catalog.model_tools() if n.startswith('system.')], ['system.package_plan'])
+        # De las herramientas de este PC, la única que no es una lectura pura es el plan.
+        self.assertEqual([n for n in catalog.model_tools() if n.startswith('system.')],
+                         ['system.status', 'system.toolchain', 'system.package_plan'])
+        self.assertEqual(catalog.group_of('system.package_plan'), 'sistema')
         self.assertEqual(catalog.TOOLS['system.package_plan']['effect'], 'read')
 
     def test_aprobar_ejecuta_comprueba_y_lo_anota(self):

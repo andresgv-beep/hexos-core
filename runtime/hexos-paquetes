@@ -63,6 +63,14 @@ def arrastrados_por_apt(nombre):
     return [linea.split()[1] for linea in salida.splitlines() if linea.startswith('Remv ')]
 
 
+def quitados_al_instalar(nombre):
+    """Lo que apt quitaría para poder instalar, desde su simulación."""
+    codigo, salida = correr(['apt-get', '-s', 'install', nombre], 120)
+    if codigo != 0:
+        raise ValueError('apt no puede simular la instalación: ' + salida.strip()[-300:])
+    return [linea.split()[1] for linea in salida.splitlines() if linea.startswith('Remv ')]
+
+
 def orden_para(gestor, accion, nombre):
     if gestor == 'apt':
         if accion == 'quitar':
@@ -74,6 +82,11 @@ def orden_para(gestor, accion, nombre):
                 raise ValueError('quitar ' + nombre + ' arrastraría ' + str(len(arrastra)) +
                                  ' paquetes; el máximo es ' + str(MAXIMO_ARRASTRADOS))
             return ['apt-get', 'remove', '-y', nombre]
+        # Instalar también puede quitar: apt resuelve un conflicto desinstalando lo que
+        # estorba. Si la simulación quita algo, no se hace desde aquí.
+        saldrian = quitados_al_instalar(nombre)
+        if saldrian:
+            raise ValueError('instalar ' + nombre + ' quitaría paquetes: ' + ', '.join(saldrian[:10]))
         return ['apt-get', 'install', '-y', nombre]
     if gestor == 'flatpak':
         if accion == 'quitar':

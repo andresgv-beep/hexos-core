@@ -463,7 +463,7 @@ GROUPS = {
     'nucleo': ('history.recent', 'history.search', 'history.read', 'profile.recall',
                'core.overview', 'task.current', 'task.focus', 'result.get',
                'web.search', 'web.read'),
-    'sistema': ('terminal.read', 'system.status', 'system.toolchain'),
+    'sistema': ('terminal.read', 'system.status', 'system.toolchain', 'system.package_plan'),
     'archivos': ('nas.locations', 'nas.directories', 'nas.directory_page', 'nas.shares',
                  'nas.find', 'nas.search', 'nas.browse', 'nas.file_open', 'nas.file_read'),
     'equipos': ('device.list', 'device.connect', 'device.forget', 'device.remote',
@@ -490,7 +490,8 @@ GROUP_GUIDANCE = {
     'sistema': ('Este PC. Cualquier pregunta sobre el ordenador sin nombrar otro: ¿tengo instalado X?, '
                 'programas, aplicaciones y juegos, consumo, lentitud, memoria, gráfica, temperatura, batería, disco, '
                 'registros y servicios de este PC: si ssh, docker u otro está activo o instalado. '
-                'Compiladores y lenguajes de programación: si se puede compilar o programar en algo.'),
+                'Compiladores y lenguajes de programación: si se puede compilar o programar en algo. '
+                'Instalar o quitar un programa de este PC.'),
     'archivos': 'Buscar y leer ficheros y carpetas que están en el NAS.',
     'equipos': 'Otros ordenadores y el NAS de la casa: listarlos, conectarse a ellos, mirar la red y lo que corre en el NAS.',
     'multimedia': 'Convertir o comprimir vídeo y audio, y seguir esos trabajos.',

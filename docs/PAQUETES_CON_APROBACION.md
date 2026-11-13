@@ -34,6 +34,8 @@ el comando para que lo ejecutaras tú.
     NetworkManager, SSH, Tailscale, controladores y CUDA de NVIDIA, Python, snapd y flatpak;
   - una desinstalación de apt que arrastra un protegido o más de 15 paquetes se rechaza
     mirando su simulación, antes de ejecutar nada.
+  - una instalación de apt que para entrar quitaría algún paquete (apt resuelve así los
+    conflictos) se rechaza igual, desde su simulación.
   El plan usa esas mismas reglas, leídas del mismo fichero: hay una sola lista.
 - **Un plan se ejecuta una vez.** Se retira de la sesión antes de lanzarlo, con un cerrojo
   propio. La interfaz se ve a la vez en el monitor y en el móvil: si dos pantallas aprueban a la

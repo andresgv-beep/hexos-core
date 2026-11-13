@@ -70,8 +70,14 @@ def simular(gestor, accion, paquete, runner=terminal_read.ejecutar):
         codigo, salida = leer(orden, runner)
         if codigo != 0:
             raise ValueError('apt no puede ' + ACCIONES[accion] + ' ' + paquete + ': ' + salida.strip()[-300:])
-        marca = 'Remv ' if accion == 'remove' else 'Inst '
-        return [linea.split()[1] for linea in salida.splitlines() if linea.startswith(marca)]
+        salen = [linea.split()[1] for linea in salida.splitlines() if linea.startswith('Remv ')]
+        if accion == 'remove':
+            return salen
+        if salen:
+            # apt resuelve un conflicto desinstalando lo que estorba: el ayudante lo va a rechazar.
+            raise ValueError('Instalar ' + paquete + ' quitaría paquetes (' + ', '.join(salen[:10]) +
+                             '). Eso se hace a mano.')
+        return [linea.split()[1] for linea in salida.splitlines() if linea.startswith('Inst ')]
     if gestor == 'flatpak':
         orden = ['flatpak', 'info', paquete] if accion == 'remove' else ['flatpak', 'remote-info', 'flathub', paquete]
     else:
