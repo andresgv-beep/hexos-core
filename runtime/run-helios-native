@@ -14,7 +14,19 @@ if [[ ! -x "$engine_binary" || ! -f "$model_path" || ! -f "$template_path" ]]; t
     echo 'Falta el runtime compilado, el modelo o la plantilla.' >&2
     exit 2
 fi
+# La memoria entre conversaciones (HERA) es opcional aquí: se enchufa diciendo dónde vive,
+# con HEXOS_MEMORY_HOME. Sin eso Helios arrancaba sin memoria y, cuando se le pedía
+# recordar algo, decía que lo guardaba sin tener dónde (sobremesa, 2026-11-13).
+memory=()
+if [[ -n "${HEXOS_MEMORY_HOME:-}" ]]; then
+    hera_binary=$repo_dir/hera/bin/hera
+    if [[ ! -x "$hera_binary" ]]; then
+        echo "Falta el programa de memoria: compílalo con «make -C $repo_dir/hera cli»." >&2
+        exit 2
+    fi
+    memory=(--hera "$hera_binary" --memory-home "$HEXOS_MEMORY_HOME")
+fi
 cd -- "$repo_dir"
 exec python3 -u -m hexos.agent.chat --workspace "$workspace_path" \
     --runtime "$engine_binary" --model "$model_path" --native-template "$template_path" \
-    --ctx "${4:-16384}" --port "${5:-8080}"
+    --ctx "${4:-16384}" --port "${5:-8080}" "${memory[@]}"

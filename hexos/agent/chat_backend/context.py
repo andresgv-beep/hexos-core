@@ -94,6 +94,10 @@ def tras_pausa(store, turn_id, ahora=None):
 
 HANDOFF_KEY = 'context_handoff'
 CORTE = 'context_boundary'
+# Hasta dónde llegó la última limpieza que pidió la PERSONA. El corte de arriba lo mueven
+# también los cortes automáticos por contexto lleno, y no son lo mismo: tras un corte
+# automático conviene conservar lo último que dijo; tras «Limpiar contexto», no.
+LIMPIEZA = 'context_cleared'
 HANDOFF_MESSAGES = 4
 HANDOFF_CHARS = 6_000
 HANDOFF_EACH = 900
@@ -451,9 +455,16 @@ class ContextManager:
                 if row['role'] == 'user':
                     tool_history[row['id']] = [json.loads(r['body']) for r in store.db.execute(
                         'SELECT body FROM tool_events WHERE turn_id=? ORDER BY seq', (row['id'],))]
+            # Las citas no cruzan una limpieza pedida por la persona. El 13/11, en el
+            # sobremesa, Andrés limpió el contexto y saludó; entre las citas iba su
+            # «¿te acuerdas del libro?» de antes, y Helios contestó a eso en vez de al
+            # saludo. El archivo sigue ahí y se puede consultar; lo que no hace es
+            # ponérsele delante sin que nadie lo pida.
+            limpio = store.db.execute('SELECT value FROM agent_state WHERE key=?',
+                                      (clave(store, LIMPIEZA),)).fetchone()
             turn.memory_evidence = store.db.execute(
-                "SELECT id,model_text AS text FROM esta_ventana WHERE role='user' AND id<>? "
-                'ORDER BY rowid DESC LIMIT 8', (turn.uid,)).fetchall()[::-1]
+                "SELECT id,model_text AS text FROM esta_ventana WHERE role='user' AND id<>? AND rowid>? "
+                'ORDER BY rowid DESC LIMIT 8', (turn.uid, int(limpio[0]) if limpio else 0)).fetchall()[::-1]
             # Mientras el prefijo siga vivo se añaden solo los datos de ESTE
             # turno. Volver a pasar el historial entero lo duplicaba en el
             # adaptador y obligaba a reconstruirlo cada vez. Al cortar o al
@@ -599,8 +610,11 @@ class ContextManager:
                 self.agent.runtime.active_groups = None
             with self.agent.store() as store:
                 boundary = store.db.execute('SELECT COALESCE(MAX(rowid),0) FROM esta_ventana').fetchone()[0]
-                store.db.execute("INSERT INTO agent_state VALUES (?,?) "
-                                 'ON CONFLICT(key) DO UPDATE SET value=excluded.value', (clave(store, CORTE), str(boundary)))
+                for marca in (CORTE, LIMPIEZA):
+                    store.db.execute("INSERT INTO agent_state VALUES (?,?) "
+                                     'ON CONFLICT(key) DO UPDATE SET value=excluded.value', (clave(store, marca), str(boundary)))
+                # Un traspaso pendiente es de la conversación que se acaba de dejar atrás.
+                store.db.execute('DELETE FROM agent_state WHERE key=?', (clave(store, HANDOFF_KEY),))
                 store.db.commit()
             return {'ok': True, 'history_preserved': True, 'reports_preserved': True}
         finally:

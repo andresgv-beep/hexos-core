@@ -344,9 +344,12 @@ class Tests(unittest.TestCase):
                 self.assertEqual(agent.tool(store, 'result.get', {}), result)
                 self.assertEqual(before, store.db.total_changes)
 
-    def test_reset_clears_turns_but_retrieves_only_user_citations(self):
+    def test_limpiar_el_contexto_no_deja_pasar_lo_dicho_antes(self):
+        # Hasta el 13/11 las últimas frases de la persona cruzaban la limpieza como citas:
+        # Andrés limpió, saludó, y Helios contestó a su «¿te acuerdas del libro?» de antes.
+        # Lo que deba durar entre conversaciones es cosa de la memoria (HERA), no de esto.
         with tempfile.TemporaryDirectory() as tmp:
-            runtime = runtime_with_outputs('Soy Marta.', 'Hola.')
+            runtime = runtime_with_outputs('Soy Marta.', 'Hola.', 'Vale.')
             agent = Agent(tmp, runtime)
             agent.chat('Soy Elena.')
             agent.clear_context()
@@ -356,8 +359,26 @@ class Tests(unittest.TestCase):
             self.assertEqual([m['role'] for m in runtime.messages],
                              ['system','user','user','assistant'])
             self.assertEqual(runtime.messages[2]['content'], 'Hola.')
-            self.assertIn('Soy Elena.', referencias(runtime.messages))
+            self.assertNotIn('Soy Elena.', referencias(runtime.messages))
             self.assertNotIn('Soy Marta.', referencias(runtime.messages))
+            # El archivo no se ha borrado, y Helios lo sabe y lo puede consultar.
+            self.assertIn('siguen guardados', referencias(runtime.messages))
+            with agent.store() as store:
+                self.assertEqual(store.db.execute("SELECT COUNT(*) FROM conversation WHERE text='Soy Elena.'").fetchone()[0], 1)
+
+    def test_las_citas_siguen_dentro_de_la_conversacion_en_curso(self):
+        from hexos.agent.chat_backend import context as contexto
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(tmp, runtime_with_outputs('Uno.', 'Dos.', 'Tres.'))
+            agent.chat('Antes de limpiar.')
+            agent.clear_context()
+            agent.chat('Soy Elena.')
+            agent.chat('¿Cómo me llamo?')
+            with agent.store() as store:
+                marca = int(store.db.execute('SELECT value FROM agent_state WHERE key=?', (contexto.LIMPIEZA,)).fetchone()[0])
+                citas = [r[0] for r in store.db.execute(
+                    "SELECT text FROM esta_ventana WHERE role='user' AND rowid>? ORDER BY rowid", (marca,))]
+            self.assertEqual(citas, ['Soy Elena.', '¿Cómo me llamo?'])           # lo de después sí cuenta
 
     def test_context_resource_reads_are_explicit_and_do_not_recalculate(self):
         with tempfile.TemporaryDirectory() as tmp:
