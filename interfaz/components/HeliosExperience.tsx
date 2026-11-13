@@ -688,9 +688,9 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     const controller = new AbortController();
     request.current = controller;
     try {
-      // Una petición escrita con la implementación abierta es una revisión de
-      // código: piensa durante ese turno aunque AUTO siga apagado globalmente.
-      const turnThinking = options?.thinking ?? (editingArtifact ? true : undefined);
+      // Editar código no enciende el razonamiento por su cuenta: manda el interruptor.
+      // Forzado, el 26B pensaba unos 20.000 caracteres (70-100 s) antes de cada retoque.
+      const turnThinking = options?.thinking;
       const hiddenWorkContext = payload !== visibleQuestion ? visibleQuestion : undefined;
       const result = await transport.send(payload, controller.signal, imagen, turnThinking, hiddenWorkContext, activeRequestId.current, voz);
       // Tu mensaje de voz se queda en el chat como lo que Helios entendió.

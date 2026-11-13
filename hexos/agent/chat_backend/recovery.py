@@ -82,6 +82,8 @@ SIN_LLAMADA_CHAT = ('AVISO DE HEXOS (no es la persona): la respuesta anterior di
                     'pero en este turno no se ejecutó ninguna escritura: no se ha guardado nada. Si la '
                     'persona pidió apuntarlo, llama ahora a la herramienta; si no lo pidió, contesta '
                     'de nuevo sin decir que lo has hecho. No menciones este aviso.')
+# Un bloque cercado con al menos cinco líneas dentro. Una orden suelta (`ls -la`) no cuenta.
+ENTREGA_CODIGO = re.compile(r'^```[^\n]*\n(?:[^\n]*\n){5,}', re.M)
 SIN_LLAMADA = ('AVISO DE HEXOS (no es la persona): la respuesta anterior no consultó nada. Si la '
                'petición se contesta mirando algo de este PC o de los equipos, haz ahora esa lectura y '
                'contesta con lo que salga. Si era conversación y no había nada que mirar, repite tu '
@@ -202,8 +204,13 @@ class RecoveryController:
         # donde lo pedido es actuar. Con historial delante el E4B cerraba así 3 de 9
         # turnos («usaré journalctl…») que en limpio resolvía. Una vez, y arrancando en
         # una lectura: decirle que llame no bastaba.
+        # Una respuesta que trae un bloque de código es la entrega, no un «voy a mirarlo»:
+        # también es estructura, no una frase. Devolverla hacía generar dos veces cada
+        # página (el 26B, 28-42 s más por turno y el contexto recargado entero) y en un
+        # caso lo empujó a llamar a project_files sin proyecto: cinco generaciones.
         if (not turn.trace and turn.grupos_pedidos and not turn.retries.sin_llamada_devuelto
                 and getattr(self.agent, 'ventana', None) == 'agente'
+                and not ENTREGA_CODIGO.search(output.get('reply') or '')
                 and hasattr(self.agent.runtime, 'require_check')):
             turn.retries.sin_llamada_devuelto = True
             # Sin forzar el arranque en una lectura. Forzado, una charla en la ventana

@@ -36,6 +36,16 @@ test("una petición con código abierto exige editar la versión completa", () =
   assert.match(prompt, /un rediseño puede cambiar la estructura/);
   assert.doesNotMatch(prompt, /Conserva exactamente la estructura|modificación mínima necesaria/);
   assert.match(prompt, /tsx/);
+  assert.match(prompt, /quítalo o cámbialo de verdad/);
+});
+
+test("pedir que algo desaparezca no se toma por un borrado accidental", () => {
+  const before = { reply: "", code: "x".repeat(2000), language: "html" };
+  const after = { reply: "", code: "x".repeat(1200), language: "html" };
+  for (const request of ["sin terminal en el centro", "olvídate del terminal", "el terminal fuera"]) {
+    assert.equal(assessCodeRevision(request, before, after).safe, true, request);
+  }
+  assert.equal(assessCodeRevision("pon el fondo más oscuro", before, after).safe, false);
 });
 
 test("rechaza una mejora pequeña que borra gran parte de la interfaz", () => {

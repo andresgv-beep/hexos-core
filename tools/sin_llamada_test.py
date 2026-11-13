@@ -61,6 +61,15 @@ class SinLlamadaTest(unittest.TestCase):
         for respuesta in ('Claro.', '¿De qué equipo hablas?', 'Voy a mirarlo ahora mismo.'):
             self.assertTrue(self.cierre(respuesta=respuesta)[2], respuesta)
 
+    def test_una_respuesta_que_entrega_codigo_no_se_devuelve(self):
+        # Visto con el 26B: cada página se generaba dos veces porque no había «consultado nada».
+        pagina = 'Aquí tienes:\n\n```html\n<!DOCTYPE html>\n<html>\n<body>\n<canvas></canvas>\n<script>\n</script>\n</body>\n</html>\n```\n'
+        runtime, turn, devuelto, _ = self.cierre(pedidos=('proyecto',), respuesta=pagina)
+        self.assertFalse(devuelto)
+        self.assertFalse(turn.messages)
+        # Una orden suelta entre cercas sigue siendo «usaré journalctl»: no es una entrega.
+        self.assertTrue(self.cierre(respuesta='Usaré esto:\n```\njournalctl -p err\n```\n')[2])
+
     def test_si_el_selector_no_pidio_nada_es_una_charla(self):
         runtime, _, devuelto, _ = self.cierre(pedidos=(), respuesta='Voy a revisar el NAS.')
         self.assertFalse(devuelto)
