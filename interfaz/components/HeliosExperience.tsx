@@ -178,8 +178,12 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const [codeOpen, setCodeOpen] = useState(false);
   const [codeFloating, setCodeFloating] = useState(false);
   // Solo se edita código con la implementación a la vista (en el panel o ampliada);
-  // con el panel cerrado, el chat es chat.
-  const editingCode = !mobile && codeOpen ? codeArtifact : null;
+  // con el panel cerrado, el chat es chat. Y en la ventana Chat no se edita nunca: ahí se
+  // habla. El 13/11 Helios puso un ejemplo dentro de un bloque marcado «matrix», la interfaz
+  // lo tomó por el código en curso y reescribió cada mensaje siguiente como una orden de
+  // modificarlo, también «socio, solo estamos hablando»: contestó dos veces con el bloque
+  // entero rehecho, que era justo lo que se le había pedido sin que nadie lo viera.
+  const editingCode = ventana !== "chat" && !mobile && codeOpen ? codeArtifact : null;
   const [fileFloating, setFileFloating] = useState<{ id?: string } | null>(null);
   const [codeHistory, setCodeHistory] = useState<ReplyArtifact[]>([]);
   const [previous, setPrevious] = useState<HistoryMessage[]>([]);
