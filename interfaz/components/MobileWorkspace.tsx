@@ -94,9 +94,9 @@ export function MobileWorkspace({ previous, turns, notes, artifact, busy, error,
           : "Habla con Helios. Tu conversación continúa aquí."}</p>}
         {previous.map((message, index) => <article className={`history-entry ${message.role}`} key={index}>
           <span className="message-author">{message.role === 'user' ? 'TÚ' : 'HELIOS'}</span>
-          <ReplyMarkdown text={message.text} onPreviewCode={onPreview} />
+          <ReplyMarkdown text={message.text} onPreviewCode={onPreview} previewHtmlOnly={ventana === "chat"} />
         </article>)}
-        {turns.map(turn => <TurnoVisible key={turn.id} turn={turn} extra={turnExtras?.[turn.id]} onPreviewCode={onPreview} />)}
+        {turns.map(turn => <TurnoVisible key={turn.id} turn={turn} extra={turnExtras?.[turn.id]} onPreviewCode={onPreview} previewHtmlOnly={ventana === "chat"} />)}
       </section>
       {[2, 3].map(index => <section className="mobile-page mobile-artifact" aria-label={panels[index]} key={index}>
         {artifact ? <CodeWorkspace artifact={artifact} busy={busy} canUndo={false} onUndo={() => {}}

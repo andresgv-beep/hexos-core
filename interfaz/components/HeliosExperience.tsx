@@ -1045,7 +1045,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     {historyOpen && <ChatHistory previous={previous} messages={turns} historyError={historyError} onClose={closeHistory}
       hasEarlier={historyNext !== null} olderLoading={olderLoading} onLoadEarlier={loadOlderHistory}
       onOpenArtifact={openHistoricalArtifact}
-      onPreviewCode={previewCode} />}
+      onPreviewCode={previewCode} previewHtmlOnly={ventana === "chat"} />}
     {!mobile && codeFloating && codeOpen && codeArtifact && <CodeWorkspace artifact={codeArtifact} busy={sending}
       canUndo={Boolean(codeHistory.length || fallbackArtifact)} onUndo={undoCodeArtifact}
       onClose={() => { setCodeFloating(false); inputRef.current?.focus(); }} onCreatePreview={previewCode} />}
