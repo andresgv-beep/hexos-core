@@ -408,23 +408,53 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   }, []);
   async function decidirSistema(approve: boolean) {
     if (!systemPlan || systemBusy) return;
+    const plan = systemPlan;
     setSystemBusy(true);
     setSystemError("");
+    // Al aprobar, el servidor retira el plan antes de ejecutarlo y la tarjeta se cerraba
+    // sola a los dos segundos: apt seguía trabajando y en pantalla no quedaba nada que lo
+    // dijera. Ahora la tarjeta se cierra al momento y queda un turno en curso con lo que
+    // HexOS está haciendo y el tiempo que lleva.
+    const id = ++nextId.current;
+    const haciendo = `HexOS está ${plan.action === "remove" ? "quitando" : "instalando"} ${plan.package} con ${plan.manager}`;
+    const inicio = Date.now();
+    let reloj: ReturnType<typeof setInterval> | undefined;
+    if (approve) {
+      setSystemPlan(null);
+      setTurns(items => [...items, { id, text: `Aprobado: ${plan.summary}`, pending: true,
+                                     generationStatus: `${haciendo}…` }]);
+      reloj = setInterval(() => {
+        const segundos = Math.round((Date.now() - inicio) / 1000);
+        setTurns(items => items.map(item => item.id === id && item.pending
+          ? { ...item, generationStatus: `${haciendo}… ${segundos} s` } : item));
+      }, 1000);
+    }
     try {
-      const r = await transport.decideSystem(systemPlan.planId, approve);
+      const r = await transport.decideSystem(plan.planId, approve);
       setSystemPlan(null);
       const reply = r.cancelled ? `Cancelado: ${r.summary}. No se ha cambiado nada.`
         : r.executed && r.verified ? `Hecho y comprobado: ${r.summary} (${r.check}).`
         : r.executed ? `Se ejecutó, pero la comprobación no cuadra: ${r.check}. Revísalo antes de darlo por hecho.`
         : `No se ejecutó: ${r.refused ?? "el gestor dio error"}.`;
-      const id = ++nextId.current;
-      setTurns(items => [...items, { id, text: approve ? `Aprobado: ${r.summary}` : `Cancelado: ${r.summary}`,
-                                     pending: false, reply }]);
+      if (approve) {
+        setTurns(items => items.map(item => item.id === id
+          ? { ...item, pending: false, generationStatus: undefined, reply } : item));
+      } else {
+        setTurns(items => [...items, { id, text: `Cancelado: ${r.summary}`, pending: false, reply }]);
+      }
       setRevealing(true);
       setAnnouncement(reply);
     } catch (error) {
-      setSystemError(error instanceof Error ? error.message : "No se pudo enviar la decisión.");
+      const detalle = error instanceof Error ? error.message : "No se pudo enviar la decisión.";
+      // Con la tarjeta ya cerrada el fallo se dice en el turno; al cancelar, en la tarjeta.
+      if (approve) {
+        setTurns(items => items.map(item => item.id === id
+          ? { ...item, pending: false, generationStatus: undefined, error: detalle } : item));
+      } else {
+        setSystemError(detalle);
+      }
     } finally {
+      clearInterval(reloj);
       setSystemBusy(false);
     }
   }
