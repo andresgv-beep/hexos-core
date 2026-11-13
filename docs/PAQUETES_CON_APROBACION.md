@@ -40,6 +40,11 @@ el comando para que lo ejecutaras tú.
 - **Un plan se ejecuta una vez.** Se retira de la sesión antes de lanzarlo, con un cerrojo
   propio. La interfaz se ve a la vez en el monitor y en el móvil: si dos pantallas aprueban a la
   vez, solo una lo toma y la otra recibe «lo decidió otra pantalla».
+- **De uno en uno, y el modelo sabe que espera.** Solo hay una tarjeta. Mientras un plan está
+  pendiente, cada turno se lo dice al modelo como dato («sigue esperando, no se ha aprobado ni
+  rechazado»); pedir el mismo plan otra vez no crea uno nuevo, y pedir otro distinto devuelve
+  que hay que decidir el primero. Sin esto, a «ya está, lo he aprobado» el E4B volvía a
+  planificar y el 26B contaba que la aprobación se había procesado y algo había fallado.
 - **Instalar exige decir el gestor.** De dónde sale el programa (apt, flatpak o snap) lo
   decides tú, no se adivina.
 

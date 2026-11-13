@@ -214,6 +214,24 @@ class ToolDispatcher:
             return entorno.reconocer()
         if name == 'system.package_plan':
             # Solo planifica: la ejecución la dispara la aprobación de la persona (/api/system).
+            pendiente = self.session.system_request
+            if system_packages.mismo_plan(pendiente, args['action'], args['package'], args.get('manager')):
+                # Pedir otra vez lo que ya espera no hace un plan nuevo: cambiaría el de la
+                # tarjeta que la persona tiene delante por otro idéntico.
+                return dict({k: v for k, v in pendiente.items() if k not in ('plan_id', 'created')}, status='pending_approval',
+                            note='Este plan ya estaba pendiente y sigue sin decidir: la persona no lo ha '
+                                 'aprobado ni rechazado todavía en la tarjeta de pantalla. No está hecho.')
+            if pendiente:
+                # Solo hay una tarjeta. El 13/11, a «instala lo que falte», el E4B planificó
+                # pip y después venv: el segundo pisó al primero y él dio los dos por pendientes.
+                # Como resultado y no como error: un error pone al modelo a reintentar la misma
+                # llamada, y no hay nada que corregir, solo esperar.
+                return dict(status='waiting_previous_plan', planned=False, pending=pendiente['summary'],
+                            requested=args['package'],
+                            note='No se ha planificado ' + args['package'] + ': van de uno en uno y «' +
+                                 pendiente['summary'] + '» sigue esperando en la tarjeta. No lo intentes otra '
+                                 'vez en este turno. Dile a la persona que decida ese primero y que después '
+                                 'planificarás ' + args['package'] + '.')
             plan = system_packages.plan(args['action'], args['package'], args.get('manager'))
             self.session.system_request = plan
             # Sin plan_id: el 03/11 el modelo lo llevó a media.start, que también recibe un

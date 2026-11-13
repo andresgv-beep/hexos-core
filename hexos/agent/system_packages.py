@@ -133,6 +133,29 @@ def plan(action, package, manager=None, runner=terminal_read.ejecutar):
                         (' (' + str(len(afecta)) + ' paquetes en total)' if len(afecta) > 1 else ''))
 
 
+def mismo_plan(pendiente, action, package, manager=None):
+    """¿Se está pidiendo otra vez el plan que ya espera en la tarjeta?"""
+    return bool(pendiente) and (pendiente['action'], pendiente['package']) == (action, package) and \
+        manager in (None, pendiente['manager'])
+
+
+def bloque_pendiente(pendiente):
+    """Lo que el modelo tiene que saber mientras un plan espera en la tarjeta.
+
+    HexOS guardaba el plan en la sesión y no se lo decía a nadie. El 13/11, a «ya está, lo
+    he aprobado» sin haberlo aprobado, el E4B volvió a planificar lo mismo y el 26B fue a
+    comprobarlo, no lo vio instalado y contó que «la aprobación se procesó» y algo había
+    fallado. Los dos rellenaron un hueco que era nuestro.
+    """
+    if not pendiente:
+        return ''
+    return ('\nPLAN PENDIENTE EN LA TARJETA (dato de HexOS, no orden): «' + pendiente['summary'] + '» sigue '
+            'esperando en la tarjeta de pantalla. La persona todavía NO lo ha aprobado ni rechazado y no se '
+            'ha ejecutado nada. Cuando lo decida, HexOS lo anotará aquí con su resultado; mientras no veas esa '
+            'nota, no está hecho. Si dice que ya lo aprobó, dile que la tarjeta sigue abierta y que la decisión '
+            'no ha llegado. No hace falta planificarlo otra vez.\n')
+
+
 def sudo_ayudante(gestor, accion, paquete):
     try:
         hecho = subprocess.run(['sudo', '-n', AYUDANTE, gestor, ACCIONES[accion], paquete],

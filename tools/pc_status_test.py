@@ -47,12 +47,21 @@ class Ps:
     def sensors_battery(self): return self.pila
 
 
-def grafica(usada=6222, procesos=(('1', '/opt/helios_runtime', '6168'),)):
+def grafica(usada=6222, procesos=(('GPU-a', '/opt/helios_runtime', '6168'),)):
     def consultar(campos, consulta='--query-gpu'):
         if consulta == '--query-gpu':
-            return [['RTX 5070', '13', str(usada), '8151', '48', '8.40']]
+            return [['RTX 5070', '13', str(usada), '8151', '48', '8.40', 'GPU-a']]
         return [list(p) for p in procesos]
     return consultar
+
+
+def dos_graficas(campos, consulta='--query-gpu'):
+    """El sobremesa con el 26B repartido en las dos tarjetas y un juego en una."""
+    if consulta == '--query-gpu':
+        return [['RTX 2080 Ti', '40', '10900', '11264', '60', '120.0', 'GPU-a'],
+                ['RTX 4070 Ti', '35', '11700', '12282', '55', '110.0', 'GPU-b']]
+    return [['GPU-a', '/opt/helios_runtime', '10800'], ['GPU-b', '/opt/helios_runtime', '9000'],
+            ['GPU-b', r'C:\Juegos\WoW.exe', '2400']]
 
 
 def medir(ps, consultar=lambda *a, **k: []):
@@ -83,14 +92,25 @@ class EstadoTest(unittest.TestCase):
 
     def test_grafica_llena_dice_quien_la_ocupa(self):
         # El caso real: el modelo no cargaba porque el juego tenía 2,2 GB de la gráfica.
-        r = medir(Ps([]), grafica(7900, (('1', r'C:\Program Files\WoW\WoWClassic.exe', '2185'),
-                                         ('2', '/opt/helios_runtime', '5400'))))
+        r = medir(Ps([]), grafica(7900, (('GPU-a', r'C:\Program Files\WoW\WoWClassic.exe', '2185'),
+                                         ('GPU-a', '/opt/helios_runtime', '5400'))))
         g = r['grafica'][0]
         self.assertEqual(g['memoria_libre'], '251 MiB')
         self.assertEqual(g['la_ocupan'], [dict(programa='helios_runtime', memoria='5400 MiB'),
                                           dict(programa='WoWClassic.exe', memoria='2185 MiB')])
         self.assertIn('helios_runtime', r['avisos'][0])
         self.assertNotIn('memoria_usada_mib', g)
+
+    def test_con_dos_graficas_cada_una_dice_quien_la_ocupa(self):
+        r = medir(Ps([]), dos_graficas)
+        primera, segunda = r['grafica']
+        self.assertEqual(primera['la_ocupan'], [dict(programa='helios_runtime', memoria='10800 MiB')])
+        self.assertEqual(segunda['la_ocupan'], [dict(programa='helios_runtime', memoria='9000 MiB'),
+                                                dict(programa='WoW.exe', memoria='2400 MiB')])
+        # Los dos avisos nombran a quien ocupa SU tarjeta, no la otra.
+        self.assertEqual(len(r['avisos']), 2)
+        self.assertIn('10800 MiB', r['avisos'][0])
+        self.assertIn('9000 MiB', r['avisos'][1])
 
     def test_avisa_de_ram_disco_calor_y_bateria(self):
         pila = types.SimpleNamespace(percent=9.0, power_plugged=False, secsleft=1500)

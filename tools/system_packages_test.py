@@ -4,6 +4,7 @@ Sin tocar el sistema: las lecturas y el ayudante se simulan.
 """
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
+import json
 import sqlite3
 import sys
 import tempfile
@@ -199,6 +200,41 @@ class AprobacionTest(unittest.TestCase):
         self.assertNotIn('plan_id', salida)
         self.assertIn('tarjeta', salida['note'])
         self.assertEqual(self.agent.system_request['plan_id'], 'p1')   # la sesión sí lo guarda
+
+    def test_pedir_otra_vez_el_plan_pendiente_no_hace_uno_nuevo(self):
+        # «Ya está, lo he aprobado» sin aprobarlo: el E4B volvía a planificar lo mismo.
+        with patch.object(system_packages, 'plan', side_effect=AssertionError('no debía planificar')):
+            salida = self.agent.dispatcher.dispatch(None, 'system.package_plan',
+                                                    dict(action=AplicarTest.PLAN['action'], package=AplicarTest.PLAN['package']))
+        self.assertIn('sigue sin decidir', salida['note'])
+        self.assertNotIn('plan_id', salida)
+        self.assertEqual(self.agent.system_request['plan_id'], AplicarTest.PLAN['plan_id'])
+
+    def test_con_un_plan_en_la_tarjeta_no_se_admite_otro_distinto(self):
+        with patch.object(system_packages, 'plan', side_effect=AssertionError('no debía planificar')):
+            salida = self.agent.dispatcher.dispatch(None, 'system.package_plan',
+                                                    dict(action='install', package='htop', manager='apt'))
+        # Resultado y no error: no hay nada que corregir, solo esperar.
+        self.assertEqual((salida['status'], salida['planned']), ('waiting_previous_plan', False))
+        self.assertIn('uno en uno', salida['note'])
+        self.assertEqual(self.agent.system_request['plan_id'], AplicarTest.PLAN['plan_id'])   # el primero sigue ahí
+
+    def test_mientras_espera_el_modelo_lo_ve_escrito_en_el_turno(self):
+        vistos = []
+        self.agent.runtime.generate = lambda messages: vistos.append(messages) or {'reply': 'ok', 'work': None}
+        self.agent.chat('ya está, lo he aprobado')
+        texto = json.dumps(vistos, ensure_ascii=False)
+        self.assertIn('PLAN PENDIENTE EN LA TARJETA', texto)
+        self.assertIn(AplicarTest.PLAN['summary'], texto)
+        self.assertIn('NO lo ha aprobado', texto)
+
+    def test_sin_plan_pendiente_no_se_dice_nada(self):
+        self.agent.session.system_request = None
+        vistos = []
+        self.agent.runtime.generate = lambda messages: vistos.append(messages) or {'reply': 'ok', 'work': None}
+        self.agent.chat('hola')
+        self.assertNotIn('PLAN PENDIENTE', json.dumps(vistos, ensure_ascii=False))
+        self.assertEqual(system_packages.bloque_pendiente(None), '')
 
     def test_el_modelo_no_tiene_herramienta_para_aplicar(self):
         # De las herramientas de este PC, la única que no es una lectura pura es el plan.

@@ -23,7 +23,7 @@ except ImportError:                      # se dice al usarla, no al importar el 
 MAS = 5                                  # procesos que se nombran en cada lista
 MUESTRA = 0.5                            # segundos entre las dos medidas de CPU
 SIN_DISCO = {'squashfs', 'tmpfs', 'devtmpfs', 'overlay', 'efivarfs', 'vfat', 'iso9660', 'fuse.portal'}
-GPU_CAMPOS = 'name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw'
+GPU_CAMPOS = 'name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw,uuid'
 SEGUNDOS = 5
 
 
@@ -66,14 +66,16 @@ def graficas(consultar=nvidia):
     filas = consultar(GPU_CAMPOS)
     if not filas:
         return []
-    ocupan = []
-    for fila in consultar('pid,name,used_memory', '--query-compute-apps'):
+    # Cada proceso con la gráfica en la que está. Con dos tarjetas no se decía quién
+    # ocupaba cada una: el 13/11 el 26B vio la memoria llena, no supo que era su propio
+    # motor y mezcló los datos de las dos.
+    ocupan = {}
+    for fila in consultar('gpu_uuid,name,used_memory', '--query-compute-apps'):
         if len(fila) == 3 and fila[2].isdigit():
-            ocupan.append((int(fila[2]), programa(fila[1])))
-    ocupan.sort(reverse=True)
+            ocupan.setdefault(fila[0], []).append((int(fila[2]), programa(fila[1])))
     vistas = []
     for fila in filas:
-        if len(fila) != 6 or not (fila[2].isdigit() and fila[3].isdigit()):
+        if len(fila) != 7 or not (fila[2].isdigit() and fila[3].isdigit()):
             continue
         usada, total = int(fila[2]), int(fila[3])
         una = dict(nombre=fila[0], memoria='%d de %d MiB' % (usada, total), memoria_libre='%d MiB' % (total - usada),
@@ -86,10 +88,9 @@ def graficas(consultar=nvidia):
             una['consumo'] = '%d W' % round(float(fila[5]))
         except ValueError:
             pass
-        # nvidia-smi no dice en qué gráfica está cada proceso con esta consulta: con una
-        # sola gráfica, que es el caso normal, son todos suyos.
-        if len(filas) == 1 and ocupan:
-            una['la_ocupan'] = [dict(programa=nombre, memoria='%d MiB' % mib) for mib, nombre in ocupan[:MAS]]
+        suyos = sorted(ocupan.get(fila[6], []), reverse=True)
+        if suyos:
+            una['la_ocupan'] = [dict(programa=nombre, memoria='%d MiB' % mib) for mib, nombre in suyos[:MAS]]
         vistas.append(una)
     return vistas
 
