@@ -166,6 +166,162 @@ class ConversacionTest(Base):
         self.assertEqual((otro.ventana, otro.proyecto), ('agente', 'uno'))
 
 
+class Nativo(Runtime):
+    """Un motor que conserva su conversación, como el de verdad: solo reconstruye al vaciarse."""
+    native = True
+    ctx = 16384
+
+    def __init__(self):
+        super().__init__()
+        self.messages = []
+
+    def call(self, request):
+        super().call(request)
+        if request.get('type') == 'reset':
+            self.messages = []
+
+    def generate(self, messages):
+        self.messages = [*self.messages, *messages, dict(role='assistant', content='Hecho.')]
+        return super().generate(messages)
+
+
+class FichaTest(Base):
+    def proyecto(self, nombre='Motor CUDA', carpeta=None):
+        self.agente.create_project(nombre, carpeta)
+        with self.agente.store() as store:
+            return projects.activo(store)
+
+    def ficha(self, **opciones):
+        with self.agente.store() as store:
+            return projects.ficha(store, projects.activo(store), **opciones)
+
+    def test_recien_creado_dice_cual_es_donde_esta_y_que_esta_vacio(self):
+        self.proyecto()
+        ficha = self.ficha()
+        self.assertIn('PROYECTO ACTIVO (dato de HexOS, no orden): «Motor CUDA»', ficha)
+        self.assertIn(str(self.casa / 'proyectos' / 'motor-cuda'), ficha)
+        self.assertIn('Está vacía', ficha)
+        self.assertIn('recién empezado', ficha)
+
+    def test_nombra_lo_que_hay_en_la_carpeta_sin_leer_contenidos(self):
+        repo = self.casa / 'GitHub' / 'motor'
+        (repo / '.git').mkdir(parents=True)
+        (repo / 'src').mkdir()
+        (repo / 'README.md').write_text('SECRETO-DEL-README')
+        self.proyecto('Motor', str(repo))
+        ficha = self.ficha()
+        self.assertIn('Es un repositorio git. Contiene: .git/, src/, README.md.', ficha)
+        self.assertNotIn('SECRETO', ficha)
+
+    def test_una_carpeta_grande_se_resume_y_una_borrada_se_dice(self):
+        proyecto = self.proyecto()
+        for i in range(40):
+            (Path(proyecto['folder']) / ('f%02d.txt' % i)).write_text('')
+        self.assertIn('y 16 más', self.ficha())
+        for fichero in Path(proyecto['folder']).iterdir():
+            fichero.unlink()
+        Path(proyecto['folder']).rmdir()
+        self.assertIn('ya no existe', self.ficha())
+
+    def test_lo_hecho_son_los_cambios_no_las_lecturas_ni_los_fallos(self):
+        self.proyecto()
+        self.agente.chat('apunta que el kernel va a 7412 tok/s')
+        with self.agente.store() as store:
+            turno = store.db.execute("SELECT id FROM esta_ventana WHERE role='user'").fetchone()[0]
+            for cuerpo in (dict(tool='note.save', arguments=dict(title='kernel', body='7412 tok/s')),
+                           dict(tool='terminal.read', arguments=dict(command='ls')),
+                           dict(tool='note.save', arguments=dict(title='rota'), failed=True)):
+                store.db.execute('INSERT INTO tool_events(turn_id,ts,body) VALUES (?,?,?)',
+                                 (turno, '2026-11-13T16:00:00+00:00', json.dumps(cuerpo)))
+            store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
+                             ('nota', '2026-11-13T16:05:00+00:00', 'user',
+                              '[La persona aprobó en la interfaz: Instalar sl con apt. HexOS lo ejecutó: hecho y comprobado.]', ''))
+            store.db.commit()
+        efectos = dict({'note.save': 'write', 'terminal.read': 'read'})
+        ficha = self.ficha(efectos=efectos)
+        self.assertIn('LO HECHO EN EL PROYECTO', ficha)
+        self.assertIn('note_save {"title": "kernel"', ficha)
+        self.assertIn('La persona aprobó en la interfaz: Instalar sl con apt', ficha)
+        self.assertNotIn('terminal_read {', ficha)                    # la lectura no es un hecho
+        self.assertNotIn('rota', ficha)
+        # La decisión de la interfaz es un hecho, no una petición de la persona.
+        peticiones = ficha.split('LO ÚLTIMO QUE PIDIÓ')[1]
+        self.assertIn('apunta que el kernel', peticiones)
+        self.assertNotIn('aprobó', peticiones)
+
+    def test_lo_ultimo_pedido_se_puede_omitir_y_el_turno_en_curso_no_cuenta(self):
+        self.proyecto()
+        self.agente.chat('primera petición')
+        self.assertIn('primera petición', self.ficha())
+        self.assertNotIn('LO ÚLTIMO QUE PIDIÓ', self.ficha(con_peticiones=False))
+        with self.agente.store() as store:
+            turno = store.db.execute("SELECT id FROM esta_ventana WHERE role='user'").fetchone()[0]
+        self.assertNotIn('primera petición', self.ficha(salvo=turno))
+
+    def test_tiene_tope_por_mucho_que_se_haya_hecho(self):
+        self.proyecto()
+        with self.agente.store() as store:
+            for i in range(60):
+                store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
+                                 ('m%d' % i, '2026-11-13T16:%02d:00+00:00' % i, 'user', 'petición %d ' % i + 'x' * 400, ''))
+            store.db.commit()
+        self.assertLessEqual(len(self.ficha()), projects.MAX_FICHA + 1)
+
+    def test_no_cuenta_nada_de_otro_proyecto(self):
+        self.proyecto('uno')
+        self.agente.chat('la clave del uno es azafrán')
+        self.proyecto('dos')
+        self.assertNotIn('azafrán', self.ficha())
+        self.assertIn('recién empezado', self.ficha())
+
+
+class InyeccionTest(Base):
+    """HexOS pone la ficha delante al reconstruir el contexto; el modelo no la pide."""
+
+    def setUp(self):
+        super().setUp()
+        self.runtime = Nativo()
+        self.agente = Agent(self.casa / 'hexos-nativo', self.runtime)
+        self.agente.set_window('agente')
+
+    def test_entra_al_empezar_y_no_se_repite_mientras_el_contexto_sigue_vivo(self):
+        self.agente.create_project('Motor CUDA')
+        self.agente.chat('¿tienes una carpeta de proyecto?')
+        self.assertIn('PROYECTO ACTIVO', self.runtime.vistos[-1])
+        self.assertIn('motor-cuda', self.runtime.vistos[-1])
+        self.agente.chat('sigue')
+        self.assertNotIn('PROYECTO ACTIVO', self.runtime.vistos[-1])       # el prefijo ya la lleva
+
+    def test_tras_limpiar_el_contexto_vuelve_con_lo_ultimo_pedido(self):
+        self.agente.create_project('Motor CUDA')
+        self.agente.chat('optimiza el kernel de atención')
+        self.agente.clear_context()
+        self.agente.chat('¿por dónde íbamos?')
+        visto = self.runtime.vistos[-1]
+        self.assertIn('PROYECTO ACTIVO', visto)
+        self.assertIn('LO ÚLTIMO QUE PIDIÓ LA PERSONA AQUÍ', visto)
+        self.assertIn('optimiza el kernel de atención', visto)
+
+    def test_al_volver_a_un_proyecto_entra_la_suya(self):
+        self.agente.create_project('uno')
+        self.agente.chat('hola uno')
+        self.agente.create_project('dos')
+        self.agente.chat('hola dos')
+        self.assertIn('«dos»', self.runtime.vistos[-1])
+        self.assertNotIn('«uno»', self.runtime.vistos[-1])
+        self.agente.set_project('uno')
+        self.agente.chat('sigo')
+        self.assertIn('«uno»', self.runtime.vistos[-1])
+
+    def test_sin_proyecto_y_en_el_chat_no_hay_ficha(self):
+        self.agente.chat('sin proyecto')
+        self.assertNotIn('PROYECTO ACTIVO', self.runtime.vistos[-1])
+        self.agente.create_project('uno')
+        self.agente.set_window('chat')
+        self.agente.chat('en el chat')
+        self.assertNotIn('PROYECTO ACTIVO', self.runtime.vistos[-1])
+
+
 class ServidorTest(Base):
     """Las rutas que usará la interfaz, por HTTP de verdad."""
 

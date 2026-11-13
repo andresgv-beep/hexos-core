@@ -276,7 +276,7 @@ TOOLS = {
                           'command="apt list --installed" con filter=parte de su nombre; esa sola llamada mira '
                           'también en snap, flatpak y los lanzadores. Programas: dpkg, apt-cache, apt, apt-mark, flatpak, snap, '
                           'which, whereis, pidof, ls, du, df, free, uname, lsblk, file, systemctl, journalctl.',
-                          {'command':'str'}, {'filter':'str'}),
+                          {'command':'str'}, {'filter':'str', 'path':'str'}),
     'system.status': spec('Cómo va este PC ahora mismo, en una sola lectura: uso del procesador y su temperatura, '
                           'memoria RAM, los programas que más procesador y más memoria gastan, la gráfica (uso, '
                           'memoria libre y qué programas la ocupan), discos y batería. avisos resume lo que se '
@@ -491,7 +491,7 @@ GROUP_GUIDANCE = {
                 'programas, aplicaciones y juegos, consumo, lentitud, memoria, gráfica, temperatura, batería, disco, '
                 'registros y servicios de este PC: si ssh, docker u otro está activo o instalado. '
                 'Compiladores y lenguajes de programación: si se puede compilar o programar en algo. '
-                'Instalar o quitar un programa de este PC.'),
+                'Instalar o quitar un programa de este PC. La carpeta del proyecto y lo que hay dentro: está en este PC.'),
     'archivos': 'Buscar y leer ficheros y carpetas que están en el NAS.',
     'equipos': 'Otros ordenadores y el NAS de la casa: listarlos, conectarse a ellos, mirar la red y lo que corre en el NAS.',
     'multimedia': 'Convertir o comprimir vídeo y audio, y seguir esos trabajos.',

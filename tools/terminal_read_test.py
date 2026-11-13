@@ -28,6 +28,19 @@ class TerminalReadTest(unittest.TestCase):
         r = terminal_read.read('dpkg -s paquete-que-no-existe', runner=lambda p: (1, "dpkg-query: package not installed"))
         self.assertEqual((r['exit_code'], r['output']), (1, 'dpkg-query: package not installed'))
 
+    def test_la_ruta_puede_venir_en_su_propio_campo(self):
+        # El E4B pide «ls en esta carpeta» con la orden por un lado y la ruta por otro.
+        vistas = []
+        runner = lambda partes: (vistas.append(partes) or (0, 'a\nb'))
+        r = terminal_read.read('ls', path='/home/x/mi proyecto', runner=runner)
+        self.assertEqual(vistas, [['ls', '/home/x/mi proyecto']])
+        self.assertEqual(r['lines'], 2)
+        terminal_read.read('ls -la /home/x/p', path='/home/x/p', runner=runner)      # repetida no se duplica
+        self.assertEqual(vistas[-1], ['ls', '-la', '/home/x/p'])
+        # Pasa por la misma lista: un programa que no es de lectura sigue sin correr.
+        with self.assertRaises(ValueError):
+            terminal_read.read('rm', path='/home/x/p', runner=runner)
+
     def test_filter_acota_sin_tuberia(self):
         r = terminal_read.read('dpkg -l', filter='GIMP', runner=lambda p: (0, 'ii gimp 3\nii vim 9\nii libgimp 3'))
         self.assertEqual(r['output'], 'ii gimp 3\nii libgimp 3')

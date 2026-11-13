@@ -76,8 +76,35 @@ cuarta es el ciclo leer-cambiar-compilar-probar-anotar y va después.
   recupera el dato y el fichero de los que se habló. El cambio es instantáneo y el primer
   turno tarda lo normal, 1,3 s.
 
-Falta: no hay nada en la interfaz todavía (fase 3), no hay ficha (fase 2: hoy al volver lee el
-archivo del proyecto, no un resumen), y no se puede borrar ni renombrar un proyecto.
+**Fase 3 (en parte), hecha el 2026-11-13**: el Agente lleva un lateral fijo a la derecha con
+los proyectos, razonamiento, historial y la tarjeta de contexto. Falta en él lo que está
+haciendo y lo hecho en la sesión.
+
+**Fase 2, hecha el 2026-11-13** (`projects.ficha`, `ContextManager.ficha_proyecto`):
+
+- **La ficha no se guarda: se calcula** en el momento con lo que HexOS ya tiene apuntado del
+  proyecto. No puede quedarse vieja ni llevar nada que el modelo se haya inventado.
+- Lleva el nombre, la carpeta y lo que hay en ella por encima (nombres, no contenidos), cuántos
+  mensajes hay archivados, lo hecho (herramientas con efecto y decisiones de la interfaz; ni
+  lecturas ni fallos) y, si el contexto arranca vacío, lo último que pidió la persona.
+- **Entra donde HexOS reconstruye el contexto** (tras limpiar, cambiar de proyecto, cortar o
+  arrancar), junto al perfil. En los turnos normales no se repite, así que no rompe la caché.
+- Tope de 2.400 caracteres.
+- Medido con el E4B y el 26B, una pasada cada uno: saben en qué proyecto están y dónde, dicen
+  qué hay en la carpeta, tras limpiar el contexto retoman el objetivo del que se habló, en otro
+  proyecto no lo conocen y al volver lo recuperan. Seis de seis en los dos.
+
+Dos cosas que salieron midiendo y están arregladas:
+
+- La ficha decía «usa terminal_read con ls» y el E4B mandó la ruta en un campo `path` que no
+  existía, dos veces, y el turno murió. Ahora la ficha da la orden entera con la ruta, y
+  `terminal_read` admite `path` y lo une a la orden.
+- A «¿qué hay en la carpeta del proyecto?» el 26B pedía las herramientas del NAS. La guía del
+  grupo `sistema` dice ahora que la carpeta del proyecto está en este PC.
+
+Falta: el resumen de intención escrito por el modelo (hoy la ficha solo lleva hechos), la ficha
+como fichero dentro de la carpeta para el uso remoto, y borrar o renombrar un proyecto. Sin
+medir: con historial real y largo, y el banco de 31 frases del selector tras tocar su guía.
 
 ## Decisiones tomadas
 

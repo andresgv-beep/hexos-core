@@ -207,7 +207,7 @@ class ToolDispatcher:
         if name == 'web.read':
             return self.env.dependencies.web_read(args['url'])
         if name == 'terminal.read':
-            return terminal_read.read(args['command'], args.get('filter'))
+            return terminal_read.read(args['command'], args.get('filter'), path=args.get('path'))
         if name == 'system.status':
             return pc_status.estado()
         if name == 'system.toolchain':

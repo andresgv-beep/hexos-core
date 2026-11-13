@@ -341,7 +341,14 @@ def sin_unidad(partes):
             and partes[1:] and next(p for p in partes[1:] if not p.startswith('-')) in ('status', 'is-active'))
 
 
-def read(command, filter=None, *, runner=ejecutar, escritorio=lanzadores, menu=aplicaciones):
+def read(command, filter=None, *, path=None, runner=ejecutar, escritorio=lanzadores, menu=aplicaciones):
+    # `path` es cómo piensa el modelo «ls en esta carpeta»: la orden por un lado y la ruta
+    # por otro. Se une a la orden y pasa por la misma lista de siempre.
+    if path:
+        if not isinstance(path, str) or len(path) > 400:
+            raise ValueError('path es la ruta de un archivo o carpeta')
+        if path not in (command or ''):
+            command = (command or '') + ' ' + shlex.quote(path)
     if filter and filter.startswith('-'):
         raise ValueError('filter es un texto que deben contener las líneas; las opciones van en command')
     command, filter, leida = sin_grep(command, filter)
