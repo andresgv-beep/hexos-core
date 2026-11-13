@@ -15,6 +15,7 @@ Dos reglas que no se pueden romper:
 from __future__ import annotations
 
 import json
+import re
 
 from . import catalog
 
@@ -58,7 +59,13 @@ def interpretar(raw, ventana=None):
     try:
         elegidos = json.loads(texto)
     except (ValueError, TypeError):
-        return None
+        # `[sistema]`, sin comillas: el E4B lo escribe así a veces. Se entiende igual y
+        # los nombres pasan por la misma comprobación de abajo; tirarlo dejaba el turno
+        # con el catálogo entero por una falta de ortografía.
+        sin_comillas = re.fullmatch(r'\[\s*([a-z_]+(?:\s*,\s*[a-z_]+)*)\s*\]', texto)
+        if not sin_comillas:
+            return None
+        elegidos = [nombre.strip() for nombre in sin_comillas.group(1).split(',')]
     if not isinstance(elegidos, list) or len(elegidos) > len(catalog.GROUPS):
         return None
     permitidos = catalog.groups_in(ventana) if ventana else tuple(

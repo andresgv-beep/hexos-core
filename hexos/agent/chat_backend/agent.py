@@ -409,6 +409,31 @@ class Agent:
             creado = projects.crear(store, name, folder)
         return dict(self.set_project(creado['id']), created=creado)
 
+    def rename_project(self, project_id, name):
+        from .. import projects
+        with self.store() as store:
+            return dict(project=projects.renombrar(store, project_id, name))
+
+    def remove_project(self, project_id):
+        """Quitar un proyecto de la lista. Ni su carpeta ni su conversación se borran."""
+        from .. import projects
+        if not self.lock.acquire(blocking=False):
+            raise RuntimeError('Ya hay un turno en curso')
+        try:
+            with self.store() as store:
+                era_activo = projects.quitar(store, project_id)
+            if era_activo:
+                # El modelo tiene delante la conversación de un proyecto que ya no está puesto.
+                self.proyecto = None
+                if getattr(self, 'grupos', None) is not None:
+                    self.grupos.reset()
+                self.runtime.call({'type': 'reset'})
+                if hasattr(self.runtime, 'active_groups'):
+                    self.runtime.active_groups = None
+        finally:
+            self.lock.release()
+        return dict(removed=project_id, active=getattr(self, 'proyecto', None), folder_kept=True)
+
     def restore_window(self):
         """La ventana guardada, o chat si no hay ninguna."""
         try:

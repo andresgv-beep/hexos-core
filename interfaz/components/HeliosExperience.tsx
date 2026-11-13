@@ -1008,7 +1008,10 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       </button>}
       active={proyecto} busy={projectBusy || sending} error={projectError} onClose={() => setProjectsOpen(false)}
       onSelect={id => void ponerProyecto(() => transport.setProject!(id))}
-      onCreate={(name, folder) => ponerProyecto(() => transport.createProject!(name, folder || undefined))} />}
+      onCreate={(name, folder) => ponerProyecto(() => transport.createProject!(name, folder || undefined))}
+      onRename={transport.renameProject ? (id, name) => ponerProyecto(async () => {
+        await transport.renameProject!(id, name); return proyectoVisto.current ?? null; }) : undefined}
+      onRemove={transport.removeProject ? id => ponerProyecto(() => transport.removeProject!(id)) : undefined} />}
     {tasksOpen && !mobile && <TasksPanel media={mediaJobs} onControl={controlMedia} onClose={() => setTasksOpen(false)} />}
     {systemOpen && !mobile && <div className="vision-system" role="dialog" aria-label="Estado del sistema">
       <button type="button" className="icon-button vision-system-close" aria-label="Cerrar estado del sistema" onClick={() => setSystemOpen(false)}><X size={16} /></button>

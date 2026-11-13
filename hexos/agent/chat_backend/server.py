@@ -134,7 +134,7 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
 
         def do_POST(self):
             if self.path not in ('/api/chat', '/api/work', '/api/context/reset', '/api/window', '/api/credentials', '/api/system',
-                                 '/api/projects', '/api/project',
+                                 '/api/projects', '/api/project', '/api/project/rename', '/api/project/remove',
                                  '/api/thinking', '/api/cancel', '/api/model/warmup', '/api/media/control'):
                 self.respond(404, {'error':'ruta inexistente'})
                 return
@@ -198,6 +198,17 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                     if not isinstance(payload, dict) or not {'name'} <= set(payload) <= {'name', 'folder'}:
                         raise ValueError('se espera {"name": "...", "folder": "/ruta/opcional"}')
                     self.respond(200, agent.create_project(payload['name'], payload.get('folder')))
+                elif self.path == '/api/project/rename':
+                    payload = strict_json(data.decode('utf-8'))
+                    if not isinstance(payload, dict) or set(payload) != {'id', 'name'}:
+                        raise ValueError('se espera {"id": "proyecto", "name": "nombre nuevo"}')
+                    self.respond(200, agent.rename_project(payload['id'], payload['name']))
+                elif self.path == '/api/project/remove':
+                    # Lo saca de la lista; su carpeta y su conversación no se borran.
+                    payload = strict_json(data.decode('utf-8'))
+                    if not isinstance(payload, dict) or set(payload) != {'id'}:
+                        raise ValueError('se espera {"id": "proyecto"}')
+                    self.respond(200, agent.remove_project(payload['id']))
                 elif self.path == '/api/project':
                     payload = strict_json(data.decode('utf-8'))
                     if not isinstance(payload, dict) or set(payload) != {'id'}:

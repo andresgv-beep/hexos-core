@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent, type ReactNode } from "react";
-import { FolderOpen, Plus, X } from "lucide-react";
+import { Check, FolderOpen, Pencil, Plus, Trash2, X } from "lucide-react";
 import type { Project } from "@/lib/helios/hexos";
 import type { InferenceMetrics } from "@/lib/helios/metrics";
 
@@ -32,7 +32,7 @@ function AgentMeter({ metrics, action }: { metrics?: InferenceMetrics; action?: 
 
 /** Los proyectos del Agente. Cada uno tiene su carpeta y su conversación: cambiar de
  *  proyecto es dejar una y seguir en otra, sin que Helios mezcle lo de las dos. */
-export function ProjectsPanel({ projects, active, busy, error, fixed, metrics, controls, meterAction, now, activity, onSelect, onCreate, onClose }: {
+export function ProjectsPanel({ projects, active, busy, error, fixed, metrics, controls, meterAction, now, activity, onSelect, onCreate, onRename, onRemove, onClose }: {
   projects: Project[];
   active: string | null;
   busy: boolean;
@@ -51,11 +51,21 @@ export function ProjectsPanel({ projects, active, busy, error, fixed, metrics, c
   activity?: ReactNode;
   onSelect: (id: string | null) => void;
   onCreate: (name: string, folder: string) => Promise<boolean>;
+  onRename?: (id: string, name: string) => Promise<boolean>;
+  onRemove?: (id: string) => Promise<boolean>;
   onClose?: () => void;
 }) {
   const [name, setName] = useState("");
   const [folder, setFolder] = useState("");
   const [conCarpeta, setConCarpeta] = useState(false);
+  // Un proyecto a la vez en edición o pendiente de confirmar que se quita.
+  const [editando, setEditando] = useState<{ id: string; name: string } | null>(null);
+  const [quitando, setQuitando] = useState<string | null>(null);
+  async function guardarNombre(event: FormEvent) {
+    event.preventDefault();
+    if (!editando || busy || !editando.name.trim() || !onRename) return;
+    if (await onRename(editando.id, editando.name)) setEditando(null);
+  }
   async function crear(event: FormEvent) {
     event.preventDefault();
     if (busy || !name.trim()) return;
@@ -91,9 +101,34 @@ export function ProjectsPanel({ projects, active, busy, error, fixed, metrics, c
         onClick={() => onSelect(null)}>
         <strong>Sin proyecto</strong><span>La conversación general del Agente</span></button></li>
       {projects.map(project => <li key={project.id}>
-        <button type="button" disabled={busy} aria-current={active === project.id ? "true" : undefined}
-          onClick={() => onSelect(project.id)}>
-          <strong>{project.name}</strong><span title={project.folder}>{project.folder}</span></button></li>)}
+        {editando?.id === project.id
+          ? <form className="vision-project-edit" onSubmit={event => void guardarNombre(event)}>
+              <input aria-label="Nombre del proyecto" value={editando.name} maxLength={80} disabled={busy}
+                ref={campo => { if (campo && document.activeElement !== campo) campo.focus(); }}
+                onChange={event => setEditando({ id: project.id, name: event.target.value })}
+                onKeyDown={event => { if (event.key === "Escape") setEditando(null); }} />
+              <button type="submit" className="icon-button" aria-label="Guardar nombre" disabled={busy || !editando.name.trim()}><Check size={15} /></button>
+              <button type="button" className="icon-button" aria-label="Cancelar" onClick={() => setEditando(null)}><X size={15} /></button>
+            </form>
+          : quitando === project.id
+          ? <div className="vision-project-confirm" role="alertdialog" aria-label={`Quitar ${project.name}`}>
+              <p>¿Quitar «{project.name}» de la lista? Su carpeta y lo hablado no se borran.</p>
+              <div>
+                <button type="button" disabled={busy} onClick={() => setQuitando(null)}>No</button>
+                <button type="button" disabled={busy} className="vision-project-danger"
+                  onClick={() => { void onRemove?.(project.id).then(hecho => { if (hecho) setQuitando(null); }); }}>Quitar</button>
+              </div>
+            </div>
+          : <div className="vision-project-row">
+              <button type="button" disabled={busy} aria-current={active === project.id ? "true" : undefined}
+                onClick={() => onSelect(project.id)}>
+                <strong>{project.name}</strong><span title={project.folder}>{project.folder}</span></button>
+              {onRename && <button type="button" className="icon-button" aria-label={`Renombrar ${project.name}`} title="Renombrar"
+                disabled={busy} onClick={() => { setQuitando(null); setEditando({ id: project.id, name: project.name }); }}><Pencil size={14} /></button>}
+              {onRemove && <button type="button" className="icon-button" aria-label={`Quitar ${project.name}`} title="Quitar de la lista"
+                disabled={busy} onClick={() => { setEditando(null); setQuitando(project.id); }}><Trash2 size={14} /></button>}
+            </div>}
+      </li>)}
     </ul>
     {!fixed && <p className="vision-tasks-empty">Cada proyecto tiene su carpeta y su conversación. Al cambiar, Helios deja de tener delante la del otro; no se borra nada.</p>}
     {fixed && activity}

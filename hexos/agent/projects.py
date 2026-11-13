@@ -121,6 +121,35 @@ def poner(store, id):
     return leer(store, id)
 
 
+def renombrar(store, id, nombre):
+    """Cambia el nombre que se ve. La etiqueta y la carpeta no se tocan: son lo que ata el
+    proyecto a su conversación y a su sitio en el disco."""
+    if not isinstance(nombre, str) or not nombre.strip() or len(nombre) > MAX_NOMBRE:
+        raise ValueError('name: nombre del proyecto, hasta %d caracteres' % MAX_NOMBRE)
+    if not isinstance(id, str) or leer(store, id) is None:
+        raise ValueError('proyecto inexistente: ' + repr(id))
+    store.db.execute('UPDATE projects SET name=? WHERE id=?', (' '.join(nombre.split()), id))
+    store.db.commit()
+    return leer(store, id)
+
+
+def quitar(store, id):
+    """Saca el proyecto de la lista. No borra nada del disco ni del archivo.
+
+    La carpeta se queda como está, y su conversación sigue guardada bajo su etiqueta: si
+    más adelante se crea otro con el mismo nombre, vuelve a aparecer. Devuelve si era el
+    que estaba puesto, para que quien llama vacíe el contexto.
+    """
+    if not isinstance(id, str) or leer(store, id) is None:
+        raise ValueError('proyecto inexistente: ' + repr(id))
+    era_activo = (activo(store) or {}).get('id') == id
+    if era_activo:
+        store.db.execute('DELETE FROM agent_state WHERE key=?', (CLAVE,))
+    store.db.execute('DELETE FROM projects WHERE id=?', (id,))
+    store.db.commit()
+    return era_activo
+
+
 # ---------------------------------------------------------------- la ficha (fase 2)
 
 MAX_FICHA = 2400          # caracteres: si crece sin tope, la degradación vuelve por otra puerta

@@ -485,7 +485,9 @@ GROUP_REQUIRES = {'multimedia': ('archivos',)}
 # modelo pequeño.
 GROUP_GUIDANCE = {
     'nucleo': 'Conversar, recordar lo hablado y buscar en la web.',
-    # Medido con el E4B y 31 frases: 29 aciertos. Nombrar «¿tengo instalado X?» tal cual y
+    # Cada cambio aquí se mide con tools/banco_selector.py, que guarda las frases: el 13/11,
+    # 40 de 40 con el E4B y con el 26B (la redacción del 12/11 daba 35 y 39). Nombrar
+    # «¿tengo instalado X?» tal cual y
     # decir que sin otro equipo se habla de este es lo que saca «¿tengo gimp?» del [].
     'sistema': ('Este PC. Cualquier pregunta sobre el ordenador sin nombrar otro: ¿tengo instalado X?, '
                 'programas, aplicaciones y juegos, consumo, lentitud, memoria, gráfica, temperatura, batería, disco, '
@@ -493,7 +495,8 @@ GROUP_GUIDANCE = {
                 'Compiladores y lenguajes de programación: si se puede compilar o programar en algo. '
                 'Instalar o quitar un programa de este PC. La carpeta del proyecto y lo que hay dentro: está en este PC.'),
     'archivos': 'Buscar y leer ficheros y carpetas que están en el NAS.',
-    'equipos': 'Otros ordenadores y el NAS de la casa: listarlos, conectarse a ellos, mirar la red y lo que corre en el NAS.',
+    'equipos': ('Otros ordenadores y el NAS de la casa, cuando se nombran: listarlos, conectarse a ellos, mirar la '
+                'red, y del NAS su salud, el espacio que le queda y lo que corre en él.'),
     'multimedia': 'Convertir o comprimir vídeo y audio, y seguir esos trabajos.',
     'notas': 'Notas de la persona: guardarlas, listarlas, marcarlas y borrarlas.',
     'informes': 'Informes, trabajos, procedimientos y documentos propios.',

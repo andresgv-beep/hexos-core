@@ -98,6 +98,42 @@ class RegistroTest(Base):
             self.agente.set_project('fantasma')
         self.assertEqual(self.agente.projects()['active'], 'uno')
 
+    def test_renombrar_cambia_el_nombre_y_nada_mas(self):
+        creado = self.agente.create_project('Motor')['created']
+        self.agente.chat('compila')
+        r = self.agente.rename_project('motor', '  Motor   CUDA v2 ')['project']
+        self.assertEqual((r['id'], r['name'], r['folder']), ('motor', 'Motor CUDA v2', creado['folder']))
+        self.assertEqual(self.textos(), ['compila'])                       # la conversación sigue siendo la suya
+        for malo in ('', '   ', 'x' * 81, None):
+            with self.subTest(malo=malo), self.assertRaises(ValueError):
+                self.agente.rename_project('motor', malo)
+        with self.assertRaises(ValueError):
+            self.agente.rename_project('fantasma', 'x')
+
+    def test_quitar_lo_saca_de_la_lista_sin_borrar_carpeta_ni_conversacion(self):
+        carpeta = Path(self.agente.create_project('Motor')['created']['folder'])
+        (carpeta / 'main.c').write_text('int main(){}')
+        self.agente.chat('compila el motor')
+        self.runtime.llamadas.clear()
+        r = self.agente.remove_project('motor')
+        self.assertEqual((r['active'], r['folder_kept']), (None, True))
+        self.assertEqual(self.runtime.llamadas, [{'type': 'reset'}])       # era el puesto: se vacía el contexto
+        self.assertEqual(self.agente.projects(), dict(active=None, projects=[]))
+        self.assertEqual((carpeta / 'main.c').read_text(), 'int main(){}')
+        self.assertEqual(self.textos(), [])                                # se vuelve a «sin proyecto»
+        # Lo hablado no se pierde: creando otro con el mismo nombre, vuelve.
+        self.agente.create_project('Motor', str(carpeta))
+        self.assertEqual(self.textos(), ['compila el motor'])
+
+    def test_quitar_uno_que_no_esta_puesto_no_toca_el_contexto(self):
+        self.agente.create_project('uno')
+        self.agente.create_project('dos')
+        self.runtime.llamadas.clear()
+        self.assertEqual(self.agente.remove_project('uno')['active'], 'dos')
+        self.assertEqual(self.runtime.llamadas, [])
+        with self.assertRaises(ValueError):
+            self.agente.remove_project('uno')
+
     def test_la_lista_pone_primero_el_ultimo_usado(self):
         self.agente.create_project('uno')
         self.agente.create_project('dos')
@@ -364,6 +400,10 @@ class ServidorTest(Base):
         self.assertEqual(self.pedir('/api/status')[1]['project'], 'motor-cuda')
         self.assertEqual(self.pedir('/api/project', dict(id=None))[1]['active'], None)
         self.assertIsNone(self.pedir('/api/status')[1]['project'])
+        self.assertEqual(self.pedir('/api/project/rename', dict(id='peliculas', name='Cine'))[1]['project']['name'], 'Cine')
+        self.assertEqual(self.pedir('/api/project/remove', dict(id='peliculas'))[1]['removed'], 'peliculas')
+        self.assertEqual([p['id'] for p in self.pedir('/api/projects')[1]['projects']], ['motor-cuda'])
+        self.assertGreaterEqual(self.pedir('/api/project/remove', dict(id='peliculas'))[0], 400)
 
     def test_lo_mal_pedido_se_rechaza_sin_crear_nada(self):
         for ruta, cuerpo in (('/api/projects', dict(nombre='x')), ('/api/projects', dict(name='x', otra=1)),

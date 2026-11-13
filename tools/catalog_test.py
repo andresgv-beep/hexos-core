@@ -28,10 +28,24 @@ class DeclarablesTest(unittest.TestCase):
 
     def test_el_contrato_nativo_cabe_sin_duplicar_el_manual(self):
         from hexos.agent.native import POLICY
-        descriptions = [catalog.model_description(name) for name in catalog.model_tools()]
         self.assertLess(len(POLICY), 2000)
-        self.assertLess(sum(map(len, descriptions)), 7000)
         self.assertNotIn('profile.remember', catalog.model_tools())
+
+    def test_lo_que_el_modelo_ve_a_la_vez_tiene_tope(self):
+        # El tope de 7.000 caracteres de descripciones se puso cuando el catálogo entero se
+        # declaraba en cada turno. Desde que se reparte por ventanas y grupos nadie lo ve
+        # entero, y la prueba llevaba semanas en rojo sumando lo que ya no se suma. Se mide
+        # donde aplica: lo más que puede ver el modelo de una vez.
+        pesa = lambda nombres: sum(len(catalog.model_description(n)) for n in nombres)
+        for ventana in catalog.WINDOWS:
+            grupos = list(catalog.groups_in(ventana))
+            # El peor caso: el selector no contesta y se ofrece todo lo de la ventana.
+            with self.subTest(ventana=ventana, caso='todos sus grupos'):
+                self.assertLess(pesa(catalog.tools_for(grupos, ventana)), 7000)
+            # El caso normal: el núcleo y un grupo, con los que arrastre.
+            for grupo in grupos:
+                with self.subTest(ventana=ventana, grupo=grupo):
+                    self.assertLess(pesa(catalog.tools_for([grupo], ventana)), 4500)
 
     def test_detalles_operativos_viven_en_la_herramienta(self):
         from hexos.agent.native import POLICY

@@ -20,6 +20,14 @@ class InterpretarTest(unittest.TestCase):
         """Conversar sin herramientas es legítimo: [] no es lo mismo que no saber."""
         self.assertEqual(tool_groups.interpretar('[]'), [])
 
+    def test_sin_comillas_tambien_se_entiende_y_se_valida_igual(self):
+        # El E4B contesta a veces `[sistema]`: correcto, pero no es JSON y se tiraba.
+        self.assertEqual(tool_groups.interpretar('[sistema]'), ['sistema'])
+        self.assertEqual(tool_groups.interpretar('[ sistema , archivos ]'), ['sistema', 'archivos'])
+        self.assertIsNone(tool_groups.interpretar('[inventado]'))
+        self.assertIsNone(tool_groups.interpretar('[sistema] y algo más'))
+        self.assertIsNone(tool_groups.interpretar('[archivos]', 'chat'))
+
     def test_lo_que_no_se_entiende_devuelve_none(self):
         for raw in ('no sé', '', None, '{"grupo": "archivos"}', '["archivos"', 42):
             self.assertIsNone(tool_groups.interpretar(raw), raw)

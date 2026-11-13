@@ -705,3 +705,20 @@ button.vision-horizon-state:focus-visible { outline: 2px solid var(--v-gold); ou
 .vision-agent-change time { font: 11px var(--v-mono); color: var(--v-muted); }
 .vision-agent-change p { margin: 0; color: var(--v-text); }
 .vision-agent-change[data-kind="decision"] p { color: var(--v-gold-soft); }
+/* Renombrar y quitar: dos iconos discretos junto a cada proyecto, que no compiten con el nombre. */
+.vision-project-row { display: flex; align-items: stretch; gap: 2px; }
+.vision-project-row > button:first-child { flex: 1; min-width: 0; }
+.vision-project-row > .icon-button { width: 26px; flex-shrink: 0; opacity: .45; }
+.vision-project-row:hover > .icon-button, .vision-project-row > .icon-button:focus-visible { opacity: 1; }
+.vision-project-edit { display: flex; gap: 4px; align-items: center; }
+.vision-project-edit input {
+  flex: 1; min-width: 0; height: 36px; padding: 0 10px; font: 600 14px var(--v-font); color: var(--v-text);
+  border: 1px solid var(--v-gold); border-radius: 9px; background: rgba(0, 0, 0, 0.22);
+}
+.vision-project-confirm { padding: 10px 12px; border: 1px solid var(--v-rim); border-radius: 10px; display: grid; gap: 8px; }
+.vision-project-confirm p { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--v-text); }
+.vision-project-confirm > div { display: flex; justify-content: flex-end; gap: 8px; }
+.vision-project-list .vision-project-confirm button {
+  width: auto; display: inline-block; padding: 5px 12px; font: 600 12px var(--v-font); text-align: center;
+}
+.vision-project-list .vision-project-confirm .vision-project-danger { border-color: var(--hud-pink); color: var(--hud-pink); }

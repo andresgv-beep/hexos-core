@@ -145,6 +145,10 @@ export interface HeliosTransport {
   createProject?(name: string, folder?: string, signal?: AbortSignal): Promise<string>;
   /** Cambia de proyecto; null vuelve al Agente sin proyecto. Devuelve el que queda puesto. */
   setProject?(id: string | null, signal?: AbortSignal): Promise<string | null>;
+  /** Cambia el nombre que se ve; la carpeta y la conversación siguen siendo las mismas. */
+  renameProject?(id: string, name: string, signal?: AbortSignal): Promise<void>;
+  /** Lo saca de la lista sin borrar su carpeta ni su conversación. Devuelve el que queda puesto. */
+  removeProject?(id: string, signal?: AbortSignal): Promise<string | null>;
   /** Avisa a HexOS al empezar a escribir. Inicia la carga, pero no bloquea la UI. */
   warmup(signal?: AbortSignal): Promise<"unloaded" | "loading" | "ready" | "unloading" | "error" | "closed">;
   history(signal?: AbortSignal): Promise<HistoryMessage[]>;
@@ -289,6 +293,18 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
         throw new Error("HexOS no confirmó el cambio de proyecto");
       }
       return data.active;
+    },
+    async renameProject(id, name, signal) {
+      if (!name.trim()) throw new Error("Ponle un nombre al proyecto");
+      const data = await request("project/rename", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, name }), signal });
+      if (!isRecord(data) || !isRecord(data.project)) throw new Error("HexOS no confirmó el nombre nuevo");
+    },
+    async removeProject(id, signal) {
+      const data = await request("project/remove", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }), signal });
+      if (!isRecord(data) || data.removed !== id) throw new Error("HexOS no confirmó que lo quitara");
+      return typeof data.active === "string" ? data.active : null;
     },
     async clearContext(signal) {
       const data = await request("context/reset", { method: "POST",
