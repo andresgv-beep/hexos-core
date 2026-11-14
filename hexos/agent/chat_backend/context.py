@@ -296,6 +296,13 @@ class ContextManager:
         pegajosos.pedir(elegidos)
         runtime.active_groups = [g for g in pegajosos.activos()
                                  if g in catalog.groups_in(ventana)]
+        # Con un proyecto puesto sus herramientas van siempre declaradas, las pida el selector o
+        # no. El 15/11, tras un reinicio, a «sigue mal el orden de teclas» no pidió el grupo: sin
+        # project_write a mano, el 26B soltó el fichero entero en el chat (80 s) y no hubo tarjeta.
+        # No cuenta como pedido: una charla dentro del proyecto no tiene por qué llamar a nada.
+        if (ventana == 'agente' and getattr(self.agent, 'proyecto', None)
+                and 'proyecto' in catalog.groups_in(ventana) and 'proyecto' not in runtime.active_groups):
+            runtime.active_groups = runtime.active_groups + ['proyecto']
 
     def prepare(self, store, turn: TurnState) -> None:
         """Guarda la entrada y construye exactamente el contexto del flujo original."""
@@ -404,6 +411,12 @@ class ContextManager:
                                 '\n'.join(decididas[-4:]) + '\n')
             decididas.clear()
             turn.decidido_en_tarjeta = True
+        if getattr(self.agent, 'ventana', None) == 'agente' and getattr(self.agent, 'proyecto', None):
+            # En cada turno, corto: la ficha solo va al reconstruir el contexto y, con una imagen
+            # delante o tras muchas vueltas, el modelo volvía a entregar el código en el chat.
+            bloque_recuerdo += ('\nEN ESTE PROYECTO (dato de HexOS): los ficheros se crean o cambian con '
+                                'project_write, que le abre la tarjeta a la persona, y se comprueban con project_run. '
+                                'No entregues el código en el chat: ahí no se escribe nada.\n')
         bloque_recuerdo += system_packages.bloque_pendiente(getattr(self.agent, 'system_request', None))
         bloque_recuerdo += project_files.bloque_pendiente(getattr(self.agent, 'project_request', None))
         # Lo que acabó en segundo plano se cuenta en el primer turno que llegue,

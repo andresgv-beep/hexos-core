@@ -236,6 +236,19 @@ class SinFicheroTest(unittest.TestCase):
         self.assertIn('no hay fichero ni tarjeta', turn.messages[0]['content'])
         self.assertFalse(otra())
 
+    def test_el_fichero_entregado_en_el_chat_se_devuelve_para_que_lo_proponga(self):
+        fichero = 'Lo he rediseñado desde cero.\n```python\n' + 'boton = 1\n' * 40 + '```\nDime qué tal.'
+        turn, devuelto, otra = self.cerrar(fichero, traza=self.LEIDO)
+        self.assertTrue(devuelto)
+        self.assertIn('project_write', turn.messages[0]['content'])
+        self.assertFalse(otra())
+        propuesto = (dict(tool='project.write', result=dict(status='pending_approval')),)
+        trozo = 'La función es esta:\n```python\n' + 'x = 1\n' * 8 + '```'
+        for respuesta, traza, proyecto in ((fichero, propuesto, 'motor'), (trozo, self.LEIDO, 'motor'),
+                                           (fichero, self.LEIDO, None)):
+            with self.subTest(proyecto=proyecto, largo=len(respuesta), traza=len(traza)):
+                self.assertFalse(self.cerrar(respuesta, traza=traza, proyecto=proyecto)[1])
+
     def test_no_salta_si_lo_propuso_si_ya_se_decidio_o_si_no_lo_afirma(self):
         propuesto = (dict(tool='project.write', result=dict(status='pending_approval')),)
         for argumentos in (dict(respuesta='He creado la propuesta del cambio.', traza=propuesto),

@@ -103,6 +103,15 @@ SIN_FICHERO = ('AVISO DE HEXOS (no es la persona): la respuesta anterior dice ha
                'pero en este turno no se ha propuesto ningún cambio: no hay fichero ni tarjeta. Si la persona '
                'lo pidió, llama ahora a project_write con el cambio; solo se escribe cuando lo apruebe en la '
                'tarjeta. Si no, contesta de nuevo sin decir que lo has hecho. No menciones este aviso.')
+# Estructura, no frases: dentro de un proyecto, un bloque de código largo en la respuesta y
+# ninguna propuesta en el turno es un fichero entregado donde no se escribe. El 15/11 el 26B
+# lo hizo dos veces seguidas (6.000 y 7.000 tokens) y Andrés tuvo que decir «no ha saltado la
+# tarjeta» las dos. Un trozo corto para explicar algo no cuenta.
+FICHERO_EN_EL_CHAT = re.compile(r'^```[^\n]*\n(?:[^\n]*\n){25,}?```', re.M)
+SIN_PROPUESTA = ('AVISO DE HEXOS (no es la persona): has entregado el código en el chat, y ahí no se escribe '
+                 'nada: la persona no tiene tarjeta que aprobar. Llama ahora a project_write con ese mismo '
+                 'contenido (path y content con el fichero entero) y después contesta en dos frases qué has '
+                 'cambiado, sin repetir el código. No menciones este aviso.')
 SIN_LLAMADA = ('AVISO DE HEXOS (no es la persona): la respuesta anterior no consultó nada. Si la '
                'petición se contesta mirando algo de este PC o de los equipos, haz ahora esa lectura y '
                'contesta con lo que salga. Si era conversación y no había nada que mirar, repite tu '
@@ -259,6 +268,16 @@ class RecoveryController:
                 activos = list(getattr(self.agent.runtime, 'active_groups', None) or [])
                 self.agent.runtime.active_groups = activos if 'proyecto' in activos else activos + ['proyecto']
             turn.messages = [dict(role='user', content=SIN_FICHERO)]
+            return True
+        if (not turn.retries.fichero_devuelto and getattr(self.agent, 'ventana', None) == 'agente'
+                and getattr(self.agent, 'proyecto', None)
+                and FICHERO_EN_EL_CHAT.search(output.get('reply') or '')
+                and not any(paso.get('tool') == 'project.write' for paso in turn.trace)):
+            turn.retries.fichero_devuelto = True
+            if hasattr(self.agent.runtime, 'active_groups'):
+                activos = list(getattr(self.agent.runtime, 'active_groups', None) or [])
+                self.agent.runtime.active_groups = activos if 'proyecto' in activos else activos + ['proyecto']
+            turn.messages = [dict(role='user', content=SIN_PROPUESTA)]
             return True
         # La persona ordenó apuntar algo, el selector declaró las notas y el turno acaba
         # sin guardar nada. Aquí no se mira la respuesta sino la orden, que es suya, y la

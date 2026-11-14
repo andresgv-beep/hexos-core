@@ -118,6 +118,23 @@ class EnvoltorioDeServicioTest(unittest.TestCase):
             self.assertTrue(elegir.called)
             self.assertEqual(self.motor.active_groups, ['sistema'])
 
+    def test_con_un_proyecto_puesto_sus_herramientas_van_siempre(self):
+        # Tras un reinicio el selector no pidió el grupo para «sigue mal el orden de teclas» y el
+        # modelo, sin project_write a mano, soltó el fichero en el chat.
+        with tempfile.TemporaryDirectory(prefix='hexos-ventana-') as tmp, \
+                mock.patch.dict('os.environ', {'HEXOS_PROJECTS_HOME': tmp + '/proyectos'}), \
+                mock.patch('pathlib.Path.home', return_value=__import__('pathlib').Path(tmp)):
+            agente = Agent(tmp + '/hexos', self.envoltorio)
+            agente.set_window('agente')
+            agente.create_project('Calculadora')
+            with mock.patch.object(tool_groups, 'elegir', return_value=[]):
+                agente.chat('sigue mal el orden de teclas')
+            self.assertEqual(self.motor.active_groups, ['proyecto'])
+            agente.set_project(None)
+            with mock.patch.object(tool_groups, 'elegir', return_value=[]):
+                agente.chat('hola')
+            self.assertNotIn('proyecto', self.motor.active_groups or [])
+
 
 if __name__ == '__main__':
     unittest.main()
