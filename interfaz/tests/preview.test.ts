@@ -93,3 +93,13 @@ test("la marca de cascada se reconoce y nunca se pinta", async () => {
   const bloques = parseReply("[[matrix]]\nHola, Andrés.");
   assert.equal(JSON.stringify(bloques).includes("matrix"), false);
 });
+
+test("la cascada no se encadena: tras una, hay que esperar o pedirla", async () => {
+  const { matrixAllowed } = await import("../lib/helios/matrixEffect");
+  assert.equal(matrixAllowed(101, "socio tienes nueva habilidad"), true);
+  assert.equal(matrixAllowed(102, "qué más te gustaría"), false);
+  assert.equal(matrixAllowed(102, "qué más te gustaría"), false);     // la decisión no cambia al repintar
+  assert.equal(matrixAllowed(103, "dime algo en modo Matrix"), true);
+  assert.equal(matrixAllowed(104, "jeje"), false);
+  assert.equal(matrixAllowed(109, "buenas noches"), true);
+});

@@ -6,6 +6,21 @@ const GLIFOS = "ｦｱｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅ�
 const CELDA = 14;
 const glifo = () => GLIFOS[Math.floor(Math.random() * GLIFOS.length)];
 
+// El 26B, en cuanto la usó una vez, puso la marca en 7 de 9 respuestas: se veía a sí mismo
+// usándola y la repetía. El efecto es un golpe, no un estilo: se concede si la persona lo
+// nombra en ese mensaje o si han pasado ESPERA turnos desde la última cascada.
+const ESPERA = 6;
+const concedido = new Map<number, boolean>();
+let ultima = -Infinity;
+export function matrixAllowed(turnId: number, userText: string): boolean {
+  const ya = concedido.get(turnId);
+  if (ya !== undefined) return ya;
+  const vale = /matrix/i.test(userText) || turnId - ultima >= ESPERA;
+  if (vale) ultima = turnId;
+  concedido.set(turnId, vale);
+  return vale;
+}
+
 export function runMatrix(box: HTMLElement, canvas: HTMLCanvasElement, live: boolean, onDone: () => void): () => void {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       box.classList.add("matrix-done");
