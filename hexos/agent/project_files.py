@@ -411,6 +411,9 @@ def proponer(store, path, content=None, old=None, new=None, pendiente=None):
     propuestos = {c['path']: c for c in (pendiente or {}).get('changes', ())
                   if pendiente['project'] == proyecto['id']}
     entero, trozo = content is not None, old is not None or new is not None
+    if entero and trozo and new == content:
+        # El fichero entero por duplicado, en content y en new: se entiende, es el fichero entero.
+        trozo, old, new = False, None, None
     if entero == trozo:
         raise ValueError('Usa content con el fichero entero, o bien old y new para cambiar un trozo; no las dos cosas.')
     if trozo:
@@ -471,23 +474,20 @@ def proponer(store, path, content=None, old=None, new=None, pendiente=None):
     mas = sum(1 for l in diff if l.startswith('+'))
     menos = sum(1 for l in diff if l.startswith('-'))
     nuevo = crudo is None
+    # Mandar entero un fichero que ya existe para un cambio parcial se acepta, y se le dice.
+    # Rechazarlo, como se hizo unas horas el 15/11, fue peor: el 26B reenvió el fichero entero
+    # seis veces (medio minuto cada una), no cambió de forma y acabó diciendo que estaba
+    # arreglado. El diff de la tarjeta ya enseña solo las líneas que cambian.
     viejas, nuevas = len(antes.splitlines()), len(despues.splitlines())
-    if entero and not nuevo and viejas >= MIN_LINEAS_PARCIAL and mas + menos < PARTE_REESCRITA * (viejas + nuevas):
-        # El 14 y el 15/11 el 26B mandó main.py entero cinco veces para cambios de 20 o 40
-        # líneas: cada vuelta eran 5.000 tokens escritos de memoria, y de paso se le descolocaba
-        # lo que no había que tocar.
-        raise ValueError('Has mandado %s entero (%d líneas) para cambiar %d: un fichero que ya existe no se '
-                         'reescribe por un cambio parcial. Cambia solo lo que toca con old (el trozo exacto que hay '
-                         'ahora, copiado de project_read) y new (el que lo sustituye); puedes llamarla varias veces '
-                         'sobre el mismo fichero y se juntan en la tarjeta. content es para ficheros nuevos o para '
-                         'rehacer uno de arriba abajo.' % (relativa, nuevas, mas + menos))
+    entero_parcial = (entero and not nuevo and viejas >= MIN_LINEAS_PARCIAL
+                      and mas + menos < PARTE_REESCRITA * (viejas + nuevas))
     resumen = (('crear %s (%d líneas)' % (relativa, len(despues.splitlines()))) if nuevo else
                'cambiar %s (+%d −%d)' % (relativa, mas, menos))
     return dict(project=proyecto['id'], project_name=proyecto['name'],
                 path=str(relativa), kind='create' if nuevo else 'edit' if trozo else 'replace', summary=resumen,
                 added=mas, removed=menos, lines=len(despues.splitlines()),
                 diff=[l[:MAX_LINEA] for l in diff[:MAX_DIFF_LINEAS]], diff_lines=len(diff),
-                content=despues, base=None if nuevo else _huella(crudo))
+                content=despues, base=None if nuevo else _huella(crudo), whole_file_for_partial=entero_parcial)
 
 
 MAX_CAMBIOS_TARJETA = 30             # ficheros en una sola tarjeta
@@ -511,7 +511,7 @@ def tarjeta_con(pendiente, cambio):
     if len(cambios) >= MAX_CAMBIOS_TARJETA:
         raise ValueError('Ya hay %d ficheros esperando en la tarjeta: la persona tiene que decidirlos antes de '
                          'proponer más.' % len(cambios))
-    cambios.append({k: v for k, v in cambio.items() if k not in ('project', 'project_name')})
+    cambios.append({k: v for k, v in cambio.items() if k not in ('project', 'project_name', 'whole_file_for_partial')})
     mas, menos = sum(c['added'] for c in cambios), sum(c['removed'] for c in cambios)
     if len(cambios) == 1:
         resumen = cambios[0]['summary']

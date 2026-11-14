@@ -220,13 +220,16 @@ class ToolDispatcher:
                                             pendiente=pendiente)
             if not project_files.esta_propuesto(pendiente, cambio):
                 self.session.project_request = pendiente = project_files.tarjeta_con(pendiente, cambio)
+            nota = ('Pendiente: NO se ha escrito nada. A la persona le aparece una tarjeta en la pantalla '
+                    'con todos los ficheros propuestos y las líneas que cambian; los aprueba o cancela '
+                    'juntos ahí, no en el chat. Si el encargo tiene más ficheros, proponlos ahora en este '
+                    'mismo turno. Al acabar dile en una frase qué has propuesto y que lo apruebe en la '
+                    'tarjeta. Cuando lo haga te llegará una nota «La persona aprobó en la interfaz…».')
+            if cambio.get('whole_file_for_partial'):
+                nota += (' Para la próxima: has mandado el fichero entero para cambiar %d líneas; con old y new '
+                         'solo mandas el trozo que cambia.' % (cambio['added'] + cambio['removed']))
             return dict(path=cambio['path'], kind=cambio['kind'], added=cambio['added'], removed=cambio['removed'],
-                        status='pending_approval', pending_files=[c['path'] for c in pendiente['changes']],
-                        note='Pendiente: NO se ha escrito nada. A la persona le aparece una tarjeta en la pantalla '
-                             'con todos los ficheros propuestos y las líneas que cambian; los aprueba o cancela '
-                             'juntos ahí, no en el chat. Si el encargo tiene más ficheros, proponlos ahora en este '
-                             'mismo turno. Al acabar dile en una frase qué has propuesto y que lo apruebe en la '
-                             'tarjeta. Cuando lo haga te llegará una nota «La persona aprobó en la interfaz…».')
+                        status='pending_approval', pending_files=[c['path'] for c in pendiente['changes']], note=nota)
         if name.startswith('project.'):
             return project_files.dispatch(store, name, args)
         if name == 'system.package_plan':

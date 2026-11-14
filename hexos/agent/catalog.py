@@ -305,8 +305,7 @@ TOOLS = {
                           'de la carpeta. Un fichero que ya existe se cambia por trozos: old es el trozo exacto que '
                           'hay (copiado de project_read, sin los números de línea, y que aparezca una sola vez) y new '
                           'el que lo sustituye; varias llamadas sobre el mismo fichero se suman. content, con el '
-                          'fichero entero, es para crearlo o rehacerlo de arriba abajo: un cambio parcial mandado así '
-                          'se rechaza. NO escribe nada: deja el cambio pendiente y a la '
+                          'fichero entero, es para crearlo o rehacerlo de arriba abajo. NO escribe nada: deja el cambio pendiente y a la '
                           'persona le aparece una tarjeta con las líneas que cambian; solo su aprobación lo escribe. '
                           'Varios ficheros se proponen con una llamada cada uno y se aprueban juntos. No borra ficheros ni escribe claves, .git, node_modules o build. Tras '
                           'llamarla dile que lo apruebe en la tarjeta; nunca digas que ya está escrito.',

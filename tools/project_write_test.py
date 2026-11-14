@@ -41,6 +41,7 @@ class ProponerTest(Escribir):
 
     def test_un_trozo_que_no_esta_o_esta_repetido_se_dice(self):
         self.escribir('src/doble.cu', 'a();\na();\n')
+        self.assertEqual(self.proponer(path='src/main.cu', content='int main() {}', old='lo de antes', new='int main() {}')['kind'], 'replace')
         for argumentos, dice in ((dict(path='src/main.cu', old='return 7;', new='x'), 'no aparece tal cual'),
                                  (dict(path='src/doble.cu', old='a();', new='b();'), 'aparece 2 veces'),
                                  (dict(path='src/main.cu', old='x', new='x'), 'iguales'),
@@ -227,16 +228,16 @@ class DespachoTest(Escribir):
         self.agente.decide_project_change(dict(plan_id=self.agente.project_request['plan_id'], approve=True))
         self.assertEqual(self.leer('app.py'), 'def suma(a, b):\n    return a + b\n')
 
-    def test_un_cambio_parcial_no_se_manda_reescribiendo_el_fichero(self):
+    def test_un_cambio_parcial_mandado_entero_se_acepta_y_se_le_dice(self):
+        # Rechazarlo dejó al 26B reenviando el fichero entero seis veces sin cambiar de forma.
         lineas = ['linea %d' % i for i in range(1, 121)]
         self.escribir('largo.py', '\n'.join(lineas) + '\n')
         tocado = list(lineas); tocado[10] = 'cambiada'; tocado[50] = 'otra'
-        with self.assertRaisesRegex(ValueError, 'no se\s+reescribe por un cambio parcial'):
-            self.pedir(path='largo.py', content='\n'.join(tocado))
-        self.assertIsNone(self.agente.project_request)
-        # Rehacerlo de arriba abajo sí, y un fichero corto también.
-        self.assertEqual(self.pedir(path='largo.py', content='\n'.join('nueva %d' % i for i in range(90)))['status'], 'pending_approval')
-        self.assertEqual(self.pedir(path='README.md', content='# Motor\nOtra cosa.\n')['status'], 'pending_approval')
+        r = self.pedir(path='largo.py', content='\n'.join(tocado))
+        self.assertEqual((r['status'], r['added'], r['removed']), ('pending_approval', 2, 2))
+        self.assertIn('con old y new', r['note'])
+        self.assertNotIn('whole_file_for_partial', self.agente.project_request['changes'][0])
+        self.assertNotIn('con old y new', self.pedir(path='nuevo.py', content='x = 1\n')['note'])
 
     def test_si_un_fichero_no_cuadra_no_se_escribe_ninguno(self):
         self.pedir(path='uno.txt', content='1')
