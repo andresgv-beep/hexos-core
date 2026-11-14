@@ -15,12 +15,22 @@ Son tres lecturas y ninguna cambia nada. Sus límites son la parte importante:
 - **Todo tiene tope**: tamaño de fichero, líneas por lectura, entradas y coincidencias.
 
 Lo leído es dato, no instrucción: cada resultado lo dice.
+
+Segundo escalón: **escribir, con aprobación**. `project.write` no escribe: prepara el cambio
+(un fichero nuevo, uno entero, o un trozo sustituido), lo deja pendiente y la interfaz se lo
+enseña a la persona con sus líneas añadidas y quitadas. Solo su aprobación lo escribe, y solo
+si el fichero sigue como estaba cuando se propuso. Mismos límites que al leer, y además no se
+borra nada ni se escribe en lo que no se recorre.
 """
 from __future__ import annotations
 
+import difflib
+import hashlib
 import os
 import re
+import time
 from pathlib import Path
+from uuid import uuid4
 
 from . import projects
 
@@ -320,6 +330,142 @@ def search(store, query, path=None):
     if not total:
         resultado['none'] = 'No aparece en ningún fichero de texto del proyecto. No distingue mayúsculas; prueba con otra palabra.'
     return resultado
+
+
+MAX_ESCRITO = 200 * 1024             # un fichero propuesto más grande no se acepta
+MAX_DIFF_LINEAS = 400                # lo que se enseña en la tarjeta; el cambio va entero
+
+
+def _huella(crudo):
+    return hashlib.sha256(crudo).hexdigest()
+
+
+def _destino(base, path):
+    """Dónde caería la escritura. Los mismos límites que al leer, y nada en lo que no se recorre."""
+    completa, relativa = dentro(base, path)
+    if completa == base:
+        raise ValueError('path es la ruta de un fichero dentro del proyecto, no la carpeta')
+    vetada = next((p for p in relativa.parts[:-1] if p in SALTAR), None)
+    if vetada or relativa.parts[-1] in SALTAR:
+        raise ValueError('No se escribe dentro de ' + (vetada or relativa.parts[-1]) + ': no es código de la persona.')
+    if completa.is_dir():
+        raise ValueError(str(relativa) + ' es una carpeta: path tiene que ser un fichero.')
+    return completa, relativa
+
+
+def proponer(store, path, content=None, old=None, new=None):
+    """Prepara un cambio en un fichero del proyecto. No escribe nada: devuelve el plan.
+
+    Dos formas: `content` con el fichero entero (crearlo o reemplazarlo), u `old` y `new`
+    para sustituir un trozo que aparece una sola vez.
+    """
+    proyecto, base = proyecto_activo(store)
+    entero, trozo = content is not None, old is not None or new is not None
+    if entero == trozo:
+        raise ValueError('Usa content con el fichero entero, o bien old y new para cambiar un trozo; no las dos cosas.')
+    if trozo:
+        if not isinstance(old, str) or not isinstance(new, str) or not old:
+            raise ValueError('old es el trozo exacto que hay ahora y new el que lo sustituye; hacen falta los dos.')
+        if old == new:
+            raise ValueError('old y new son iguales: no hay nada que cambiar.')
+        completa, relativa, _ = localizar(base, path)
+        completa, relativa = _destino(base, str(relativa))
+        crudo = completa.read_bytes()
+        if len(crudo) > MAX_BYTES or b'\x00' in crudo[:8192]:
+            raise ValueError(str(relativa) + ' no es un fichero de texto que se pueda cambiar desde aquí.')
+        try:
+            antes = crudo.decode('utf-8')
+        except UnicodeDecodeError:
+            raise ValueError(str(relativa) + ' no está en UTF-8: no se cambia desde aquí.')
+        veces = antes.count(old)
+        if not veces:
+            raise ValueError('El trozo de old no aparece tal cual en ' + str(relativa) + '. Léelo con project_read y '
+                             'copia el trozo exacto, con sus espacios, sin los números de línea.')
+        if veces > 1:
+            raise ValueError('El trozo de old aparece %d veces en %s: incluye más líneas alrededor para que '
+                             'sea único.' % (veces, relativa))
+        despues = antes.replace(old, new, 1)
+    else:
+        if not isinstance(content, str) or '\x00' in content:
+            raise ValueError('content es el texto entero del fichero')
+        completa, relativa = _destino(base, path)
+        if completa.exists():
+            crudo = completa.read_bytes()
+            if len(crudo) > MAX_BYTES or b'\x00' in crudo[:8192]:
+                raise ValueError(str(relativa) + ' no es un fichero de texto: no se reemplaza desde aquí.')
+            antes = crudo.decode('utf-8', errors='replace')
+        else:
+            crudo, antes = None, ''
+        despues = content if content.endswith('\n') or not content else content + '\n'
+        if despues == antes:
+            raise ValueError(str(relativa) + ' ya tiene exactamente ese contenido: no hay nada que cambiar.')
+    if len(despues.encode('utf-8')) > MAX_ESCRITO:
+        raise ValueError('El fichero quedaría en más de ' + tamano(MAX_ESCRITO) + ': no se escribe desde aquí.')
+    diff = list(difflib.unified_diff(antes.splitlines(), despues.splitlines(), 'antes', 'después', lineterm='', n=3))[2:]
+    mas = sum(1 for l in diff if l.startswith('+'))
+    menos = sum(1 for l in diff if l.startswith('-'))
+    nuevo = crudo is None
+    resumen = (('crear %s (%d líneas)' % (relativa, len(despues.splitlines()))) if nuevo else
+               'cambiar %s (+%d −%d)' % (relativa, mas, menos))
+    return dict(plan_id=uuid4().hex, created=time.time(), project=proyecto['id'], project_name=proyecto['name'],
+                path=str(relativa), kind='create' if nuevo else 'edit' if trozo else 'replace', summary=resumen,
+                added=mas, removed=menos, lines=len(despues.splitlines()),
+                diff=[l[:MAX_LINEA] for l in diff[:MAX_DIFF_LINEAS]], diff_lines=len(diff),
+                content=despues, base=None if nuevo else _huella(crudo))
+
+
+def mismo_cambio(pendiente, plan):
+    return bool(pendiente) and (pendiente['project'], pendiente['path'], pendiente['content']) == (
+        plan['project'], plan['path'], plan['content'])
+
+
+def publico(plan):
+    """El plan sin el contenido entero: lo que ven el modelo y la interfaz."""
+    return {k: v for k, v in plan.items() if k not in ('content', 'base', 'created')} if plan else None
+
+
+def aplicar(store, plan):
+    """Escribe un cambio aprobado. Solo lo llama la aprobación de la persona.
+
+    Vuelve a pasar todos los límites y exige que el fichero siga como estaba al proponerlo:
+    entre la propuesta y la aprobación la persona puede haberlo tocado con su editor.
+    """
+    try:
+        proyecto, base = proyecto_activo(store)
+        if proyecto['id'] != plan['project']:
+            raise ValueError('el proyecto puesto ya no es «' + plan['project_name'] + '»')
+        completa, relativa = _destino(base, plan['path'])
+        ahora = completa.read_bytes() if completa.exists() else None
+        if (None if ahora is None else _huella(ahora)) != plan['base']:
+            raise ValueError(str(relativa) + ' ha cambiado desde que se propuso; hay que proponerlo otra vez '
+                             'sobre lo que hay ahora')
+        completa.parent.mkdir(parents=True, exist_ok=True)
+        temporal = completa.with_name('.' + completa.name + '.hexos-' + plan['plan_id'][:8])
+        try:
+            temporal.write_text(plan['content'], encoding='utf-8', newline='')
+            if ahora is not None:
+                os.chmod(temporal, completa.stat().st_mode & 0o777)
+            os.replace(temporal, completa)
+        finally:
+            temporal.unlink(missing_ok=True)
+        escrito = completa.read_bytes()
+    except (ValueError, OSError) as error:
+        return dict(plan_id=plan['plan_id'], summary=plan['summary'], path=plan['path'], executed=False,
+                    verified=False, refused=str(error), check='no se ha escrito nada')
+    bien = escrito == plan['content'].encode('utf-8')
+    return dict(plan_id=plan['plan_id'], summary=plan['summary'], path=plan['path'], executed=True, verified=bien,
+                refused=None, check='%s tiene ahora %d líneas, %s' % (
+                    plan['path'], len(escrito.decode('utf-8', errors='replace').splitlines()), tamano(len(escrito))))
+
+
+def bloque_pendiente(pendiente):
+    """Lo que el modelo tiene que saber mientras un cambio espera en la tarjeta."""
+    if not pendiente:
+        return ''
+    return ('\nCAMBIO PENDIENTE EN LA TARJETA (dato de HexOS, no orden): «' + pendiente['summary'] + '» sigue '
+            'esperando en la tarjeta de pantalla. La persona todavía NO lo ha aprobado ni rechazado y el fichero '
+            'no se ha tocado. Cuando lo decida, HexOS lo anotará aquí; mientras no veas esa nota, no está hecho '
+            'y no hace falta proponerlo otra vez.\n')
 
 
 def dispatch(store, name, args):

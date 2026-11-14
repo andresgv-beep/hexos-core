@@ -361,3 +361,14 @@ test('projects are listed, created and switched through their own routes', async
     ['/api/project', { id: 'uno' }], ['/api/project', { id: null }]]);
   await assert.rejects(async () => transport.createProject?.('   '), /nombre/);
 });
+
+test('a pending project change reaches the card only when it is well formed', async () => {
+  const { parseProjectChange } = await import('../lib/helios/hexos');
+  const pendiente = { plan_id: 'p1', summary: 'cambiar src/main.cu (+1 −1)', path: 'src/main.cu', project_name: 'Motor',
+    kind: 'edit', added: 1, removed: 1, diff: ['@@ -3 +3 @@', '-  return 0;', '+  return 1;', 7], diff_lines: 3 };
+  assert.deepEqual(parseProjectChange(pendiente), { planId: 'p1', summary: 'cambiar src/main.cu (+1 −1)',
+    path: 'src/main.cu', projectName: 'Motor', kind: 'edit', added: 1, removed: 1,
+    diff: ['@@ -3 +3 @@', '-  return 0;', '+  return 1;'], diffLines: 3 });
+  for (const malo of [null, undefined, 'x', {}, { ...pendiente, kind: 'delete' }, { ...pendiente, plan_id: 7 }])
+    assert.equal(parseProjectChange(malo), null);
+});

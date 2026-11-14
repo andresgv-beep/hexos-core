@@ -117,9 +117,36 @@ por tramos con sus líneas numeradas, y dónde aparece un texto. Solo lecturas.
 - Dos fallos del E4B corregidos midiendo: mandaba `start: 0` y se le rechazaba, y para «explica
   este fichero» buscaba dentro de él en vez de leerlo.
 
-Quedan los otros tres escalones: escribir con aprobación, ejecutar (compilar y pasar pruebas) y
-anotar. El catálogo del Agente está en 6.9xx de 7.000 caracteres: el siguiente obliga a decidir
-qué se recorta.
+**Fase 4, segundo escalón, hecho el 2026-11-14: escribir con aprobación** (`project.write`,
+`project_files.proponer` y `aplicar`, `tools/project_write_test.py`). Igual que instalar un
+programa: el modelo propone, a la persona le sale una tarjeta con las líneas que entran y salen,
+y solo su aprobación escribe (`POST /api/project/change`).
+
+- Dos formas: `content` con el fichero entero, u `old` y `new` para un trozo que aparece una vez.
+- De uno en uno. Cambiar de proyecto retira el cambio pendiente.
+- Al aprobar se pasan otra vez todos los límites y se exige que el fichero siga como estaba al
+  proponerlo; se escribe en un temporal, se cambia de golpe y se relee.
+- Los límites de leer, y además: no se escribe en `.git`, `node_modules`, `build` ni cachés, no se
+  borra nada y el fichero no pasa de 200 KB.
+- Para que cupiera en el tope de 7.000 se acortaron las descripciones de las tres lecturas del
+  proyecto; el banco del selector sigue en 45 de 45 con el E4B.
+- Medido con el E4B por la capa de carga, una pasada: crea un fichero y añade una línea a otro
+  proponiendo sin escribir, no toca `.env` ni sale de la carpeta, y tras aprobar sabe que está
+  escrito. **Sin medir con el 26B, y la tarjeta sin ver en pantalla.**
+
+Dos cosas que salieron midiendo:
+
+- Lo decidido en una tarjeta se apuntaba en el archivo, pero con el contexto vivo el modelo no
+  lo relee: tras aprobar decía que seguía pendiente. Pasaba también con los planes de instalación.
+  Ahora la decisión va delante del turno siguiente (`session.notas_interfaz`).
+- El E4B leía el fichero, escribía el cambio en el chat y cerraba con «apruébalo en la tarjeta»
+  sin proponerlo. Si la respuesta pide aprobar en una tarjeta y no hay ninguna, se devuelve una vez.
+
+Sin arreglar: a «arréglala» el E4B lista los ficheros, dice que necesita leer el fichero y cierra
+el turno ahí; hay que insistirle. Es el encadenado de pasos, no la escritura.
+
+Quedan dos escalones: ejecutar (compilar y pasar pruebas) y anotar. El catálogo del Agente está
+en 6.99x de 7.000 caracteres.
 
 Falta: el resumen de intención escrito por el modelo (hoy la ficha solo lleva hechos), la ficha
 como fichero dentro de la carpeta para el uso remoto, y borrar o renombrar un proyecto. Sin

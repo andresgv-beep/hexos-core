@@ -35,6 +35,26 @@ export interface SystemRequest {
   /** Paquetes que entran o salen según la simulación (los primeros 60). */
   affects: string[]; affectsCount: number;
 }
+/** Cambio en un fichero del proyecto que Helios ha preparado y espera tu aprobación.
+ *  Helios no puede escribirlo: lo escribe HexOS cuando lo apruebas aquí. */
+export interface ProjectChange {
+  planId: string; summary: string; path: string; projectName: string;
+  kind: "create" | "replace" | "edit"; added: number; removed: number;
+  /** Líneas del diff unificado (las primeras 400) y cuántas tiene entero. */
+  diff: string[]; diffLines: number;
+}
+/** El `project_request` de /api/status, o null si no hay ninguno válido. */
+export function parseProjectChange(pr: unknown): ProjectChange | null {
+  if (!pr || typeof pr !== "object") return null;
+  const r = pr as Record<string, unknown>;
+  if (typeof r.plan_id !== "string" || typeof r.summary !== "string" || typeof r.path !== "string" ||
+      (r.kind !== "create" && r.kind !== "replace" && r.kind !== "edit")) return null;
+  const diff = Array.isArray(r.diff) ? r.diff.filter((x): x is string => typeof x === "string") : [];
+  return { planId: r.plan_id, summary: r.summary, path: r.path, projectName: String(r.project_name ?? ""),
+           kind: r.kind, added: typeof r.added === "number" ? r.added : 0,
+           removed: typeof r.removed === "number" ? r.removed : 0,
+           diff, diffLines: typeof r.diff_lines === "number" ? r.diff_lines : diff.length };
+}
 /** Cómo acabó un plan aprobado o rechazado. */
 export interface SystemDecision {
   summary: string; executed: boolean; verified?: boolean; cancelled?: boolean;
@@ -120,9 +140,12 @@ export interface HeliosTransport {
      *  si este HexOS es anterior a los proyectos y no hay nada que enseñar. */
     project?: string | null;
     tools: ToolActivity[]; credentialRequest: CredentialRequest | null; systemRequest: SystemRequest | null;
+    projectChange: ProjectChange | null;
     progress: Progress; generation?: Generation; metrics?: InferenceMetrics }>;
   /** Aprueba o rechaza el plan pendiente. Aprobarlo lo ejecuta HexOS y lo comprueba. */
   decideSystem(planId: string, approve: boolean, signal?: AbortSignal): Promise<SystemDecision>;
+  /** Aprueba o rechaza el cambio de fichero pendiente. Aprobarlo lo escribe HexOS y lo relee. */
+  decideProjectChange(planId: string, approve: boolean, signal?: AbortSignal): Promise<SystemDecision>;
   /** Guarda el acceso de un equipo. `host` fija su dirección: sin ella se busca
    *  entre los vecinos de la red, que solo sirve estando en la misma. */
   saveAccess(input: { device: string; user: string; password: string; host?: string; port?: number },
@@ -210,6 +233,7 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
       const project = typeof data.project === "string" ? data.project : data.project === null ? null : undefined;
       return { phase: phaseFromHexos(data.state), mode: data.mode, thinking, window: ventana, project,
                tools: parseToolActivities(data.active_tools, "running"), credentialRequest, systemRequest,
+               projectChange: parseProjectChange(data.project_request),
                progress: parseProgress(data.progress), generation, metrics: parseInferenceMetrics(data.metrics) };
     },
     async saveAccess({ device, user, password, host, port }, signal) {
@@ -232,6 +256,16 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
     },
     async decideSystem(planId, approve, signal) {
       const data = await request("system", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan_id: planId, approve }), signal });
+      if (!isRecord(data) || typeof data.summary !== "string") throw new Error("HexOS no confirmó la decisión");
+      return { summary: data.summary, executed: data.executed === true,
+               verified: typeof data.verified === "boolean" ? data.verified : undefined,
+               cancelled: data.cancelled === true,
+               refused: typeof data.refused === "string" ? data.refused : undefined,
+               check: typeof data.check === "string" ? data.check : undefined };
+    },
+    async decideProjectChange(planId, approve, signal) {
+      const data = await request("project/change", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan_id: planId, approve }), signal });
       if (!isRecord(data) || typeof data.summary !== "string") throw new Error("HexOS no confirmó la decisión");
       return { summary: data.summary, executed: data.executed === true,

@@ -153,6 +153,44 @@ class Agent:
             store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
                              (uuid4().hex, now(), 'user', note, note))
             store.db.commit()
+        self.session.notas_interfaz.append(note)
+        return dict(result, note=note)
+
+    @property
+    def project_request(self):
+        from .. import project_files
+        return project_files.publico(self.session.project_request)
+
+    def decide_project_change(self, payload, *, apply=None):
+        """La persona aprueba o rechaza el cambio pendiente de project.write.
+
+        Como decide_system: es el único camino a la escritura, viene de la interfaz y el
+        cambio se retira antes de aplicarlo, así que se escribe una sola vez.
+        """
+        from .. import project_files
+        if set(payload) != {'plan_id', 'approve'} or not isinstance(payload['approve'], bool):
+            raise ValueError('se espera {"plan_id": "...", "approve": true|false}')
+        with self.system_lock:
+            pending = self.session.project_request
+            if not pending or pending['plan_id'] != payload['plan_id']:
+                raise ValueError('Ese cambio ya no está pendiente: lo decidió otra pantalla o caducó')
+            self.session.project_request = None
+        with self.store() as store:
+            if payload['approve']:
+                result = (apply or project_files.aplicar)(store, pending)
+                estado = ('escrito y comprobado' if result['executed'] and result['verified'] else
+                          'escrito, pero lo leído no coincide' if result['executed'] else
+                          'no se escribió: ' + (result['refused'] or 'error'))
+                note = ('[La persona aprobó en la interfaz: ' + pending['summary'] + '. HexOS: ' + estado +
+                        ' (' + result['check'] + ').]')
+            else:
+                result = dict(plan_id=pending['plan_id'], summary=pending['summary'], path=pending['path'],
+                              executed=False, cancelled=True)
+                note = '[La persona rechazó en la interfaz: ' + pending['summary'] + '. El fichero no se ha tocado.]'
+            store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
+                             (uuid4().hex, now(), 'user', note, note))
+            store.db.commit()
+        self.session.notas_interfaz.append(note)
         return dict(result, note=note)
 
     @property
@@ -395,6 +433,8 @@ class Agent:
                 puesto = projects.poner(store, project_id)
             self.proyecto = puesto['id'] if puesto else None
             if (antes or {}).get('id') != (puesto or {}).get('id'):
+                # Un cambio propuesto para el otro proyecto no se queda esperando en este.
+                self.session.project_request = None
                 if getattr(self, 'grupos', None) is not None:
                     self.grupos.reset()
                 self.runtime.call({'type': 'reset'})

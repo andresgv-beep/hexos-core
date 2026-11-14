@@ -240,7 +240,10 @@ def ficha(store, proyecto, *, efectos=None, con_peticiones=True, salvo=None):
               'Carpeta del proyecto: ' + proyecto['folder'] + '. ' + carpeta(proyecto['folder']),
               'Esta conversación es solo de este proyecto: lo hablado en otros proyectos no está aquí. '
               'Para ver sus ficheros usa project_files, para leer uno project_read y para buscar un texto '
-              'project_search: trabajan dentro de esta carpeta, con rutas relativas a ella.']
+              'project_search: trabajan dentro de esta carpeta, con rutas relativas a ella. Para crear o cambiar '
+              'un fichero, project_write: content con el fichero entero, u old y new para sustituir un trozo; '
+              'no escribe hasta que la persona lo aprueba en la tarjeta, así que si pide un cambio, léelo y '
+              'proponlo en el mismo turno sin preguntarle antes en el chat.']
     total = store.db.execute('SELECT COUNT(*), MIN(c.ts) FROM conversation c JOIN conversation_ventana v '
                              'ON v.id=c.id WHERE v.ventana=? AND c.id<>?',
                              (etiqueta(proyecto['id']), salvo or '')).fetchone()

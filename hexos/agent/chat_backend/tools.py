@@ -212,6 +212,28 @@ class ToolDispatcher:
             return pc_status.estado()
         if name == 'system.toolchain':
             return entorno.reconocer()
+        if name == 'project.write':
+            # Solo propone: escribe la aprobación de la persona (/api/project/change).
+            plan = project_files.proponer(store, args['path'], args.get('content'), args.get('old'), args.get('new'))
+            pendiente = self.session.project_request
+            if project_files.mismo_cambio(pendiente, plan):
+                return dict(project_files.publico(pendiente), status='pending_approval',
+                            note='Este cambio ya estaba pendiente y sigue sin decidir en la tarjeta. No está hecho.')
+            if pendiente:
+                # De uno en uno, como los planes de instalación: solo hay una tarjeta.
+                return dict(status='waiting_previous_change', planned=False, pending=pendiente['summary'],
+                            requested=plan['summary'],
+                            note='No se ha propuesto ' + plan['summary'] + ': van de uno en uno y «' +
+                                 pendiente['summary'] + '» sigue esperando en la tarjeta. No lo intentes otra '
+                                 'vez en este turno. Dile a la persona que decida ese primero.')
+            self.session.project_request = plan
+            visto = project_files.publico(plan)
+            visto.pop('plan_id'); visto.pop('diff')
+            return dict(visto, status='pending_approval',
+                        note='Pendiente: el fichero NO se ha escrito. A la persona le ha aparecido una tarjeta en '
+                             'la pantalla con las líneas que cambian; lo aprueba o lo cancela ahí, no en el chat. '
+                             'Dile en una frase qué has propuesto y que lo apruebe en la tarjeta. Cuando lo haga '
+                             'te llegará una nota «La persona aprobó en la interfaz…».')
         if name.startswith('project.'):
             return project_files.dispatch(store, name, args)
         if name == 'system.package_plan':

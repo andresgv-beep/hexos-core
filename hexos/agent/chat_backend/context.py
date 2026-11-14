@@ -7,7 +7,7 @@ import os
 from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import uuid4
-from .. import catalog, procedures, projects, reproche, sin_resolver, system_packages, task_notices, tool_digest, tool_groups
+from .. import catalog, procedures, project_files, projects, reproche, sin_resolver, system_packages, task_notices, tool_digest, tool_groups
 from ..native_transport import AudioClip
 from ..context import native_messages
 from ..work import now
@@ -395,7 +395,16 @@ class ContextManager:
         turn.reproche = bool(aviso_reproche)
         bloque_recuerdo += aviso_reproche
         bloque_recuerdo += sin_resolver.bloque(store, turn.uid)
+        # Lo decidido en una tarjeta se apunta en el archivo, pero con el prefijo vivo el
+        # modelo no relee el archivo: el 14/11, tras aprobar un fichero, a «¿está ya?» el E4B
+        # contestó que seguía pendiente. Va delante del turno siguiente, una vez.
+        decididas = getattr(getattr(self.agent, 'session', None), 'notas_interfaz', None)
+        if decididas:
+            bloque_recuerdo += ('\nDECIDIDO EN LA TARJETA DESDE TU ÚLTIMA RESPUESTA (dato de HexOS, ya ocurrido):\n' +
+                                '\n'.join(decididas[-4:]) + '\n')
+            decididas.clear()
         bloque_recuerdo += system_packages.bloque_pendiente(getattr(self.agent, 'system_request', None))
+        bloque_recuerdo += project_files.bloque_pendiente(getattr(self.agent, 'project_request', None))
         # Lo que acabó en segundo plano se cuenta en el primer turno que llegue,
         # aunque sea un saludo: Helios no puede escribir por su cuenta.
         workspace = getattr(self.agent, 'workspace', None)

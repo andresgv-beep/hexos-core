@@ -44,6 +44,7 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                                    'active_tools':[dict(item) for item in agent.active_tools],
                                    'credential_request': agent.credential_request,
                                    'system_request': agent.system_request,
+                                   'project_request': getattr(agent, 'project_request', None),
                                    'thinking': agent.thinking(),
                                    'window': getattr(agent, 'ventana', None),
                                    'project': getattr(agent, 'proyecto', None),
@@ -134,7 +135,7 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
 
         def do_POST(self):
             if self.path not in ('/api/chat', '/api/work', '/api/context/reset', '/api/window', '/api/credentials', '/api/system',
-                                 '/api/projects', '/api/project', '/api/project/rename', '/api/project/remove',
+                                 '/api/projects', '/api/project', '/api/project/change', '/api/project/rename', '/api/project/remove',
                                  '/api/thinking', '/api/cancel', '/api/model/warmup', '/api/media/control'):
                 self.respond(404, {'error':'ruta inexistente'})
                 return
@@ -169,6 +170,8 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                         self.respond(200, {'state':'ready', 'ready':True})
                 elif self.path == '/api/system':
                     self.respond(200, agent.decide_system(strict_json(data.decode('utf-8'))))
+                elif self.path == '/api/project/change':
+                    self.respond(200, agent.decide_project_change(strict_json(data.decode('utf-8'))))
                 elif self.path == '/api/credentials':
                     saved = agent.save_access(strict_json(data.decode('utf-8')))
                     operation = saved.pop('_resume_operation', None)

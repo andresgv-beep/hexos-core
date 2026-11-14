@@ -192,5 +192,28 @@ class SinLlamadaTest(unittest.TestCase):
         self.assertIn('No anuncies una consulta sin hacerla', native.POLICY)
 
 
+class SinTarjetaTest(SinLlamadaTest):
+    LEIDO = (dict(tool='project.read', result={}),)
+
+    def test_manda_a_una_tarjeta_que_no_existe_y_se_devuelve_una_vez(self):
+        runtime, turn, devuelto, otra = self.cierre(pedidos=('proyecto',), traza=self.LEIDO,
+            respuesta='Propongo añadir la línea. Por favor, aprueba este cambio en la tarjeta.')
+        self.assertTrue(devuelto)
+        self.assertIn('no hay ninguna abierta', turn.messages[0]['content'])
+        self.assertFalse(otra())
+
+    def test_si_propuso_el_cambio_o_solo_cuenta_lo_ya_aprobado_no(self):
+        propuesto = self.LEIDO + (dict(tool='project.write', result=dict(status='pending_approval')),)
+        for traza, respuesta in ((propuesto, 'He propuesto el cambio: apruébalo en la tarjeta.'),
+                                 (self.LEIDO, 'Sí, lo aprobaste en la tarjeta y ya está escrito.'),
+                                 (self.LEIDO, 'El fichero tiene dos funciones.')):
+            with self.subTest(respuesta=respuesta):
+                self.assertFalse(self.cierre(pedidos=('proyecto',), traza=traza, respuesta=respuesta)[2])
+
+    def test_en_el_chat_no_aplica(self):
+        self.assertFalse(self.cierre(ventana='chat', pedidos=(), traza=self.LEIDO,
+                                     respuesta='Aprueba el cambio en la tarjeta.')[2])
+
+
 if __name__ == '__main__':
     unittest.main()

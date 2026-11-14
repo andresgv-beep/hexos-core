@@ -67,6 +67,10 @@ class SessionState:
     credential_request: dict | None = None
     # Plan de system.package_plan esperando la aprobación de la persona en la interfaz.
     system_request: dict | None = None
+    # Cambio de project.write esperando lo mismo. El contenido entero se queda aquí.
+    project_request: dict | None = None
+    # Decisiones tomadas en una tarjeta que el modelo aún no ha visto: van con el turno siguiente.
+    notas_interfaz: list = field(default_factory=list)
     context_cut: dict | None = None
     # Última lectura de red: sirve para nombrar «la que termina en 129» sin
     # convertir cada vecino observado en inventario persistente.
@@ -87,6 +91,7 @@ class RetryState:
     web_read_guided: bool = False
     read_claim_checked: bool = False
     sin_llamada_devuelto: bool = False
+    tarjeta_devuelta: bool = False
     # La respuesta que se devolvió en el chat, por si repetir no sirve de nada.
     respuesta_devuelta: str | None = None
     traza_al_devolver: int = 0

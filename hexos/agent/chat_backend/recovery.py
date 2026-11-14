@@ -84,6 +84,15 @@ SIN_LLAMADA_CHAT = ('AVISO DE HEXOS (no es la persona): la respuesta anterior di
                     'de nuevo sin decir que lo has hecho. No menciones este aviso.')
 # Un bloque cercado con al menos cinco líneas dentro. Una orden suelta (`ls -la`) no cuenta.
 ENTREGA_CODIGO = re.compile(r'^```[^\n]*\n(?:[^\n]*\n){5,}', re.M)
+# Se contrasta con el estado, no con la intención: la respuesta manda a la persona a una
+# tarjeta y HexOS no tiene ninguna abierta. El 14/11 el E4B leyó el README, escribió en el
+# chat el antes y el después y cerró con «apruébalo en la tarjeta» sin llamar a project_write.
+# «Aprueba», «apruébalo»: pedir la aprobación. «Aprobaste», «aprobado» (ya ocurrió) no entran.
+TARJETA_DICHA = re.compile(r'\bapru[eé]b\w*\b[^.\n]{0,80}\btarjeta\b', re.I)
+SIN_TARJETA = ('AVISO DE HEXOS (no es la persona): la respuesta anterior habla de una tarjeta, pero no hay '
+               'ninguna abierta: no se ha propuesto ningún cambio. Si la persona pidió crear o cambiar un '
+               'fichero del proyecto, llama ahora a project_write con el cambio. Si no, contesta de nuevo '
+               'sin mencionar ninguna tarjeta. No menciones este aviso.')
 SIN_LLAMADA = ('AVISO DE HEXOS (no es la persona): la respuesta anterior no consultó nada. Si la '
                'petición se contesta mirando algo de este PC o de los equipos, haz ahora esa lectura y '
                'contesta con lo que salga. Si era conversación y no había nada que mirar, repite tu '
@@ -221,6 +230,15 @@ class RecoveryController:
             turn.retries.respuesta_devuelta = output.get('reply') or ''
             turn.retries.traza_al_devolver = len(turn.trace)
             turn.messages = [dict(role='user', content=SIN_LLAMADA)]
+            return True
+        if (not turn.retries.tarjeta_devuelta and getattr(self.agent, 'ventana', None) == 'agente'
+                and TARJETA_DICHA.search(output.get('reply') or '')
+                and not getattr(self.agent, 'project_request', None)
+                and not getattr(self.agent, 'system_request', None)
+                and not getattr(self.agent.session, 'notas_interfaz', None)
+                and not any(paso.get('tool') in ('project.write', 'system.package_plan') for paso in turn.trace)):
+            turn.retries.tarjeta_devuelta = True
+            turn.messages = [dict(role='user', content=SIN_TARJETA)]
             return True
         # La persona ordenó apuntar algo, el selector declaró las notas y el turno acaba
         # sin guardar nada. Aquí no se mira la respuesta sino la orden, que es suya, y la

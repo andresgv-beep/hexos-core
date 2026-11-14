@@ -766,3 +766,15 @@ button.vision-horizon-state:focus-visible { outline: 2px solid var(--v-gold); ou
   40% { color: #19e06a; text-shadow: 0 0 6px #19e06a; }
   100% { text-shadow: none; }
 }
+
+/* Tarjeta de un cambio propuesto en un fichero del proyecto. */
+.access-panel.change-panel { width: min(760px, 100%); }
+.change-panel .panel-title code { font-family: var(--font-mono, ui-monospace, monospace); font-size: .92em; }
+.change-mas { color: #7fd69a; }
+.change-menos { color: #ff9c8f; }
+.change-diff { margin: 0 0 12px; padding: 10px 0; max-height: min(52vh, 460px); overflow: auto; border: 1px solid var(--v-rim, #ffffff22);
+  border-radius: 10px; background: #0000004d; font: 11.5px/1.55 var(--font-mono, ui-monospace, monospace); white-space: pre; tab-size: 4; }
+.change-diff span { display: block; padding: 0 12px; min-width: max-content; }
+.change-diff span[data-linea="mas"] { background: #1f6b3a40; color: #b6f0c6; }
+.change-diff span[data-linea="menos"] { background: #7a2a2240; color: #ffc4bb; }
+.change-diff span[data-linea="tramo"] { color: var(--v-muted, #8aa); padding-top: 4px; }

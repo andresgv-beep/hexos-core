@@ -22,13 +22,14 @@ import { CoreViewer } from "./CoreViewer";
 import { CodeWorkspace } from "./CodeWorkspace";
 import { phases } from "@/lib/helios/state";
 import { createHexosTransport, type ContextCut, type CredentialRequest, type HeliosTransport, type HistoryMessage,
-         type SystemRequest } from "@/lib/helios/hexos";
+         type ProjectChange, type SystemRequest } from "@/lib/helios/hexos";
 import { mergeToolActivities, type ToolActivity } from "@/lib/helios/tools";
 import { coreSectionForTools, createCoreClient, type NoteDetail } from "@/lib/helios/core";
 import { createMediaClient, isActive, type MediaControl, type MediaJob } from "@/lib/helios/media";
 import { MediaCard } from "./MediaCard";
 import { TasksPanel } from "./TasksPanel";
 import { ProjectsPanel } from "./ProjectsPanel";
+import { ProjectChangeCard } from "./ProjectChangeCard";
 import { AgentActivity, AgentNow } from "./AgentActivity";
 import type { Activity as AgentLog, Project } from "@/lib/helios/hexos";
 import { observationFor } from "@/lib/helios/previewProbe";
@@ -76,6 +77,9 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const [systemPlan, setSystemPlan] = useState<SystemRequest | null>(null);
   const [systemBusy, setSystemBusy] = useState(false);
   const [systemError, setSystemError] = useState("");
+  const [projectChange, setProjectChange] = useState<ProjectChange | null>(null);
+  const [changeBusy, setChangeBusy] = useState(false);
+  const [changeError, setChangeError] = useState("");
   const [accessForm, setAccessForm] = useState({ user: "", password: "", host: "", port: "22" });
   const [accessError, setAccessError] = useState("");
   const [accessSaving, setAccessSaving] = useState(false);
@@ -408,6 +412,11 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         if (!nuevo) return null;
         return previo && previo.planId === nuevo.planId ? previo : nuevo;
       });
+      setProjectChange(previo => {
+        const nuevo = estado.projectChange;
+        if (!nuevo) return null;
+        return previo && previo.planId === nuevo.planId ? previo : nuevo;
+      });
       // Helios pide el acceso a mitad de turno, así que hay que seguir mirando;
       // con una sola consulta al montar la ventana no aparecía nunca.
       setAccess(previo => {
@@ -488,6 +497,29 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     } finally {
       clearInterval(reloj);
       setSystemBusy(false);
+    }
+  }
+
+  async function decidirCambio(approve: boolean) {
+    if (!projectChange || changeBusy) return;
+    const cambio = projectChange;
+    setChangeBusy(true);
+    setChangeError("");
+    try {
+      const r = await transport.decideProjectChange(cambio.planId, approve);
+      setProjectChange(null);
+      const reply = r.cancelled ? `Cancelado: ${r.summary}. El fichero no se ha tocado.`
+        : r.executed && r.verified ? `Escrito y comprobado: ${r.check}.`
+        : r.executed ? `Se escribió, pero lo leído no coincide: ${r.check}. Revísalo.`
+        : `No se escribió: ${r.refused ?? "error al escribir"}.`;
+      const id = ++nextId.current;
+      setTurns(items => [...items, { id, text: `${approve ? "Aprobado" : "Cancelado"}: ${r.summary}`, pending: false, reply }]);
+      setRevealing(true);
+      setAnnouncement(reply);
+    } catch (error) {
+      setChangeError(error instanceof Error ? error.message : "No se pudo enviar la decisión.");
+    } finally {
+      setChangeBusy(false);
     }
   }
 
@@ -879,9 +911,9 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const lateralAgente = !mobile && !workspaceOpen && ventana === "agente" && proyecto !== undefined && Boolean(transport.projects);
   // Lo que Helios hace ahora, en una línea. Una tarjeta abierta manda sobre todo lo demás:
   // mientras espera tu decisión, eso es lo que está pasando.
-  const ocupado = Boolean(systemPlan) || systemBusy || sending || Boolean(herramientaEnCurso);
+  const ocupado = Boolean(systemPlan) || Boolean(projectChange) || systemBusy || changeBusy || sending || Boolean(herramientaEnCurso);
   const ahora = connection !== "ready" ? { clave: connection, texto: estado }
-    : systemPlan ? { clave: "plan", texto: "Esperando tu aprobación en la tarjeta" }
+    : systemPlan || projectChange ? { clave: "plan", texto: "Esperando tu aprobación en la tarjeta" }
     : systemBusy ? { clave: "sistema", texto: "HexOS está aplicando el cambio" }
     : herramientaEnCurso ? { clave: `tool-${herramientaEnCurso.id}`, texto: `Ejecutando ${herramientaEnCurso.name.replace(".", "_")}` }
     : sending ? (etapa ?? { clave: "thinking", texto: "Pensando…" })
@@ -1075,6 +1107,8 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         </div>
       </div>
     </div>}
+    {projectChange && !systemPlan && !access && <ProjectChangeCard change={projectChange} busy={changeBusy}
+      error={changeError} onDecide={approve => void decidirCambio(approve)} />}
     {access && <div className="access-backdrop">
       <div className="access-panel" role="dialog" aria-modal="true" aria-labelledby="access-title">
         <h2 id="access-title" className="panel-title">
