@@ -752,3 +752,17 @@ button.vision-horizon-state:focus-visible { outline: 2px solid var(--v-gold); ou
 .vision-project-list { grid-template-columns: minmax(0, 1fr); }
 .vision-project-list > li { min-width: 0; }
 .vision-project-edit input { width: 0; }
+
+/* Respuesta en cascada ([[matrix]]): la lluvia va en un lienzo encima del texto. */
+.matrix-reply { position: relative; }
+.matrix-reply.matrix-live { min-height: 96px; }
+.matrix-reply canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; transition: opacity .5s; }
+.matrix-reply.matrix-done canvas { opacity: 0; }
+.matrix-reply.matrix-ready .matrix-letter { opacity: 0; }
+.matrix-reply.matrix-ready .matrix-letter.on { opacity: 1; animation: matrix-lock .7s ease-out; }
+.matrix-reply.matrix-done .matrix-letter { opacity: 1; }
+@keyframes matrix-lock {
+  0% { color: #eafff1; text-shadow: 0 0 10px #35ff8a; }
+  40% { color: #19e06a; text-shadow: 0 0 6px #19e06a; }
+  100% { text-shadow: none; }
+}

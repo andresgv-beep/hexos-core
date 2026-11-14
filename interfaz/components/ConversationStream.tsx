@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ProgressiveReply } from "./ProgressiveReply";
+import { MatrixReply } from "./MatrixReply";
+import { replyEffect } from "@/lib/helios/markdown";
 import { ReplyMarkdown } from "./ReplyMarkdown";
 import { ToolTerminal } from "./ToolTerminal";
 import type { ToolActivity } from "@/lib/helios/tools";
@@ -69,6 +71,9 @@ export function TurnoVisible({ turn, saliendo, settled = false, extra, onReplyCo
       </p>}
       {(turn.preview || turn.reply) && (saliendo || settled
         ? <ReplyMarkdown text={turn.reply || turn.preview || ""} onPreviewCode={onPreviewCode} previewHtmlOnly={previewHtmlOnly} />
+        : replyEffect(turn.reply || turn.preview || "").effect === "matrix"
+        ? <MatrixReply text={turn.reply || turn.preview || ""} live={Boolean(turn.pending)}
+            onComplete={() => onReplyComplete?.(turn.id)} />
         : <div className={turn.pending ? "reply-preview" : undefined}
             aria-label={turn.pending ? "Respuesta en generación" : undefined}>
           <ProgressiveReply text={turn.reply || turn.preview || ""} live={Boolean(turn.pending)}

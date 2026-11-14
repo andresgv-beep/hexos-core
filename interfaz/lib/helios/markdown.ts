@@ -73,7 +73,20 @@ function markEntries(bloques: Block[]) {
   return bloques;
 }
 
-export function parseReply(text: string): Block[] {
+/** La marca con la que Helios pide que su respuesta caiga en cascada. Va sola en la primera línea. */
+export const MATRIX_MARK = "[[matrix]]";
+
+/** Separa la marca de efecto del texto. Mientras llega a trozos («[[mat») tampoco se enseña. */
+export function replyEffect(text: string): { effect: "matrix" | null; text: string } {
+  const inicio = text.trimStart();
+  if (inicio.toLowerCase().startsWith(MATRIX_MARK)) return { effect: "matrix", text: inicio.slice(MATRIX_MARK.length).trimStart() };
+  if (inicio.length < MATRIX_MARK.length && inicio.startsWith("[[") && MATRIX_MARK.startsWith(inicio.toLowerCase())) return { effect: null, text: "" };
+  return { effect: null, text };
+}
+
+export function parseReply(original: string): Block[] {
+  // La marca nunca se pinta, la lea quien la lea: historial, móvil o el turno en vivo.
+  const text = replyEffect(original).text;
   const bloques: Block[] = [];
   let parrafo: string[] = [];
   let codigo: string[] | null = null;

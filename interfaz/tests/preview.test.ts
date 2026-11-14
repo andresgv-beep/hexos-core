@@ -83,3 +83,13 @@ test("la sonda no acepta mensajes que no son suyos ni valores fuera de rango", a
   assert.equal(raro!.errors.length, 1);
   assert.equal(raro!.errors[0].length, 200);
 });
+
+test("la marca de cascada se reconoce y nunca se pinta", async () => {
+  const { parseReply, replyEffect } = await import("../lib/helios/markdown");
+  assert.deepEqual(replyEffect("[[matrix]]\nHola, Andrés."), { effect: "matrix", text: "Hola, Andrés." });
+  assert.equal(replyEffect("Hola [[matrix]]").effect, null);
+  assert.equal(replyEffect("[[mat").text, "");                 // llegando a trozos
+  assert.equal(replyEffect("[[otra cosa").text, "[[otra cosa");
+  const bloques = parseReply("[[matrix]]\nHola, Andrés.");
+  assert.equal(JSON.stringify(bloques).includes("matrix"), false);
+});
