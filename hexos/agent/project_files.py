@@ -533,4 +533,7 @@ def dispatch(store, name, args):
     if name == 'project.plan':
         from . import project_memory
         return project_memory.apuntar(store, args.get('goal'), args.get('steps'), args.get('done'), args.get('note'))
+    if name == 'project.run':
+        from . import project_run
+        return project_run.run(store, args['command'], args.get('timeout'))
     raise ValueError('herramienta de proyecto inexistente: ' + name)

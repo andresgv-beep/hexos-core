@@ -245,6 +245,10 @@ def ficha(store, proyecto, *, efectos=None, con_peticiones=True, salvo=None):
               'no escribe hasta que la persona lo aprueba en la tarjeta, así que si pide un cambio, léelo y '
               'proponlo en el mismo turno sin preguntarle antes en el chat. Si son varios ficheros (montar un '
               'proyecto, un esqueleto), propón todos en el mismo turno, uno por llamada: se aprueban juntos.',
+              'Para comprobar, project_run: compila, pasa las pruebas o lanza un script dentro de la carpeta, '
+              'aislado y sin red. Antes de decir que falta una biblioteca compruébalo con '
+              '["python3","-c","import nombre"]; si falta, no mandes a la persona a usar pip: proponla como paquete '
+              'del sistema (python3-nombre, con apt). Tras escribir, ejecuta y cuenta la salida real.',
               # El 14/11 el 26B recorrió hera/ bien pero a un fichero por mensaje, leyendo solo el
               # primer tramo de cada uno y preguntando «¿quieres que revise el siguiente?».
               'Cuando pida revisar, entender o seguir el código, sigue la pista entera en este mismo turno: '

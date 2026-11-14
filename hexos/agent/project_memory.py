@@ -31,11 +31,12 @@ MAX_PASO = 200
 MAX_NOTAS = 30
 MAX_NOTA = 400
 MAX_HECHOS = 40
+MAX_EJECUCIONES = 12
 MAX_BLOQUE = 1500                    # lo que ocupa en la ficha
 
 
 def _vacia():
-    return dict(version=1, objetivo='', plan=[], notas=[], hechos=[])
+    return dict(version=1, objetivo='', plan=[], notas=[], hechos=[], ejecuciones=[])
 
 
 def _ahora():
@@ -56,7 +57,7 @@ def leer(carpeta):
     for paso in cruda.get('plan') if isinstance(cruda.get('plan'), list) else ():
         if isinstance(paso, dict) and isinstance(paso.get('paso'), str) and paso['paso'].strip():
             memoria['plan'].append(dict(paso=paso['paso'][:MAX_PASO], hecho=paso.get('hecho') is True))
-    for clave in ('notas', 'hechos'):
+    for clave in ('notas', 'hechos', 'ejecuciones'):
         for apunte in cruda.get(clave) if isinstance(cruda.get(clave), list) else ():
             if isinstance(apunte, dict) and isinstance(apunte.get('texto'), str) and apunte['texto'].strip():
                 memoria[clave].append(dict(ts=str(apunte.get('ts') or ''), texto=apunte['texto'][:MAX_NOTA]))
@@ -131,10 +132,22 @@ def hecho(carpeta, texto):
         pass                                            # la memoria no puede tumbar una aprobación
 
 
+def ejecutado(carpeta, orden, resultado):
+    """También lo apunta HexOS: qué se ejecutó y cómo acabó. Repetir una orden sustituye su apunte."""
+    try:
+        memoria = leer(carpeta)
+        orden = ' '.join(orden.split())[:200]
+        previas = [e for e in memoria['ejecuciones'] if not e['texto'].startswith(orden + ' → ')]
+        memoria['ejecuciones'] = (previas + [dict(ts=_ahora(), texto=orden + ' → ' + resultado)])[-MAX_EJECUCIONES:]
+        guardar(carpeta, memoria)
+    except OSError:
+        pass
+
+
 def bloque(carpeta):
     """La memoria tal como va en la ficha: objetivo, plan con lo hecho, y lo último apuntado."""
     memoria = leer(carpeta)
-    if not (memoria['objetivo'] or memoria['plan'] or memoria['notas'] or memoria['hechos']):
+    if not (memoria['objetivo'] or memoria['plan'] or memoria['notas'] or memoria['hechos'] or memoria['ejecuciones']):
         return ('Memoria del proyecto: vacía. Cuando haya un objetivo o un encargo de varios pasos, apúntalo con '
                 'project_plan (goal y steps), marca cada paso al terminarlo (done) y deja en note lo que convenga '
                 'recordar: es lo que HexOS te pondrá delante si se pierde el contexto.')
@@ -150,6 +163,8 @@ def bloque(carpeta):
         lineas.append('Notas: ' + ' | '.join(n['texto'] for n in memoria['notas'][-5:]))
     if memoria['hechos']:
         lineas.append('Escrito con aprobación de la persona: ' + ' | '.join(h['texto'] for h in memoria['hechos'][-6:]))
+    if memoria['ejecuciones']:
+        lineas.append('Últimas ejecuciones (las apunta HexOS): ' + ' | '.join(e['texto'] for e in memoria['ejecuciones'][-5:]))
     lineas.append('Mantenla al día: done al terminar un paso, note para lo que convenga recordar.')
     texto = '\n'.join(lineas)
     return texto if len(texto) <= MAX_BLOQUE else texto[:MAX_BLOQUE - 40].rsplit(' ', 1)[0] + ' […recortada]'

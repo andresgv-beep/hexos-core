@@ -15,11 +15,11 @@ Lista viva, apuntada el 2026-11-14. Lo que se cierre se quita de aquí.
 
 ## Agente
 
-- **Proyectos, fase 4** (`PROYECTOS_CON_FICHA_PLAN.md`): hechos leer, escribir con aprobación
-  (varios ficheros por tarjeta) y la memoria JSON del proyecto; falta ejecutar (compilar y pasar
-  pruebas), que es lo que le deja comprobar lo que escribe.
-- **Por comprobar con el 26B y en pantalla:** montar un proyecto desde cero, la tarjeta de varios
-  ficheros y que remonta desde la memoria tras un corte.
+- **Proyectos, fase 4** (`PROYECTOS_CON_FICHA_PLAN.md`): hecha entera el 14/11 (leer, escribir con
+  aprobación, memoria JSON y ejecutar en jaula). **Por comprobar con el 26B y en pantalla:** montar
+  un proyecto desde cero, la tarjeta de varios ficheros, pasar pruebas y remontar tras un corte.
+- **Ejecutar, lo que falta:** la gráfica dentro de la jaula (CUDA) y un entorno por proyecto
+  (venv) para bibliotecas que no estén en apt.
 - **Borrar y renombrar ficheros** del proyecto: no hay.
 - **El E4B no encadena pasos:** a «arréglala» lista, dice que necesita leer y cierra el turno.
 - **Seguir la pista del código:** comprobado con el 26B el 14/11 (ocho lecturas en un turno, 2.053

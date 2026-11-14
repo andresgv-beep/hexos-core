@@ -162,7 +162,24 @@ el turno ahí; hay que insistirle. Es el encadenado de pasos, no la escritura.
   contexto dice por qué paso iba. Marca los pasos de uno en uno y se deja alguno sin marcar.
   **Sin medir con el 26B, y la tarjeta de varios ficheros sin ver en pantalla.**
 
-Queda un escalón: ejecutar (compilar y pasar pruebas). El catálogo del Agente está
+**Fase 4, último escalón, hecho el 2026-11-14: ejecutar** (`project.run`,
+`hexos/agent/project_run.py`, `tools/project_run_test.py`).
+
+- Una orden como lista de argumentos, sin shell, dentro de la carpeta del proyecto. El programa
+  es un compilador o intérprete conocido, o un ejecutable del proyecto.
+- **En una jaula de bubblewrap**: sin red, sistema en solo lectura, carpeta personal vacía, sin
+  `/run` (zócalos de D-Bus, llavero, Docker), sin `/mnt` ni `/media`, y escribiendo solo en la
+  carpeta del proyecto. Comprobado en el portátil y en el sobremesa.
+- **No pide aprobación**, porque no puede tocar nada fuera del proyecto. Sin bubblewrap no se
+  ejecuta nada: no hay modo sin jaula.
+- Tope de 60 s (hasta 300) y de salida. Al no haber red, no instala nada: `pip` se rechaza con la
+  indicación de proponer el paquete de apt.
+- HexOS apunta en la memoria del proyecto qué se ejecutó y cómo acabó.
+- Medido con el E4B, una pasada: tras aprobar los ficheros pasa las pruebas y cuenta la salida
+  real. **Sin medir con el 26B.**
+
+Sin hacer: la jaula no deja ver la gráfica (nada de CUDA dentro), y no hay entorno propio por
+proyecto (venv) para bibliotecas que no estén en apt. El catálogo del Agente está
 en 6.99x de 7.000 caracteres.
 
 Falta: el resumen de intención escrito por el modelo (hoy la ficha solo lleva hechos), la ficha
