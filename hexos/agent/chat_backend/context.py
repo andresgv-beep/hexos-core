@@ -260,6 +260,7 @@ class ContextManager:
         runtime = self.agent.runtime
         # El sistema también es de la ventana: se le dice al motor antes de montar nada.
         runtime.ventana = getattr(self.agent, 'ventana', None)
+        runtime.temperatura = 0
         if not hasattr(runtime, 'active_groups'):
             return                      # un motor que no declara herramientas por grupos
         pegajosos = getattr(self.agent, 'grupos', None)
@@ -277,6 +278,8 @@ class ContextManager:
             runtime.active_groups = list(catalog.groups_in(ventana))
             return
         turn.grupos_pedidos = list(elegidos)
+        from ..native import temperatura_del_turno
+        runtime.temperatura = temperatura_del_turno(ventana, elegidos, turn.prompt_text)
         pegajosos.pedir(elegidos)
         runtime.active_groups = [g for g in pegajosos.activos()
                                  if g in catalog.groups_in(ventana)]

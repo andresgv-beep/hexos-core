@@ -98,6 +98,31 @@ NAS. Si preguntan por ellos, contesta solo: «Eso lo miro desde la ventana Agent
 la llave». No des nombres ni identificadores internos salvo que los pidan.'''
 
 
+# Temperatura de muestreo según lo que toca escribir. Estuvo siempre a 0, también para
+# charlar: el modelo elegía la palabra más probable, se repetía a sí mismo y el código salía
+# «liso». Las herramientas siguen sin azar: el turno que las necesita va a 0 y el motor baja a
+# 0 en cuanto se abre una llamada.
+def _temperatura_env(nombre, defecto):
+    try:
+        return min(1.5, max(0.0, float(os.environ.get(nombre, defecto))))
+    except ValueError:
+        return defecto
+
+# El texto con el que la interfaz envuelve un retoque del código abierto (preview.ts).
+REVISION_DE_CODIGO = 'Estás trabajando directamente sobre la implementación abierta'
+
+
+def temperatura_del_turno(ventana, grupos_pedidos, peticion=''):
+    """0 si el turno necesita herramientas; si no, la de conversar o la de escribir código."""
+    if (peticion or '').startswith(REVISION_DE_CODIGO):
+        return _temperatura_env('HEXOS_TEMP_CODIGO', 0.4)
+    if grupos_pedidos is None or grupos_pedidos:
+        return 0.0                  # el selector no supo, o pidió herramientas
+    if ventana == 'chat':
+        return _temperatura_env('HEXOS_TEMP_CHAT', 0.7)
+    return _temperatura_env('HEXOS_TEMP_AGENTE', 0.4)
+
+
 def sistema(ventana=None):
     """El bloque de sistema de una ventana. Sin ventana, el contrato de siempre."""
     if ventana == 'chat':
@@ -567,6 +592,12 @@ class NativeRuntime:
         context_rollovers = 0
         # Resume the SAME assistant prefix, not a new user instruction. No
         # tools are parsed or queued until the entire completion terminates.
+        # Temperatura solo para escribir: nunca tras un reproche que exige una lectura,
+        # al reparar una llamada, ni para contar lo que acaba de devolver una herramienta.
+        if getattr(self, '_transport', None):
+            sin_azar = (required_read or getattr(self, 'repair_call', False) or getattr(self, 'qwen', False)
+                        or (self.messages and self.messages[-1].get('role') == 'tool'))
+            self._transport.temperature = 0 if sin_azar else float(getattr(self, 'temperatura', 0) or 0)
         for chunk in range(4):
             self._completion_prefix = prefix + completion
             self._stream_completion = ''

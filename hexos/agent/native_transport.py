@@ -73,6 +73,12 @@ def visible_preview(text, open_thought=False):
     return restore(text)
 
 
+# En cuanto el modelo abre una llamada a herramienta, el motor deja el resto del turno
+# sin azar: el nombre y los argumentos tienen que salir exactos aunque se esté charlando
+# con temperatura.
+GREEDY_DESDE = ('<|tool_call>',)
+
+
 class NativeTransport:
     def __init__(self, binary, model, ctx, log, multimodal=None):
         # Gemma 4 12B lleva imagen y audio en un HNF aparte del texto.
@@ -171,15 +177,19 @@ class NativeTransport:
             ack = self.control(dict(type='attachment', kind='rgb8', bytes=len(pixels),
                                     width=width, height=height, stride=width*3), pixels)
             attachments.append(ack['request_id'])
+        # Solo la conversación lleva temperatura, y solo si quien dirige el turno la puso.
+        # Las generaciones auxiliares (selector, extractor) deciden: siempre sin azar.
+        temperatura = 0 if auxiliar else float(getattr(self, 'temperature', 0) or 0)
         rid = uuid4().hex
         with self.state_lock:
             self.active = rid
         self.pending = (rid, session, attachments)
         self.write(dict(type='turn', request_id=rid, session=session,
             messages=[dict(role='user', content=prompt)], attachment_ids=attachments,
-            generation=dict(temperature=0, max_visible_tokens=3072, max_thinking_tokens=0,
+            generation=dict(temperature=temperatura, max_visible_tokens=3072, max_thinking_tokens=0,
                 preformatted=True, reuse_prefix=True, close_turn=False,
-                stop_tokens=getattr(self, 'stop_tokens', ['<|tool_response>']), prefill_progress=True)))
+                stop_tokens=getattr(self, 'stop_tokens', ['<|tool_response>']), prefill_progress=True,
+                **(dict(greedy_after_tokens=list(GREEDY_DESDE)) if temperatura else {}))))
 
     def finish(self, update=None):
         rid, session, attachments = self.pending
