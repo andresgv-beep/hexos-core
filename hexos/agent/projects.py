@@ -152,7 +152,7 @@ def quitar(store, id):
 
 # ---------------------------------------------------------------- la ficha (fase 2)
 
-MAX_FICHA = 2400          # caracteres: si crece sin tope, la degradación vuelve por otra puerta
+MAX_FICHA = 2900          # caracteres: si crece sin tope, la degradación vuelve por otra puerta
 MAX_ENTRADAS = 24         # lo que se nombra de la carpeta
 MAX_PETICIONES = 5
 MAX_HECHOS = 10
@@ -243,7 +243,13 @@ def ficha(store, proyecto, *, efectos=None, con_peticiones=True, salvo=None):
               'project_search: trabajan dentro de esta carpeta, con rutas relativas a ella. Para crear o cambiar '
               'un fichero, project_write: content con el fichero entero, u old y new para sustituir un trozo; '
               'no escribe hasta que la persona lo aprueba en la tarjeta, así que si pide un cambio, léelo y '
-              'proponlo en el mismo turno sin preguntarle antes en el chat.']
+              'proponlo en el mismo turno sin preguntarle antes en el chat.',
+              # El 14/11 el 26B recorrió hera/ bien pero a un fichero por mensaje, leyendo solo el
+              # primer tramo de cada uno y preguntando «¿quieres que revise el siguiente?».
+              'Cuando pida revisar, entender o seguir el código, sigue la pista entera en este mismo turno: '
+              'si un fichero viene cortado, continúa con start; si lo que lees llama a algo de otro fichero, '
+              'localízalo con project_search y léelo también. No pares tras cada fichero a preguntar si '
+              'sigues. Explica al final el recorrido completo y di qué ficheros y líneas has leído y cuáles no.']
     total = store.db.execute('SELECT COUNT(*), MIN(c.ts) FROM conversation c JOIN conversation_ventana v '
                              'ON v.id=c.id WHERE v.ventana=? AND c.id<>?',
                              (etiqueta(proyecto['id']), salvo or '')).fetchone()

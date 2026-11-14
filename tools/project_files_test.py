@@ -165,7 +165,11 @@ class LeerTest(Base):
         r = self.llamar('project.read', path='largo.txt')
         self.assertEqual((r['end'], r['next_start']), (project_files.MAX_LINEAS, project_files.MAX_LINEAS + 1))
         siguiente = self.llamar('project.read', path='largo.txt', start=r['next_start'])
-        self.assertTrue(siguiente['content'].startswith('251| linea 251'))
+        self.assertTrue(siguiente['content'].startswith('401| linea 401'))
+        # Dice con números qué parte se ha visto, y que del resto no se puede hablar.
+        self.assertEqual((r['seen'], siguiente['seen']), ('líneas 1-400 de 600 (67 %)', 'líneas 401-600 de 600 (33 %)'))
+        self.assertIn('ni que has revisado el fichero entero', r['truncated'])
+        self.assertNotIn('seen', self.llamar('project.read', path='README.md'))
         self.assertEqual(self.llamar('project.read', path='largo.txt', start=600)['content'], '600| linea 600')
         with self.assertRaisesRegex(ValueError, 'se pasa'):
             self.llamar('project.read', path='largo.txt', start=601)

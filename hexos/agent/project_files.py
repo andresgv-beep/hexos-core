@@ -35,8 +35,10 @@ from uuid import uuid4
 from . import projects
 
 MAX_BYTES = 2 * 1024 * 1024          # un fichero más grande no se abre
-MAX_LINEAS = 250                     # por lectura; se sigue con start
-MAX_CARACTERES = 9000
+# Con 250 líneas y 9.000 caracteres el 26B vio 188 de las 1.040 líneas de hera_store.c y lo dio
+# por analizado (14/11). Un tramo más largo son menos llamadas para seguir un fichero entero.
+MAX_LINEAS = 400                     # por lectura; se sigue con start
+MAX_CARACTERES = 16000
 MAX_LINEA = 400                      # una línea más larga se corta
 MAX_FICHEROS = 200                   # entradas de un listado
 MAX_PLANO = 60                       # con más ficheros que estos, el listado va por carpetas
@@ -281,11 +283,16 @@ def read(store, path, start=1):
     fin = start + len(tramo) - 1
     resultado = dict(path=str(relativa), lines=len(lineas), start=start, end=max(fin, 0),
                      content='\n'.join(tramo), note=DATO)
+    if start > 1 or fin < len(lineas):
+        # Qué parte se ha visto, dicho con números: sin esto un tramo se contaba como el fichero.
+        resultado['seen'] = 'líneas %d-%d de %d (%d %%)' % (start, fin, len(lineas),
+                                                            round(100 * len(tramo) / max(len(lineas), 1)))
     if aviso:
         resultado['resolved'] = aviso
     if fin < len(lineas):
         resultado['next_start'] = fin + 1
-        resultado['truncated'] = 'Faltan %d líneas: sigue con start=%d.' % (len(lineas) - fin, fin + 1)
+        resultado['truncated'] = ('Faltan %d líneas: sigue con start=%d. De lo que no has leído no puedes decir '
+                                  'nada, ni que has revisado el fichero entero.' % (len(lineas) - fin, fin + 1))
     return resultado
 
 
