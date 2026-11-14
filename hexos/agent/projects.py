@@ -240,15 +240,17 @@ def ficha(store, proyecto, *, efectos=None, con_peticiones=True, salvo=None):
               'Carpeta del proyecto: ' + proyecto['folder'] + '. ' + carpeta(proyecto['folder']),
               'Esta conversación es solo de este proyecto: lo hablado en otros proyectos no está aquí. '
               'Para ver sus ficheros usa project_files, para leer uno project_read y para buscar un texto '
-              'project_search: trabajan dentro de esta carpeta, con rutas relativas a ella. Para crear o cambiar '
-              'un fichero, project_write: content con el fichero entero, u old y new para sustituir un trozo; '
-              'no escribe hasta que la persona lo aprueba en la tarjeta, así que si pide un cambio, léelo y '
+              'project_search: trabajan dentro de esta carpeta, con rutas relativas a ella. Para cambiar un fichero '
+              'que ya existe, project_write con old y new: solo el trozo que toca, las veces que haga falta, sin '
+              'reescribir el fichero entero; content es para crear uno nuevo. No escribe hasta que la persona lo aprueba en la tarjeta, así que si pide un cambio, léelo y '
               'proponlo en el mismo turno sin preguntarle antes en el chat. Si son varios ficheros (montar un '
               'proyecto, un esqueleto), propón todos en el mismo turno, uno por llamada: se aprueban juntos.',
               'Para comprobar, project_run: compila, pasa las pruebas o lanza un script dentro de la carpeta, '
               'aislado y sin red. Antes de decir que falta una biblioteca compruébalo con '
               '["python3","-c","import nombre"]; si falta, no mandes a la persona a usar pip: proponla como paquete '
-              'del sistema (python3-nombre, con apt). Tras escribir, ejecuta y cuenta la salida real.',
+              'del sistema (python3-nombre, con apt). Tras escribir, ejecuta y cuenta la salida real. '
+              'Una ventana no la ves: para comprobar cómo queda, ejecútala fuera de pantalla con un script que la '
+              'cree, la muestre y liste cada control con su posición y tamaño (geometry), y corrige con esos números.',
               # El 14/11 el 26B recorrió hera/ bien pero a un fichero por mensaje, leyendo solo el
               # primer tramo de cada uno y preguntando «¿quieres que revise el siguiente?».
               'Cuando pida revisar, entender o seguir el código, sigue la pista entera en este mismo turno: '

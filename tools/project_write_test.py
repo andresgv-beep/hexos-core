@@ -194,6 +194,50 @@ class DespachoTest(Escribir):
         self.assertEqual(self.leer('app/main.py'), 'print("adiós")\n')
         self.assertEqual(self.leer('README.md'), '# App\n')
 
+    def test_varios_trozos_del_mismo_fichero_se_suman(self):
+        self.pedir(path='src/main.cu', old='return 0;', new='return 1;')
+        r = self.pedir(path='src/main.cu', old='lanzar_atencion();', new='lanzar_atencion();\n  comprobar();')
+        self.assertEqual(r['pending_files'], ['src/main.cu'])
+        cambio = self.agente.project_request['changes'][0]
+        self.assertEqual((cambio['added'], cambio['removed']), (2, 1))
+        # Tocar otra vez lo ya cambiado se dice, en vez de «no aparece».
+        with self.assertRaisesRegex(ValueError, 'ya lo cambia otra propuesta'):
+            self.pedir(path='src/main.cu', old='return 0;', new='return 2;')
+        self.pedir(path='src/main.cu', old='return 1;', new='return 2;')
+        self.agente.decide_project_change(dict(plan_id=self.agente.project_request['plan_id'], approve=True))
+        self.assertEqual(self.leer('src/main.cu'), 'int main() {\n  lanzar_atencion();\n  comprobar();\n  return 2;\n}\n')
+
+    def test_el_trozo_casa_aunque_venga_con_el_espacio_de_la_lectura_numerada(self):
+        self.escribir('conf.py', "REGISTROS = {\n    'broma': ('bromea',\n              0.9, 'Síguele'),\n    'charla': ('conversa',\n               0.7, 'Charla'),\n}\n")
+        # Tal como lo copia el modelo de «2|     'broma'…»: un espacio de más en cada línea.
+        self.pedir(path='conf.py', old="     'broma': ('bromea',\n               0.9, 'Síguele'),",
+                   new="     'broma': ('bromea',\n               0.8, 'Síguele'),")
+        self.agente.decide_project_change(dict(plan_id=self.agente.project_request['plan_id'], approve=True))
+        self.assertEqual(self.leer('conf.py'), "REGISTROS = {\n    'broma': ('bromea',\n              0.8, 'Síguele'),\n    'charla': ('conversa',\n               0.7, 'Charla'),\n}\n")
+        # Si el trozo podría ser dos sitios, no se adivina.
+        self.escribir('doble.py', 'if a:\n    x = 1\nif b:\n        x = 1\n')
+        with self.assertRaisesRegex(ValueError, 'no aparece tal cual'):
+            self.pedir(path='doble.py', old='x  =  1', new='x = 2')
+        with self.assertRaisesRegex(ValueError, 'no aparece tal cual'):
+            self.pedir(path='doble.py', old='y = 1', new='y = 2')
+
+    def test_un_fichero_nuevo_que_espera_tambien_se_retoca_por_trozos(self):
+        self.pedir(path='app.py', content='def suma(a, b):\n    return a - b\n')
+        self.pedir(path='app.py', old='a - b', new='a + b')
+        self.agente.decide_project_change(dict(plan_id=self.agente.project_request['plan_id'], approve=True))
+        self.assertEqual(self.leer('app.py'), 'def suma(a, b):\n    return a + b\n')
+
+    def test_un_cambio_parcial_no_se_manda_reescribiendo_el_fichero(self):
+        lineas = ['linea %d' % i for i in range(1, 121)]
+        self.escribir('largo.py', '\n'.join(lineas) + '\n')
+        tocado = list(lineas); tocado[10] = 'cambiada'; tocado[50] = 'otra'
+        with self.assertRaisesRegex(ValueError, 'no se\s+reescribe por un cambio parcial'):
+            self.pedir(path='largo.py', content='\n'.join(tocado))
+        self.assertIsNone(self.agente.project_request)
+        # Rehacerlo de arriba abajo sí, y un fichero corto también.
+        self.assertEqual(self.pedir(path='largo.py', content='\n'.join('nueva %d' % i for i in range(90)))['status'], 'pending_approval')
+        self.assertEqual(self.pedir(path='README.md', content='# Motor\nOtra cosa.\n')['status'], 'pending_approval')
+
     def test_si_un_fichero_no_cuadra_no_se_escribe_ninguno(self):
         self.pedir(path='uno.txt', content='1')
         self.pedir(path='README.md', content='# Otro\n')

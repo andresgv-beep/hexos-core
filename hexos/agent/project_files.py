@@ -360,13 +360,56 @@ def _destino(base, path):
     return completa, relativa
 
 
-def proponer(store, path, content=None, old=None, new=None):
+def _sangria(linea):
+    return len(linea) - len(linea.lstrip(' '))
+
+
+def _casar_por_lineas(texto, old, new):
+    """Sustituye `old` aunque su sangrado no coincida con el del fichero. None si no casa una sola vez.
+
+    Las lecturas van numeradas («18| código») y el modelo copia el trozo con el espacio que
+    sigue a la barra: cada línea de old llega con un espacio de más y no casa con nada. El
+    15/11 el E4B lo intentó cuatro veces seguidas. Se comparan las líneas sin su sangrado y,
+    si hay un único sitio donde coinciden, new se recoloca con la misma diferencia.
+    """
+    viejas = old.strip('\n').split('\n')
+    lineas = texto.split('\n')
+    limpio = [l.strip() for l in viejas]
+    if not any(limpio):
+        return None
+    sitios = [i for i in range(len(lineas) - len(viejas) + 1)
+              if [l.strip() for l in lineas[i:i + len(viejas)]] == limpio]
+    if len(sitios) != 1:
+        return None
+    inicio = sitios[0]
+    guia = next(k for k, l in enumerate(limpio) if l)
+    desvio = _sangria(lineas[inicio + guia]) - _sangria(viejas[guia])
+    nuevas = []
+    for linea in new.strip('\n').split('\n'):
+        if not linea.strip():
+            nuevas.append('')
+        elif desvio >= 0:
+            nuevas.append(' ' * desvio + linea)
+        else:
+            nuevas.append(linea[min(-desvio, _sangria(linea)):])
+    return '\n'.join(lineas[:inicio] + nuevas + lineas[inicio + len(viejas):])
+
+
+MIN_LINEAS_PARCIAL = 40              # por debajo, reescribir el fichero entero no molesta
+PARTE_REESCRITA = 0.5                # un fichero entero que cambia menos que esto es un cambio parcial
+
+
+def proponer(store, path, content=None, old=None, new=None, pendiente=None):
     """Prepara un cambio en un fichero del proyecto. No escribe nada: devuelve el plan.
 
-    Dos formas: `content` con el fichero entero (crearlo o reemplazarlo), u `old` y `new`
-    para sustituir un trozo que aparece una sola vez.
+    Dos formas: `content` con el fichero entero (crearlo o rehacerlo), u `old` y `new` para
+    sustituir un trozo que aparece una sola vez. `pendiente` es la tarjeta que ya espera: un
+    trozo se aplica sobre lo ya propuesto para ese fichero, así que varios cambios seguidos se
+    suman en vez de pisarse.
     """
     proyecto, base = proyecto_activo(store)
+    propuestos = {c['path']: c for c in (pendiente or {}).get('changes', ())
+                  if pendiente['project'] == proyecto['id']}
     entero, trozo = content is not None, old is not None or new is not None
     if entero == trozo:
         raise ValueError('Usa content con el fichero entero, o bien old y new para cambiar un trozo; no las dos cosas.')
@@ -375,23 +418,39 @@ def proponer(store, path, content=None, old=None, new=None):
             raise ValueError('old es el trozo exacto que hay ahora y new el que lo sustituye; hacen falta los dos.')
         if old == new:
             raise ValueError('old y new son iguales: no hay nada que cambiar.')
-        completa, relativa, _ = localizar(base, path)
-        completa, relativa = _destino(base, str(relativa))
-        crudo = completa.read_bytes()
-        if len(crudo) > MAX_BYTES or b'\x00' in crudo[:8192]:
-            raise ValueError(str(relativa) + ' no es un fichero de texto que se pueda cambiar desde aquí.')
-        try:
-            antes = crudo.decode('utf-8')
-        except UnicodeDecodeError:
-            raise ValueError(str(relativa) + ' no está en UTF-8: no se cambia desde aquí.')
-        veces = antes.count(old)
+        directa = str(dentro(base, path)[1])
+        if directa in propuestos and propuestos[directa]['base'] is None:
+            # Un fichero nuevo que aún espera en la tarjeta: se retoca lo propuesto.
+            completa, relativa = _destino(base, directa)
+            crudo, antes = None, ''
+        else:
+            completa, relativa, _ = localizar(base, path)
+            completa, relativa = _destino(base, str(relativa))
+            crudo = completa.read_bytes()
+            if len(crudo) > MAX_BYTES or b'\x00' in crudo[:8192]:
+                raise ValueError(str(relativa) + ' no es un fichero de texto que se pueda cambiar desde aquí.')
+            try:
+                antes = crudo.decode('utf-8')
+            except UnicodeDecodeError:
+                raise ValueError(str(relativa) + ' no está en UTF-8: no se cambia desde aquí.')
+        previo = propuestos.get(str(relativa))
+        ya = previo['content'] if previo and previo['base'] == (None if crudo is None else _huella(crudo)) else antes
+        veces = ya.count(old)
+        flexible = _casar_por_lineas(ya, old, new) if not veces else None
+        if flexible is not None:
+            veces = 1
+        if not veces and ya is not antes and old in antes:
+            raise ValueError('Ese trozo de ' + str(relativa) + ' ya lo cambia otra propuesta que espera en la tarjeta. '
+                             'Si quieres otra cosa en ese sitio, usa como old el texto nuevo que propusiste.')
         if not veces:
             raise ValueError('El trozo de old no aparece tal cual en ' + str(relativa) + '. Léelo con project_read y '
                              'copia el trozo exacto, con sus espacios, sin los números de línea.')
         if veces > 1:
             raise ValueError('El trozo de old aparece %d veces en %s: incluye más líneas alrededor para que '
                              'sea único.' % (veces, relativa))
-        despues = antes.replace(old, new, 1)
+        despues = flexible if flexible is not None else ya.replace(old, new, 1)
+        if despues == ya:
+            raise ValueError('old y new dicen lo mismo: no hay nada que cambiar.')
     else:
         if not isinstance(content, str) or '\x00' in content:
             raise ValueError('content es el texto entero del fichero')
@@ -412,6 +471,16 @@ def proponer(store, path, content=None, old=None, new=None):
     mas = sum(1 for l in diff if l.startswith('+'))
     menos = sum(1 for l in diff if l.startswith('-'))
     nuevo = crudo is None
+    viejas, nuevas = len(antes.splitlines()), len(despues.splitlines())
+    if entero and not nuevo and viejas >= MIN_LINEAS_PARCIAL and mas + menos < PARTE_REESCRITA * (viejas + nuevas):
+        # El 14 y el 15/11 el 26B mandó main.py entero cinco veces para cambios de 20 o 40
+        # líneas: cada vuelta eran 5.000 tokens escritos de memoria, y de paso se le descolocaba
+        # lo que no había que tocar.
+        raise ValueError('Has mandado %s entero (%d líneas) para cambiar %d: un fichero que ya existe no se '
+                         'reescribe por un cambio parcial. Cambia solo lo que toca con old (el trozo exacto que hay '
+                         'ahora, copiado de project_read) y new (el que lo sustituye); puedes llamarla varias veces '
+                         'sobre el mismo fichero y se juntan en la tarjeta. content es para ficheros nuevos o para '
+                         'rehacer uno de arriba abajo.' % (relativa, nuevas, mas + menos))
     resumen = (('crear %s (%d líneas)' % (relativa, len(despues.splitlines()))) if nuevo else
                'cambiar %s (+%d −%d)' % (relativa, mas, menos))
     return dict(project=proyecto['id'], project_name=proyecto['name'],

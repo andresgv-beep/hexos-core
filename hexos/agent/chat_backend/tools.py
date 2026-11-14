@@ -215,8 +215,9 @@ class ToolDispatcher:
         if name == 'project.write':
             # Solo propone: escribe la aprobación de la persona (/api/project/change). Los
             # cambios se acumulan en una tarjeta y se aprueban juntos.
-            cambio = project_files.proponer(store, args['path'], args.get('content'), args.get('old'), args.get('new'))
             pendiente = self.session.project_request
+            cambio = project_files.proponer(store, args['path'], args.get('content'), args.get('old'), args.get('new'),
+                                            pendiente=pendiente)
             if not project_files.esta_propuesto(pendiente, cambio):
                 self.session.project_request = pendiente = project_files.tarjeta_con(pendiente, cambio)
             return dict(path=cambio['path'], kind=cambio['kind'], added=cambio['added'], removed=cambio['removed'],

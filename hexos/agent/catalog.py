@@ -302,9 +302,11 @@ TOOLS = {
                            'cuál es; para ver un fichero concreto se usa project_read.',
                            {'query':'str'}, {'path':'str'}),
     'project.write': spec('Proponer crear o cambiar un fichero de texto del proyecto puesto. path es su ruta dentro '
-                          'de la carpeta. Dos formas: content con el fichero entero (crearlo o reemplazarlo), o bien '
-                          'old y new para sustituir un trozo que aparece una sola vez; old se copia exacto de '
-                          'project_read, sin los números de línea. NO escribe nada: deja el cambio pendiente y a la '
+                          'de la carpeta. Un fichero que ya existe se cambia por trozos: old es el trozo exacto que '
+                          'hay (copiado de project_read, sin los números de línea, y que aparezca una sola vez) y new '
+                          'el que lo sustituye; varias llamadas sobre el mismo fichero se suman. content, con el '
+                          'fichero entero, es para crearlo o rehacerlo de arriba abajo: un cambio parcial mandado así '
+                          'se rechaza. NO escribe nada: deja el cambio pendiente y a la '
                           'persona le aparece una tarjeta con las líneas que cambian; solo su aprobación lo escribe. '
                           'Varios ficheros se proponen con una llamada cada uno y se aprueban juntos. No borra ficheros ni escribe claves, .git, node_modules o build. Tras '
                           'llamarla dile que lo apruebe en la tarjeta; nunca digas que ya está escrito.',
@@ -473,7 +475,7 @@ NATIVE_DESCRIPTIONS = {
     'project.files': 'Listar ficheros del proyecto. path: carpeta; pattern: nombre.',
     'project.read': 'Ver un fichero del proyecto, para explicarlo o revisarlo.',
     'project.search': 'Buscar un texto en los ficheros del proyecto.',
-    'project.write': 'Proponer crear o cambiar un fichero del proyecto: content entero, u old y new para un trozo. Lo aprueba la persona.',
+    'project.write': 'Proponer un cambio en el proyecto: old y new para cambiar un trozo de un fichero; content solo para crearlo. Lo aprueba la persona.',
     'project.plan': 'Memoria del proyecto: goal, steps (el plan), done (nº de paso hecho), note.',
     'project.run': 'Ejecutar en el proyecto, aislado y sin red: command es la orden como lista, p. ej. ["python3","-m","unittest"].',
     'system.package_plan': 'Este PC: planificar install/remove de un paquete. La persona lo aprueba en la tarjeta de pantalla, no en el chat.',
