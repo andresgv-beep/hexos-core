@@ -16,13 +16,16 @@ import os
 # nombre: (cómo reconocerlo, temperatura, qué hacer)
 REGISTROS = {
     'broma': ('bromea, provoca, exagera o propone un juego; no espera una respuesta seria',
-              0.9, 'Síguele el juego en su mismo tono, en dos o tres frases. No la expliques ni la '
-                   'analices, no des una lección y no cierres con una pregunta.'),
-    'charla': ('conversa, comenta, saluda o cuenta algo de su día',
-               0.7, 'Contesta corto, a la medida de su mensaje: un párrafo como mucho. Sin lección, '
-                    'sin lista y sin pregunta de cierre.'),
-    'tecnico': ('pregunta o enseña algo técnico o de trabajo y quiere una respuesta precisa',
-                0.3, 'Sé preciso y ordenado, sin adornos ni entusiasmo; lo que no sepas, dilo.'),
+              0.9, 'Síguele el juego con tu humor y en su mismo tono, sin alargarte. No la expliques '
+                   'ni la conviertas en una lección.'),
+    'charla': ('conversa, saluda, cuenta algo, pregunta por curiosidad, pide una recomendación o '
+               'pregunta por ti',
+               0.7, 'Charla como un compañero: cercano, con tu humor y tu opinión, y con ganas si '
+                    'pregunta algo. Sin lección ni lista.'),
+    'tecnico': ('plantea una duda técnica concreta o trae código, un error o una configuración, y '
+                'necesita una respuesta exacta',
+                0.4, 'Aquí manda la exactitud: datos correctos y en orden, con tu voz de siempre. '
+                     'Lo que no sepas, dilo.'),
     'reflexion': ('se abre, piensa en voz alta o pide tu opinión de fondo sobre algo',
                   0.7, 'Puedes extenderte y dar tu opinión con matices, sin convertirla en un informe.'),
 }

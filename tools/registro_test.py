@@ -36,7 +36,7 @@ class RegistroTest(unittest.TestCase):
         self.assertIsNone(registro.elegir(Runtime('broma', fin='max_tokens'), '', 'x'))
 
     def test_una_broma_pide_seguirla_corta_y_lo_tecnico_baja_la_temperatura(self):
-        self.assertIn('dos o tres frases', registro.bloque('broma'))
+        self.assertIn('sin alargarte', registro.bloque('broma'))
         self.assertIn('dato de HexOS', registro.bloque('broma'))
         self.assertEqual(registro.bloque(None), '')
         self.assertGreater(registro.temperatura('broma', 0.7), registro.temperatura('tecnico', 0.7))
