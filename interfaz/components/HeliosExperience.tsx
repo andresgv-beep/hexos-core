@@ -188,7 +188,10 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   // lo tomó por el código en curso y reescribió cada mensaje siguiente como una orden de
   // modificarlo, también «socio, solo estamos hablando»: contestó dos veces con el bloque
   // entero rehecho, que era justo lo que se le había pedido sin que nadie lo viera.
-  const editingCode = ventana !== "chat" && !mobile && codeOpen ? codeArtifact : null;
+  // Con un proyecto puesto el código es del proyecto y se cambia con project_write: envolver
+  // el mensaje como «revisa el código abierto» le quitaba al modelo la orden de proponerlo. El
+  // 14/11, a «procede», el 26B devolvió el bloque otra vez y dijo «He creado el archivo».
+  const editingCode = ventana !== "chat" && !mobile && codeOpen && !proyecto ? codeArtifact : null;
   const [fileFloating, setFileFloating] = useState<{ id?: string } | null>(null);
   const [codeHistory, setCodeHistory] = useState<ReplyArtifact[]>([]);
   const [previous, setPrevious] = useState<HistoryMessage[]>([]);

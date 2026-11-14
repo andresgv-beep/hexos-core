@@ -403,6 +403,7 @@ class ContextManager:
             bloque_recuerdo += ('\nDECIDIDO EN LA TARJETA DESDE TU ÚLTIMA RESPUESTA (dato de HexOS, ya ocurrido):\n' +
                                 '\n'.join(decididas[-4:]) + '\n')
             decididas.clear()
+            turn.decidido_en_tarjeta = True
         bloque_recuerdo += system_packages.bloque_pendiente(getattr(self.agent, 'system_request', None))
         bloque_recuerdo += project_files.bloque_pendiente(getattr(self.agent, 'project_request', None))
         # Lo que acabó en segundo plano se cuenta en el primer turno que llegue,

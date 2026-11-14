@@ -215,5 +215,37 @@ class SinTarjetaTest(SinLlamadaTest):
                                      respuesta='Aprueba el cambio en la tarjeta.')[2])
 
 
+class SinFicheroTest(unittest.TestCase):
+    def cerrar(self, respuesta, traza=(), proyecto='motor', decidido=False):
+        tmp = tempfile.TemporaryDirectory(prefix='hexos-sin-fichero-')
+        self.addCleanup(tmp.cleanup)
+        agent = Agent(tmp.name, Runtime())
+        agent.ventana, agent.proyecto = 'agente', proyecto
+        turn = TurnState(text='procede', image=None, model_request='procede', transcript=None)
+        turn.grupos_pedidos, turn.trace, turn.decidido_en_tarjeta = ['proyecto'], list(traza), decidido
+        salida = dict(reply=respuesta, work=None)
+        return turn, agent.runner.recovery.before_completion(None, turn, salida), \
+            lambda: agent.runner.recovery.before_completion(None, turn, salida)
+
+    LEIDO = (dict(tool='project.read', result={}),)
+
+    def test_dice_haber_creado_un_fichero_sin_proponerlo(self):
+        turn, devuelto, otra = self.cerrar('He creado el archivo `tools/time_tool.py` con la implementación.\n'
+                                           '```python\n' + 'x = 1\n' * 8 + '```', traza=self.LEIDO)
+        self.assertTrue(devuelto)
+        self.assertIn('no hay fichero ni tarjeta', turn.messages[0]['content'])
+        self.assertFalse(otra())
+
+    def test_no_salta_si_lo_propuso_si_ya_se_decidio_o_si_no_lo_afirma(self):
+        propuesto = (dict(tool='project.write', result=dict(status='pending_approval')),)
+        for argumentos in (dict(respuesta='He creado la propuesta del cambio.', traza=propuesto),
+                           dict(respuesta='He creado el fichero y ya lo aprobaste.', traza=self.LEIDO, decidido=True),
+                           dict(respuesta='He leído el fichero y he encontrado el fallo.', traza=self.LEIDO),
+                           dict(respuesta='No he creado nada todavía.', traza=self.LEIDO),
+                           dict(respuesta='He creado un plan en tres pasos.', proyecto=None, traza=self.LEIDO)):
+            with self.subTest(respuesta=argumentos['respuesta']):
+                self.assertFalse(self.cerrar(**argumentos)[1])
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -93,6 +93,16 @@ SIN_TARJETA = ('AVISO DE HEXOS (no es la persona): la respuesta anterior habla d
                'ninguna abierta: no se ha propuesto ningún cambio. Si la persona pidió crear o cambiar un '
                'fichero del proyecto, llama ahora a project_write con el cambio. Si no, contesta de nuevo '
                'sin mencionar ninguna tarjeta. No menciones este aviso.')
+# También contra la traza: dice en primera persona haber creado o cambiado un fichero y en el
+# turno no hay ninguna propuesta. El 14/11 el 26B, a «procede», contestó «He creado el archivo
+# tools/time_tool.py» sin llamar a nada: no había fichero ni tarjeta.
+FICHERO_DICHO = re.compile(
+    r'(?<!no )\b(?:he|hemos)\s+(?:ya\s+)?(?:cread|escrit|modificad|cambiad|añadid|actualizad|guardad|aplicad|'
+    r'corregid|arreglad|editad|reemplazad|sustituid)[oa]s?\b', re.I)
+SIN_FICHERO = ('AVISO DE HEXOS (no es la persona): la respuesta anterior dice haber creado o cambiado un fichero, '
+               'pero en este turno no se ha propuesto ningún cambio: no hay fichero ni tarjeta. Si la persona '
+               'lo pidió, llama ahora a project_write con el cambio; solo se escribe cuando lo apruebe en la '
+               'tarjeta. Si no, contesta de nuevo sin decir que lo has hecho. No menciones este aviso.')
 SIN_LLAMADA = ('AVISO DE HEXOS (no es la persona): la respuesta anterior no consultó nada. Si la '
                'petición se contesta mirando algo de este PC o de los equipos, haz ahora esa lectura y '
                'contesta con lo que salga. Si era conversación y no había nada que mirar, repite tu '
@@ -239,6 +249,17 @@ class RecoveryController:
                 and not any(paso.get('tool') in ('project.write', 'system.package_plan') for paso in turn.trace)):
             turn.retries.tarjeta_devuelta = True
             turn.messages = [dict(role='user', content=SIN_TARJETA)]
+            return True
+        if (not turn.retries.fichero_devuelto and getattr(self.agent, 'ventana', None) == 'agente'
+                and getattr(self.agent, 'proyecto', None) and not turn.decidido_en_tarjeta
+                and FICHERO_DICHO.search(output.get('reply') or '')
+                and not any(catalog.TOOLS.get(paso.get('tool'), {}).get('effect') != 'read'
+                            or paso.get('tool') == 'project.write' for paso in turn.trace)):
+            turn.retries.fichero_devuelto = True
+            if hasattr(self.agent.runtime, 'active_groups'):
+                activos = list(getattr(self.agent.runtime, 'active_groups', None) or [])
+                self.agent.runtime.active_groups = activos if 'proyecto' in activos else activos + ['proyecto']
+            turn.messages = [dict(role='user', content=SIN_FICHERO)]
             return True
         # La persona ordenó apuntar algo, el selector declaró las notas y el turno acaba
         # sin guardar nada. Aquí no se mira la respuesta sino la orden, que es suya, y la

@@ -92,6 +92,7 @@ class RetryState:
     read_claim_checked: bool = False
     sin_llamada_devuelto: bool = False
     tarjeta_devuelta: bool = False
+    fichero_devuelto: bool = False
     # La respuesta que se devolvió en el chat, por si repetir no sirve de nada.
     respuesta_devuelta: str | None = None
     traza_al_devolver: int = 0
@@ -117,6 +118,7 @@ class TurnState:
     # Grupos que el selector pidió para ESTE mensaje, sin los que se arrastran de antes.
     grupos_pedidos: list = field(default_factory=list)
     registro: str | None = None      # broma, charla, tecnico o reflexion: ver agent/registro.py
+    decidido_en_tarjeta: bool = False    # en este turno se le ha contado una decisión de una tarjeta
     reading_started: float | None = None
     document_read_mark: tuple | None = None
     document_read_retries: int = 0
