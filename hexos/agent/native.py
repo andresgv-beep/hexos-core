@@ -382,6 +382,12 @@ class NativeRuntime:
     def attach_image(self, pixels, width, height):
         """Adjunta una imagen RGB8 al turno siguiente. Se consume una sola vez."""
         if getattr(self, '_transport', None) and not self._transport.model_info.get('multimodal'):
+            # El 14/11 el 26B, que ve, dijo «este HNF no incluye un adaptador visual»: en esa carga
+            # la visión no había cabido en la VRAM. Son dos cosas distintas y el motor las distingue.
+            if self._transport.model_info.get('vision_dropped'):
+                raise RuntimeError('unsupported_attachment: este modelo ve imágenes, pero en esta carga la visión '
+                                   'no ha cabido en la memoria de la gráfica. Cierra lo que esté usando la gráfica '
+                                   'y vuelve a cargar el modelo.')
             raise RuntimeError('unsupported_attachment: este HNF no incluye un adaptador visual')
         if width <= 0 or height <= 0 or len(pixels) != width * height * 3:
             raise ValueError('la imagen debe ser RGB8 con tamaño coherente')
