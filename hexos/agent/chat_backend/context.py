@@ -284,10 +284,14 @@ class ContextManager:
         # de por medio ni en el Agente. Otra generación auxiliar corta, sin azar.
         from .. import registro
         from ..native import REVISION_DE_CODIGO
-        if (ventana == 'chat' and not elegidos and registro.activo() and not propio
-                and getattr(runtime, 'template', None) is not None
+        # En servicio el motor va tras ModelLifecycle, que pregunta por la sesión auxiliar
+        # con el modelo cargado; suelto (medidas) se pregunta directamente.
+        por_capa = getattr(runtime, 'elegir_registro', None)
+        if (ventana == 'chat' and not elegidos and registro.activo()
+                and (por_capa or getattr(runtime, 'template', None) is not None)
                 and not (turn.prompt_text or '').startswith(REVISION_DE_CODIGO)):
-            turn.registro = registro.elegir(runtime, ultimo, turn.text or '')
+            turn.registro = (por_capa(ultimo, turn.text or '') if por_capa
+                             else registro.elegir(runtime, ultimo, turn.text or ''))
             runtime.temperatura = registro.temperatura(turn.registro, runtime.temperatura)
         pegajosos.pedir(elegidos)
         runtime.active_groups = [g for g in pegajosos.activos()

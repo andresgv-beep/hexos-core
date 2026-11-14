@@ -70,6 +70,26 @@ class ModelLifecycleTest(unittest.TestCase):
         release.set();worker.join(1);foreground.join(1)
         self.assertTrue(chat_acquired.is_set())
 
+    def test_la_temperatura_llega_al_motor_cargado_y_al_que_se_cargue(self):
+        # En servicio se quedaba en esta capa: el motor siguió generando a 0.
+        made = []
+        lifecycle = ModelLifecycle(lambda: made.append(FakeRuntime()) or made[-1], ctx=4096)
+        self.addCleanup(lifecycle.close)
+        lifecycle.temperatura = 0.7                    # decidida con el modelo aún sin cargar
+        lifecycle.acquire_turn(); lifecycle.generate([dict(role='user', content='hola')]); lifecycle.release_turn()
+        self.assertEqual(made[-1].temperatura, 0.7)
+        lifecycle.temperatura = 0                      # y con el modelo ya cargado
+        self.assertEqual(made[-1].temperatura, 0)
+
+    def test_el_registro_se_pregunta_al_motor_de_verdad(self):
+        runtime = FakeRuntime()
+        runtime.template = type('T', (), {'render': staticmethod(lambda **d: 'p')})
+        runtime.send = lambda prompt, auxiliar=False: None
+        runtime.event = lambda: ((0, 0, 0, 0, 'eos'), 'broma')
+        lifecycle = ModelLifecycle(lambda: runtime, ctx=4096)
+        self.addCleanup(lifecycle.close)
+        self.assertEqual(lifecycle.elegir_registro('', 'dominaremos el mundo'), 'broma')
+
     def test_recupera_conversacion_archivada_tras_descargar(self):
         made = []
         lifecycle = ModelLifecycle(lambda: made.append(FakeRuntime()) or made[-1],

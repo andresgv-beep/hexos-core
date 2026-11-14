@@ -47,6 +47,7 @@ class ModelLifecycle:
         self._on_update = None
         self._active_groups = None
         self._ventana = None
+        self._temperatura = 0
         self.inference_slot = InferenceSlot()
         self._chat_slot = None
         self._io_lock = threading.RLock()
@@ -89,6 +90,26 @@ class ModelLifecycle:
             self._ventana = value
             if self._runtime is not None:
                 self._runtime.ventana = value
+
+    # La temperatura del turno, igual que los grupos: se decide fuera y hay que dársela
+    # al motor de verdad. Sin esta propiedad se quedaba en esta capa y en servicio todo
+    # se seguía generando a 0, aunque en las medidas (sin esta capa) funcionase.
+    @property
+    def temperatura(self):
+        return self._temperatura
+
+    @temperatura.setter
+    def temperatura(self, value):
+        with self._condition:
+            self._temperatura = value
+            if self._runtime is not None:
+                self._runtime.temperatura = value
+
+    def elegir_registro(self, ultimo_asistente, mensaje):
+        """El registro del mensaje, por la sesión auxiliar como el selector."""
+        from .. import registro
+        with self._io_lock, self._use() as runtime:
+            return registro.elegir(runtime, ultimo_asistente, mensaje)
 
     def elegir_grupos(self, ultimo_asistente, mensaje, ventana):
         """El selector usa la sesión auxiliar: pregunta y respuesta van en una sola toma."""
@@ -186,6 +207,7 @@ class ModelLifecycle:
                 runtime.on_update = self._on_update
                 runtime.active_groups = self._active_groups
                 runtime.ventana = self._ventana
+                runtime.temperatura = self._temperatura
                 self._runtime = runtime
                 self._state = 'ready'
                 self._last_activity = time.monotonic()
