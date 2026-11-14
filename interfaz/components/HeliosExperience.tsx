@@ -23,7 +23,7 @@ import { CodeWorkspace } from "./CodeWorkspace";
 import { phases } from "@/lib/helios/state";
 import { createHexosTransport, type ContextCut, type CredentialRequest, type HeliosTransport, type HistoryMessage,
          type ProjectChange, type SystemRequest } from "@/lib/helios/hexos";
-import { mergeToolActivities, type ToolActivity } from "@/lib/helios/tools";
+import { mergeToolActivities, turnToolActivities, type ToolActivity } from "@/lib/helios/tools";
 import { coreSectionForTools, createCoreClient, type NoteDetail } from "@/lib/helios/core";
 import { createMediaClient, isActive, type MediaControl, type MediaJob } from "@/lib/helios/media";
 import { MediaCard } from "./MediaCard";
@@ -325,7 +325,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
           setTurnTools(items => mergeToolActivities(items, status.tools));
           const destino = ventanaEnCurso.current;
           if (destino !== null) setTurns(items => items.map(item => item.id === destino
-            ? { ...item, tools: mergeToolActivities(item.tools ?? [], status.tools) } : item));
+            ? { ...item, tools: turnToolActivities(item.tools ?? [], status.tools) } : item));
         }
         const generation = status.generation;
         const target = ventanaEnCurso.current;
@@ -554,7 +554,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         const reparo = cierre && !["comprobado", "sin_operaciones"].includes(cierre.reason)
           ? { note: cierre.note, tools: cierre.unverified.map(u => u.tool) }
           : undefined;
-        setTurnTools(result.tools);
+        setTurnTools(mergeToolActivities([], result.tools));
         setTurns(items => [...items, { id, text: guardado.resumedRequest ?? guardado.resume ?? "Continuar operación pendiente",
                                       pending: false, reply: result.reply, caveat: reparo, tools: result.tools }]);
         setRevealing(Boolean(result.reply));
@@ -808,7 +808,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         setRevealing(Boolean(visibleReply) && !streamedRequest.current && !result.cancelled);
         setTurns(items => items.map(item => item.id === id ? { ...item, pending: false, reply: visibleReply,
           streamed: item.streamed || result.cancelled, caveat: reparo,
-          tools: mergeToolActivities(item.tools ?? [], result.tools) } : item));
+          tools: result.tools.length ? result.tools : item.tools } : item));
         setAnnouncement(result.cancelled ? "Generación detenida" : `Helios ha respondido en la conversación ${id}`);
       }
     } catch (error) {

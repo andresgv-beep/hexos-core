@@ -372,3 +372,12 @@ test('a pending project change reaches the card only when it is well formed', as
   for (const malo of [null, undefined, 'x', {}, { ...pendiente, kind: 'delete' }, { ...pendiente, plan_id: 7 }])
     assert.equal(parseProjectChange(malo), null);
 });
+
+test('a turn keeps every call, also when the same tool runs eight times', async () => {
+  const { turnToolActivities } = await import('../lib/helios/tools');
+  const lectura = (i: number, status: 'running' | 'done') => ({ id: `${i}-project.read`, name: 'project.read', status, seconds: status === 'done' ? .1 : null });
+  let vistas = turnToolActivities([], [lectura(0, 'done'), lectura(1, 'running')]);
+  vistas = turnToolActivities(vistas, [0, 1, 2, 3, 4, 5, 6].map(i => lectura(i, 'done')).concat(lectura(7, 'running')));
+  assert.equal(vistas.length, 8);
+  assert.deepEqual(vistas.map(tool => tool.status), [...Array(7).fill('done'), 'running']);
+});

@@ -41,7 +41,21 @@ export function parseToolActivities(value: unknown, defaultStatus: ToolActivityS
       status,
       seconds: typeof entry.seconds === "number" && Number.isFinite(entry.seconds) && entry.seconds >= 0 ? entry.seconds : null,
     }];
-  }).slice(-6);
+  }).slice(-MAX_TURN_TOOLS);
+}
+
+const MAX_TURN_TOOLS = 60;
+
+/** Las llamadas de un turno, una por una. Se casan por posición y nombre, no solo por nombre:
+ *  ocho `project.read` seguidos son ocho llamadas, y casadas por nombre el chat enseñaba una. */
+export function turnToolActivities(current: ToolActivity[], incoming: ToolActivity[]): ToolActivity[] {
+  const merged = [...current];
+  for (const tool of incoming) {
+    const existing = merged.findIndex(item => item.id === tool.id);
+    if (existing >= 0) merged[existing] = tool;
+    else merged.push(tool);
+  }
+  return merged.slice(-MAX_TURN_TOOLS);
 }
 
 /** Preserve the recent tool constellation while updating repeated tools in place. */

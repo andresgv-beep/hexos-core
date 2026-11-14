@@ -19,9 +19,9 @@ Lista viva, apuntada el 2026-11-14. Lo que se cierre se quita de aquí.
   faltan ejecutar (compilar y pasar pruebas) y anotar. El catálogo está en el tope de 7.000.
 - **Escribir, por comprobar:** con el 26B, y la tarjeta del cambio vista en pantalla.
 - **El E4B no encadena pasos:** a «arréglala» lista, dice que necesita leer y cierra el turno.
-- **Seguir la pista del código, por comprobar con el 26B:** tramos de 400 líneas, el resultado dice
-  qué parte se ha visto y la ficha pide recorrerlo en un turno. Con el E4B lee el fichero entero
-  pero no salta a quien lo llama.
+- **Seguir la pista del código:** comprobado con el 26B el 14/11 (ocho lecturas en un turno, 2.053
+  líneas, y dice exacto lo que ha leído). Le queda distinguir un interruptor de pruebas
+  (`HERA_SABOTAJE`) de un riesgo real. El E4B lee el fichero entero pero no salta a quien lo llama.
 - **Un modelo por ventana:** que Chat y Agente carguen cada uno el suyo al cambiar. Candidatos de
   código para el Agente, sin probar: Qwen3-Coder-30B-A3B, Laguna XS 2.1, North Mini Code (MoE de
   ~30B que caben en 23 GB). Primer paso: mirar su `config.json` contra lo que soporta el motor.
