@@ -88,7 +88,7 @@ export function CodeWorkspace({ artifact, busy, canUndo, onUndo, onClose, onCrea
     <div className="code-workspace-body">
       {mode === "code" ? <ReplyCode code={artifact.code} language={artifact.language} />
         : artifact.previewHtml
-          ? <PreviewFrame title="Vista previa de la interfaz generada" srcDoc={previewSource} />
+          ? <PreviewFrame title="Vista previa de la interfaz generada" srcDoc={previewSource} source={artifact.previewHtml} />
           : <div className="code-preview-empty">
               <MonitorUp size={38} aria-hidden="true" />
               <h3>Prepara una vista de esta interfaz</h3>

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { parseObservation, recordObservation } from "@/lib/helios/previewProbe";
 
 // Ancho de escritorio al que se dibuja una maqueta. Helios las hace para
 // pantalla completa; en el panel lateral (~550 px) solo se veía la columna
@@ -10,8 +11,21 @@ export function previewScale(width: number, design = PREVIEW_DESIGN_WIDTH): numb
   return width > 0 && width < design ? width / design : 1;
 }
 
-export function PreviewFrame({ title, srcDoc }: { title: string; srcDoc: string }) {
+/** `source` es el código tal como lo entregó el modelo: con él se guarda lo que la sonda mide. */
+export function PreviewFrame({ title, srcDoc, source }: { title: string; srcDoc: string; source?: string }) {
   const box = useRef<HTMLDivElement>(null);
+  const frame = useRef<HTMLIFrameElement>(null);
+  useEffect(() => {
+    if (!source) return;
+    const listen = (event: MessageEvent) => {
+      // Solo lo que viene de ESTE marco; la página no puede hacerse pasar por otra.
+      if (event.source !== frame.current?.contentWindow) return;
+      const seen = parseObservation(event.data);
+      if (seen) recordObservation(source, seen);
+    };
+    window.addEventListener("message", listen);
+    return () => window.removeEventListener("message", listen);
+  }, [source]);
   const [size, setSize] = useState({ width: 0, height: 0 });
   useEffect(() => {
     const element = box.current;
@@ -25,6 +39,6 @@ export function PreviewFrame({ title, srcDoc }: { title: string; srcDoc: string 
   const fitted = scale < 1 ? { width: PREVIEW_DESIGN_WIDTH, height: size.height / scale,
     transform: `scale(${scale})`, transformOrigin: "0 0" } : { width: "100%", height: "100%" };
   return <div ref={box} className="preview-fit">
-    <iframe title={title} sandbox="allow-scripts" srcDoc={srcDoc} style={fitted} />
+    <iframe ref={frame} title={title} sandbox="allow-scripts" srcDoc={srcDoc} style={fitted} />
   </div>;
 }

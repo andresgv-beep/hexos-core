@@ -34,7 +34,7 @@ export function ContentDock({ artifact, fileRequest, busy, canUndo, onUndo, onEx
         onClose={() => {}} onExpand={onExpandFile} /></div>}
       {tab === "nas" ? null : !artifact ? <div className="hud-content-empty"><p>{tab === "code" ? "El código que abra Helios aparecerá aquí." : "La vista previa de la implementación aparecerá aquí."}</p></div>
         : tab === "code" ? <ReplyCode download code={artifact.code} language={artifact.language} />
-        : artifact.previewHtml ? <PreviewFrame title="Vista previa lateral" srcDoc={previewSource} />
+        : artifact.previewHtml ? <PreviewFrame title="Vista previa lateral" srcDoc={previewSource} source={artifact.previewHtml} />
         : <div className="hud-content-empty"><p>Esta implementación todavía no tiene vista previa.</p>
           <button type="button" disabled={busy} onClick={() => onPreview(artifact.code, artifact.language)}>Crear interfaz</button></div>}
     </div>

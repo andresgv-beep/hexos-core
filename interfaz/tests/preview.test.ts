@@ -56,3 +56,30 @@ test("rechaza una mejora pequeña que borra gran parte de la interfaz", () => {
   assert.match(result.reason || "", /eliminaba/);
   assert.equal(assessCodeRevision("elimina las secciones antiguas", before, after).safe, true);
 });
+
+test("lo que mide la vista previa viaja con el retoque como hechos", async () => {
+  const { describeObservation, parseObservation } = await import("../lib/helios/previewProbe");
+  const seen = parseObservation({ mark: "hexos-preview-probe", seconds: 20, errors: [],
+    canvas: { light: .01, dark: .9, moving: .05 }, textLength: 0 });
+  assert.ok(seen);
+  assert.match(describeObservation(seen!), /SIGUE en movimiento/);
+  const prompt = codeRevisionPrompt("sigue cayendo", { reply: "", code: "<canvas></canvas>", language: "html" }, seen);
+  assert.match(prompt, /hechos medidos/);
+  assert.match(prompt, /A los 20 s|a los 20 s/);
+  assert.doesNotMatch(codeRevisionPrompt("x", { reply: "", code: "y" }), /hechos medidos/);
+  const blanco = parseObservation({ mark: "hexos-preview-probe", seconds: 5, errors: ["x is not defined (línea 3)"],
+    canvas: { light: .97, dark: 0, moving: 0 }, textLength: 0 });
+  assert.match(describeObservation(blanco!), /casi todo en blanco/);
+  assert.match(describeObservation(blanco!), /x is not defined/);
+});
+
+test("la sonda no acepta mensajes que no son suyos ni valores fuera de rango", async () => {
+  const { parseObservation } = await import("../lib/helios/previewProbe");
+  assert.equal(parseObservation({ seconds: 3, errors: [] }), null);
+  assert.equal(parseObservation("hola"), null);
+  const raro = parseObservation({ mark: "hexos-preview-probe", seconds: 3, errors: ["a".repeat(900), 7],
+    canvas: { light: 4, dark: 0, moving: 0 }, textLength: 2 });
+  assert.equal(raro!.canvas, null);
+  assert.equal(raro!.errors.length, 1);
+  assert.equal(raro!.errors[0].length, 200);
+});
