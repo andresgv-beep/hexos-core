@@ -227,6 +227,16 @@ class MemoriaTest(Escribir):
         self.assertEqual([p['done'] for p in r['steps']], [True, False, True, False])
         self.assertEqual(self.memoria()['objetivo'], 'Una calculadora en Python')
 
+    def test_los_pasos_valen_tambien_como_objetos(self):
+        # Tal como los mandó el 26B: el turno murió en «project.plan.steps: se requiere list».
+        argumentos = dict(goal='Calculadora con PyQt6', steps=[dict(done=False, goal='Verificar entorno'),
+                                                               dict(step='Estructura'), 'Interfaz'])
+        catalog.validate('project.plan', argumentos)
+        self.assertEqual(argumentos['steps'], ['Verificar entorno', 'Estructura', 'Interfaz'])
+        self.assertEqual([p['step'] for p in self.plan(**argumentos)['steps']], ['Verificar entorno', 'Estructura', 'Interfaz'])
+        with self.assertRaisesRegex(ValueError, 'se requiere list'):
+            catalog.validate('project.plan', dict(steps=[dict(sin='texto')]))
+
     def test_dice_que_falta_o_que_el_paso_no_existe(self):
         for argumentos, dice in ((dict(), 'al menos uno'), (dict(done=1), 'El plan tiene 0 pasos'),
                                  (dict(steps=[]), 'lista de pasos'), (dict(goal='  '), 'goal es un texto')):

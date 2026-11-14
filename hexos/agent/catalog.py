@@ -310,8 +310,8 @@ TOOLS = {
                           'llamarla dile que lo apruebe en la tarjeta; nunca digas que ya está escrito.',
                           {'path':'str'}, {'content':'str', 'old':'str', 'new':'str'}),
     'project.plan': spec('Llevar la memoria del proyecto puesto, que HexOS te pone delante cuando se pierde el '
-                         'contexto. goal es el objetivo; steps, la lista de pasos del plan (rehacerla conserva los ya '
-                         'hechos); done, el número del paso que acabas de terminar; note, algo que convenga recordar. '
+                         'contexto. goal es el objetivo; steps, la lista de pasos del plan, cada uno un texto (rehacerla conserva '
+                         'los ya hechos); done, el número del paso que acabas de terminar; note, algo que convenga recordar. '
                          'Al menos uno. Se guarda en .helios/proyecto.json dentro de la carpeta y no pide '
                          'aprobación. Úsala al empezar un encargo de varios pasos y al terminar cada uno.',
                          optional={'goal':'str', 'steps':'list', 'done':'int', 'note':'str'},
@@ -593,12 +593,34 @@ def tools_for(groups, window=None):
     return {name: definition for name, definition in model_tools().items() if name in nombres}
 
 
+CAMPOS_DE_PASO = ('step', 'paso', 'goal', 'text', 'texto', 'title', 'name', 'description', 'task')
+
+
+def pasos_como_texto(steps):
+    """Los pasos de un plan como lista de textos, vengan como vengan.
+
+    Se declaran como lista de textos, pero el 14/11 el 26B mandó cada paso como un objeto
+    (`{goal: "...", done: false}`) y el turno murió en la validación, dos veces seguidas. Lo que
+    quería decir estaba claro: se toma el texto de cada objeto y se sigue.
+    """
+    if not isinstance(steps, list):
+        return steps
+    textos = []
+    for paso in steps:
+        if isinstance(paso, dict):
+            paso = next((paso[c] for c in CAMPOS_DE_PASO if isinstance(paso.get(c), str) and paso[c].strip()), paso)
+        textos.append(paso)
+    return textos
+
+
 def validate(name, args):
     if not isinstance(name, str) or name not in TOOLS:
         raise ValueError('herramienta inexistente')
     definition = TOOLS[name]
     if not isinstance(args, dict):
         raise ValueError('arguments debe ser un objeto')
+    if name == 'project.plan' and 'steps' in args:
+        args['steps'] = pasos_como_texto(args['steps'])
     missing = set(definition['required']) - set(args)
     extra = set(args) - set(definition['required']) - set(definition['optional'])
     if missing or extra:
