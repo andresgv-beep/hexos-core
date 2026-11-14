@@ -280,6 +280,15 @@ class ContextManager:
         turn.grupos_pedidos = list(elegidos)
         from ..native import temperatura_del_turno
         runtime.temperatura = temperatura_del_turno(ventana, elegidos, turn.prompt_text)
+        # Solo en una charla del Chat, que es donde el tono importa: ni con herramientas
+        # de por medio ni en el Agente. Otra generación auxiliar corta, sin azar.
+        from .. import registro
+        from ..native import REVISION_DE_CODIGO
+        if (ventana == 'chat' and not elegidos and registro.activo() and not propio
+                and getattr(runtime, 'template', None) is not None
+                and not (turn.prompt_text or '').startswith(REVISION_DE_CODIGO)):
+            turn.registro = registro.elegir(runtime, ultimo, turn.text or '')
+            runtime.temperatura = registro.temperatura(turn.registro, runtime.temperatura)
         pegajosos.pedir(elegidos)
         runtime.active_groups = [g for g in pegajosos.activos()
                                  if g in catalog.groups_in(ventana)]
@@ -395,6 +404,8 @@ class ContextManager:
                 bloque_recuerdo += task_notices.history_block(task_notices.recent(store.db))
         if hora_activa() and tras_pausa(store, turn.uid):
             bloque_recuerdo += hora_local()
+        from .. import registro
+        bloque_recuerdo += registro.bloque(getattr(turn, 'registro', None))
         turn.native = bool(getattr(self.agent.runtime, 'native', False))
         turn.budget = self.agent.history_budget()
         # Acumulativa, no deslizante. Con una ventana de los últimos N mensajes

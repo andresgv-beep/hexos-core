@@ -111,6 +111,7 @@ class TurnState:
     reproche: bool = False
     # Grupos que el selector pidió para ESTE mensaje, sin los que se arrastran de antes.
     grupos_pedidos: list = field(default_factory=list)
+    registro: str | None = None      # broma, charla, tecnico o reflexion: ver agent/registro.py
     reading_started: float | None = None
     document_read_mark: tuple | None = None
     document_read_retries: int = 0
