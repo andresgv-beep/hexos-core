@@ -362,14 +362,19 @@ test('projects are listed, created and switched through their own routes', async
   await assert.rejects(async () => transport.createProject?.('   '), /nombre/);
 });
 
-test('a pending project change reaches the card only when it is well formed', async () => {
+test('pending project changes reach the card only when they are well formed', async () => {
   const { parseProjectChange } = await import('../lib/helios/hexos');
-  const pendiente = { plan_id: 'p1', summary: 'cambiar src/main.cu (+1 −1)', path: 'src/main.cu', project_name: 'Motor',
-    kind: 'edit', added: 1, removed: 1, diff: ['@@ -3 +3 @@', '-  return 0;', '+  return 1;', 7], diff_lines: 3 };
-  assert.deepEqual(parseProjectChange(pendiente), { planId: 'p1', summary: 'cambiar src/main.cu (+1 −1)',
-    path: 'src/main.cu', projectName: 'Motor', kind: 'edit', added: 1, removed: 1,
-    diff: ['@@ -3 +3 @@', '-  return 0;', '+  return 1;'], diffLines: 3 });
-  for (const malo of [null, undefined, 'x', {}, { ...pendiente, kind: 'delete' }, { ...pendiente, plan_id: 7 }])
+  const fichero = { path: 'src/main.cu', kind: 'edit', added: 1, removed: 1,
+    diff: ['@@ -3 +3 @@', '-  return 0;', '+  return 1;', 7], diff_lines: 3 };
+  const pendiente = { plan_id: 'p1', summary: '2 ficheros (+3 −1): src/main.cu, README.md', project_name: 'Motor',
+    added: 3, removed: 1, changes: [fichero, { path: 'README.md', kind: 'create', added: 2, removed: 0, diff: ['+# Motor'] },
+      { path: 'malo.txt', kind: 'delete' }, 'basura'] };
+  assert.deepEqual(parseProjectChange(pendiente), { planId: 'p1', summary: '2 ficheros (+3 −1): src/main.cu, README.md',
+    projectName: 'Motor', added: 3, removed: 1, changes: [
+      { path: 'src/main.cu', kind: 'edit', added: 1, removed: 1, diff: ['@@ -3 +3 @@', '-  return 0;', '+  return 1;'], diffLines: 3 },
+      { path: 'README.md', kind: 'create', added: 2, removed: 0, diff: ['+# Motor'], diffLines: 1 }] });
+  for (const malo of [null, undefined, 'x', {}, { ...pendiente, changes: [] }, { ...pendiente, plan_id: 7 },
+    { ...pendiente, changes: [{ path: 'x', kind: 'delete' }] }])
     assert.equal(parseProjectChange(malo), null);
 });
 

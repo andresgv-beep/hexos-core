@@ -11,9 +11,15 @@ class Escribir(Base):
         with self.agente.store() as store:
             return project_files.proponer(store, **argumentos)
 
-    def aplicar(self, plan):
+    def tarjeta(self, *cambios):
+        pendiente = None
+        for cambio in cambios:
+            pendiente = project_files.tarjeta_con(pendiente, cambio)
+        return pendiente
+
+    def aplicar(self, *cambios):
         with self.agente.store() as store:
-            return project_files.aplicar(store, plan)
+            return project_files.aplicar(store, self.tarjeta(*cambios))
 
     def leer(self, ruta):
         return (self.repo / ruta).read_text()
@@ -73,9 +79,9 @@ class ProponerTest(Escribir):
             self.proponer(path='foto.bin', content='x')
 
     def test_lo_publico_no_lleva_el_contenido_entero(self):
-        visto = project_files.publico(self.proponer(path='a.txt', content='secreto no, pero largo'))
-        self.assertNotIn('content', visto)
-        self.assertIn('diff', visto)
+        visto = project_files.publico(self.tarjeta(self.proponer(path='a.txt', content='secreto no, pero largo')))
+        self.assertNotIn('content', visto['changes'][0])
+        self.assertIn('diff', visto['changes'][0])
 
 
 class AplicarTest(Escribir):
@@ -114,7 +120,7 @@ class AplicarTest(Escribir):
 class TarjetaTest(Escribir):
     def setUp(self):
         super().setUp()
-        self.plan = self.proponer(path='src/main.cu', old='return 0;', new='return 1;')
+        self.plan = self.tarjeta(self.proponer(path='src/main.cu', old='return 0;', new='return 1;'))
         self.agente.session.project_request = self.plan
 
     def notas(self):
@@ -123,7 +129,7 @@ class TarjetaTest(Escribir):
 
     def test_el_estado_ensena_el_cambio_sin_el_contenido(self):
         self.assertEqual(self.agente.project_request['summary'], 'cambiar src/main.cu (+1 −1)')
-        self.assertNotIn('content', self.agente.project_request)
+        self.assertNotIn('content', self.agente.project_request['changes'][0])
 
     def test_aprobar_escribe_y_lo_anota(self):
         r = self.agente.decide_project_change(dict(plan_id=self.plan['plan_id'], approve=True))
@@ -167,14 +173,89 @@ class DespachoTest(Escribir):
         self.assertEqual(r['status'], 'pending_approval')
         self.assertFalse({'plan_id', 'content', 'diff'} & set(r))
         self.assertIn('return 0;', self.leer('src/main.cu'))
-        self.assertEqual(self.agente.project_request['path'], 'src/main.cu')
+        self.assertEqual([c['path'] for c in self.agente.project_request['changes']], ['src/main.cu'])
 
-    def test_van_de_uno_en_uno_y_repetir_no_cambia_la_tarjeta(self):
-        self.pedir(path='a.txt', content='a')
-        tarjeta = self.agente.project_request['plan_id']
-        self.assertEqual(self.pedir(path='a.txt', content='a')['status'], 'pending_approval')
-        self.assertEqual(self.pedir(path='b.txt', content='b')['status'], 'waiting_previous_change')
-        self.assertEqual(self.agente.project_request['plan_id'], tarjeta)
+    def test_varios_ficheros_se_juntan_en_una_tarjeta_y_se_aprueban_a_la_vez(self):
+        self.pedir(path='app/main.py', content='print("hola")')
+        primera = self.agente.project_request['plan_id']
+        self.assertEqual(self.pedir(path='app/main.py', content='print("hola")')['status'], 'pending_approval')
+        self.assertEqual(self.agente.project_request['plan_id'], primera)       # repetir no cambia la tarjeta
+        r = self.pedir(path='README.md', content='# App\n')
+        self.assertEqual(r['pending_files'], ['app/main.py', 'README.md'])
+        self.pedir(path='app/main.py', content='print("adiós")')                # proponerlo otra vez lo sustituye
+        tarjeta = self.agente.project_request
+        self.assertNotEqual(tarjeta['plan_id'], primera)                         # se aprueba lo que se ha visto
+        self.assertEqual([c['path'] for c in tarjeta['changes']], ['README.md', 'app/main.py'])
+        self.assertIn('2 ficheros', tarjeta['summary'])
+        with self.assertRaises(ValueError):
+            self.agente.decide_project_change(dict(plan_id=primera, approve=True))
+        hecho = self.agente.decide_project_change(dict(plan_id=tarjeta['plan_id'], approve=True))
+        self.assertEqual((hecho['verified'], hecho['written']), (True, ['README.md', 'app/main.py']))
+        self.assertEqual(self.leer('app/main.py'), 'print("adiós")\n')
+        self.assertEqual(self.leer('README.md'), '# App\n')
+
+    def test_si_un_fichero_no_cuadra_no_se_escribe_ninguno(self):
+        self.pedir(path='uno.txt', content='1')
+        self.pedir(path='README.md', content='# Otro\n')
+        self.escribir('README.md', 'lo tocó la persona\n')
+        hecho = self.agente.decide_project_change(dict(plan_id=self.agente.project_request['plan_id'], approve=True))
+        self.assertEqual((hecho['executed'], hecho['written']), (False, []))
+        self.assertFalse((self.repo / 'uno.txt').exists())
+
+
+class MemoriaTest(Escribir):
+    def plan(self, **argumentos):
+        with self.agente.store() as store:
+            return project_files.dispatch(store, 'project.plan', argumentos)
+
+    def memoria(self):
+        import json
+        return json.loads((self.repo / '.helios' / 'proyecto.json').read_text())
+
+    def test_objetivo_plan_pasos_hechos_y_notas(self):
+        r = self.plan(goal='Una calculadora en Python', steps=['Esqueleto', 'Funciones', 'Pruebas'])
+        self.assertEqual((r['total'], r['done'], r['next']), (3, 0, '1. Esqueleto'))
+        r = self.plan(done=1, note='Se usa unittest, sin dependencias')
+        self.assertEqual((r['done'], r['next'], r['notes']), (1, '2. Funciones', 1))
+        self.assertNotIn('Siguen pendientes', r['note'])
+        # done marca un paso, no «hasta ese», y lo dice.
+        r = self.plan(done=3)
+        self.assertEqual(([p['done'] for p in r['steps']], 'los anteriores: 2' in r['note']), ([True, False, True], True))
+        r = self.plan(steps=['Esqueleto', 'Funciones', 'Pruebas'])
+        # Rehacer el plan conserva lo ya hecho.
+        r = self.plan(steps=['Esqueleto', 'Funciones', 'Pruebas', 'README'])
+        self.assertEqual([p['done'] for p in r['steps']], [True, False, True, False])
+        self.assertEqual(self.memoria()['objetivo'], 'Una calculadora en Python')
+
+    def test_dice_que_falta_o_que_el_paso_no_existe(self):
+        for argumentos, dice in ((dict(), 'al menos uno'), (dict(done=1), 'El plan tiene 0 pasos'),
+                                 (dict(steps=[]), 'lista de pasos'), (dict(goal='  '), 'goal es un texto')):
+            with self.subTest(dice=dice), self.assertRaisesRegex(ValueError, dice):
+                self.plan(**argumentos)
+
+    def test_lo_escrito_con_aprobacion_lo_apunta_hexos(self):
+        self.agente.session.project_request = self.tarjeta(self.proponer(path='a.txt', content='a'))
+        self.agente.decide_project_change(dict(plan_id=self.agente.project_request['plan_id'], approve=True))
+        self.assertEqual([h['texto'] for h in self.memoria()['hechos']], ['a.txt'])
+
+    def test_va_en_la_ficha_y_no_se_lee_ni_se_pisa_como_un_fichero_mas(self):
+        from hexos.agent import projects
+        self.plan(goal='Una calculadora', steps=['Esqueleto', 'Pruebas'], done=None)
+        self.plan(done=1)
+        with self.agente.store() as store:
+            ficha = projects.ficha(store, projects.activo(store))
+            listado = project_files.dispatch(store, 'project.files', {})
+        self.assertIn('Objetivo: Una calculadora', ficha)
+        self.assertIn('1. [hecho] Esqueleto 2. [pendiente] Pruebas', ficha)
+        self.assertIn('Siguiente paso: 2. Pruebas', ficha)
+        self.assertNotIn('.helios/proyecto.json', [f['path'] for f in listado['files']])
+        with self.assertRaisesRegex(ValueError, 'No se escribe dentro de .helios'):
+            self.proponer(path='.helios/proyecto.json', content='{}')
+
+    def test_una_memoria_rota_no_tumba_nada(self):
+        (self.repo / '.helios').mkdir()
+        (self.repo / '.helios' / 'proyecto.json').write_text('{esto no es json')
+        self.assertEqual(self.plan(note='sigo')['notes'], 1)
 
 
 class CatalogoTest(unittest.TestCase):

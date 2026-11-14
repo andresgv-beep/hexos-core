@@ -253,8 +253,7 @@ class RecoveryController:
         if (not turn.retries.fichero_devuelto and getattr(self.agent, 'ventana', None) == 'agente'
                 and getattr(self.agent, 'proyecto', None) and not turn.decidido_en_tarjeta
                 and FICHERO_DICHO.search(output.get('reply') or '')
-                and not any(catalog.TOOLS.get(paso.get('tool'), {}).get('effect') != 'read'
-                            or paso.get('tool') == 'project.write' for paso in turn.trace)):
+                and not any(paso.get('tool') == 'project.write' for paso in turn.trace)):
             turn.retries.fichero_devuelto = True
             if hasattr(self.agent.runtime, 'active_groups'):
                 activos = list(getattr(self.agent.runtime, 'active_groups', None) or [])

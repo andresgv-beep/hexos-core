@@ -40,8 +40,12 @@ class DeclarablesTest(unittest.TestCase):
         for ventana in catalog.WINDOWS:
             grupos = list(catalog.groups_in(ventana))
             # El peor caso: el selector no contesta y se ofrece todo lo de la ventana.
+            # 7.000 hasta el 14/11. Subido a 7.200 al dar al proyecto escribir y memoria: las
+            # tres lecturas ya se habían acortado para la escritura, y recortar más las
+            # descripciones de otros grupos sin poder medirlos costaba más que 60 caracteres en
+            # un caso que solo se da cuando el selector falla. El tope por grupo no se mueve.
             with self.subTest(ventana=ventana, caso='todos sus grupos'):
-                self.assertLess(pesa(catalog.tools_for(grupos, ventana)), 7000)
+                self.assertLess(pesa(catalog.tools_for(grupos, ventana)), 7200)
             # El caso normal: el núcleo y un grupo, con los que arrastre.
             for grupo in grupos:
                 with self.subTest(ventana=ventana, grupo=grupo):

@@ -48,7 +48,7 @@ MAX_RECORRIDOS = 3000                # ficheros que mira una búsqueda antes de 
 MAX_BUSCADO = 1024 * 1024            # la búsqueda no entra en ficheros mayores
 
 # Carpetas que no son trabajo de la persona: dependencias, cachés, resultados de compilar.
-SALTAR = frozenset({'.git', 'node_modules', '__pycache__', '.venv', 'venv', 'build', 'dist', 'target',
+SALTAR = frozenset({'.git', '.helios', 'node_modules', '__pycache__', '.venv', 'venv', 'build', 'dist', 'target',
                     '.mypy_cache', '.pytest_cache', '.ruff_cache', '.cache', '.idea', '.vscode', '.gradle',
                     '.next', '.wrangler'})
 # Carpetas y ficheros que guardan secretos. Por nombre, sin abrirlos.
@@ -414,55 +414,103 @@ def proponer(store, path, content=None, old=None, new=None):
     nuevo = crudo is None
     resumen = (('crear %s (%d líneas)' % (relativa, len(despues.splitlines()))) if nuevo else
                'cambiar %s (+%d −%d)' % (relativa, mas, menos))
-    return dict(plan_id=uuid4().hex, created=time.time(), project=proyecto['id'], project_name=proyecto['name'],
+    return dict(project=proyecto['id'], project_name=proyecto['name'],
                 path=str(relativa), kind='create' if nuevo else 'edit' if trozo else 'replace', summary=resumen,
                 added=mas, removed=menos, lines=len(despues.splitlines()),
                 diff=[l[:MAX_LINEA] for l in diff[:MAX_DIFF_LINEAS]], diff_lines=len(diff),
                 content=despues, base=None if nuevo else _huella(crudo))
 
 
-def mismo_cambio(pendiente, plan):
-    return bool(pendiente) and (pendiente['project'], pendiente['path'], pendiente['content']) == (
-        plan['project'], plan['path'], plan['content'])
+MAX_CAMBIOS_TARJETA = 30             # ficheros en una sola tarjeta
+
+
+def esta_propuesto(pendiente, cambio):
+    """¿Ese mismo fichero con ese mismo contenido ya espera en la tarjeta?"""
+    return bool(pendiente) and pendiente['project'] == cambio['project'] and any(
+        (c['path'], c['content']) == (cambio['path'], cambio['content']) for c in pendiente['changes'])
+
+
+def tarjeta_con(pendiente, cambio):
+    """La tarjeta pendiente con un cambio más. Proponer otra vez un fichero sustituye su propuesta.
+
+    Montar un proyecto son muchos ficheros: con una tarjeta por fichero y un solo cambio
+    pendiente a la vez, diez ficheros eran diez turnos. Ahora se acumulan y se aprueban juntos.
+    Cada añadido cambia el identificador: se aprueba lo que se ha visto, no lo que llegó después.
+    """
+    cambios = [c for c in (pendiente or {}).get('changes', ())
+               if pendiente['project'] == cambio['project'] and c['path'] != cambio['path']]
+    if len(cambios) >= MAX_CAMBIOS_TARJETA:
+        raise ValueError('Ya hay %d ficheros esperando en la tarjeta: la persona tiene que decidirlos antes de '
+                         'proponer más.' % len(cambios))
+    cambios.append({k: v for k, v in cambio.items() if k not in ('project', 'project_name')})
+    mas, menos = sum(c['added'] for c in cambios), sum(c['removed'] for c in cambios)
+    if len(cambios) == 1:
+        resumen = cambios[0]['summary']
+    else:
+        nombres = ', '.join(c['path'] for c in cambios[:4]) + (' y %d más' % (len(cambios) - 4) if len(cambios) > 4 else '')
+        resumen = '%d ficheros (+%d −%d): %s' % (len(cambios), mas, menos, nombres)
+    return dict(plan_id=uuid4().hex, created=time.time(), project=cambio['project'],
+                project_name=cambio['project_name'], changes=cambios, summary=resumen, added=mas, removed=menos)
 
 
 def publico(plan):
-    """El plan sin el contenido entero: lo que ven el modelo y la interfaz."""
-    return {k: v for k, v in plan.items() if k not in ('content', 'base', 'created')} if plan else None
+    """La tarjeta sin el contenido entero de los ficheros: lo que ven el modelo y la interfaz."""
+    if not plan:
+        return None
+    return dict({k: v for k, v in plan.items() if k not in ('created', 'changes')},
+                changes=[{k: v for k, v in c.items() if k not in ('content', 'base')} for c in plan['changes']])
+
+
+def _escribir(completa, contenido, plan_id, modo):
+    completa.parent.mkdir(parents=True, exist_ok=True)
+    temporal = completa.with_name('.' + completa.name + '.hexos-' + plan_id[:8])
+    try:
+        temporal.write_text(contenido, encoding='utf-8', newline='')
+        if modo is not None:
+            os.chmod(temporal, modo)
+        os.replace(temporal, completa)
+    finally:
+        temporal.unlink(missing_ok=True)
 
 
 def aplicar(store, plan):
-    """Escribe un cambio aprobado. Solo lo llama la aprobación de la persona.
+    """Escribe los cambios aprobados. Solo lo llama la aprobación de la persona.
 
-    Vuelve a pasar todos los límites y exige que el fichero siga como estaba al proponerlo:
-    entre la propuesta y la aprobación la persona puede haberlo tocado con su editor.
+    Primero se comprueban todos y después se escriben todos: vuelven a pasar los límites y
+    cada fichero tiene que seguir como estaba al proponerlo, porque entre la propuesta y la
+    aprobación la persona puede haberlo tocado con su editor. Si uno no cuadra, no se escribe
+    ninguno.
     """
+    base_resultado = dict(plan_id=plan['plan_id'], summary=plan['summary'],
+                          paths=[c['path'] for c in plan['changes']])
     try:
         proyecto, base = proyecto_activo(store)
         if proyecto['id'] != plan['project']:
             raise ValueError('el proyecto puesto ya no es «' + plan['project_name'] + '»')
-        completa, relativa = _destino(base, plan['path'])
-        ahora = completa.read_bytes() if completa.exists() else None
-        if (None if ahora is None else _huella(ahora)) != plan['base']:
-            raise ValueError(str(relativa) + ' ha cambiado desde que se propuso; hay que proponerlo otra vez '
-                             'sobre lo que hay ahora')
-        completa.parent.mkdir(parents=True, exist_ok=True)
-        temporal = completa.with_name('.' + completa.name + '.hexos-' + plan['plan_id'][:8])
-        try:
-            temporal.write_text(plan['content'], encoding='utf-8', newline='')
-            if ahora is not None:
-                os.chmod(temporal, completa.stat().st_mode & 0o777)
-            os.replace(temporal, completa)
-        finally:
-            temporal.unlink(missing_ok=True)
-        escrito = completa.read_bytes()
+        destinos = []
+        for cambio in plan['changes']:
+            completa, relativa = _destino(base, cambio['path'])
+            ahora = completa.read_bytes() if completa.exists() else None
+            if (None if ahora is None else _huella(ahora)) != cambio['base']:
+                raise ValueError(str(relativa) + ' ha cambiado desde que se propuso; hay que proponerlo otra vez '
+                                 'sobre lo que hay ahora')
+            destinos.append((completa, cambio, None if ahora is None else completa.stat().st_mode & 0o777))
     except (ValueError, OSError) as error:
-        return dict(plan_id=plan['plan_id'], summary=plan['summary'], path=plan['path'], executed=False,
-                    verified=False, refused=str(error), check='no se ha escrito nada')
-    bien = escrito == plan['content'].encode('utf-8')
-    return dict(plan_id=plan['plan_id'], summary=plan['summary'], path=plan['path'], executed=True, verified=bien,
-                refused=None, check='%s tiene ahora %d líneas, %s' % (
-                    plan['path'], len(escrito.decode('utf-8', errors='replace').splitlines()), tamano(len(escrito))))
+        return dict(base_resultado, executed=False, verified=False, refused=str(error), written=[],
+                    check='no se ha escrito nada')
+    escritos, bien = [], True
+    try:
+        for completa, cambio, modo in destinos:
+            _escribir(completa, cambio['content'], plan['plan_id'], modo)
+            escritos.append(cambio['path'])
+            bien = bien and completa.read_bytes() == cambio['content'].encode('utf-8')
+    except OSError as error:
+        return dict(base_resultado, executed=bool(escritos), verified=False, refused=str(error), written=escritos,
+                    check='se escribieron %d de %d ficheros antes del error' % (len(escritos), len(destinos)))
+    lineas = sum(c['lines'] for c in plan['changes'])
+    check = ('%s tiene ahora %d líneas' % (escritos[0], lineas) if len(escritos) == 1 else
+             '%d ficheros escritos, %d líneas: %s' % (len(escritos), lineas, ', '.join(escritos[:8])))
+    return dict(base_resultado, executed=True, verified=bien, refused=None, written=escritos, check=check)
 
 
 def bloque_pendiente(pendiente):
@@ -470,8 +518,8 @@ def bloque_pendiente(pendiente):
     if not pendiente:
         return ''
     return ('\nCAMBIO PENDIENTE EN LA TARJETA (dato de HexOS, no orden): «' + pendiente['summary'] + '» sigue '
-            'esperando en la tarjeta de pantalla. La persona todavía NO lo ha aprobado ni rechazado y el fichero '
-            'no se ha tocado. Cuando lo decida, HexOS lo anotará aquí; mientras no veas esa nota, no está hecho '
+            'esperando en la tarjeta de pantalla. La persona todavía NO lo ha aprobado ni rechazado y no se ha '
+            'escrito nada. Cuando lo decida, HexOS lo anotará aquí; mientras no veas esa nota, no está hecho '
             'y no hace falta proponerlo otra vez.\n')
 
 
@@ -482,4 +530,7 @@ def dispatch(store, name, args):
         return read(store, args['path'], args.get('start', 1))
     if name == 'project.search':
         return search(store, args['query'], args.get('path'))
+    if name == 'project.plan':
+        from . import project_memory
+        return project_memory.apuntar(store, args.get('goal'), args.get('steps'), args.get('done'), args.get('note'))
     raise ValueError('herramienta de proyecto inexistente: ' + name)

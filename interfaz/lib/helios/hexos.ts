@@ -35,25 +35,35 @@ export interface SystemRequest {
   /** Paquetes que entran o salen según la simulación (los primeros 60). */
   affects: string[]; affectsCount: number;
 }
-/** Cambio en un fichero del proyecto que Helios ha preparado y espera tu aprobación.
- *  Helios no puede escribirlo: lo escribe HexOS cuando lo apruebas aquí. */
-export interface ProjectChange {
-  planId: string; summary: string; path: string; projectName: string;
-  kind: "create" | "replace" | "edit"; added: number; removed: number;
+/** Un fichero dentro de la tarjeta de cambios: qué se crea o cambia y sus líneas. */
+export interface FileChange {
+  path: string; kind: "create" | "replace" | "edit"; added: number; removed: number;
   /** Líneas del diff unificado (las primeras 400) y cuántas tiene entero. */
   diff: string[]; diffLines: number;
+}
+/** Los cambios en ficheros del proyecto que Helios ha preparado y esperan tu aprobación, todos
+ *  juntos. Helios no puede escribirlos: los escribe HexOS cuando los apruebas aquí. */
+export interface ProjectChange {
+  planId: string; summary: string; projectName: string; added: number; removed: number;
+  changes: FileChange[];
 }
 /** El `project_request` de /api/status, o null si no hay ninguno válido. */
 export function parseProjectChange(pr: unknown): ProjectChange | null {
   if (!pr || typeof pr !== "object") return null;
   const r = pr as Record<string, unknown>;
-  if (typeof r.plan_id !== "string" || typeof r.summary !== "string" || typeof r.path !== "string" ||
-      (r.kind !== "create" && r.kind !== "replace" && r.kind !== "edit")) return null;
-  const diff = Array.isArray(r.diff) ? r.diff.filter((x): x is string => typeof x === "string") : [];
-  return { planId: r.plan_id, summary: r.summary, path: r.path, projectName: String(r.project_name ?? ""),
-           kind: r.kind, added: typeof r.added === "number" ? r.added : 0,
-           removed: typeof r.removed === "number" ? r.removed : 0,
-           diff, diffLines: typeof r.diff_lines === "number" ? r.diff_lines : diff.length };
+  if (typeof r.plan_id !== "string" || typeof r.summary !== "string" || !Array.isArray(r.changes)) return null;
+  const numero = (valor: unknown) => typeof valor === "number" ? valor : 0;
+  const changes = r.changes.flatMap((entrada): FileChange[] => {
+    if (!entrada || typeof entrada !== "object") return [];
+    const c = entrada as Record<string, unknown>;
+    if (typeof c.path !== "string" || (c.kind !== "create" && c.kind !== "replace" && c.kind !== "edit")) return [];
+    const diff = Array.isArray(c.diff) ? c.diff.filter((x): x is string => typeof x === "string") : [];
+    return [{ path: c.path, kind: c.kind, added: numero(c.added), removed: numero(c.removed), diff,
+              diffLines: typeof c.diff_lines === "number" ? c.diff_lines : diff.length }];
+  });
+  if (!changes.length) return null;
+  return { planId: r.plan_id, summary: r.summary, projectName: String(r.project_name ?? ""),
+           added: numero(r.added), removed: numero(r.removed), changes };
 }
 /** Cómo acabó un plan aprobado o rechazado. */
 export interface SystemDecision {

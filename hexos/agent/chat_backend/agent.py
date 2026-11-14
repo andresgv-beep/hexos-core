@@ -183,10 +183,15 @@ class Agent:
                           'no se escribió: ' + (result['refused'] or 'error'))
                 note = ('[La persona aprobó en la interfaz: ' + pending['summary'] + '. HexOS: ' + estado +
                         ' (' + result['check'] + ').]')
+                if result.get('written'):
+                    from .. import project_memory, projects
+                    puesto = projects.activo(store)
+                    if puesto:
+                        project_memory.hecho(puesto['folder'], ', '.join(result['written']))
             else:
-                result = dict(plan_id=pending['plan_id'], summary=pending['summary'], path=pending['path'],
-                              executed=False, cancelled=True)
-                note = '[La persona rechazó en la interfaz: ' + pending['summary'] + '. El fichero no se ha tocado.]'
+                result = dict(plan_id=pending['plan_id'], summary=pending['summary'],
+                              paths=[c['path'] for c in pending['changes']], executed=False, cancelled=True)
+                note = '[La persona rechazó en la interfaz: ' + pending['summary'] + '. No se ha escrito nada.]'
             store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
                              (uuid4().hex, now(), 'user', note, note))
             store.db.commit()

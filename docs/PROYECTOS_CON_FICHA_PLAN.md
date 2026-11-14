@@ -145,7 +145,24 @@ Dos cosas que salieron midiendo:
 Sin arreglar: a «arréglala» el E4B lista los ficheros, dice que necesita leer el fichero y cierra
 el turno ahí; hay que insistirle. Es el encadenado de pasos, no la escritura.
 
-Quedan dos escalones: ejecutar (compilar y pasar pruebas) y anotar. El catálogo del Agente está
+**Fase 4, tercer escalón, hecho el 2026-11-14: varios ficheros y anotar** (`project.plan`,
+`hexos/agent/project_memory.py`).
+
+- **Una tarjeta para varios ficheros.** Cada `project.write` se suma a la tarjeta pendiente (hasta
+  30) y se aprueban juntos. Si un fichero ha cambiado entretanto no se escribe ninguno. Cada
+  añadido cambia el identificador de la tarjeta: se aprueba lo que se ha visto.
+- **Memoria del proyecto en `<carpeta>/.helios/proyecto.json`**: objetivo, plan con los pasos
+  hechos y notas, que escribe el modelo con `project.plan` sin aprobación; y los ficheros escritos,
+  que apunta HexOS al aprobar. Va en la carpeta para que el proyecto se lleve con su memoria.
+- **Entra en la ficha**, así que tras un corte o una limpieza el modelo tiene delante el objetivo,
+  el plan y el paso siguiente. Las lecturas y escrituras del proyecto no entran en `.helios`.
+- El tope del catálogo en el peor caso pasó de 7.000 a 7.200 (ver `tools/catalog_test.py`).
+- Medido con el E4B por la capa de carga, dos pasadas: a «monta desde cero una calculadora…»
+  apunta objetivo y plan, propone los tres ficheros en un turno y una tarjeta, y tras limpiar el
+  contexto dice por qué paso iba. Marca los pasos de uno en uno y se deja alguno sin marcar.
+  **Sin medir con el 26B, y la tarjeta de varios ficheros sin ver en pantalla.**
+
+Queda un escalón: ejecutar (compilar y pasar pruebas). El catálogo del Agente está
 en 6.99x de 7.000 caracteres.
 
 Falta: el resumen de intención escrito por el modelo (hoy la ficha solo lleva hechos), la ficha

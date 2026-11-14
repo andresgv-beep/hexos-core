@@ -15,9 +15,12 @@ Lista viva, apuntada el 2026-11-14. Lo que se cierre se quita de aquí.
 
 ## Agente
 
-- **Proyectos, fase 4** (`PROYECTOS_CON_FICHA_PLAN.md`): hechos leer y escribir con aprobación;
-  faltan ejecutar (compilar y pasar pruebas) y anotar. El catálogo está en el tope de 7.000.
-- **Escribir, por comprobar:** con el 26B, y la tarjeta del cambio vista en pantalla.
+- **Proyectos, fase 4** (`PROYECTOS_CON_FICHA_PLAN.md`): hechos leer, escribir con aprobación
+  (varios ficheros por tarjeta) y la memoria JSON del proyecto; falta ejecutar (compilar y pasar
+  pruebas), que es lo que le deja comprobar lo que escribe.
+- **Por comprobar con el 26B y en pantalla:** montar un proyecto desde cero, la tarjeta de varios
+  ficheros y que remonta desde la memoria tras un corte.
+- **Borrar y renombrar ficheros** del proyecto: no hay.
 - **El E4B no encadena pasos:** a «arréglala» lista, dice que necesita leer y cierra el turno.
 - **Seguir la pista del código:** comprobado con el 26B el 14/11 (ocho lecturas en un turno, 2.053
   líneas, y dice exacto lo que ha leído). Le queda distinguir un interruptor de pruebas
