@@ -7,7 +7,7 @@ import os
 from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import uuid4
-from .. import catalog, procedures, project_files, projects, reproche, sin_resolver, system_packages, task_notices, tool_digest, tool_groups
+from .. import catalog, procedures, project_files, project_memory, projects, tecnicas, reproche, sin_resolver, system_packages, task_notices, tool_digest, tool_groups
 from ..native_transport import AudioClip
 from ..context import native_messages
 from ..work import now
@@ -233,6 +233,27 @@ class ContextManager:
         if handoff is not None:
             store.db.execute('DELETE FROM agent_state WHERE key=?', (clave(store, HANDOFF_KEY),))
             store.db.commit()
+
+    def tecnicas_del_turno(self, store, turn, reiniciar):
+        """Las fichas de técnica que tocan en este turno y aún no se han dado en este contexto.
+
+        Se eligen por lo que usa el proyecto y por lo que se pide ahora. Cada una va una vez:
+        cuando el contexto se reconstruye se olvida cuáles se dieron y vuelven a entrar.
+        """
+        if getattr(self.agent, 'ventana', None) != 'agente':
+            return ''
+        proyecto = projects.activo(store)
+        if not proyecto:
+            return ''
+        sesion = self.agent.session
+        if reiniciar:
+            sesion.tecnicas_dadas = set()
+        memoria = project_memory.leer(proyecto['folder'])
+        vistas = tecnicas.senales(proyecto['folder'], turn.text, memoria['objetivo'],
+                                  ' '.join(p['paso'] for p in memoria['plan']))
+        nuevas = tecnicas.elegir(vistas, sesion.tecnicas_dadas)
+        sesion.tecnicas_dadas |= {ficha['nombre'] for ficha in nuevas}
+        return tecnicas.bloque(nuevas)
 
     def ficha_proyecto(self, store, turn):
         """La ficha del proyecto puesto, para el momento en que se reconstruye el contexto.
@@ -512,6 +533,7 @@ class ContextManager:
             # arrancar, sí se reconstruye desde el archivo más el traspaso.
             reusable = bool(getattr(self.agent.runtime, 'messages', None))
             rebuild = bool(turn.handoff) or not reusable
+            turn.metadata += self.tecnicas_del_turno(store, turn, rebuild)
             if rebuild:
                 turn.metadata = profile + self.ficha_proyecto(store, turn) + turn.metadata
                 if hora_activa() and 'HORA LOCAL' not in turn.metadata:

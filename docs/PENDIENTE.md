@@ -18,6 +18,8 @@ Lista viva, apuntada el 2026-11-14. Lo que se cierre se quita de aquí.
 - **Proyectos, fase 4** (`PROYECTOS_CON_FICHA_PLAN.md`): hecha entera el 14/11 (leer, escribir con
   aprobación, memoria JSON y ejecutar en jaula). **Por comprobar con el 26B y en pantalla:** montar
   un proyecto desde cero, la tarjeta de varios ficheros, pasar pruebas y remontar tras un corte.
+- **Fichas de técnica** (`TECNICAS.md`): hechas el 15/11 con cinco de serie. Por medir con el
+  26B, y falta que Helios proponga fichas nuevas con lo que aprende, para aprobarlas.
 - **Que vea lo que dibuja:** diseña ventanas a ciegas (15/11, la calculadora de PyQt6 salió
   descolocada tres veces). Con la jaula puede pintar la ventana fuera de pantalla y guardar una
   captura; falta una herramienta para que mire esa imagen.

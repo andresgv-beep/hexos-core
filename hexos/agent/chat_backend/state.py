@@ -71,6 +71,8 @@ class SessionState:
     project_request: dict | None = None
     # Decisiones tomadas en una tarjeta que el modelo aún no ha visto: van con el turno siguiente.
     notas_interfaz: list = field(default_factory=list)
+    # Fichas de técnica ya dadas en el contexto vivo: cada una va una vez.
+    tecnicas_dadas: set = field(default_factory=set)
     context_cut: dict | None = None
     # Última lectura de red: sirve para nombrar «la que termina en 129» sin
     # convertir cada vecino observado en inventario persistente.
