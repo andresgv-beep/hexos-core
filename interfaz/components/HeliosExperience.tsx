@@ -4,7 +4,7 @@ import { ContinuousChat } from "./ContinuousChat";
 import { InferenceFooter } from "./InferenceFooter";
 import { type InferenceMetrics } from "@/lib/helios/metrics";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { Activity, ArrowRight, Brain, Code2, Eraser, FolderOpen, HardDrive, History, ListChecks, MessageCircle, NotebookText, Square, Wrench, X } from "lucide-react";
 import { AttachmentButton, ChatAttachments, type Attachment } from "./ChatAttachments";
 import { VoiceButton } from "./VoiceButton";
@@ -24,12 +24,14 @@ import { phases } from "@/lib/helios/state";
 import { AUTO_CHECK_LABEL, createHexosTransport, type ContextCut, type CredentialRequest, type HeliosTransport, type HistoryMessage,
          type ProjectChange, type SystemRequest } from "@/lib/helios/hexos";
 import { mergeToolActivities, turnToolActivities, type ToolActivity } from "@/lib/helios/tools";
+import { addStep, isNewGeneration, stepFromDiscarded } from "@/lib/helios/steps";
 import { coreSectionForTools, createCoreClient, type NoteDetail } from "@/lib/helios/core";
 import { createMediaClient, isActive, type MediaControl, type MediaJob } from "@/lib/helios/media";
 import { MediaCard } from "./MediaCard";
 import { TasksPanel } from "./TasksPanel";
 import { ProjectsPanel } from "./ProjectsPanel";
 import { ProjectChangeCard } from "./ProjectChangeCard";
+import { ChangeChip, type ChangeState } from "./ChangeChip";
 import { AgentActivity, AgentNow } from "./AgentActivity";
 import type { Activity as AgentLog, Project } from "@/lib/helios/hexos";
 import { observationFor } from "@/lib/helios/previewProbe";
@@ -80,6 +82,10 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const [projectChange, setProjectChange] = useState<ProjectChange | null>(null);
   const [changeBusy, setChangeBusy] = useState(false);
   const [changeError, setChangeError] = useState("");
+  // La ventana con el detalle de un cambio no se abre sola: se abre desde su contador en la
+  // conversación. `changeOpen` es la del cambio que espera; `changeShown`, la de uno ya decidido.
+  const [changeOpen, setChangeOpen] = useState(false);
+  const [changeShown, setChangeShown] = useState<ProjectChange | null>(null);
   const [accessForm, setAccessForm] = useState({ user: "", password: "", host: "", port: "22" });
   const [accessError, setAccessError] = useState("");
   const [accessSaving, setAccessSaving] = useState(false);
@@ -341,8 +347,16 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
             : generation.phase === "generating" ? "Generando respuesta…" : "Helios está en ello…";
           // La clave no lleva los números del prefill: el contador del lateral cuenta la etapa entera.
           setEtapa({ clave: generation.cancelling ? "cancelling" : generation.phase, texto: label });
-          setTurns(items => items.map(item => item.id === target && item.pending
-            ? { ...item, preview: generation.text, streamed: item.streamed || Boolean(generation.text), generationStatus: label } : item));
+          setTurns(items => items.map(item => {
+            if (item.id !== target || !item.pending) return item;
+            // Otra generación dentro del mismo turno: lo que se estaba escribiendo no era la
+            // respuesta. En vez de borrarlo de golpe se queda como un paso, en una línea.
+            const previo = item.preview ?? "";
+            const progress = isNewGeneration(previo, generation.text)
+              ? addStep(item.progress, stepFromDiscarded(previo)) : item.progress;
+            return { ...item, progress, preview: generation.text,
+                     streamed: item.streamed || Boolean(generation.text), generationStatus: label };
+          }));
         }
       } catch { /* The chat request owns connection errors; this poll is visual telemetry. */ }
       if (!disposed) timer = setTimeout(poll, 450);
@@ -406,7 +420,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       if (nuevos.length && destino !== null) {
         nuevos.forEach(m => anunciosVistos.current.add(m.id));
         setTurns(items => items.map(item => item.id === destino
-          ? { ...item, progress: [...(item.progress ?? []), ...nuevos.map(m => m.text)] }
+          ? { ...item, progress: nuevos.reduce((pasos, m) => addStep(pasos, m.text), item.progress ?? []) }
           : item));
       }
       // Mientras se decide no se toca: el plan sigue pendiente en el servidor hasta la respuesta.
@@ -511,13 +525,17 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     try {
       const r = await transport.decideProjectChange(cambio.planId, approve);
       setProjectChange(null);
+      setChangeOpen(false);
       const reply = r.cancelled ? `Cancelado: ${r.summary}. El fichero no se ha tocado.`
         : r.executed && r.verified ? `Escrito y comprobado: ${r.check}.`
         : r.executed ? `Se escribió, pero lo leído no coincide: ${r.check}. Revísalo.`
         : `No se escribió: ${r.refused ?? "error al escribir"}.`;
       const id = ++nextId.current;
-      setTurns(items => [...items, { id, text: `${approve ? "Aprobado" : "Cancelado"}: ${r.summary}`, pending: false, reply }]);
-      setRevealing(true);
+      // En la conversación queda el contador, no una frase: la frase va de ayuda al pasar el ratón.
+      const state: ChangeState = r.cancelled ? "cancelado" : r.executed && r.verified ? "escrito" : "fallo";
+      setTurns(items => [...items, { id, text: "", pending: false,
+        change: { change: cambio, state, detail: reply },
+        error: state === "fallo" ? reply : undefined }]);
       setAnnouncement(reply);
       // Aprobar ocurre fuera de un turno: sin esto Helios escribía y nadie comprobaba nada
       // hasta que volvías a escribirle. Si lo aprobado es código, se le pide que lo ejecute.
@@ -905,8 +923,21 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const tareasEnCurso = tareasActivas.length;
   // El chat acompaña solo las tareas activas; las terminadas quedan en Tareas.
   const turnoMedia = [...turns].reverse().find(turn => turn.tools?.some(tool => tool.name.startsWith("media.")));
-  const turnExtras = turnoMedia && tareasActivas.length
-    ? { [turnoMedia.id]: <MediaCard jobs={tareasActivas} onControl={controlMedia} /> } : undefined;
+  const turnExtras: Record<number, ReactNode> = {};
+  if (turnoMedia && tareasActivas.length) turnExtras[turnoMedia.id] = <MediaCard jobs={tareasActivas} onControl={controlMedia} />;
+  // Los cambios de código, como contadores: los ya decididos en su propio turno y el que
+  // espera, bajo el último turno. Pulsarlos abre la ventana con las líneas.
+  for (const turn of turns) {
+    if (turn.change) {
+      const { change, state, detail } = turn.change;
+      turnExtras[turn.id] = <ChangeChip change={change} state={state} detail={detail} onOpen={() => setChangeShown(change)} />;
+    }
+  }
+  const ultimoTurno = turns[turns.length - 1];
+  if (projectChange && ultimoTurno && !ultimoTurno.change) {
+    turnExtras[ultimoTurno.id] = <>{turnExtras[ultimoTurno.id]}
+      <ChangeChip change={projectChange} state="pendiente" onOpen={() => setChangeOpen(true)} /></>;
+  }
   // El espacio de trabajo solo ocupa sitio cuando hay algo que enseñar en él.
   // Un solo sitio para el código: el panel, o la ventana ampliada que lo sustituye.
   const workspaceOpen = !mobile && codeOpen && !codeFloating && Boolean(codeArtifact || fileViewer);
@@ -922,7 +953,8 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   // mientras espera tu decisión, eso es lo que está pasando.
   const ocupado = Boolean(systemPlan) || Boolean(projectChange) || systemBusy || changeBusy || sending || Boolean(herramientaEnCurso);
   const ahora = connection !== "ready" ? { clave: connection, texto: estado }
-    : systemPlan || projectChange ? { clave: "plan", texto: "Esperando tu aprobación en la tarjeta" }
+    : systemPlan ? { clave: "plan", texto: "Esperando tu aprobación en la tarjeta" }
+    : projectChange ? { clave: "plan", texto: "Esperando que revises el cambio: pulsa su contador" }
     : systemBusy ? { clave: "sistema", texto: "HexOS está aplicando el cambio" }
     : herramientaEnCurso ? { clave: `tool-${herramientaEnCurso.id}`, texto: `Ejecutando ${herramientaEnCurso.name.replace(".", "_")}` }
     : sending ? (etapa ?? { clave: "thinking", texto: "Pensando…" })
@@ -1116,8 +1148,10 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         </div>
       </div>
     </div>}
-    {projectChange && !systemPlan && !access && <ProjectChangeCard change={projectChange} busy={changeBusy}
-      error={changeError} onDecide={approve => void decidirCambio(approve)} />}
+    {projectChange && changeOpen && !systemPlan && !access && <ProjectChangeCard change={projectChange} busy={changeBusy}
+      error={changeError} onDecide={approve => void decidirCambio(approve)} onClose={() => setChangeOpen(false)} />}
+    {changeShown && !(projectChange && changeOpen) && !systemPlan && !access && <ProjectChangeCard change={changeShown}
+      readOnly busy={false} error="" onDecide={() => undefined} onClose={() => setChangeShown(null)} />}
     {access && <div className="access-backdrop">
       <div className="access-panel" role="dialog" aria-modal="true" aria-labelledby="access-title">
         <h2 id="access-title" className="panel-title">

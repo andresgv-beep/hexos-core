@@ -4,16 +4,20 @@ const VERBO = { create: "nuevo", replace: "entero", edit: "cambio" } as const;
 
 /** La tarjeta de los cambios propuestos en el proyecto: cada fichero con las líneas que entran y
  *  salen, y dos botones para todos a la vez. Helios no puede escribirlos; los escribe HexOS al aprobar. */
-export function ProjectChangeCard({ change, busy, error, onDecide }: {
+export function ProjectChangeCard({ change, busy, error, onDecide, onClose, readOnly = false }: {
   change: ProjectChange; busy: boolean; error: string; onDecide: (approve: boolean) => void;
+  /** Cerrar la ventana sin decidir nada: el cambio sigue esperando en su contador. */
+  onClose: () => void;
+  /** Un cambio ya decidido: se enseña lo que se propuso, sin botones de aprobar. */
+  readOnly?: boolean;
 }) {
   const varios = change.changes.length > 1;
   const cortados = change.changes.filter(c => c.diffLines > c.diff.length).length;
   return <div className="access-backdrop">
     <div className="access-panel change-panel" role="dialog" aria-modal="true" aria-labelledby="change-title">
       <h2 id="change-title" className="panel-title">
-        {varios ? `Helios propone ${change.changes.length} ficheros`
-          : <>Helios propone {change.changes[0].kind === "create" ? "crear" : "cambiar"} <code>{change.changes[0].path}</code></>}
+        {varios ? `${readOnly ? "Cambio en" : "Helios propone"} ${change.changes.length} ficheros`
+          : <>{readOnly ? "Cambio:" : "Helios propone"} {change.changes[0].kind === "create" ? "crear" : "cambiar"} <code>{change.changes[0].path}</code></>}
       </h2>
       <p className="access-target">
         Proyecto «{change.projectName}» · <span className="change-mas">+{change.added}</span>{" "}
@@ -39,16 +43,17 @@ export function ProjectChangeCard({ change, busy, error, onDecide }: {
         Aprobarlo escribe el cambio entero.
       </p>}
       {error && <p className="attachment-error" role="alert">{error}</p>}
-      <p className="access-note">
+      {!readOnly && <p className="access-note">
         Helios no puede escribirlo. Si lo apruebas, HexOS escribe {varios ? "todos los ficheros" : "el fichero"} dentro
         de la carpeta del proyecto, solo si {varios ? "siguen" : "sigue"} como {varios ? "estaban" : "estaba"} cuando
         se propuso, y lo relee para comprobarlo.
-      </p>
+      </p>}
       <div className="access-actions">
-        <button type="button" disabled={busy} onClick={() => onDecide(false)}>Cancelar</button>
-        <button type="button" className="access-save" disabled={busy} onClick={() => onDecide(true)}>
+        <button type="button" className="change-close" disabled={busy} onClick={onClose}>Cerrar</button>
+        {!readOnly && <button type="button" disabled={busy} onClick={() => onDecide(false)}>Descartar el cambio</button>}
+        {!readOnly && <button type="button" className="access-save" disabled={busy} onClick={() => onDecide(true)}>
           {busy ? "Escribiendo…" : varios ? `Aprobar y escribir los ${change.changes.length}` : "Aprobar y escribir"}
-        </button>
+        </button>}
       </div>
     </div>
   </div>;

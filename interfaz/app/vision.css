@@ -781,3 +781,18 @@ button.vision-horizon-state:focus-visible { outline: 2px solid var(--v-gold); ou
 .change-diff span[data-linea="mas"] { background: #1f6b3a40; color: #b6f0c6; }
 .change-diff span[data-linea="menos"] { background: #7a2a2240; color: #ffc4bb; }
 .change-diff span[data-linea="tramo"] { color: var(--v-muted, #8aa); padding-top: 4px; }
+
+/* Contador de un cambio de código en la conversación: fichero, +añadidas −quitadas y estado. */
+.change-chip { display: inline-flex; align-items: center; gap: 12px; margin: 8px 0 4px; padding: 8px 14px;
+  border: 1px solid var(--v-rim, #ffffff22); border-radius: 12px; background: #ffffff0a; color: inherit;
+  font: 13px/1.2 var(--font-mono, ui-monospace, monospace); cursor: pointer; }
+.change-chip:hover { border-color: var(--v-gold, #e8b04f); background: rgba(232, 176, 79, 0.10); }
+.change-chip-file { font-weight: 600; max-width: 34ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.change-chip-count { padding-left: 12px; border-left: 1px solid var(--v-rim, #ffffff22); }
+.change-chip-state { color: var(--v-muted, #8aa); font-family: inherit; font-size: 11px; }
+.change-chip[data-state="pendiente"] { border-color: var(--v-gold, #e8b04f); }
+.change-chip[data-state="pendiente"] .change-chip-state { color: var(--v-gold, #e8b04f); font-weight: 600; }
+.change-chip[data-state="cancelado"] { opacity: .6; }
+.change-chip[data-state="cancelado"] .change-chip-count { text-decoration: line-through; }
+.change-chip[data-state="fallo"] .change-chip-state { color: #ff9c8f; }
+.access-actions .change-close { margin-right: auto; }
