@@ -31,3 +31,14 @@ class Tests(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
+
+class AvisoTest(unittest.TestCase):
+    def test_el_aviso_no_recibe_los_textos_largos(self):
+        # Un project_write con el fichero viejo y el nuevo no cabía en la sesión auxiliar y
+        # el fallo del aviso mataba el turno.
+        from hexos.agent.native import NativeRuntime
+        cortos = NativeRuntime.argumentos_para_aviso(dict(path='main.py', old='x' * 5000, new='y' * 6000, start=3))
+        self.assertEqual((cortos['path'], cortos['start']), ('main.py', 3))
+        self.assertLess(len(cortos['old']), 300)
+        self.assertIn('caracteres más', cortos['new'])

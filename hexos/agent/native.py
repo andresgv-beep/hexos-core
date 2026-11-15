@@ -879,13 +879,32 @@ class NativeRuntime:
                 hechos.append(dict(key=clave,value=valor))
         return hechos
 
+    MAX_ARGUMENTO_AVISO = 240
+
+    @classmethod
+    def argumentos_para_aviso(cls, arguments):
+        """Los argumentos tal como le hacen falta a quien redacta «voy a…»: sin los textos largos.
+
+        Iban enteros. El 15/11 un project_write con el fichero viejo y el nuevo (9.600
+        caracteres) no cupo en la sesión auxiliar, el aviso falló y se llevó el turno por
+        delante: ni tarjeta ni respuesta, tres veces seguidas.
+        """
+        if not isinstance(arguments, dict):
+            return arguments
+        tope = cls.MAX_ARGUMENTO_AVISO
+        return {clave: (valor[:tope] + ' […%d caracteres más]' % (len(valor) - tope)
+                        if isinstance(valor, str) and len(valor) > tope else valor)
+                for clave, valor in arguments.items()}
+
     def announce(self, tool, arguments, request):
         """Redactar un aviso si la llamada validada llegó sin preámbulo.
 
         Inferencia sin herramientas, manteniendo intacta la conversación operativa.
-        No cambia la llamada pendiente ni puede ejecutar otra operación.
+        No cambia la llamada pendiente ni puede ejecutar otra operación. Si falla, no hay
+        aviso y la llamada sigue: una frase de cortesía no puede tumbar el turno.
         """
         self.last_announcement_generation = None
+        arguments = self.argumentos_para_aviso(arguments)
         messages=[{'role':'system','content':
             'Escribe una sola frase breve y natural en español anunciando la operación '
             'que se va a ejecutar para la persona. Habla en primera persona. '
@@ -897,8 +916,11 @@ class NativeRuntime:
         prompt=self.template.render(messages=neutral_messages(messages),tools=[],bos_token='<bos>',
                                     add_generation_prompt=True,enable_thinking=False)
         # El preámbulo nunca lleva imagen: es una frase corta sobre la herramienta elegida.
-        data = self.send(prompt, auxiliar=True)
-        header,raw=self.event()
+        try:
+            data = self.send(prompt, auxiliar=True)
+            header,raw=self.event()
+        except RuntimeError:
+            return None
         self.last_announcement_generation=dict(kind='announcement',raw=raw,finish_reason=header[4],
             tokens=int(header[2]),ms=int(header[1]),prompt=prompt)
         if header[4]!='eos' or len(raw)>500 or '<|' in raw or '|>' in raw:
