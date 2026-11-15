@@ -1,7 +1,7 @@
 # Comprobar una ventana sin verla
 aplica: tkinter, pyqt6, pyside6, interfaz, ventana, gui
 
-No ves lo que dibujas, pero puedes medirlo. Hazlo antes de decir que una interfaz está bien.
+No ves lo que dibujas, pero puedes medirlo. Hazlo siempre que montes o cambies una interfaz, antes de decir que está bien: que arranque no dice nada de cómo queda.
 
 - Si arranca: lanza el programa con `timeout` 5. Si a los 5 segundos sigue en marcha y sin errores, arranca.
 - Cómo queda: crea la ventana, actualízala, imprime la posición y el tamaño de cada control y ciérrala. Hazlo con `python3 -c "…"` importando tu clase, sin tocar ningún fichero. Nunca metas la medición en el programa (`main.py`): la ventana se le cerraría sola a la persona al abrirlo.
