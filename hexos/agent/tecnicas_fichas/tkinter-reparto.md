@@ -8,6 +8,7 @@ En Tkinter nada se estira si no se le dice. Sin pesos, cada control se queda en 
 - Usa `ttk` (Button, Entry, Treeview, LabelFrame) y no los controles clásicos: se ven actuales.
 - Márgenes con `padx`/`pady` siguiendo una escala (8 entre controles, 16 en el borde), no a ojo.
 - Pon `minsize` a la ventana para que no se pueda aplastar.
+- Tkinter no dibuja esquinas redondeadas ni transparencias. Si piden eso, se hace en PyQt6.
 - Un estilo de `ttk` no es un nombre cualquiera: se llama `Algo.TButton` (acaba en la clase del control) y hay que definirlo antes con `ttk.Style().configure('Algo.TButton', …)`. Con `style='operador'` a secas el programa muere con «Layout operador not found».
 
 ```python

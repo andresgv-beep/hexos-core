@@ -1,5 +1,5 @@
 # Márgenes, espacios y jerarquía en cualquier interfaz
-aplica: interfaz, ventana, gui, tkinter, pyqt6, pyside6, gtk, kivy, .html, .css, formulario, botones, diseño
+aplica: interfaz, ventana, gui, tkinter, pyqt6, pyside6, gtk, kivy, .html, .css, formulario, botones, diseño, moderna, moderno, pantalla
 
 Una pantalla se entiende por cómo está repartida, antes de leer nada.
 

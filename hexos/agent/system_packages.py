@@ -69,7 +69,15 @@ def simular(gestor, accion, paquete, runner=terminal_read.ejecutar):
         orden = ['apt-get', '-s', 'remove' if accion == 'remove' else 'install', paquete]
         codigo, salida = leer(orden, runner)
         if codigo != 0:
-            raise ValueError('apt no puede ' + ACCIONES[accion] + ' ' + paquete + ': ' + salida.strip()[-300:])
+            # Lo que dice apt de verdad va en las líneas «E:». Antes se daba el final de la salida,
+            # y para un paquete que no existe era el aviso de simulación («needs root privileges
+            # for real execution»): el modelo entendió que faltaban permisos y mandó a usar pip.
+            errores = [linea[2:].strip() for linea in salida.splitlines() if linea.startswith('E:')]
+            motivo = '; '.join(errores)[:300] if errores else salida.strip()[-300:]
+            if any('Unable to locate' in e or 'No se ha podido localizar' in e for e in errores):
+                motivo = ('no existe ningún paquete con ese nombre en apt. No lo sustituyas por pip: busca con '
+                          'terminal_read («apt-cache search») o usa otra biblioteca que ya esté instalada.')
+            raise ValueError('apt no puede ' + ACCIONES[accion] + ' ' + paquete + ': ' + motivo)
         salen = [linea.split()[1] for linea in salida.splitlines() if linea.startswith('Remv ')]
         if accion == 'remove':
             return salen

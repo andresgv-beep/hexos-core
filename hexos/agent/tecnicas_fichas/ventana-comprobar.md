@@ -4,7 +4,7 @@ aplica: tkinter, pyqt6, pyside6, interfaz, ventana, gui
 No ves lo que dibujas, pero puedes medirlo. Hazlo antes de decir que una interfaz está bien.
 
 - Si arranca: lanza el programa con `timeout` 5. Si a los 5 segundos sigue en marcha y sin errores, arranca.
-- Cómo queda: un script de prueba aparte que crea la ventana, la actualiza, imprime la posición y el tamaño de cada control y la cierra. Lee esos números.
+- Cómo queda: crea la ventana, actualízala, imprime la posición y el tamaño de cada control y ciérrala. Hazlo con `python3 -c "…"` importando tu clase, sin tocar ningún fichero. Nunca metas la medición en el programa (`main.py`): la ventana se le cerraría sola a la persona al abrirlo.
 - Señales de que está mal: controles con 20 px de alto, todos con la misma `y`, una zona de contenido más pequeña que las barras, o la suma de alturas muy por debajo de la altura de la ventana (hay un hueco muerto).
 
 ```python

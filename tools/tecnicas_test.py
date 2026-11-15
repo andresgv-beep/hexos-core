@@ -47,6 +47,13 @@ class DeSerieTest(Base):
         self.assertEqual(self.nombres(vistas)[0], 'pyqt6-reparto')
         self.assertEqual(self.nombres(tecnicas.senales(self.proyecto, 'ordena esta lista de números')), [])
 
+    def test_pedir_algo_moderno_trae_como_elegir_la_libreria(self):
+        # El 15/11, a «una calculadora pro, y que se vea moderna», el 26B eligió Tkinter, que no
+        # redondea botones, teniendo PyQt6 instalado, y acabó mandando instalar un paquete con pip.
+        vistas = tecnicas.senales(self.proyecto, 'necesito que me creas una calculadora pro, y que se vea moderna')
+        self.assertEqual(self.nombres(vistas)[:2], ['interfaz-libreria', 'interfaz-jerarquia'])
+        self.assertIn('border-radius', tecnicas.bloque(tecnicas.elegir(vistas)))
+
     def test_lo_que_no_es_codigo_de_la_persona_no_cuenta(self):
         (self.proyecto / 'node_modules').mkdir()
         (self.proyecto / 'node_modules' / 'x.py').write_text('import tkinter\n')

@@ -30,7 +30,7 @@ from pathlib import Path
 from . import project_files
 
 DE_SERIE = Path(__file__).with_name('tecnicas_fichas')
-MAX_FICHA = 1500                     # caracteres del cuerpo; lo que pase se corta
+MAX_FICHA = 1800                     # caracteres del cuerpo; lo que pase se corta
 MAX_POR_VEZ = 4                      # fichas que se dan de una vez
 MAX_MIRADOS = 80                     # ficheros del proyecto en los que se buscan señales
 MAX_LEIDO = 6000                     # bytes del principio de cada uno

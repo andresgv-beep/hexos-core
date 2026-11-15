@@ -82,7 +82,8 @@ class PlanTest(unittest.TestCase):
     def test_un_paquete_que_apt_no_encuentra_no_llega_a_plan(self):
         with self.assertRaises(ValueError) as e:
             system_packages.plan('install', 'noexiste', 'apt', runner=sistema(simulacion=None))
-        self.assertIn('Unable to locate', str(e.exception))
+        self.assertIn('no existe ningún paquete con ese nombre', str(e.exception))
+        self.assertIn('No lo sustituyas por pip', str(e.exception))
 
     def test_flatpak_y_snap_comprueban_que_existe_en_su_origen(self):
         plan = system_packages.plan('install', 'org.gimp.GIMP', 'flatpak', runner=sistema(flathub={'org.gimp.GIMP'}))

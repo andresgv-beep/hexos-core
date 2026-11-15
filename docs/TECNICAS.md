@@ -30,7 +30,7 @@ Se leen en cada turno: editar una ficha vale al momento, sin reiniciar nada.
 
 En la ventana Agente y con un proyecto puesto. HexOS mira qué importan los ficheros del
 proyecto, sus extensiones, el objetivo y el plan apuntados y lo que se pide en el turno, y le
-pone delante las fichas que casan: hasta 4 de una vez, de 1.500 caracteres como mucho cada
+pone delante las fichas que casan: hasta 4 de una vez, de 1.800 caracteres como mucho cada
 una. Cada ficha va una vez por contexto; si el contexto se corta o se limpia, vuelven.
 
 No hay herramienta para pedirlas: no dependen de que el modelo se acuerde.
@@ -44,6 +44,7 @@ No hay herramienta para pedirlas: no dependen de que el modelo se acuerde.
 | `pyqt6-reparto` | Layouts, estiramiento y estilos en Qt |
 | `sqlite-migrar` | Cambiar el esquema cuando ya hay datos |
 | `ventana-comprobar` | Medir una ventana que no se ve |
+| `interfaz-libreria` | Elegir con qué hacer una interfaz según lo instalado |
 
 ## Medido
 
