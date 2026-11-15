@@ -83,6 +83,22 @@ class JaulaTest(Ejecutar):
             self.correr('/bin/ls')
 
 
+@unittest.skipUnless(CON_JAULA and shutil.which('Xvfb'), 'sin Xvfb no hay pantalla virtual que probar')
+class PantallaTest(Ejecutar):
+    def test_una_ventana_de_tkinter_se_crea_y_se_mide_sin_pantalla_de_verdad(self):
+        self.escribir('ventana.py', '\n'.join((
+            'import tkinter as tk',
+            'r = tk.Tk(); r.geometry("300x200"); b = tk.Button(r, text="Hola"); b.pack(); r.update()',
+            'print("ventana", r.winfo_width(), r.winfo_height(), "boton", b.winfo_height() > 5)',
+            'r.destroy()', '')))
+        r = self.correr('python3', 'ventana.py')
+        self.assertEqual((r['exit_code'], r['output'].strip()), (0, 'ventana 300 200 boton True'))
+
+    def test_el_codigo_de_salida_del_programa_se_conserva(self):
+        self.escribir('mal.py', 'import sys\nsys.exit(3)\n')
+        self.assertEqual(self.correr('python3', 'mal.py')['exit_code'], 3)
+
+
 class LimitesTest(Ejecutar):
     def test_solo_programas_conocidos_y_sin_shell(self):
         for orden, dice in ((('bash', '-c', 'ls'), 'no se puede ejecutar'), (('rm', '-rf', '.'), 'no se puede ejecutar'),
@@ -104,6 +120,14 @@ class LimitesTest(Ejecutar):
             with self.agente.store() as store, self.assertRaisesRegex(ValueError, 'bubblewrap'):
                 project_run.run(store, ['python3', '-V'], lanzar=lambda *a, **k: lanzadas.append(a))
         self.assertEqual(lanzadas, [])
+
+    def test_sin_xvfb_la_orden_va_tal_cual(self):
+        original = shutil.which
+        with unittest.mock.patch.object(project_run.shutil, 'which', lambda n: None if n == 'Xvfb' else original(n)):
+            self.assertEqual(project_run.con_pantalla(['/usr/bin/python3', 'a.py']), ['/usr/bin/python3', 'a.py'])
+        with unittest.mock.patch.object(project_run.shutil, 'which', lambda n: '/usr/bin/' + n):
+            orden = project_run.con_pantalla(['/usr/bin/python3', 'a.py'])
+        self.assertEqual((orden[0], orden[3], orden[-2:]), ('/usr/bin/python3', '/usr/bin/Xvfb', ['/usr/bin/python3', 'a.py']))
 
     def test_la_jaula_va_sin_red_y_con_la_casa_tapada(self):
         orden = project_run.jaula(self.repo)

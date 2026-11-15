@@ -249,8 +249,9 @@ def ficha(store, proyecto, *, efectos=None, con_peticiones=True, salvo=None):
               'aislado y sin red. Antes de decir que falta una biblioteca compruébalo con '
               '["python3","-c","import nombre"]; si falta, no mandes a la persona a usar pip: proponla como paquete '
               'del sistema (python3-nombre, con apt). Tras escribir, ejecuta y cuenta la salida real. '
-              'Una ventana no la ves: para comprobar cómo queda, ejecútala fuera de pantalla con un script que la '
-              'cree, la muestre y liste cada control con su posición y tamaño (geometry), y corrige con esos números.',
+              'Una ventana no la ves, y lanzar el programa entero no acaba nunca: para comprobarla, ejecuta un '
+              'script que la cree, la actualice, liste cada control con su posición y tamaño, y la cierre; '
+              'corrige con esos números. A la persona dile la orden para abrirla ella (python3 fichero).',
               # El 14/11 el 26B recorrió hera/ bien pero a un fichero por mensaje, leyendo solo el
               # primer tramo de cada uno y preguntando «¿quieres que revise el siguiente?».
               'Cuando pida revisar, entender o seguir el código, sigue la pista entera en este mismo turno: '

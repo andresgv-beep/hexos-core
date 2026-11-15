@@ -81,6 +81,35 @@ def jaula(base):
                     '--chdir', str(base)]
 
 
+# Una pantalla de mentira dentro de la jaula, para lo que abre ventanas. Qt sabe pintar fuera de
+# pantalla, pero Tkinter no: el 15/11 «python3 main.py» de un inventario en Tkinter murió con
+# «no display name» y el modelo no pudo comprobar nada. Con Xvfb la ventana se crea, se mide y
+# se cierra sin que nadie la vea. Sin GLX: con él Xvfb se cae al arrancar dentro de la jaula.
+PANTALLA = '''
+import os, subprocess, sys, time
+x = subprocess.Popen([sys.argv[1], ":99", "-screen", "0", "1280x800x24", "-nolisten", "tcp", "-ac", "-extension", "GLX"],
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+for _ in range(50):
+    if os.path.exists("/tmp/.X11-unix/X99") or x.poll() is not None:
+        break
+    time.sleep(0.1)
+if x.poll() is None:
+    os.environ["DISPLAY"] = ":99"
+try:
+    codigo = subprocess.run(sys.argv[2:]).returncode
+finally:
+    if x.poll() is None:
+        x.terminate()
+sys.exit(codigo if codigo >= 0 else 128 - codigo)
+'''
+
+
+def con_pantalla(orden):
+    """La orden envuelta para que tenga una pantalla virtual, si el equipo tiene Xvfb."""
+    xvfb, python = shutil.which('Xvfb'), shutil.which('python3')
+    return [python, '-c', PANTALLA, xvfb] + orden if xvfb and python else orden
+
+
 def _entorno():
     entorno = {k: os.environ[k] for k in ('PATH', 'LANG', 'LC_ALL') if k in os.environ}
     # Una ventana no tiene pantalla en la jaula: fuera de pantalla se puede crear y cerrar para probarla.
@@ -106,7 +135,7 @@ def run(store, command, timeout=None, lanzar=subprocess.run):
                          'persona que lo instale (paquete bubblewrap) o que lance la orden ella.')
     inicio = time.monotonic()
     try:
-        hecho = lanzar(encierro + [programa] + command[1:], env=_entorno(), stdin=subprocess.DEVNULL,
+        hecho = lanzar(encierro + con_pantalla([programa] + command[1:]), env=_entorno(), stdin=subprocess.DEVNULL,
                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=timeout)
         salida, codigo, agotado = hecho.stdout or b'', hecho.returncode, False
     except subprocess.TimeoutExpired as tarde:
@@ -120,6 +149,7 @@ def run(store, command, timeout=None, lanzar=subprocess.run):
         resultado['truncated'] = 'La salida era de %d caracteres: se enseña el principio y el final.' % len(texto)
     if agotado:
         resultado['timed_out'] = ('Se paró a los %d segundos sin terminar. Un programa con ventana o que espera '
-                                  'entrada no acaba solo: pruébalo con una orden que termine.' % timeout)
+                                  'entrada no acaba solo: para comprobarlo, lanza un script que cree la ventana, '
+                                  'la actualice (update), imprima lo que quieras medir y la cierre.' % timeout)
     project_memory.ejecutado(base, orden, 'no terminó' if agotado else 'bien' if codigo == 0 else 'falló (código %d)' % codigo)
     return resultado
