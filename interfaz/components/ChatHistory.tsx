@@ -1,5 +1,6 @@
 "use client";
 
+import { AUTO_CHECK_LABEL } from "@/lib/helios/hexos";
 import { useEffect, useRef } from "react";
 import { Code2, X } from "lucide-react";
 import type { HistoryMessage } from "@/lib/helios/hexos";
@@ -54,9 +55,9 @@ export function ChatHistory({ previous, messages, historyError, onClose, onOpenA
         onClick={() => void loadEarlier()}>{olderLoading ? "Cargando mensajes…" : "Cargar mensajes anteriores"}</button>}
       {historyError && <p role="status">{historyError}</p>}
       {!previous.length && !messages.length && <p className="history-empty">Aquí podrás volver a leer nuestra conversación.</p>}
-      {previous.map((message, index) => <div key={`previous-${index}`} className={`history-entry ${message.role}`}><span className="message-author">{message.role === "user" ? "TÚ" : "HELIOS"}</span>{message.role === "assistant" ? <AssistantReply text={message.text} onOpenArtifact={onOpenArtifact} onPreviewCode={onPreviewCode} previewHtmlOnly={previewHtmlOnly} /> : <p>{message.text}</p>}</div>)}
+      {previous.filter(message => !(message.role === "user" && message.text === AUTO_CHECK_LABEL)).map((message, index) => <div key={`previous-${index}`} className={`history-entry ${message.role}`}><span className="message-author">{message.role === "user" ? "TÚ" : "HELIOS"}</span>{message.role === "assistant" ? <AssistantReply text={message.text} onOpenArtifact={onOpenArtifact} onPreviewCode={onPreviewCode} previewHtmlOnly={previewHtmlOnly} /> : <p>{message.text}</p>}</div>)}
       {messages.map(message => <div key={message.id} className="history-turn">
-        <div className="history-entry user"><span className="message-author">TÚ</span><p>{message.text}</p></div>
+        {message.text !== AUTO_CHECK_LABEL && <div className="history-entry user"><span className="message-author">TÚ</span><p>{message.text}</p></div>}
         <div className="history-entry assistant"><span className="message-author">HELIOS</span>{message.pending
           ? <p>Helios está pensando…</p>
           : message.reply ? <AssistantReply text={message.reply} onOpenArtifact={onOpenArtifact} onPreviewCode={onPreviewCode} previewHtmlOnly={previewHtmlOnly} />

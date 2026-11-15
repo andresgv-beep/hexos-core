@@ -21,7 +21,7 @@ import { NoteWindow, type NoteWindowState } from "./NoteWindow";
 import { CoreViewer } from "./CoreViewer";
 import { CodeWorkspace } from "./CodeWorkspace";
 import { phases } from "@/lib/helios/state";
-import { createHexosTransport, type ContextCut, type CredentialRequest, type HeliosTransport, type HistoryMessage,
+import { AUTO_CHECK_LABEL, createHexosTransport, type ContextCut, type CredentialRequest, type HeliosTransport, type HistoryMessage,
          type ProjectChange, type SystemRequest } from "@/lib/helios/hexos";
 import { mergeToolActivities, turnToolActivities, type ToolActivity } from "@/lib/helios/tools";
 import { coreSectionForTools, createCoreClient, type NoteDetail } from "@/lib/helios/core";
@@ -521,7 +521,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       setAnnouncement(reply);
       // Aprobar ocurre fuera de un turno: sin esto Helios escribía y nadie comprobaba nada
       // hasta que volvías a escribirle. Si lo aprobado es código, se le pide que lo ejecute.
-      if (r.resume) void send({ preventDefault() {} } as FormEvent, r.resume);
+      if (r.resume) void send({ preventDefault() {} } as FormEvent, r.resume, { displayText: AUTO_CHECK_LABEL });
     } catch (error) {
       setChangeError(error instanceof Error ? error.message : "No se pudo enviar la decisión.");
     } finally {

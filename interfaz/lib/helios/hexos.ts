@@ -65,6 +65,9 @@ export function parseProjectChange(pr: unknown): ProjectChange | null {
   return { planId: r.plan_id, summary: r.summary, projectName: String(r.project_name ?? ""),
            added: numero(r.added), removed: numero(r.removed), changes };
 }
+/** Con este texto queda en el archivo la comprobación que la interfaz pide sola tras aprobar
+ *  un cambio. No lo escribió la persona, así que la conversación no lo enseña como suyo. */
+export const AUTO_CHECK_LABEL = "Comprobación tras aprobar";
 /** Cómo acabó un plan aprobado o rechazado. */
 export interface SystemDecision {
   summary: string; executed: boolean; verified?: boolean; cancelled?: boolean;

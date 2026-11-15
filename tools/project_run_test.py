@@ -149,6 +149,14 @@ class CatalogoTest(unittest.TestCase):
         self.assertNotIn('project.run', catalog.tools_for(list(catalog.groups_in('chat')), 'chat'))
         catalog.validate('project.run', dict(command=['python3', '-m', 'unittest']))
 
+    def test_ejecutar_no_deja_un_aviso_de_sin_comprobar(self):
+        import tempfile
+        from hexos.agent.chat import Agent
+        with tempfile.TemporaryDirectory() as tmp:
+            agente = Agent(tmp, type('R', (), {'call': lambda self, r: None})())
+            estado, _ = agente.verify(None, 'project.run', dict(command=['python3', 'a.py']), dict(exit_code=0, ok=True))
+        self.assertEqual(estado, 'confirmada')
+
 
 if __name__ == '__main__':
     unittest.main()

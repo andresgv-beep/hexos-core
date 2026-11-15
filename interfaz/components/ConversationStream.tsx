@@ -1,5 +1,6 @@
 "use client";
 
+import { AUTO_CHECK_LABEL } from "@/lib/helios/hexos";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ProgressiveReply } from "./ProgressiveReply";
 import { MatrixReply } from "./MatrixReply";
@@ -58,7 +59,7 @@ export function ConversationStream({ turn, onReplyComplete, onPreviewCode, previ
 export function TurnoVisible({ turn, saliendo, settled = false, extra, onReplyComplete, onPreviewCode, previewHtmlOnly }:
   { turn: Turn; saliendo?: boolean; settled?: boolean; extra?: ReactNode; onReplyComplete?: (id: number) => void } & CodeActions) {
   return <article className={`stream-turn${saliendo ? " leaving" : ""}`} aria-hidden={saliendo || undefined}>
-    <p className="stream-question"><span className="message-author">TÚ</span>{turn.text}</p>
+    {turn.text !== AUTO_CHECK_LABEL && <p className="stream-question"><span className="message-author">TÚ</span>{turn.text}</p>}
     <div className="stream-body">
       {/* Se pliega cuando empieza a llegar la respuesta, no al terminar: así el
           salto ocurre una vez, antes del texto, y no bajo lo que se está leyendo. */}

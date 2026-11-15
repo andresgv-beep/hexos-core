@@ -326,7 +326,10 @@ TOOLS = {
                         'carpeta personal y escribiendo solo en el proyecto, así que no instala nada (ni pip ni npm '
                         'install). timeout, segundos (60 por defecto, hasta 300); para ver si un programa con ventana arranca, 5. No pide aprobación. Úsala después de '
                         'escribir para comprobar que funciona, y cuenta la salida real.',
-                        {'command':'list'}, {'timeout':'int'}, effect='run', verify='self',
+                        # verify local: la ejecución es su propia evidencia (salida y código). Con «self»
+                        # HexOS esperaba un veredicto que esta herramienta no da y avisaba en cada turno
+                        # de que «algo quedó sin poder comprobarse: project.run».
+                        {'command':'list'}, {'timeout':'int'}, effect='run', verify='local',
                         announces=(('ejecutar','ejecutad','ejecuto'), ('compilar','compilad','compilo'))),
     'system.package_plan': spec('Preparar la instalación o desinstalación de un programa en ESTE PC (no en el NAS). '
                                 'action es install o remove; package, el nombre exacto del paquete; manager '
