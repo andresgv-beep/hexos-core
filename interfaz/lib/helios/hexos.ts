@@ -69,6 +69,8 @@ export function parseProjectChange(pr: unknown): ProjectChange | null {
 export interface SystemDecision {
   summary: string; executed: boolean; verified?: boolean; cancelled?: boolean;
   refused?: string; check?: string;
+  /** Lo que la interfaz le pide a Helios nada más aprobar: comprobar lo que se acaba de escribir. */
+  resume?: string;
 }
 export interface AccessSaved {
   device: string; user: string; host: string; pinned: boolean;
@@ -282,7 +284,8 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
                verified: typeof data.verified === "boolean" ? data.verified : undefined,
                cancelled: data.cancelled === true,
                refused: typeof data.refused === "string" ? data.refused : undefined,
-               check: typeof data.check === "string" ? data.check : undefined };
+               check: typeof data.check === "string" ? data.check : undefined,
+               resume: typeof data.resume === "string" && data.resume.trim() ? data.resume : undefined };
     },
     async dismissAccess(device, signal) {
       await request("credentials", { method: "POST", headers: { "Content-Type": "application/json" },

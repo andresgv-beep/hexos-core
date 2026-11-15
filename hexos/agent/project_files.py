@@ -582,6 +582,25 @@ def aplicar(store, plan):
     return dict(base_resultado, executed=True, verified=bien, refused=None, written=escritos, check=check)
 
 
+# Lo que se puede ejecutar o compilar: tras escribirlo tiene sentido comprobarlo.
+EJECUTABLE = re.compile(r'\.(py|c|h|cc|cpp|hpp|cu|cuh|rs|go|js|mjs|ts|java|cs|sh)$|(^|/)(Makefile|CMakeLists\.txt)$', re.I)
+COMPRUEBALO = ('Aprobado y escrito. Comprueba ahora que funciona: ejecútalo o pasa sus pruebas con project_run '
+               '(si abre una ventana, con timeout 5) y dime la salida real. Si falla, propón el arreglo.')
+
+
+def comprobacion_tras(resultado):
+    """Lo que la interfaz le pide al modelo en cuanto la persona aprueba, o None.
+
+    Aprobar ocurre fuera de un turno: el modelo proponía, la persona aprobaba, y nadie
+    ejecutaba nada hasta que ella volvía a escribir. El 15/11 Andrés tuvo que decir «compruébalo,
+    hay errores» y mandar una captura para que mirase un fallo que un project_run enseñaba solo.
+    """
+    escritos = resultado.get('written') or []
+    if resultado.get('executed') and resultado.get('verified') and any(EJECUTABLE.search(ruta) for ruta in escritos):
+        return COMPRUEBALO
+    return None
+
+
 def bloque_pendiente(pendiente):
     """Lo que el modelo tiene que saber mientras un cambio espera en la tarjeta."""
     if not pendiente:

@@ -183,6 +183,9 @@ class Agent:
                           'no se escribió: ' + (result['refused'] or 'error'))
                 note = ('[La persona aprobó en la interfaz: ' + pending['summary'] + '. HexOS: ' + estado +
                         ' (' + result['check'] + ').]')
+                seguir = project_files.comprobacion_tras(result)
+                if seguir:
+                    result = dict(result, resume=seguir)
                 if result.get('written'):
                     from .. import project_memory, projects
                     puesto = projects.activo(store)

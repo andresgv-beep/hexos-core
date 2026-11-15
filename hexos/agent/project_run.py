@@ -148,8 +148,14 @@ def run(store, command, timeout=None, lanzar=subprocess.run):
         resultado['output'] = texto[:CABEZA] + '\n[…%d caracteres omitidos…]\n' % (len(texto) - CABEZA - COLA) + texto[-COLA:]
         resultado['truncated'] = 'La salida era de %d caracteres: se enseña el principio y el final.' % len(texto)
     if agotado:
-        resultado['timed_out'] = ('Se paró a los %d segundos sin terminar. Un programa con ventana o que espera '
-                                  'entrada no acaba solo: para comprobarlo, lanza un script que cree la ventana, '
-                                  'la actualice (update), imprima lo que quieras medir y la cierre.' % timeout)
-    project_memory.ejecutado(base, orden, 'no terminó' if agotado else 'bien' if codigo == 0 else 'falló (código %d)' % codigo)
+        # Un programa con ventana no acaba solo. Seguir vivo sin errores a la vista ES que arranca,
+        # y hay que decírselo así: el 15/11 el 26B lanzó «python3 main.py» para comprobar un
+        # arreglo, la ventana abrió bien, y la respuesta fue un minuto de espera y un «no terminó».
+        limpio = not any(marca in texto for marca in ('Traceback', 'Error', 'error:', 'Exception'))
+        resultado['timed_out'] = (
+            ('Seguía en marcha a los %d segundos y sin errores en la salida. Si es un programa con ventana, eso es '
+             'que arranca bien: no acaba solo. Dile a la persona que ya puede abrirlo.' if limpio else
+             'Se paró a los %d segundos sin terminar, y en la salida hay errores: míralos.') % timeout +
+            ' Para comprobar solo si arranca, la próxima vez usa timeout 5.')
+    project_memory.ejecutado(base, orden, 'seguía en marcha a los %d s' % timeout if agotado else 'bien' if codigo == 0 else 'falló (código %d)' % codigo)
     return resultado

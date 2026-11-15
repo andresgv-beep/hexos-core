@@ -324,7 +324,7 @@ TOOLS = {
                         'programa es un compilador o intérprete instalado (python3, pytest, make, cmake, gcc, g++, '
                         'nvcc, cargo, go, node, npm…) o un ejecutable del proyecto. Corre aislada: sin red, sin ver la '
                         'carpeta personal y escribiendo solo en el proyecto, así que no instala nada (ni pip ni npm '
-                        'install). timeout, segundos (60 por defecto, hasta 300). No pide aprobación. Úsala después de '
+                        'install). timeout, segundos (60 por defecto, hasta 300); para ver si un programa con ventana arranca, 5. No pide aprobación. Úsala después de '
                         'escribir para comprobar que funciona, y cuenta la salida real.',
                         {'command':'list'}, {'timeout':'int'}, effect='run', verify='self',
                         announces=(('ejecutar','ejecutad','ejecuto'), ('compilar','compilad','compilo'))),

@@ -142,6 +142,16 @@ class TarjetaTest(Escribir):
         # Con el contexto vivo el modelo no relee el archivo: la nota va con el turno siguiente.
         self.assertEqual(self.agente.session.notas_interfaz, [self.notas()[-1]])
 
+    def test_tras_aprobar_codigo_se_pide_comprobarlo_y_tras_un_texto_no(self):
+        r = self.agente.decide_project_change(dict(plan_id=self.plan['plan_id'], approve=True))
+        self.assertIn('project_run', r['resume'])
+        self.agente.session.project_request = self.tarjeta(self.proponer(path='README.md', content='# Otro\n'))
+        r = self.agente.decide_project_change(dict(plan_id=self.agente.project_request['plan_id'], approve=True))
+        self.assertNotIn('resume', r)
+        self.agente.session.project_request = self.tarjeta(self.proponer(path='calc.py', content='x = 1\n'))
+        r = self.agente.decide_project_change(dict(plan_id=self.agente.project_request['plan_id'], approve=False))
+        self.assertNotIn('resume', r)
+
     def test_rechazar_no_toca_el_fichero(self):
         r = self.agente.decide_project_change(dict(plan_id=self.plan['plan_id'], approve=False))
         self.assertTrue(r['cancelled'])

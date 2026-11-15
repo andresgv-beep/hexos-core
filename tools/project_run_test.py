@@ -60,6 +60,10 @@ class JaulaTest(Ejecutar):
         self.escribir('eterno.py', 'import time\nprint("empiezo", flush=True)\ntime.sleep(60)\n')
         r = self.correr('python3', 'eterno.py', timeout=2)
         self.assertEqual((r['exit_code'], r['ok'], 'timed_out' in r), (None, False, True))
+        # Seguir vivo sin errores es «arranca», no un fallo; con errores a la vista, se dice.
+        self.assertIn('eso es que arranca bien', r['timed_out'])
+        self.escribir('roto.py', 'import time\nprint("Traceback (most recent call last):", flush=True)\ntime.sleep(60)\n')
+        self.assertIn('hay errores', self.correr('python3', 'roto.py', timeout=2)['timed_out'])
 
     def test_una_salida_enorme_se_recorta(self):
         self.escribir('ruido.py', 'print("principio")\nprint("x" * 40000)\nprint("final")\n')

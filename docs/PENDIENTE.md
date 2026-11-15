@@ -21,6 +21,9 @@ Lista viva, apuntada el 2026-11-14. Lo que se cierre se quita de aquí.
 - **Que vea lo que dibuja:** diseña ventanas a ciegas (15/11, la calculadora de PyQt6 salió
   descolocada tres veces). Con la jaula puede pintar la ventana fuera de pantalla y guardar una
   captura; falta una herramienta para que mire esa imagen.
+- **Cambiar por trozos de memoria:** el 26B manda como `old` el fichero entero tal como lo
+  recuerda; si no coincide con el disco falla, relee y repite (cuatro veces el 15/11, medio
+  minuto cada una).
 - **Ejecutar, lo que falta:** la gráfica dentro de la jaula (CUDA) y un entorno por proyecto
   (venv) para bibliotecas que no estén en apt.
 - **Borrar y renombrar ficheros** del proyecto: no hay.

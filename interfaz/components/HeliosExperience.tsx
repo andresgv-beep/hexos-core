@@ -519,6 +519,9 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       setTurns(items => [...items, { id, text: `${approve ? "Aprobado" : "Cancelado"}: ${r.summary}`, pending: false, reply }]);
       setRevealing(true);
       setAnnouncement(reply);
+      // Aprobar ocurre fuera de un turno: sin esto Helios escribía y nadie comprobaba nada
+      // hasta que volvías a escribirle. Si lo aprobado es código, se le pide que lo ejecute.
+      if (r.resume) void send({ preventDefault() {} } as FormEvent, r.resume);
     } catch (error) {
       setChangeError(error instanceof Error ? error.message : "No se pudo enviar la decisión.");
     } finally {
