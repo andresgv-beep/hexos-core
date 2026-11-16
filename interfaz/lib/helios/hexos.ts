@@ -35,20 +35,28 @@ export interface SystemRequest {
   /** Paquetes que entran o salen según la simulación (los primeros 60). */
   affects: string[]; affectsCount: number;
 }
-/** Un fichero de la web que Helios propone bajar a este PC y espera tu aprobación.
- *  Helios no puede descargarlo: solo lo baja HexOS cuando lo apruebas aquí. */
-export interface DownloadRequest {
-  planId: string; summary: string; name: string; host: string; url: string; kind: string;
+/** Un fichero de la web tal como HexOS lo ha visto en el servidor, antes de bajarlo. */
+export interface DownloadItem {
+  name: string; host: string; url: string; kind: string;
   /** Lo que el servidor dice que pesa; null si no lo declara. */
-  bytes: number | null; folder: string;
+  bytes: number | null;
 }
-/** El `download_request` de /api/status, o null si no hay ninguno válido. */
+/** Los ficheros que Helios propone bajar a este PC y esperan tu aprobación, todos en una tarjeta.
+ *  Helios no puede descargarlos: solo los baja HexOS cuando lo apruebas aquí. Cada fichero que
+ *  se suma estrena `planId`, así que se aprueba la lista que se ha visto. */
+export interface DownloadRequest { planId: string; summary: string; folder: string; items: DownloadItem[] }
+/** El `download_request` de /api/status, o null si no hay ninguno válido. Un fichero a medias
+ *  invalida la tarjeta entera: no se enseña una lista distinta de la que se aprobaría. */
 export function parseDownloadRequest(dr: unknown): DownloadRequest | null {
   if (!isRecord(dr) || typeof dr.plan_id !== "string" || typeof dr.summary !== "string"
-      || typeof dr.name !== "string" || typeof dr.url !== "string") return null;
-  return { planId: dr.plan_id, summary: dr.summary, name: dr.name, host: String(dr.host ?? ""), url: dr.url,
-           kind: String(dr.kind ?? ""), bytes: typeof dr.bytes === "number" ? dr.bytes : null,
-           folder: String(dr.folder ?? "") };
+      || !Array.isArray(dr.items) || !dr.items.length) return null;
+  const items: DownloadItem[] = [];
+  for (const f of dr.items) {
+    if (!isRecord(f) || typeof f.name !== "string" || typeof f.url !== "string") return null;
+    items.push({ name: f.name, host: String(f.host ?? ""), url: f.url, kind: String(f.kind ?? ""),
+                 bytes: typeof f.bytes === "number" ? f.bytes : null });
+  }
+  return { planId: dr.plan_id, summary: dr.summary, folder: String(dr.folder ?? ""), items };
 }
 /** Un fichero ya descargado. `viewable`: el navegador puede enseñarlo; `readable`: Helios puede leerlo. */
 export interface DownloadedFile { id: string; name: string; kind: string; bytes: number; ts: string; source: string;
@@ -101,6 +109,28 @@ export interface SystemDecision {
   refused?: string; check?: string;
   /** Lo que la interfaz le pide a Helios nada más aprobar: comprobar lo que se acaba de escribir. */
   resume?: string;
+}
+/** Cómo acabó cada fichero de una tarjeta de descargas aprobada. */
+export interface DownloadOutcome { name: string; executed: boolean; verified: boolean; refused?: string; check?: string }
+export interface DownloadDecision extends SystemDecision { files: DownloadOutcome[] }
+/** Lo que se le dice a la persona cuando HexOS termina con una tarjeta de descargas. Con varios
+ *  ficheros va uno por línea: el que falló se nombra, no se pierde entre los que salieron bien. */
+export function downloadReply(r: DownloadDecision): string {
+  if (r.cancelled) return `Cancelado: ${r.summary}. No se ha descargado nada.`;
+  if (r.files.length < 2) {
+    const f = r.files[0] ?? r;
+    return f.executed && f.verified ? `Descargado y comprobado: ${f.check}. Lo tienes en Descargas.`
+      : f.executed ? `Se descargó, pero lo guardado no coincide con lo recibido: ${f.check}. No te fíes de ese fichero.`
+      : `No se descargó: ${f.refused ?? "hubo un error"}.`;
+  }
+  const buenos = r.files.filter(f => f.executed && f.verified).length;
+  const cabecera = buenos === r.files.length ? `Descargados y comprobados los ${buenos} ficheros. Los tienes en Descargas.`
+    : buenos ? `Descargados y comprobados ${buenos} de ${r.files.length} ficheros. Los que han salido bien están en Descargas.`
+    : `No se descargó ninguno de los ${r.files.length} ficheros.`;
+  const lineas = r.files.map(f => `- \`${f.name}\`: ` + (f.executed && f.verified ? "descargado y comprobado"
+    : f.executed ? "se descargó, pero lo guardado no coincide con lo recibido; no te fíes de ese fichero"
+    : `no se descargó: ${f.refused ?? "hubo un error"}`));
+  return `${cabecera}\n\n${lineas.join("\n")}`;
 }
 export interface AccessSaved {
   device: string; user: string; host: string; pinned: boolean;
@@ -204,7 +234,7 @@ export interface HeliosTransport {
   /** Aprueba o rechaza el plan pendiente. Aprobarlo lo ejecuta HexOS y lo comprueba. */
   decideSystem(planId: string, approve: boolean, signal?: AbortSignal): Promise<SystemDecision>;
   /** Aprueba o rechaza la descarga pendiente. Aprobarla la baja HexOS y comprueba lo guardado. */
-  decideDownload?(planId: string, approve: boolean, signal?: AbortSignal): Promise<SystemDecision>;
+  decideDownload?(planId: string, approve: boolean, signal?: AbortSignal): Promise<DownloadDecision>;
   /** Lo descargado hasta ahora, lo más nuevo primero. */
   downloads?(signal?: AbortSignal): Promise<Downloads>;
   /** La dirección de un fichero descargado: para verlo en el navegador o, con `save`, para guardarlo. */
@@ -340,11 +370,15 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
       const data = await request("download", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan_id: planId, approve }), signal });
       if (!isRecord(data) || typeof data.summary !== "string") throw new Error("HexOS no confirmó la decisión");
+      const files = (Array.isArray(data.files) ? data.files : []).filter(isRecord).map(f => ({
+        name: String(f.name ?? ""), executed: f.executed === true, verified: f.verified === true,
+        refused: typeof f.refused === "string" ? f.refused : undefined,
+        check: typeof f.check === "string" ? f.check : undefined }));
       return { summary: data.summary, executed: data.executed === true,
                verified: typeof data.verified === "boolean" ? data.verified : undefined,
                cancelled: data.cancelled === true,
                refused: typeof data.refused === "string" ? data.refused : undefined,
-               check: typeof data.check === "string" ? data.check : undefined };
+               check: typeof data.check === "string" ? data.check : undefined, files };
     },
     async downloads(signal) {
       return parseDownloads(await request("downloads", { signal }));

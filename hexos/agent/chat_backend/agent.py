@@ -42,7 +42,7 @@ class Agent:
         # La interfaz se ve a la vez en varias pantallas (monitor, móvil): dos pueden
         # aprobar el mismo plan casi a la vez. Solo una lo toma. No es self.lock, que
         # está ocupado durante todo un turno y no dejaría aprobar mientras Helios habla.
-        self.system_lock = threading.Lock()
+        self.system_lock = self.session.cards_lock
         self.live = None
         self.runtime_turn_acquired = False
         with self.store() as store:
@@ -161,29 +161,31 @@ class Agent:
         return self.session.download_request
 
     def decide_download(self, payload, *, apply=None):
-        """La persona aprueba o rechaza la descarga pendiente de file.download.
+        """La persona aprueba o rechaza la tarjeta de descargas pendiente de file.download.
 
         Como decide_system: es el único camino a la descarga, viene de la interfaz y el plan
-        se retira antes de bajarlo, así que se baja una sola vez.
+        se retira antes de bajarlo, así que se baja una sola vez. La tarjeta se decide entera,
+        y solo la que se ha visto: cada fichero que Helios le suma le cambia el plan_id.
         """
         from .. import descargas
         if set(payload) != {'plan_id', 'approve'} or not isinstance(payload['approve'], bool):
             raise ValueError('se espera {"plan_id": "...", "approve": true|false}')
         with self.system_lock:
             pending = self.session.download_request
-            if not pending or pending['plan_id'] != payload['plan_id']:
+            if not pending:
                 raise ValueError('Esa descarga ya no está pendiente: la decidió otra pantalla o caducó')
+            if pending['plan_id'] != payload['plan_id']:
+                raise ValueError('La tarjeta ha cambiado desde que la viste: Helios le ha sumado otro fichero. '
+                                 'Revisa la lista y decide otra vez')
             self.session.download_request = None
         with self.store() as store:
             if payload['approve']:
-                result = (apply or descargas.aplicar)(store, pending)
-                estado = ('descargado y comprobado' if result['executed'] and result['verified'] else
-                          'descargado, pero lo guardado no coincide con lo recibido' if result['executed'] else
-                          'no se descargó: ' + (result['refused'] or 'error'))
-                note = ('[La persona aprobó en la interfaz: ' + pending['summary'] + '. HexOS: ' + estado +
+                result = descargas.aplicar_lote(store, pending, uno=apply)
+                note = ('[La persona aprobó en la interfaz: ' + pending['summary'] + '. HexOS: ' + result['status'] +
                         ' (' + result['check'] + ').]')
             else:
-                result = dict(plan_id=pending['plan_id'], summary=pending['summary'], executed=False, cancelled=True)
+                result = dict(plan_id=pending['plan_id'], summary=pending['summary'], executed=False, cancelled=True,
+                              files=[])
                 note = '[La persona rechazó en la interfaz: ' + pending['summary'] + '. No se ha descargado nada.]'
             store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
                              (uuid4().hex, now(), 'user', note, note))

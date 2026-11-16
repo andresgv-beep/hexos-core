@@ -389,12 +389,17 @@ test('service keys are saved, tested and removed without ever coming back', asyn
 
 test('a proposed download reaches its card and is decided through its own route', async () => {
   const { parseDownloadRequest } = await import('../lib/helios/hexos');
-  const pendiente = { plan_id: 'd1', summary: 'descargar manual.pdf (PDF, 2,0 MB) de example.com', name: 'manual.pdf',
-    host: 'example.com', url: 'https://example.com/manual.pdf', kind: 'PDF', bytes: 2018052, folder: '~/Helios/descargas' };
-  assert.deepEqual(parseDownloadRequest(pendiente), { planId: 'd1', summary: pendiente.summary, name: 'manual.pdf',
-    host: 'example.com', url: 'https://example.com/manual.pdf', kind: 'PDF', bytes: 2018052, folder: '~/Helios/descargas' });
-  assert.equal(parseDownloadRequest({ ...pendiente, bytes: null })?.bytes, null);
-  for (const malo of [null, undefined, 'x', {}, { ...pendiente, plan_id: 7 }, { ...pendiente, url: undefined }])
+  const manual = { name: 'manual.pdf', host: 'example.com', url: 'https://example.com/manual.pdf', kind: 'PDF', bytes: 2018052,
+    requested: 'https://example.com/manual.pdf', content_type: 'application/pdf', summary: 'descargar manual.pdf' };
+  const planos = { name: 'planos.zip', host: 'example.org', url: 'https://example.org/planos.zip', kind: 'ZIP', bytes: null };
+  const pendiente = { plan_id: 'd1', summary: 'descargar 2 ficheros (tamaño sin declarar): manual.pdf, planos.zip',
+    folder: '~/Helios/descargas', items: [manual, planos] };
+  assert.deepEqual(parseDownloadRequest(pendiente), { planId: 'd1', summary: pendiente.summary, folder: '~/Helios/descargas',
+    items: [{ name: 'manual.pdf', host: 'example.com', url: 'https://example.com/manual.pdf', kind: 'PDF', bytes: 2018052 },
+            { name: 'planos.zip', host: 'example.org', url: 'https://example.org/planos.zip', kind: 'ZIP', bytes: null }] });
+  // Una lista a medias no se enseña: lo que se aprueba es lo que se ve.
+  for (const malo of [null, undefined, 'x', {}, { ...pendiente, plan_id: 7 }, { ...pendiente, items: [] }, { ...pendiente, items: undefined },
+                      { ...pendiente, items: [manual, { ...planos, url: undefined }] }, { ...pendiente, items: [manual, 'basura'] }])
     assert.equal(parseDownloadRequest(malo), null);
   const estado = { state: 'idle', mode: 'native-experimental' };
   assert.equal((await createHexosTransport('/api', fixture(estado)).status()).downloadRequest, undefined);
@@ -403,11 +408,35 @@ test('a proposed download reaches its card and is decided through its own route'
   const seen: Array<[string, unknown]> = [];
   const fetcher = (async (url, init) => {
     seen.push([String(url), JSON.parse(String(init?.body))]);
-    return Response.json({ summary: pendiente.summary, executed: true, verified: true, check: '2,0 MB en ~/Helios/descargas/manual.pdf' });
+    return Response.json({ summary: pendiente.summary, executed: true, verified: false, check: 'x', files: [
+      { name: 'manual.pdf', executed: true, verified: true, refused: null, check: '2,0 MB en ~/Helios/descargas/manual.pdf' },
+      { name: 'planos.zip', executed: false, verified: false, refused: 'la fuente respondió HTTP 403', check: 'no se ha guardado nada' }, 'basura'] });
   }) as typeof fetch;
   const hecho = await createHexosTransport('/api', fetcher).decideDownload?.('d1', true);
-  assert.deepEqual([hecho?.executed, hecho?.verified, hecho?.check], [true, true, '2,0 MB en ~/Helios/descargas/manual.pdf']);
+  assert.deepEqual([hecho?.executed, hecho?.verified], [true, false]);
+  assert.deepEqual(hecho?.files, [
+    { name: 'manual.pdf', executed: true, verified: true, refused: undefined, check: '2,0 MB en ~/Helios/descargas/manual.pdf' },
+    { name: 'planos.zip', executed: false, verified: false, refused: 'la fuente respondió HTTP 403', check: 'no se ha guardado nada' }]);
   assert.deepEqual(seen, [['/api/download', { plan_id: 'd1', approve: true }]]);
+});
+
+test('the person is told how each downloaded file ended, the failed one by name', async () => {
+  const { downloadReply } = await import('../lib/helios/hexos');
+  const bien = { name: 'manual.pdf', executed: true, verified: true, check: '2,0 MB en ~/Helios/descargas/manual.pdf' };
+  const caido = { name: 'planos.zip', executed: false, verified: false, refused: 'la fuente respondió HTTP 403' };
+  const raro = { name: 'foto.png', executed: true, verified: false, check: '1 kB en ~/Helios/descargas/foto.png' };
+  const base = { summary: 'descargar…', executed: true, verified: true };
+  assert.equal(downloadReply({ ...base, files: [bien] }), 'Descargado y comprobado: 2,0 MB en ~/Helios/descargas/manual.pdf. Lo tienes en Descargas.');
+  assert.equal(downloadReply({ ...base, executed: false, files: [caido] }), 'No se descargó: la fuente respondió HTTP 403.');
+  assert.match(downloadReply({ ...base, files: [raro] }), /no coincide con lo recibido.*No te fíes/);
+  assert.equal(downloadReply({ ...base, files: [bien, { ...bien, name: 'otro.pdf' }] }),
+    'Descargados y comprobados los 2 ficheros. Los tienes en Descargas.\n\n- `manual.pdf`: descargado y comprobado\n- `otro.pdf`: descargado y comprobado');
+  const mezcla = downloadReply({ ...base, verified: false, files: [bien, caido, raro] });
+  assert.match(mezcla, /^Descargados y comprobados 1 de 3 ficheros\./);
+  assert.match(mezcla, /- `planos\.zip`: no se descargó: la fuente respondió HTTP 403\n- `foto\.png`: se descargó, pero lo guardado no coincide/);
+  assert.match(downloadReply({ ...base, executed: false, verified: false, files: [caido, caido] }), /^No se descargó ninguno de los 2 ficheros\./);
+  assert.equal(downloadReply({ summary: 'descargar 2 ficheros', executed: false, cancelled: true, files: [] }),
+    'Cancelado: descargar 2 ficheros. No se ha descargado nada.');
 });
 
 test('downloaded files are listed and addressed by id, to view or to save', async () => {

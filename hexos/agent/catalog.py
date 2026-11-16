@@ -372,6 +372,7 @@ TOOLS = {
                           'imagen, un ZIP. url es su dirección exacta, vista en web_search o dada por la persona; '
                           'name, opcional, el nombre con el que guardarlo. NO descarga nada: mira el tipo y el tamaño '
                           'y a la persona le aparece una tarjeta para aprobarlo; HexOS lo baja y lo comprueba después. '
+                          'Si son varios ficheros, una llamada por cada uno, seguidas: van a la misma tarjeta. '
                           'No se aprueba en el chat. Tras llamarla dile que lo apruebe en la tarjeta; nunca digas que '
                           'ya está descargado. Un PDF o un texto descargado queda además como documento y se lee '
                           'entero con document_read. No baja programas ni páginas web.',

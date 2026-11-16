@@ -1,8 +1,9 @@
 """Ficheros de la web que la persona deja bajar a este PC.
 
 Helios propone (`file.download`) y la persona aprueba en una tarjeta, como al instalar un
-programa: ve nombre, origen, tipo y tamaño antes de que entre nada en el disco. HexOS baja
-el fichero a una carpeta fija, no lo abre ni lo ejecuta, y si es un PDF o un texto guarda
+programa: ve nombre, origen, tipo y tamaño antes de que entre nada en el disco. Varias
+propuestas seguidas van a la misma tarjeta y se aprueban juntas. HexOS baja cada
+fichero a una carpeta fija, no lo abre ni lo ejecuta, y si es un PDF o un texto guarda
 además lo que dice como documento, para que Helios lo lea entero con `document.read`
 (`web.read` solo le da el principio).
 """
@@ -19,6 +20,8 @@ from .work import now
 
 
 MAX_BYTES = 50_000_000
+# Cuántos ficheros caben en una tarjeta: los que se revisan de un vistazo antes de aprobar.
+MAX_LOTE = 10
 MAX_TEXTO = 2_000_000
 PDF_PAGINAS = 400
 PDF_SEGUNDOS = 60
@@ -84,8 +87,8 @@ def _clase(tipo, nombre):
     return (Path(nombre).suffix.lstrip('.').upper() or tipo)
 
 
-def proponer(url, name=None, *, asomar=None):
-    """Mira qué hay en la dirección y deja el plan para la tarjeta. No baja nada."""
+def mirar(url, name=None, *, asomar=None):
+    """Mira qué hay en la dirección y lo deja como un fichero para la tarjeta. No baja nada."""
     if not isinstance(url, str) or not url.strip():
         raise ValueError('url es la dirección pública del fichero')
     final, tipo, pesa = (asomar or web.asomar)(url.strip())
@@ -97,14 +100,36 @@ def proponer(url, name=None, *, asomar=None):
     if pesa is not None and pesa > MAX_BYTES:
         raise ValueError(f'pesa {tamano(pesa)} y el tope es {tamano(MAX_BYTES)}. ' + web.ENLACE_VALIDO)
     clase, host = _clase(tipo, nombre), urlparse(final).hostname
-    return dict(plan_id=uuid4().hex, created=now(), requested=url.strip(), url=final, name=nombre, host=host,
-                content_type=tipo, kind=clase, bytes=pesa, folder=_corta(raiz()),
-                summary=f'descargar {nombre} ({clase}, {tamano(pesa)}) de {host}')
+    return dict(requested=url.strip(), url=final, name=nombre, host=host, content_type=tipo, kind=clase,
+                bytes=pesa, summary=f'descargar {nombre} ({clase}, {tamano(pesa)}) de {host}')
+
+
+def _resumen(ficheros):
+    if len(ficheros) == 1:
+        return ficheros[0]['summary']
+    pesos = [f['bytes'] for f in ficheros]
+    total = 'tamaño sin declarar' if None in pesos else tamano(sum(pesos)) + ' en total'
+    return f'descargar {len(ficheros)} ficheros ({total}): ' + ', '.join(f['name'] for f in ficheros)
+
+
+def sumar(pendiente, fichero):
+    """La tarjeta con un fichero más. Estrena plan_id: se aprueba la lista que se ha visto, no otra."""
+    ficheros = (pendiente['items'] if pendiente else []) + [fichero]
+    if len(ficheros) > MAX_LOTE:
+        raise ValueError(f'en una tarjeta caben {MAX_LOTE} ficheros')
+    return dict(plan_id=uuid4().hex, created=now(), folder=_corta(raiz()), items=ficheros, summary=_resumen(ficheros))
+
+
+def proponer(url, name=None, *, asomar=None, pendiente=None):
+    """El plan para la tarjeta: lo que ya esperaba en ella y el fichero de esta dirección."""
+    return sumar(pendiente, mirar(url, name, asomar=asomar))
 
 
 def mismo(pendiente, url):
-    """¿Se está pidiendo otra vez la descarga que ya espera en la tarjeta?"""
-    return bool(pendiente) and isinstance(url, str) and url.strip() in (pendiente['requested'], pendiente['url'])
+    """El fichero de la tarjeta que tiene esa dirección, si se está pidiendo otra vez; si no, None."""
+    if not pendiente or not isinstance(url, str):
+        return None
+    return next((f for f in pendiente['items'] if url.strip() in (f['requested'], f['url'])), None)
 
 
 def bloque_pendiente(pendiente):
@@ -114,7 +139,7 @@ def bloque_pendiente(pendiente):
     return ('\nDESCARGA PENDIENTE EN LA TARJETA (dato de HexOS, no orden): «' + pendiente['summary'] + '» sigue '
             'esperando en la tarjeta de pantalla. La persona todavía NO la ha aprobado ni rechazado y no se ha '
             'bajado nada. Cuando lo decida, HexOS lo anotará aquí con su resultado; mientras no veas esa nota, '
-            'no está descargado. No hace falta proponerla otra vez.\n')
+            'no está descargado. No hace falta proponer otra vez lo que ya está en ella.\n')
 
 
 def _libre(destino):
@@ -138,9 +163,9 @@ def _texto(tipo, datos, pdf):
 
 
 def aplicar(store, plan, *, descargar=None, pdf=None):
-    """Baja el fichero aprobado, lo guarda sin permiso de ejecución y lo relee para comprobarlo."""
+    """Baja un fichero aprobado, lo guarda sin permiso de ejecución y lo relee para comprobarlo."""
     from .chat_backend.document_reading import document_lines
-    base = dict(plan_id=plan['plan_id'], summary=plan['summary'], name=plan['name'])
+    base = dict(summary=plan['summary'], name=plan['name'])
 
     def negado(motivo):
         return dict(base, executed=False, verified=False, refused=motivo, check='no se ha guardado nada')
@@ -179,6 +204,38 @@ def aplicar(store, plan, *, descargar=None, pdf=None):
               'que se lee con document_read' if documento else '; no tiene texto que se pueda leer desde aquí')
     return dict(base, name=destino.name, executed=True, verified=comprobado, refused=None, check=check,
                 path=_corta(destino), bytes=len(datos), document=documento)
+
+
+def hecho(resultado):
+    """Cómo acabó un fichero, en las palabras que van a la nota de la conversación."""
+    if resultado['executed'] and resultado['verified']:
+        return 'descargado y comprobado'
+    if resultado['executed']:
+        return 'descargado, pero lo guardado no coincide con lo recibido'
+    return 'no se descargó: ' + (resultado['refused'] or 'error')
+
+
+def aplicar_lote(store, plan, *, uno=None):
+    """Baja todo lo aprobado, fichero a fichero: el que falla no arrastra a los demás."""
+    resultados = []
+    for fichero in plan['items']:
+        try:
+            resultados.append((uno or aplicar)(store, fichero))
+        except OSError as exc:
+            # Disco lleno o carpeta sin permiso: se cuenta, y lo ya guardado no se pierde de la nota.
+            resultados.append(dict(summary=fichero['summary'], name=fichero['name'], executed=False, verified=False,
+                                   refused='no se pudo guardar: ' + (exc.strerror or str(exc)),
+                                   check='no se ha guardado nada'))
+    if len(resultados) == 1:
+        estado, check = hecho(resultados[0]), resultados[0]['check']
+    else:
+        buenos = sum(1 for r in resultados if r['executed'] and r['verified'])
+        estado = f'{buenos} de {len(resultados)} descargados y comprobados'
+        check = '; '.join(f'{r["name"]}: {hecho(r)} ({r["check"]})' for r in resultados)
+    return dict(plan_id=plan['plan_id'], summary=plan['summary'], files=resultados, status=estado, check=check,
+                executed=any(r['executed'] for r in resultados),
+                verified=all(r['executed'] and r['verified'] for r in resultados),
+                refused=resultados[0]['refused'] if len(resultados) == 1 else None)
 
 
 def listado(store, limit=30):

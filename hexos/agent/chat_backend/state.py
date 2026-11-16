@@ -69,8 +69,11 @@ class SessionState:
     system_request: dict | None = None
     # Cambio de project.write esperando lo mismo. El contenido entero se queda aquí.
     project_request: dict | None = None
-    # Descarga de file.download esperando lo mismo.
+    # Descargas de file.download esperando lo mismo: una tarjeta con uno o varios ficheros.
     download_request: dict | None = None
+    # Quien toma o cambia una tarjeta pendiente lo hace con este cerrojo: la decisión llega por
+    # HTTP mientras el turno sigue, y un fichero sumado a una tarjeta ya decidida se bajaría dos veces.
+    cards_lock: Any = field(default_factory=threading.Lock)
     # Decisiones tomadas en una tarjeta que el modelo aún no ha visto: van con el turno siguiente.
     notas_interfaz: list = field(default_factory=list)
     # Fichas de técnica ya dadas en el contexto vivo: cada una va una vez.

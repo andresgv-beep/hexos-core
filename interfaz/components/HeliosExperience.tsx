@@ -21,7 +21,7 @@ import { NoteWindow, type NoteWindowState } from "./NoteWindow";
 import { CoreViewer } from "./CoreViewer";
 import { CodeWorkspace } from "./CodeWorkspace";
 import { phases } from "@/lib/helios/state";
-import { AUTO_CHECK_LABEL, createHexosTransport, type ContextCut, type CredentialRequest, type HeliosTransport, type HistoryMessage,
+import { AUTO_CHECK_LABEL, createHexosTransport, downloadReply, type ContextCut, type CredentialRequest, type HeliosTransport, type HistoryMessage,
          type ProjectChange, type SystemRequest } from "@/lib/helios/hexos";
 import { mergeToolActivities, turnToolActivities, type ToolActivity } from "@/lib/helios/tools";
 import { addStep, isNewGeneration, stepFromDiscarded } from "@/lib/helios/steps";
@@ -540,15 +540,13 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     if (approve) {
       setDownloadPlan(null);
       setTurns(items => [...items, { id, text: `Aprobado: ${plan.summary}`, pending: true,
-                                     generationStatus: `HexOS está descargando ${plan.name}…` }]);
+                                     generationStatus: plan.items.length > 1 ? `HexOS está descargando ${plan.items.length} ficheros…`
+                                       : `HexOS está descargando ${plan.items[0].name}…` }]);
     }
     try {
       const r = await transport.decideDownload(plan.planId, approve);
       setDownloadPlan(null);
-      const reply = r.cancelled ? `Cancelado: ${r.summary}. No se ha descargado nada.`
-        : r.executed && r.verified ? `Descargado y comprobado: ${r.check}. Lo tienes en Descargas.`
-        : r.executed ? `Se descargó, pero lo guardado no coincide con lo recibido: ${r.check}. No te fíes de ese fichero.`
-        : `No se descargó: ${r.refused ?? "hubo un error"}.`;
+      const reply = downloadReply(r);
       if (approve) {
         setTurns(items => items.map(item => item.id === id
           ? { ...item, pending: false, generationStatus: undefined, reply } : item));
@@ -1009,7 +1007,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     : systemPlan || downloadPlan ? { clave: "plan", texto: "Esperando tu aprobación en la tarjeta" }
     : projectChange ? { clave: "plan", texto: "Esperando que revises el cambio: pulsa su contador" }
     : systemBusy ? { clave: "sistema", texto: "HexOS está aplicando el cambio" }
-    : downloadBusy ? { clave: "descarga", texto: "HexOS está descargando el fichero" }
+    : downloadBusy ? { clave: "descarga", texto: "HexOS está descargando lo aprobado" }
     : herramientaEnCurso ? { clave: `tool-${herramientaEnCurso.id}`, texto: `Ejecutando ${herramientaEnCurso.name.replace(".", "_")}` }
     : sending ? (etapa ?? { clave: "thinking", texto: "Pensando…" })
     : { clave: "idle", texto: "En reposo" };

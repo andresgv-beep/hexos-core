@@ -211,26 +211,46 @@ class ToolDispatcher:
         if name == 'web.read':
             return self.env.dependencies.web_read(args['url'])
         if name == 'file.download':
-            # Solo propone: baja el fichero la aprobación de la persona (/api/download).
+            # Solo propone: baja los ficheros la aprobación de la persona (/api/download).
+            # Varias llamadas seguidas van a la misma tarjeta. El 16/11 iban de una en una y, a
+            # «bájame los dos», el segundo se quedaba sin proponer hasta que se pedía otra vez.
+            repetida = dict(status='pending_approval',
+                            note='Este fichero ya estaba en la tarjeta y sigue sin decidir: la persona no lo ha '
+                                 'aprobado ni rechazado todavía en la pantalla. No está descargado.')
+            llena = dict(status='waiting_previous_plan', planned=False,
+                         note=f'No se ha propuesto esta descarga: en una tarjeta caben {descargas.MAX_LOTE} '
+                              'ficheros y ya están. No lo intentes otra vez en este turno. Dile a la persona '
+                              'que decida esa tarjeta primero y que después propondrás el resto.')
             pendiente = self.session.download_request
-            if descargas.mismo(pendiente, args['url']):
-                return dict(summary=pendiente['summary'], status='pending_approval',
-                            note='Esta descarga ya estaba pendiente y sigue sin decidir: la persona no la ha '
-                                 'aprobado ni rechazado todavía en la tarjeta de pantalla. No está descargada.')
-            if pendiente:
-                # Una tarjeta cada vez, y como resultado, no como error: no hay nada que corregir.
-                return dict(status='waiting_previous_plan', planned=False, pending=pendiente['summary'],
-                            note='No se ha propuesto esta descarga: van de una en una y «' + pendiente['summary'] +
-                                 '» sigue esperando en la tarjeta. No lo intentes otra vez en este turno. Dile a '
-                                 'la persona que decida esa primero.')
-            plan = descargas.proponer(args['url'], args.get('name'))
-            self.session.download_request = plan
-            return dict(summary=plan['summary'], name=plan['name'], kind=plan['kind'], size=descargas.tamano(plan['bytes']),
-                        source=plan['host'], folder=plan['folder'], status='pending_approval',
-                        note='Pendiente: NO se ha descargado nada. A la persona le ha aparecido una tarjeta en la '
-                             'pantalla con el nombre, el origen y el tamaño; la aprueba o la cancela ahí, no en el '
-                             'chat. Dile en una frase qué has propuesto bajar y que lo apruebe en la tarjeta. '
-                             'Cuando lo haga te llegará una nota «La persona aprobó en la interfaz…» con el resultado.')
+            ya = descargas.mismo(pendiente, args['url'])
+            if ya:
+                return dict(repetida, summary=ya['summary'])
+            if pendiente and len(pendiente['items']) >= descargas.MAX_LOTE:
+                # Como resultado y no como error: no hay nada que corregir, solo esperar.
+                return dict(llena, pending=pendiente['summary'])
+            # Asomarse a la dirección sale a la red y tarda: fuera del cerrojo. La tarjeta se
+            # vuelve a leer dentro, porque la persona puede haberla decidido mientras tanto.
+            fichero = descargas.mirar(args['url'], args.get('name'))
+            with self.session.cards_lock:
+                pendiente = self.session.download_request
+                ya = descargas.mismo(pendiente, fichero['url'])
+                if ya:
+                    return dict(repetida, summary=ya['summary'])
+                if pendiente and len(pendiente['items']) >= descargas.MAX_LOTE:
+                    return dict(llena, pending=pendiente['summary'])
+                plan = self.session.download_request = descargas.sumar(pendiente, fichero)
+            cuantos = len(plan['items'])
+            tarjeta = ('A la persona le ha aparecido una tarjeta en la pantalla con el nombre, el origen y el tamaño'
+                       if cuantos == 1 else f'Se ha sumado a la tarjeta que ya tenía en la pantalla, que lleva {cuantos} '
+                                            'ficheros y se aprueba entera')
+            return dict(summary=fichero['summary'], name=fichero['name'], kind=fichero['kind'],
+                        size=descargas.tamano(fichero['bytes']), source=fichero['host'], folder=plan['folder'],
+                        in_card=cuantos, status='pending_approval',
+                        note='Pendiente: NO se ha descargado nada. ' + tarjeta + '; la aprueba o la cancela ahí, '
+                             'no en el chat. Si la persona pidió más ficheros, llama ahora a file_download con el '
+                             'siguiente: van a la misma tarjeta. Cuando estén todos, dile en una frase qué has '
+                             'propuesto bajar y que lo apruebe en la tarjeta. Cuando lo haga te llegará una nota '
+                             '«La persona aprobó en la interfaz…» con el resultado.')
         if name == 'file.list':
             return descargas.listado(store)
         if name == 'terminal.read':

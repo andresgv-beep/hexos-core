@@ -100,7 +100,7 @@ SIN_TARJETA = ('AVISO DE HEXOS (no es la persona): la respuesta anterior habla d
 SIN_TARJETA_DESCARGA = ('AVISO DE HEXOS (no es la persona): la respuesta anterior habla de una tarjeta, pero no '
                         'hay ninguna abierta: no se ha propuesto ninguna descarga. Si la persona pidió bajar o '
                         'guardar un fichero, llama ahora a file_download con su dirección exacta; si son varios, '
-                        'una llamada por fichero y van de uno en uno. Si no, contesta de nuevo sin mencionar '
+                        'una llamada por fichero, seguidas: van a la misma tarjeta. Si no, contesta de nuevo sin mencionar '
                         'ninguna tarjeta. No menciones este aviso.')
 # Las herramientas que abren una tarjeta: con una en la traza, la tarjeta de la que se habla existe.
 CON_TARJETA = ('project.write', 'system.package_plan', 'file.download')
