@@ -155,7 +155,9 @@ body { background: var(--v-bg); color: var(--v-text); }
 
 /* Conversación centrada. */
 .vision-conversation { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; }
-.vision-conversation .hud-chat-scroll { flex: 1; min-height: 0; width: 100%; overflow-y: auto; padding: 44px 0 18px; box-sizing: border-box; scrollbar-gutter: stable both-edges; }
+/* Abajo, más aire que arriba: con 18px el último renglón quedaba dentro del desvanecido
+   y bajo el resplandor del cuadro de escritura, como si se metiera debajo. */
+.vision-conversation .hud-chat-scroll { flex: 1; min-height: 0; width: 100%; overflow-y: auto; padding: 44px 0 72px; box-sizing: border-box; scrollbar-gutter: stable both-edges; }
 .vision-conversation .hud-chat-messages { width: min(760px, calc(100% - 48px)); margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
 .vision-conversation .message-author { display: none; }
 .vision-layout .vision-conversation :is(.stream-question, .hud-saved-message.user) {
