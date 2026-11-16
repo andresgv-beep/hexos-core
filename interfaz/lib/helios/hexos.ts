@@ -50,6 +50,18 @@ export function parseDownloadRequest(dr: unknown): DownloadRequest | null {
            kind: String(dr.kind ?? ""), bytes: typeof dr.bytes === "number" ? dr.bytes : null,
            folder: String(dr.folder ?? "") };
 }
+/** Un fichero ya descargado. `viewable`: el navegador puede enseñarlo; `readable`: Helios puede leerlo. */
+export interface DownloadedFile { id: string; name: string; kind: string; bytes: number; ts: string; source: string;
+  onDisk: boolean; viewable: boolean; readable: boolean }
+export interface Downloads { folder: string; files: DownloadedFile[] }
+export function parseDownloads(data: unknown): Downloads {
+  if (!isRecord(data) || !Array.isArray(data.downloads)) throw new Error("Lista de descargas no válida");
+  return { folder: String(data.folder ?? ""), files: data.downloads.filter(isRecord)
+    .filter(f => typeof f.id === "string" && typeof f.name === "string")
+    .map(f => ({ id: String(f.id), name: String(f.name), kind: String(f.kind ?? ""),
+      bytes: typeof f.bytes === "number" ? f.bytes : 0, ts: String(f.ts ?? ""), source: String(f.source ?? ""),
+      onDisk: f.on_disk === true, viewable: f.viewable === true, readable: f.readable === true })) };
+}
 /** Un fichero dentro de la tarjeta de cambios: qué se crea o cambia y sus líneas. */
 export interface FileChange {
   path: string; kind: "create" | "replace" | "edit"; added: number; removed: number;
@@ -193,6 +205,10 @@ export interface HeliosTransport {
   decideSystem(planId: string, approve: boolean, signal?: AbortSignal): Promise<SystemDecision>;
   /** Aprueba o rechaza la descarga pendiente. Aprobarla la baja HexOS y comprueba lo guardado. */
   decideDownload?(planId: string, approve: boolean, signal?: AbortSignal): Promise<SystemDecision>;
+  /** Lo descargado hasta ahora, lo más nuevo primero. */
+  downloads?(signal?: AbortSignal): Promise<Downloads>;
+  /** La dirección de un fichero descargado: para verlo en el navegador o, con `save`, para guardarlo. */
+  downloadUrl?(id: string, save?: boolean): string;
   /** Aprueba o rechaza el cambio de fichero pendiente. Aprobarlo lo escribe HexOS y lo relee. */
   decideProjectChange(planId: string, approve: boolean, signal?: AbortSignal): Promise<SystemDecision>;
   /** Guarda el acceso de un equipo. `host` fija su dirección: sin ella se busca
@@ -329,6 +345,12 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
                cancelled: data.cancelled === true,
                refused: typeof data.refused === "string" ? data.refused : undefined,
                check: typeof data.check === "string" ? data.check : undefined };
+    },
+    async downloads(signal) {
+      return parseDownloads(await request("downloads", { signal }));
+    },
+    downloadUrl(id, save) {
+      return `${endpoint}/downloads/${encodeURIComponent(id)}${save ? "/download" : ""}`;
     },
     async decideProjectChange(planId, approve, signal) {
       const data = await request("project/change", { method: "POST", headers: { "Content-Type": "application/json" },

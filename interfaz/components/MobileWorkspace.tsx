@@ -10,12 +10,14 @@ import { CodeWorkspace } from "./CodeWorkspace";
 const panels = ["Notas", "Chat", "Código", "Visualización"];
 /** Presentation only: no second transport, conversation or agent. */
 export function MobileWorkspace({ previous, turns, notes, artifact, busy, error, onBrowseNotes,
-  onPreview, hasEarlier, olderLoading, onLoadEarlier, onOpenFiles, turnExtras, ventana, ventanaBusy, onVentana }: {
+  onPreview, hasEarlier, olderLoading, onLoadEarlier, onOpenFiles, onOpenDownloads, turnExtras, ventana, ventanaBusy, onVentana }: {
   previous: HistoryMessage[]; turns: Turn[]; notes: NoteDetail[]; artifact: ReplyArtifact | null;
   busy: boolean; error: string; onBrowseNotes: () => void;
   onPreview: (code: string, language?: string) => void;
   hasEarlier?: boolean; olderLoading?: boolean; onLoadEarlier?: () => Promise<void>;
   onOpenFiles?: () => void;
+  /** Lo que Helios ha bajado de la web: en el móvil no hay raíl, así que se abre desde aquí. */
+  onOpenDownloads?: () => void;
   turnExtras?: Record<number, ReactNode>;
   // Chat y Agente son dos conversaciones distintas. En el móvil no hay raíl, así que
   // se elige aquí; sin esto la pestaña decía «Chat» y enseñaba la del Agente.
@@ -88,6 +90,7 @@ export function MobileWorkspace({ previous, turns, notes, artifact, busy, error,
           following.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100; }}>
         {error && <p role="alert">{error}</p>}
         {onOpenFiles && <button className="history-code-open" onClick={onOpenFiles}>Archivos del NAS</button>}
+        {onOpenDownloads && <button className="history-code-open" onClick={onOpenDownloads}>Descargas</button>}
         {hasEarlier && <button type="button" className="history-code-open" disabled={olderLoading}
           onClick={() => void loadEarlier()}>{olderLoading ? "Cargando mensajes…" : "Cargar mensajes anteriores"}</button>}
         {!previous.length && !turns.length && <p>{ventana === "agente" ? "Pídele al agente algo de este equipo. Su conversación va aparte de la del Chat."

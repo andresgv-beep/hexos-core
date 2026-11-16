@@ -5,7 +5,7 @@ import { InferenceFooter } from "./InferenceFooter";
 import { type InferenceMetrics } from "@/lib/helios/metrics";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
-import { Activity, ArrowRight, Brain, Code2, Eraser, FolderOpen, HardDrive, History, ListChecks, MessageCircle, NotebookText, Settings, Square, Wrench, X } from "lucide-react";
+import { Activity, ArrowRight, Brain, Code2, Download, Eraser, FolderOpen, HardDrive, History, ListChecks, MessageCircle, NotebookText, Settings, Square, Wrench, X } from "lucide-react";
 import { AttachmentButton, ChatAttachments, type Attachment } from "./ChatAttachments";
 import { VoiceButton } from "./VoiceButton";
 import { VoiceMode } from "./VoiceMode";
@@ -33,6 +33,7 @@ import { SettingsWindow } from "./SettingsWindow";
 import { ProjectsPanel } from "./ProjectsPanel";
 import { ProjectChangeCard } from "./ProjectChangeCard";
 import { DownloadCard } from "./DownloadCard";
+import { DownloadsWindow } from "./DownloadsWindow";
 import { ChangeChip, type ChangeState } from "./ChangeChip";
 import { AgentActivity, AgentNow } from "./AgentActivity";
 import type { Activity as AgentLog, DownloadRequest, Project } from "@/lib/helios/hexos";
@@ -301,6 +302,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const [systemOpen, setSystemOpen] = useState(false);
   const [tasksOpen, setTasksOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [downloadsOpen, setDownloadsOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
   // La cola de vídeo se lee aparte del chat: la tarjeta avanza sin gastar turnos.
   const [mediaJobs, setMediaJobs] = useState<MediaJob[]>([]);
@@ -544,7 +546,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       const r = await transport.decideDownload(plan.planId, approve);
       setDownloadPlan(null);
       const reply = r.cancelled ? `Cancelado: ${r.summary}. No se ha descargado nada.`
-        : r.executed && r.verified ? `Descargado y comprobado: ${r.check}.`
+        : r.executed && r.verified ? `Descargado y comprobado: ${r.check}. Lo tienes en Descargas.`
         : r.executed ? `Se descargó, pero lo guardado no coincide con lo recibido: ${r.check}. No te fíes de ese fichero.`
         : `No se descargó: ${r.refused ?? "hubo un error"}.`;
       if (approve) {
@@ -1029,6 +1031,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       busy={sending} error={historyError} onBrowseNotes={() => setCoreOpen(true)}
       hasEarlier={historyNext !== null} olderLoading={olderLoading} onLoadEarlier={loadOlderHistory}
       onOpenFiles={() => setFileViewer({})}
+      onOpenDownloads={transport.downloads ? () => setDownloadsOpen(true) : undefined}
       onPreview={previewCode} turnExtras={turnExtras}
       ventana={ventana} ventanaBusy={ventanaBusy || sending} onVentana={destino => void irAVentana(destino)} />}
     <nav className="vision-rail" aria-label="Secciones">
@@ -1040,6 +1043,8 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         onClick={() => void irAVentana("agente")}><Wrench size={21} /></button>}
       <button type="button" aria-label="Notas" aria-pressed={coreOpen} onClick={() => setCoreOpen(true)}><NotebookText size={21} /></button>
       <button type="button" aria-label="Archivos del NAS" onClick={() => setFileFloating({})}><HardDrive size={21} /></button>
+      {transport.downloads && <button type="button" aria-label="Descargas" title="Ficheros que Helios ha bajado de la web"
+        aria-pressed={downloadsOpen} onClick={() => setDownloadsOpen(true)}><Download size={21} /></button>}
       <button type="button" aria-label="Implementación" aria-pressed={codeOpen} disabled={!ultimaImplementacion && !fileViewer}
         onClick={alternarImplementacion}><Code2 size={21} /></button>
       <button type="button" aria-label={tareasEnCurso ? `Tareas, ${tareasEnCurso} en curso` : "Tareas"} aria-pressed={tasksOpen}
@@ -1156,6 +1161,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       onRename={transport.renameProject ? (id, name) => ponerProyecto(async () => {
         await transport.renameProject!(id, name); return proyectoVisto.current ?? null; }) : undefined}
       onRemove={transport.removeProject ? id => ponerProyecto(() => transport.removeProject!(id)) : undefined} />}
+    {downloadsOpen && <DownloadsWindow transport={transport} onClose={() => { setDownloadsOpen(false); inputRef.current?.focus(); }} />}
     {settingsOpen && <SettingsWindow transport={transport} onClose={() => { setSettingsOpen(false); inputRef.current?.focus(); }} />}
     {tasksOpen && !mobile && <TasksPanel media={mediaJobs} onControl={controlMedia} onClose={() => setTasksOpen(false)} />}
     {systemOpen && !mobile && <div className="vision-system" role="dialog" aria-label="Estado del sistema">

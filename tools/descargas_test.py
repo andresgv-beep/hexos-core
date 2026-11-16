@@ -211,6 +211,59 @@ class ServidorTest(Base):
             with error:
                 return error.code, json.loads(error.read())
 
+    def bruto(self, ruta):
+        try:
+            with urllib.request.urlopen(self.url + ruta, timeout=10) as r:
+                return r.status, dict(r.headers), r.read()
+        except HTTPError as error:
+            with error:
+                return error.code, dict(error.headers), error.read()
+
+    def bajar(self, nombre, tipo, datos, texto=''):
+        plan = descargas.proponer('https://example.com/' + nombre, asomar=asomar(tipo, len(datos)))
+        with self.agente_.store() as store:
+            return descargas.aplicar(store, plan, descargar=lambda u, l: (u, tipo, datos, False),
+                                     pdf=lambda d, paginas, segundos: texto)
+
+    def test_el_panel_lista_lo_descargado_y_cada_fichero_se_ve_o_se_guarda(self):
+        self.assertEqual(self.pedir('/api/downloads')[1]['downloads'], [])
+        self.bajar('planos.svg', 'image/svg+xml', b'<svg onload="alert(1)"/>')
+        self.bajar('manual.pdf', 'application/pdf', PDF, TEXTO)
+        lista = self.pedir('/api/downloads')[1]
+        self.assertEqual([(d['name'], d['kind'], d['viewable'], d['readable'], d['on_disk']) for d in lista['downloads']],
+                         [('manual.pdf', 'PDF', True, True, True), ('planos.svg', 'imagen SVG', False, False, True)])
+        pdf, svg = (d['id'] for d in lista['downloads'])
+
+        codigo, cabeceras, cuerpo = self.bruto('/api/downloads/' + pdf)
+        self.assertEqual((codigo, cabeceras['Content-Type'], cuerpo), (200, 'application/pdf', PDF))
+        self.assertTrue(cabeceras['Content-Disposition'].startswith('inline'))
+        self.assertEqual(cabeceras['X-Content-Type-Options'], 'nosniff')
+        codigo, cabeceras, cuerpo = self.bruto('/api/downloads/' + pdf + '/download')
+        self.assertEqual((cabeceras['Content-Type'], cuerpo), ('application/octet-stream', PDF))
+        self.assertIn("attachment; filename*=UTF-8''manual.pdf", cabeceras['Content-Disposition'])
+        # Un SVG abierto en el origen de Helios ejecutaría su script: solo se entrega para guardar.
+        codigo, cabeceras, _ = self.bruto('/api/downloads/' + svg)
+        self.assertEqual(cabeceras['Content-Type'], 'application/octet-stream')
+        self.assertTrue(cabeceras['Content-Disposition'].startswith('attachment'))
+
+    def test_solo_se_sirve_lo_que_sigue_en_la_carpeta_de_descargas(self):
+        self.bajar('manual.pdf', 'application/pdf', PDF, TEXTO)
+        uno = self.pedir('/api/downloads')[1]['downloads'][0]['id']
+        for ruta in ('/api/downloads/no-existe', '/api/downloads/' + uno + '/otra', '/api/downloads/' + uno + '/a/b'):
+            self.assertEqual(self.bruto(ruta)[0], 404)
+        destino = self.carpeta / 'manual.pdf'
+        destino.unlink()
+        self.assertEqual(self.bruto('/api/downloads/' + uno)[0], 404)
+        self.assertFalse(self.pedir('/api/downloads')[1]['downloads'][0]['on_disk'])
+        secreto = self.casa / 'secreto.txt'
+        secreto.write_text('clave')
+        destino.symlink_to(secreto)
+        self.assertEqual(self.bruto('/api/downloads/' + uno)[0], 404, 'un enlace hacia fuera no se sigue')
+        with self.agente_.store() as store:
+            store.db.execute('UPDATE downloads SET path=? WHERE id=?', (str(secreto), uno))
+            store.db.commit()
+        self.assertEqual(self.bruto('/api/downloads/' + uno)[0], 404, 'una ruta fuera de la carpeta no se sirve')
+
     def test_la_tarjeta_sale_en_el_estado_y_se_decide_por_su_ruta(self):
         self.assertIsNone(self.pedir('/api/status')[1]['download_request'])
         self.agente_.session.download_request = plan = descargas.proponer(URL, asomar=asomar())

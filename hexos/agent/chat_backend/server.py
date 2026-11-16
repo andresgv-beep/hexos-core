@@ -5,7 +5,7 @@ import json
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
-from .. import actividad, ajustes, core, notes, catalog
+from .. import actividad, ajustes, core, descargas, notes, catalog
 from ..work import strict_json, string
 from .images import decode_image
 from .audio import decode_audio
@@ -57,6 +57,9 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                                    'mode':'native-experimental' if native_template else 'json'})
             elif self.path == '/api/projects':
                 self.respond(200, agent.projects())
+            elif self.path == '/api/downloads' or self.path.startswith('/api/downloads/'):
+                with agent.store() as store:
+                    descargas.servir(self, store)
             elif self.path == '/api/settings':
                 # Qué servicios hay y cuáles tienen clave. La clave no viaja nunca hacia aquí.
                 try:

@@ -11,7 +11,7 @@ import mimetypes
 import os
 from pathlib import Path
 import re
-from urllib.parse import unquote, urlparse
+from urllib.parse import quote, unquote, urlparse
 from uuid import uuid4
 
 from . import web
@@ -35,6 +35,9 @@ TIPOS_EJECUTABLES = frozenset(('application/x-executable', 'application/x-msdown
 CLASES = {'application/pdf': 'PDF', 'application/zip': 'ZIP', 'application/json': 'JSON', 'text/plain': 'texto',
           'text/csv': 'CSV', 'text/markdown': 'Markdown', 'application/epub+zip': 'EPUB'}
 _RARO = re.compile(r'[^\w .()+-]')
+# Lo que el navegador puede enseñar sin riesgo dentro de la interfaz. Lo demás solo se entrega
+# para guardar: un SVG o un HTML abiertos desde el origen de Helios ejecutarían lo que traigan.
+A_LA_VISTA = frozenset(('application/pdf', 'image/png', 'image/jpeg', 'image/gif', 'image/webp'))
 
 
 def raiz():
@@ -77,7 +80,7 @@ def _clase(tipo, nombre):
     if tipo in CLASES:
         return CLASES[tipo]
     if tipo.startswith('image/'):
-        return 'imagen ' + tipo.split('/', 1)[1].upper()
+        return 'imagen ' + tipo.split('/', 1)[1].split('+')[0].upper()
     return (Path(nombre).suffix.lstrip('.').upper() or tipo)
 
 
@@ -189,3 +192,57 @@ def listado(store, limit=30):
         for f in filas],
         note='Los que traen document se leen con document_read usando ese id. Lo que no esté en disco '
              '(on_disk falso) lo ha movido o borrado la persona.')
+
+
+def _visible(tipo):
+    """Con qué tipo se enseña en el navegador, o None si solo se puede guardar."""
+    if tipo in A_LA_VISTA:
+        return tipo
+    if tipo.startswith('text/') or tipo == 'application/json':
+        return 'text/plain; charset=utf-8'
+    return None
+
+
+def panel(store, limit=200):
+    """Lo descargado, para el panel de la interfaz: lo más nuevo primero."""
+    initialize(store)
+    filas = store.db.execute('SELECT * FROM downloads ORDER BY ts DESC LIMIT ?', (limit,)).fetchall()
+    return dict(folder=_corta(raiz()), downloads=[
+        dict(id=f['id'], name=f['name'], kind=_clase(f['content_type'], f['name']), bytes=f['bytes'], ts=f['ts'],
+             source=urlparse(f['url']).hostname, url=f['url'], on_disk=Path(f['path']).is_file(),
+             viewable=_visible(f['content_type']) is not None, readable=bool(f['document']))
+        for f in filas])
+
+
+def servir(handler, store):
+    """GET /api/downloads, /api/downloads/<id> (verlo) y /api/downloads/<id>/download (guardarlo).
+
+    Solo por identificador y solo lo que HexOS descargó y sigue en su carpeta: la ruta
+    guardada se vuelve a comprobar, porque la carpeta es de la persona y puede haber cambiado.
+    """
+    partes = urlparse(handler.path).path.split('/')
+    if len(partes) == 3:
+        handler.respond(200, panel(store))
+        return
+    guardar = len(partes) == 5 and partes[4] == 'download'
+    if len(partes) not in (4, 5) or (len(partes) == 5 and not guardar):
+        handler.respond(404, {'error': 'ruta inexistente'})
+        return
+    initialize(store)
+    fila = store.db.execute('SELECT * FROM downloads WHERE id=?', (partes[3],)).fetchone()
+    ruta = Path(fila['path']) if fila else None
+    if (ruta is None or ruta.is_symlink() or not ruta.is_file()
+            or raiz().resolve() not in ruta.resolve().parents or ruta.stat().st_size > MAX_BYTES):
+        handler.respond(404, {'error': 'ese fichero ya no está entre las descargas'})
+        return
+    contenido = ruta.read_bytes()
+    visible = None if guardar else _visible(fila['content_type'])
+    handler.send_response(200)
+    handler.send_header('Content-Type', visible or 'application/octet-stream')
+    handler.send_header('Content-Length', str(len(contenido)))
+    handler.send_header('Content-Disposition', ('inline' if visible else 'attachment') +
+                        "; filename*=UTF-8''" + quote(fila['name'], safe=''))
+    handler.send_header('X-Content-Type-Options', 'nosniff')
+    handler.send_header('Cache-Control', 'private, no-store')
+    handler.end_headers()
+    handler.wfile.write(contenido)

@@ -410,6 +410,17 @@ test('a proposed download reaches its card and is decided through its own route'
   assert.deepEqual(seen, [['/api/download', { plan_id: 'd1', approve: true }]]);
 });
 
+test('downloaded files are listed and addressed by id, to view or to save', async () => {
+  const fila = { id: 'a b/1', name: 'manual.pdf', kind: 'PDF', bytes: 2018052, ts: '2026-11-16T09:21:56+00:00',
+    source: 'example.com', url: 'https://example.com/manual.pdf', on_disk: true, viewable: true, readable: true };
+  const transport = createHexosTransport('/api/helios', fixture({ folder: '~/Helios/descargas', downloads: [fila, 'basura', { name: 'sin id' }] }));
+  assert.deepEqual(await transport.downloads?.(), { folder: '~/Helios/descargas', files: [{ id: 'a b/1', name: 'manual.pdf',
+    kind: 'PDF', bytes: 2018052, ts: '2026-11-16T09:21:56+00:00', source: 'example.com', onDisk: true, viewable: true, readable: true }] });
+  assert.equal(transport.downloadUrl?.('a b/1'), '/api/helios/downloads/a%20b%2F1');
+  assert.equal(transport.downloadUrl?.('x', true), '/api/helios/downloads/x/download');
+  await assert.rejects(async () => createHexosTransport('/api', fixture({})).downloads?.(), /no válida/);
+});
+
 test('pending project changes reach the card only when they are well formed', async () => {
   const { parseProjectChange } = await import('../lib/helios/hexos');
   const fichero = { path: 'src/main.cu', kind: 'edit', added: 1, removed: 1,

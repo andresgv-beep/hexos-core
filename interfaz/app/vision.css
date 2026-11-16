@@ -836,3 +836,25 @@ button.vision-horizon-state:focus-visible { outline: 2px solid var(--v-gold); ou
 .download-facts dt { color: var(--v-muted); }
 .download-facts dd { margin: 0; color: var(--v-text); overflow-wrap: anywhere; }
 .download-url { font-family: var(--v-mono); overflow-wrap: anywhere; }
+
+/* Panel de descargas: una fila por fichero, con verlo y guardarlo a la derecha. */
+.downloads-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.downloads-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--v-line); border-radius: var(--v-radius); color: var(--v-muted); }
+.downloads-row[data-missing="true"] { opacity: .55; }
+.downloads-what { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.downloads-what > :is(a, span) { font: 600 14px var(--v-font); color: var(--v-text); text-decoration: none; overflow-wrap: anywhere; }
+.downloads-what > a:hover { color: var(--v-gold-soft); }
+.downloads-what small { font-size: 12px; color: var(--v-muted); overflow-wrap: anywhere; }
+.downloads-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.downloads-actions a {
+  height: 38px; padding: 0 12px; border: 1px solid var(--v-line-strong); border-radius: 8px; color: var(--v-text);
+  font: 600 13px var(--v-font); text-decoration: none; display: inline-flex; align-items: center; gap: 7px;
+}
+.downloads-actions a:hover { border-color: var(--v-rim); background: rgba(232, 176, 79, 0.10); }
+:is(.downloads-what, .downloads-actions) a:focus-visible { outline: 2px solid var(--v-gold); outline-offset: 2px; }
+@media (max-width: 700px) {
+  /* En el móvil el nombre necesita el ancho entero: los botones bajan a su propia línea. */
+  .downloads-row { flex-wrap: wrap; }
+  .downloads-row > svg { display: none; }
+  .downloads-actions { width: 100%; justify-content: flex-end; }
+}
