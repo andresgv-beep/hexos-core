@@ -276,6 +276,8 @@ class NativeRuntime:
         env.globals['raise_exception']=fail
         source = Path(template).read_text()
         self.qwen = '<|im_start|>' in source and '<tool_call>' in source
+        # Qwen3-Coder llama con etiquetas (<function=…><parameter=…>) y no con JSON.
+        self.qwen_xml = self.qwen and '<function=' in source
         self.template=env.from_string(source)
         self.thinking = thinking
         # None: se declaran todas. context.py lo fija en cada turno con los grupos vivos.
@@ -378,6 +380,14 @@ class NativeRuntime:
             self.proc.terminate();raise RuntimeError('timeout del motor nativo')
         if isinstance(result,Exception):raise RuntimeError(str(result))
         return result
+
+    def tipos_de_alias(self, alias):
+        """Los tipos de los argumentos de una herramienta, por el nombre con que se declara."""
+        nombre = self.names.get(alias)
+        if not nombre:
+            return None
+        definicion = catalog.TOOLS[nombre]
+        return definicion['required'] | definicion['optional']
 
     def attach_image(self, pixels, width, height):
         """Adjunta una imagen RGB8 al turno siguiente. Se consume una sola vez."""
@@ -540,7 +550,10 @@ class NativeRuntime:
         repairing = getattr(self, 'repair_call', False)
         prefix = ('<|tool_call>call:' + required_read if required_read else
                   '<|tool_call>call:' if repairing else '')
-        if getattr(self, 'qwen', False) and prefix:
+        qwen_xml = getattr(self, 'qwen_xml', False)
+        if qwen_xml and prefix:
+            prefix = '<tool_call>\n<function=' + (required_read + '>\n' if required_read else '')
+        elif getattr(self, 'qwen', False) and prefix:
             prefix = '<tool_call>\n'
             if required_read:
                 prefix += '{"name": ' + json.dumps(required_read) + ', "arguments": '
@@ -548,7 +561,8 @@ class NativeRuntime:
         # que acaba de ver. Dejándole elegir el argumento ponía el id de la última nota
         # que guardó y descartaba esa, que era otra (medido 3 de 3 con el E4B).
         if nota_ordenada and required_read == 'note_mark':
-            prefix += '{"n": ' if getattr(self, 'qwen', False) else '{n:'
+            prefix += ('<parameter=n>\n' if qwen_xml else
+                       '{"n": ' if getattr(self, 'qwen', False) else '{n:')
         self.repair_call = False
         # Grupos activos: el conjunto se fija al empezar el turno y aquí solo se aplica,
         # porque cambiarlo a mitad invalida el prefijo KV de todo lo que viene detrás.
@@ -695,7 +709,9 @@ class NativeRuntime:
             if re.search(r'<\|[^>]*>|<[^>]*\|>',preamble):
                 raise NativeSyntax('marcadores inesperados antes de llamada')
             try:
-                calls = qwen_protocol.calls(raw[start:]) if getattr(self, 'qwen', False) else calls_from_text(raw[start:])
+                calls = (qwen_protocol.calls_xml(raw[start:], self.tipos_de_alias) if getattr(self, 'qwen_xml', False)
+                         else qwen_protocol.calls(raw[start:]) if getattr(self, 'qwen', False)
+                         else calls_from_text(raw[start:]))
             except (ValueError, RecursionError) as exc:
                 raise NativeSyntax(str(exc)) from exc
             if not calls:raise NativeSyntax('cesión sin llamada')

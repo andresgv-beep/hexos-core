@@ -92,3 +92,95 @@ def calls(text):
         result.append(value)
         text = tail[len('</tool_call>'):].strip()
     return result
+
+
+# --- Qwen3-Coder: llamadas con etiquetas, no JSON ---------------------------------------
+#
+#   <tool_call>
+#   <function=nombre>
+#   <parameter=ruta>
+#   valor, que puede ocupar varias líneas
+#   </parameter>
+#   </function>
+#   </tool_call>
+#
+# El valor va en crudo: un fichero de código entero viaja sin escapar comillas ni saltos de
+# línea. A cambio no dice de qué tipo es, así que el tipo lo pone el catálogo.
+
+MAX_LLAMADAS = 6
+ABRE_FUNCION = re.compile(r'<function=([A-Za-z_][\w.-]*)>')
+ABRE_PARAMETRO = re.compile(r'<parameter=([A-Za-z_]\w*)>')
+# El cierre de un valor es el `</parameter>` al que sigue otro parámetro o el fin de la
+# función. Así un `</parameter>` escrito dentro del valor (código que habla de este mismo
+# formato) no lo corta.
+CIERRA_PARAMETRO = re.compile(r'</parameter>\s*(?=<parameter=|</function>)')
+
+
+def _valor(crudo, tipo, nombre):
+    """El texto de un parámetro, convertido al tipo que declara el catálogo."""
+    # La plantilla pone un salto de línea tras abrir y otro antes de cerrar: son del formato.
+    texto = crudo[1:] if crudo.startswith('\n') else crudo
+    texto = texto[:-1] if texto.endswith('\n') else texto
+    if tipo in (None, 'str'):
+        return texto
+    limpio = texto.strip()
+    if tipo == 'int':
+        if not re.fullmatch(r'-?\d+', limpio):
+            raise ValueError(nombre + ': se esperaba un número entero')
+        return int(limpio)
+    if tipo == 'bool':
+        if limpio.lower() not in ('true', 'false'):
+            raise ValueError(nombre + ': se esperaba true o false')
+        return limpio.lower() == 'true'
+    if tipo == 'list':
+        try:
+            valor = json.loads(limpio)
+        except ValueError:
+            # Una lista escrita a mano, un elemento por línea, también vale.
+            valor = [linea.strip() for linea in limpio.splitlines() if linea.strip()]
+        if not isinstance(valor, list):
+            raise ValueError(nombre + ': se esperaba una lista')
+        return valor
+    raise ValueError(nombre + ': tipo de argumento desconocido en el catálogo')
+
+
+def calls_xml(text, tipos=None):
+    """Las llamadas de un texto en el formato de Qwen3-Coder.
+
+    `tipos(nombre)` devuelve {parámetro: 'str'|'int'|'bool'|'list'} para una herramienta, o
+    None si no la conoce; sin él todo son textos. Rechaza texto suelto entre llamadas,
+    parámetros repetidos y bloques sin cerrar, igual que el analizador de JSON.
+    """
+    result = []
+    text = text.strip()
+    while text:
+        if not text.startswith('<tool_call>') or len(result) >= MAX_LLAMADAS:
+            raise ValueError('llamada Qwen inválida')
+        fin = text.find('</tool_call>')
+        # El cierre bueno es el que sigue a `</function>`: un valor puede contener el otro.
+        cierre = re.search(r'</function>\s*</tool_call>', text)
+        if not cierre or fin < 0:
+            raise ValueError('llamada Qwen incompleta')
+        cuerpo = text[len('<tool_call>'):cierre.start()].strip()
+        funcion = ABRE_FUNCION.match(cuerpo)
+        if not funcion:
+            raise ValueError('llamada Qwen sin <function=nombre>')
+        nombre = funcion.group(1)
+        clases = (tipos(nombre) if tipos else None) or {}
+        resto = cuerpo[funcion.end():].lstrip('\n') + '</function>'
+        argumentos = {}
+        while not resto.startswith('</function>'):
+            abre = ABRE_PARAMETRO.match(resto)
+            if not abre:
+                raise ValueError('texto inesperado entre los parámetros de ' + nombre)
+            clave = abre.group(1)
+            if clave in argumentos:
+                raise ValueError('clave duplicada')
+            cierra = CIERRA_PARAMETRO.search(resto, abre.end())
+            if not cierra:
+                raise ValueError('parámetro ' + clave + ' sin cerrar')
+            argumentos[clave] = _valor(resto[abre.end():cierra.start()], clases.get(clave), nombre + '.' + clave)
+            resto = resto[cierra.end():]
+        result.append(dict(name=nombre, arguments=argumentos))
+        text = text[cierre.end():].strip()
+    return result
