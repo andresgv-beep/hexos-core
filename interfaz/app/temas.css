@@ -1,0 +1,163 @@
+/* Helios · temas. Va después de vision.css y solo cambia variables: cada mando de
+   Ajustes › Apariencia pone un atributo en <html> y aquí se le da valor. Sin atributos
+   queda el aspecto de siempre (carbón, dorado, contornos encendidos, redondeado), que no
+   se define aquí sino en la raíz de vision.css.
+
+   El orden importa: los contornos discretos van al final porque apagan tonos que el
+   color acaba de dar. */
+
+/* Forma: todo radio de la interfaz se multiplica por --v-forma. */
+:root[data-forma="suave"] { --v-forma: 0.5; }
+:root[data-forma="recto"] { --v-forma: 0; }
+
+/* Fondo. Los canales son para los velos translúcidos de paneles y ventanas. */
+:root[data-fondo="negro"] {
+  --v-bg: #09090a;
+  --v-line: rgba(255, 255, 255, 0.085);
+  --v-surface-rgb: 15, 15, 16;
+  --v-surface-code-rgb: 11, 11, 12;
+  --v-surface-warm-rgb: 20, 20, 21;
+  --v-deep-rgb: 5, 5, 6;
+  --v-void-rgb: 0, 0, 0;
+  --v-abyss-rgb: 2, 2, 2;
+  --hud-panelA: #101011;
+  --hud-panelB: #0e0e0f;
+  --hud-chat: #0b0b0c;
+  --hud-code: #070708;
+  --hud-input: #0c0c0d;
+  --hud-raised: #19191b;
+  --hud-track: #1c1c1e;
+  --hud-line: #262628;
+  --hud-userBubble: #18181a;
+  --hud-heliosBubble: #0e0e0f;
+}
+:root[data-fondo="azul"] {
+  --v-bg: #0a0d12;
+  --v-text: #e8edf4;
+  --v-muted: #94a0b2;
+  --v-line: rgba(160, 190, 255, 0.10);
+  --v-surface-rgb: 16, 20, 27;
+  --v-surface-code-rgb: 12, 16, 22;
+  --v-surface-warm-rgb: 20, 25, 33;
+  --v-deep-rgb: 6, 9, 14;
+  --v-void-rgb: 2, 4, 7;
+  --v-abyss-rgb: 3, 5, 8;
+  --v-code-text: #dfe6ef;
+  --hud-panelA: #10141b;
+  --hud-panelB: #0e1218;
+  --hud-chat: #0c1016;
+  --hud-code: #080b10;
+  --hud-input: #0d1117;
+  --hud-raised: #19202a;
+  --hud-track: #1b222c;
+  --hud-line: #263040;
+  --hud-userBubble: #182029;
+  --hud-heliosBubble: #0e1319;
+  --hud-label: #c0cbd8;
+  --hud-dim: #7d8795;
+  --hud-bright: #f4f8fd;
+}
+
+/* Lienzo liso: sin el resplandor, la viñeta ni el grano que van sobre el fondo. */
+:root[data-lienzo="liso"] { --v-lienzo: none; }
+
+/* Color: el acento y todos sus tonos hermanos. Con uno solo cambiaría una parte mínima. */
+:root[data-color="cian"] {
+  --v-gold-rgb: 92, 200, 255;
+  --v-gold-soft: #8fdaff;
+  --v-gold-pale: #a9e2ff;
+  --v-gold-deep: #2b8fd9;
+  --v-gold-cream: #cfeeff;
+  --v-ember-rgb: 80, 190, 255;
+  --v-rim-rgb: 110, 205, 255;
+  --v-highlight-rgb: 190, 232, 255;
+  --v-flare-rgb: 110, 205, 255;
+  --v-flare-deep-rgb: 50, 150, 255;
+  --v-flare-soft-rgb: 140, 215, 255;
+  --v-flare-1: #3aa8ff;
+  --v-flare-2: #8ad4ff;
+  --v-flare-3: #cfefff;
+  --v-on-gold: #04141d;
+  --v-accent-text: #bfe6ff;
+  --v-accent-text-soft: #a9d6ef;
+  --v-glass-rgb: 208, 232, 255;
+  --hud-frame: #2c3d4a;
+  --hud-tick: #3a566b;
+}
+:root[data-color="verde"] {
+  --v-gold-rgb: 125, 220, 138;
+  --v-gold-soft: #a5eab0;
+  --v-gold-pale: #b9efc2;
+  --v-gold-deep: #3fae52;
+  --v-gold-cream: #d2f5d8;
+  --v-ember-rgb: 110, 225, 130;
+  --v-rim-rgb: 135, 225, 150;
+  --v-highlight-rgb: 195, 245, 205;
+  --v-flare-rgb: 135, 225, 150;
+  --v-flare-deep-rgb: 60, 200, 90;
+  --v-flare-soft-rgb: 160, 235, 175;
+  --v-flare-1: #4fcf66;
+  --v-flare-2: #9be8a8;
+  --v-flare-3: #d8f8de;
+  --v-on-gold: #06180a;
+  --v-accent-text: #c8f0cf;
+  --v-accent-text-soft: #b3dfba;
+  --v-glass-rgb: 215, 255, 225;
+  --hud-frame: #2c4a33;
+  --hud-tick: #3a6b45;
+}
+:root[data-color="hueso"] {
+  --v-gold-rgb: 233, 228, 218;
+  --v-gold-soft: #ffffff;
+  --v-gold-pale: #f3efe8;
+  --v-gold-deep: #b9b3a6;
+  --v-gold-cream: #fbf9f5;
+  --v-ember-rgb: 240, 236, 228;
+  --v-rim-rgb: 235, 230, 222;
+  --v-highlight-rgb: 255, 255, 255;
+  --v-flare-rgb: 240, 236, 228;
+  --v-flare-deep-rgb: 200, 195, 185;
+  --v-flare-soft-rgb: 248, 245, 240;
+  --v-flare-1: #cfc9bd;
+  --v-flare-2: #ebe7df;
+  --v-flare-3: #ffffff;
+  --v-on-gold: #161616;
+  --v-accent-text: #f3efe8;
+  --v-accent-text-soft: #dcd8d0;
+  --v-glass-rgb: 255, 255, 255;
+  --hud-frame: #45433f;
+  --hud-tick: #6a665f;
+}
+:root[data-color="rojo"] {
+  --v-gold-rgb: 255, 107, 87;
+  --v-gold-soft: #ff9484;
+  --v-gold-pale: #ffa99c;
+  --v-gold-deep: #d93f2b;
+  --v-gold-cream: #ffd2cb;
+  --v-ember-rgb: 255, 95, 75;
+  --v-rim-rgb: 255, 120, 100;
+  --v-highlight-rgb: 255, 190, 180;
+  --v-flare-rgb: 255, 120, 100;
+  --v-flare-deep-rgb: 255, 70, 50;
+  --v-flare-soft-rgb: 255, 150, 135;
+  --v-flare-1: #ff4a3a;
+  --v-flare-2: #ff9c8a;
+  --v-flare-3: #ffd9d2;
+  --v-on-gold: #1d0603;
+  --v-accent-text: #ffd0c8;
+  --v-accent-text-soft: #efbdb5;
+  --v-glass-rgb: 255, 220, 214;
+  --hud-frame: #4a2f2c;
+  --hud-tick: #6b3f3a;
+}
+
+/* Contornos discretos: las cajas llevan una línea neutra y el color queda para lo que
+   importa (el botón principal, lo activo, el foco). Sin resplandor. */
+:root[data-contorno="discreto"] {
+  --v-line-strong: rgba(255, 255, 255, 0.10);
+  --v-rim: rgba(255, 255, 255, 0.16);
+  --v-highlight: rgba(255, 255, 255, 0.08);
+  --v-glow: 0 0 0 transparent;
+  --v-rim-rgb: 120, 120, 124;
+  --v-highlight-rgb: 150, 150, 154;
+}

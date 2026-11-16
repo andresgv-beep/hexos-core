@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "./hud.css";
 import "./vision.css";
+import "./temas.css";
+import { GUION_TEMA } from "@/lib/helios/tema";
 
 export const metadata: Metadata = {
   title: "Helios · Espacio de trabajo",
@@ -14,8 +16,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es">
+    // El guion del tema pone atributos en <html> antes de que React hidrate: no es un desajuste.
+    <html lang="es" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: GUION_TEMA }} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         {/* eslint-disable-next-line @next/next/no-page-custom-font -- app router: this layout wraps every page */}

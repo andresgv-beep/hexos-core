@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Globe, Settings as SettingsIcon, X } from "lucide-react";
+import { Globe, Palette, Settings as SettingsIcon, X } from "lucide-react";
 import type { HeliosTransport, ServiceProvider, Settings } from "@/lib/helios/hexos";
+import { CLAVE_TEMA, MANDOS, TEMA_ATAJOS, TEMA_BASE, TEMA_MANDOS, aplicarTema, guardarTema, leerTema, mismoTema,
+         type Tema } from "@/lib/helios/tema";
 
-/** Las secciones de la ventana. Una nueva (temas, chat…) es otra entrada aquí y su panel abajo. */
-const SECCIONES = [{ id: "web", nombre: "Web", Icono: Globe }] as const;
+/** Las secciones de la ventana. Una nueva (chat…) es otra entrada aquí y su panel abajo. */
+const SECCIONES = [{ id: "web", nombre: "Web", Icono: Globe },
+                   { id: "apariencia", nombre: "Apariencia", Icono: Palette }] as const;
 type Seccion = typeof SECCIONES[number]["id"];
 
 const error = (reason: unknown) => reason instanceof Error ? reason.message : "No se pudo completar";
@@ -77,7 +80,42 @@ function ProviderCard({ provider, transport, onChange }: {
   </section>;
 }
 
-/** Ajustes de Helios. Hoy solo «Web»: los servicios externos y sus claves. */
+const almacen = (): Storage | null => { try { return window.localStorage; } catch { return null; } };
+
+/** El aspecto de la interfaz. No pasa por HexOS: se aplica al documento y se guarda en este
+ *  navegador, así que cada dispositivo lleva el suyo y cambia sin esperar a nadie. */
+function Apariencia() {
+  // Solo se monta al abrir Ajustes, ya en el navegador: se puede leer lo guardado al empezar.
+  const [tema, setTema] = useState<Tema>(() => leerTema(almacen()?.getItem(CLAVE_TEMA)));
+  // El último tema puesto, no el del último repintado: dos pulsaciones seguidas se suman
+  // en vez de partir las dos del mismo estado y que la segunda deshaga la primera.
+  const puesto = useRef(tema);
+  function poner(cambio: Partial<Tema>) {
+    const nuevo = puesto.current = { ...puesto.current, ...cambio };
+    setTema(nuevo);
+    aplicarTema(document.documentElement, nuevo);
+    guardarTema(nuevo, almacen());
+  }
+  return <>
+    <h3>Apariencia</h3>
+    <p className="settings-lead">Cambia al momento y se guarda en este dispositivo: el móvil y el PC pueden ir distintos.</p>
+    <div className="theme-group" role="group" aria-label="Atajos">
+      <span>Atajos</span>
+      <div>{TEMA_ATAJOS.map(atajo => <button key={atajo.nombre} type="button" aria-pressed={mismoTema(tema, atajo.tema)}
+        onClick={() => poner(atajo.tema)}>{atajo.nombre}</button>)}</div>
+    </div>
+    {MANDOS.map(mando => <div key={mando} className="theme-group" role="group" aria-label={TEMA_MANDOS[mando].nombre}>
+      <span>{TEMA_MANDOS[mando].nombre}</span>
+      <div>{TEMA_MANDOS[mando].opciones.map(opcion => <button key={opcion.id} type="button"
+        aria-pressed={tema[mando] === opcion.id} onClick={() => poner({ [mando]: opcion.id })}>
+        {"muestra" in opcion && <i style={{ background: opcion.muestra }} aria-hidden="true" />}{opcion.nombre}
+      </button>)}</div>
+    </div>)}
+    {!mismoTema(tema, TEMA_BASE) && <p className="access-note">«Clásico» devuelve el aspecto de siempre.</p>}
+  </>;
+}
+
+/** Ajustes de Helios: «Web», los servicios externos y sus claves, y «Apariencia», el tema. */
 export function SettingsWindow({ transport, onClose }: { transport: HeliosTransport; onClose: () => void }) {
   const [seccion, setSeccion] = useState<Seccion>("web");
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -117,8 +155,9 @@ export function SettingsWindow({ transport, onClose }: { transport: HeliosTransp
             <Icono size={16} aria-hidden="true" /> {nombre}</button>)}
         </nav>
         <div className="settings-content">
-          {fallo && <p className="settings-status" data-kind="error" role="alert">{fallo}</p>}
-          {!settings && !fallo && <p className="settings-lead">Cargando…</p>}
+          {seccion === "apariencia" && <Apariencia />}
+          {seccion === "web" && fallo && <p className="settings-status" data-kind="error" role="alert">{fallo}</p>}
+          {seccion === "web" && !settings && !fallo && <p className="settings-lead">Cargando…</p>}
           {settings && seccion === "web" && <>
             <h3>Búsqueda en la web</h3>
             <p className="settings-lead">Helios busca ahora con <strong>{settings.web.search}</strong>.{" "}
