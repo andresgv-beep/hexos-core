@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Check, FolderOpen, Pencil, Plus, Trash2, X } from "lucide-react";
 import type { Project } from "@/lib/helios/hexos";
 import type { InferenceMetrics } from "@/lib/helios/metrics";
@@ -10,6 +11,67 @@ import type { InferenceMetrics } from "@/lib/helios/metrics";
 function etiqueta(nombre: string): string {
   return nombre.normalize("NFKD").replace(/[^ -~]/g, "").toLowerCase()
     .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48).replace(/-+$/, "");
+}
+
+/** La carpeta que HexOS le daría a un proyecto con ese nombre, o "" si el nombre no da para una. */
+export function carpetaPropuesta(root: string, nombre: string): string {
+  return nombre.trim() && etiqueta(nombre) ? `${root}/${etiqueta(nombre)}` : "";
+}
+
+/** La ventana de «Proyecto nuevo»: nombre y carpeta. Estaba fija en el lateral y se comía la
+ *  altura de la lista de proyectos y de las herramientas; ahora solo existe mientras se crea uno. */
+export function NewProjectForm({ root, busy, error, onCreate, onClose }: {
+  root: string; busy: boolean; error: string;
+  onCreate: (name: string, folder: string) => Promise<boolean>; onClose: () => void;
+}) {
+  const [name, setName] = useState("");
+  // La carpeta se enseña ya escrita, calculada con el nombre, hasta que la persona la toca:
+  // así se ve dónde va a ir y se puede cambiar el destino o apuntar a una que ya existe.
+  const [folder, setFolder] = useState("");
+  const [carpetaTocada, setCarpetaTocada] = useState(false);
+  // El error del panel es de todo lo que se hace con proyectos: aquí solo cuenta el de este intento.
+  const [intentado, setIntentado] = useState(false);
+  const carpeta = carpetaTocada ? folder : carpetaPropuesta(root, name);
+  const campo = useRef<HTMLInputElement>(null);
+  const cerrar = useRef(onClose);
+  useEffect(() => { cerrar.current = onClose; }, [onClose]);
+  useEffect(() => {
+    campo.current?.focus();
+    const tecla = (event: KeyboardEvent) => { if (event.key === "Escape") cerrar.current(); };
+    window.addEventListener("keydown", tecla);
+    return () => window.removeEventListener("keydown", tecla);
+  }, []);
+  async function crear(event: FormEvent) {
+    event.preventDefault();
+    if (busy || !name.trim()) return;
+    setIntentado(true);
+    // Sin tocar, decide HexOS con su misma regla; tocada, se le manda la que se ha escrito.
+    if (await onCreate(name, carpetaTocada ? folder.trim() : "")) onClose();
+  }
+  return <div className="access-backdrop">
+    <form className="access-panel project-new-panel" role="dialog" aria-modal="true" aria-labelledby="project-new-title"
+      onSubmit={event => void crear(event)}>
+      <h2 id="project-new-title" className="panel-title">Proyecto nuevo</h2>
+      <label className="access-field">Nombre
+        <input ref={campo} value={name} maxLength={80} placeholder="Cómo se va a llamar" autoComplete="off"
+          disabled={busy} onChange={event => setName(event.target.value)} />
+      </label>
+      <label className="access-field">Carpeta
+        <input className="project-new-folder" value={carpeta} placeholder={`${root}/…`} autoComplete="off" spellCheck={false}
+          disabled={busy} title={carpeta}
+          onChange={event => { setCarpetaTocada(true); setFolder(event.target.value); }} />
+      </label>
+      <p className="access-note">{carpetaTocada
+        ? <>Se usará esa ruta: si ya existe, tal cual; si no, se crea. <button type="button" disabled={busy}
+            onClick={() => { setCarpetaTocada(false); setFolder(""); }}>Volver a la propuesta</button></>
+        : "Se crea ahí si no existe. Cámbiala para elegir otro destino o usar una carpeta que ya tienes."}</p>
+      {intentado && error && <p className="attachment-error" role="alert">{error}</p>}
+      <div className="access-actions">
+        <button type="button" disabled={busy} onClick={onClose}>Cancelar</button>
+        <button type="submit" className="access-save" disabled={busy || !name.trim()}>{busy ? "Creando…" : "Crear proyecto"}</button>
+      </div>
+    </form>
+  </div>;
 }
 
 const integer = new Intl.NumberFormat("es-ES");
@@ -64,13 +126,7 @@ export function ProjectsPanel({ projects, root = "~/Helios/proyectos", active, b
   onRemove?: (id: string) => Promise<boolean>;
   onClose?: () => void;
 }) {
-  const [name, setName] = useState("");
-  // La carpeta se enseña ya escrita, calculada con el nombre, hasta que la persona la toca:
-  // así se ve dónde va a ir y se puede cambiar el destino o apuntar a una que ya existe.
-  const [folder, setFolder] = useState("");
-  const [carpetaTocada, setCarpetaTocada] = useState(false);
-  const propuesta = name.trim() && etiqueta(name) ? `${root}/${etiqueta(name)}` : "";
-  const carpeta = carpetaTocada ? folder : propuesta;
+  const [creando, setCreando] = useState(false);
   // Un proyecto a la vez en edición o pendiente de confirmar que se quita.
   const [editando, setEditando] = useState<{ id: string; name: string } | null>(null);
   const [quitando, setQuitando] = useState<string | null>(null);
@@ -78,12 +134,6 @@ export function ProjectsPanel({ projects, root = "~/Helios/proyectos", active, b
     event.preventDefault();
     if (!editando || busy || !editando.name.trim() || !onRename) return;
     if (await onRename(editando.id, editando.name)) setEditando(null);
-  }
-  async function crear(event: FormEvent) {
-    event.preventDefault();
-    if (busy || !name.trim()) return;
-    // Sin tocar, decide HexOS con su misma regla; tocada, se le manda la que se ha escrito.
-    if (await onCreate(name, carpetaTocada ? folder.trim() : "")) { setName(""); setFolder(""); setCarpetaTocada(false); }
   }
   const Caja = fixed ? "aside" : "div";
   return <Caja className={fixed ? "vision-agent-side vision-projects" : "vision-tasks vision-projects"}
@@ -94,25 +144,15 @@ export function ProjectsPanel({ projects, root = "~/Helios/proyectos", active, b
       <FolderOpen size={17} aria-hidden="true" />
       <h2 id="projects-title">Proyectos</h2>
       <span>{projects.length === 1 ? "1 proyecto" : projects.length ? `${projects.length} proyectos` : "ninguno todavía"}</span>
+      <button type="button" className="vision-project-add" aria-label="Proyecto nuevo" title="Proyecto nuevo"
+        aria-haspopup="dialog" disabled={busy} onClick={() => setCreando(true)}><Plus size={16} aria-hidden="true" /></button>
       {!fixed && <button type="button" className="icon-button" aria-label="Cerrar proyectos" onClick={onClose}><X size={16} /></button>}
     </header>
-    <form className="vision-project-new" onSubmit={event => void crear(event)}>
-      <label htmlFor="project-name">Proyecto nuevo</label>
-      <div>
-        <input id="project-name" value={name} maxLength={80} placeholder="Nombre" autoComplete="off"
-          disabled={busy} onChange={event => setName(event.target.value)} />
-        <button type="submit" className="icon-button" aria-label="Crear proyecto" disabled={busy || !name.trim()}><Plus size={16} /></button>
-      </div>
-      <label htmlFor="project-folder" className="vision-project-sub">Carpeta</label>
-      <input id="project-folder" value={carpeta} placeholder={`${root}/…`} autoComplete="off" spellCheck={false}
-        disabled={busy} title={carpeta}
-        onChange={event => { setCarpetaTocada(true); setFolder(event.target.value); }} />
-      <p className="vision-project-hint">{carpetaTocada
-        ? <>Se usará esa ruta: si ya existe, tal cual; si no, se crea. <button type="button" disabled={busy}
-            onClick={() => { setCarpetaTocada(false); setFolder(""); }}>Volver a la propuesta</button></>
-        : "Se crea ahí si no existe. Cámbiala para elegir otro destino o usar una carpeta que ya tienes."}</p>
-      {error && <p className="attachment-error" role="alert">{error}</p>}
-    </form>
+    {/* Fuera del panel: en el móvil el panel es de cristal, y un fondo desenfocado encierra dentro
+        de sí a lo que se coloca fijo sobre la pantalla. */}
+    {creando && createPortal(<NewProjectForm root={root} busy={busy} error={error} onCreate={onCreate}
+      onClose={() => setCreando(false)} />, document.body)}
+    {error && !creando && <p className="attachment-error" role="alert">{error}</p>}
     <ul className="vision-project-list">
       <li><button type="button" disabled={busy} aria-current={active === null ? "true" : undefined}
         onClick={() => onSelect(null)}>

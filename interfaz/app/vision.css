@@ -655,16 +655,17 @@ button.vision-horizon-state:focus-visible { outline: 2px solid var(--v-gold); ou
 .vision-project-list button:focus-visible { outline: 2px solid var(--v-gold); outline-offset: 2px; }
 .vision-project-list strong { font: 600 14px var(--v-font); }
 .vision-project-list span { font: 11px var(--v-mono); color: var(--v-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.vision-project-new { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--v-line); display: grid; gap: 8px; }
-.vision-project-new > label:first-child { font: 600 11px var(--v-font); letter-spacing: .1em; text-transform: uppercase; color: var(--v-muted); }
-.vision-project-new > div { display: flex; gap: 8px; }
-.vision-project-new input:not([type="checkbox"]) {
-  flex: 1; min-width: 0; height: 36px; padding: 0 11px; font: 14px var(--v-font); color: var(--v-text);
-  border: 1px solid var(--v-line); border-radius: calc(9px * var(--v-forma)); background: rgba(0, 0, 0, 0.22);
+/* Proyecto nuevo: un + en la cabecera abre su ventana. El formulario ya no vive en el panel. */
+.vision-project-add {
+  width: 30px; height: 30px; flex-shrink: 0; display: grid; place-items: center; padding: 0; cursor: pointer;
+  border: 1px solid var(--v-line-strong); border-radius: calc(7px * var(--v-forma)); background: transparent; color: var(--v-text);
 }
-.vision-project-new input:not([type="checkbox"]):focus-visible { outline: 2px solid var(--v-gold); outline-offset: 1px; }
-.vision-project-check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--v-muted); cursor: pointer; }
-.vision-project-hint { margin: 0; font-size: 12px; color: var(--v-muted); }
+.vision-project-add:hover:not(:disabled) { border-color: var(--v-rim); background: rgba(var(--v-gold-rgb), 0.10); }
+.vision-project-add:disabled { opacity: .6; cursor: default; }
+.vision-project-add:focus-visible { outline: 2px solid var(--v-gold); outline-offset: 2px; }
+.project-new-panel .access-field input { font-size: 14px; }
+.project-new-panel .access-field input.project-new-folder { font: 12px var(--v-mono); }
+.project-new-panel .access-note button { border: 0; background: none; padding: 0; color: var(--v-gold-soft); font: inherit; cursor: pointer; text-decoration: underline; }
 /* En el móvil no hay raíl del que colgar el panel: ocupa el ancho, por encima de la
    conversación y por debajo de las tarjetas que piden algo. Más opaco, que detrás hay texto. */
 .vision-layout.mobile-layout .vision-projects {
@@ -681,7 +682,6 @@ button.vision-horizon-state:focus-visible { outline: 2px solid var(--v-gold); ou
 .vision-agent-side .vision-tasks-empty { margin: 0; font-size: 13px; }
 .vision-agent-side .vision-project-list { margin-top: 0; }
 @media (max-width: 1100px) { .vision-agent-side { width: 240px; padding-left: 14px; padding-right: 14px; } }
-.vision-project-new > * { min-width: 0; }
 .vision-agent-side .vision-panel-heading > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* La tarjeta del fondo del lateral: contexto y velocidad, fuera de debajo del chat. */
 .vision-agent-meter {
@@ -695,7 +695,6 @@ button.vision-horizon-state:focus-visible { outline: 2px solid var(--v-gold); ou
 .vision-agent-meter .inference-track > span { background: var(--v-gold); border-radius: calc(2px * var(--v-forma)); }
 .vision-agent-meter[data-full="true"] strong { color: var(--hud-pink); }
 .vision-agent-meter[data-full="true"] .inference-track > span { background: var(--hud-pink); }
-.vision-agent-side .vision-project-new { margin-top: 0; padding-top: 0; border-top: 0; padding-bottom: 14px; border-bottom: 1px solid var(--v-line); }
 /* Arriba del lateral, a la altura de la cabecera: razonamiento e historial como botones
    cuadrados. Con ellos aquí, los proyectos suben y el centro del lateral queda libre. */
 .vision-agent-side { padding-top: 16px; }
@@ -785,9 +784,6 @@ button.vision-horizon-state:focus-visible { outline: 2px solid var(--v-gold); ou
 }
 .vision-project-list .vision-project-row > .icon-button { display: grid; place-items: center; padding: 0; gap: 0; border: 0; background: transparent; }
 /* La carpeta de destino del proyecto nuevo. */
-.vision-project-new .vision-project-sub { font: 11px var(--v-font); color: var(--v-muted); letter-spacing: 0; text-transform: none; margin-top: 2px; }
-.vision-project-new input#project-folder { font: 12px var(--v-mono); height: 32px; }
-.vision-project-hint button { border: 0; background: none; padding: 0; color: var(--v-gold-soft); font: inherit; cursor: pointer; text-decoration: underline; }
 /* La lista es una rejilla: sin esto, una fila con un campo de texto ensancha la columna
    más allá del lateral en vez de encogerse. */
 .vision-project-list { grid-template-columns: minmax(0, 1fr); }
