@@ -124,6 +124,21 @@ def failed_call(turn, name, arguments):
     return None
 
 
+def blocked_search(turn, marca):
+    """Búsqueda web de este turno que falló por algo que otra consulta no arregla.
+
+    `failed_call` solo ve la misma llamada, y el modelo cambia una palabra cada vez:
+    el 16/11 fueron ocho consultas seguidas contra un buscador que pedía un reto
+    antibots. `marca` es la frase con la que `web` señala esos fallos.
+    """
+    for step in reversed(turn.trace):
+        if step.get('tool') == 'web.search' and step.get('failed'):
+            error = (step.get('result') or {}).get('error')
+            if isinstance(error, str) and marca in error:
+                return step
+    return None
+
+
 def completed_registration(turn, name, arguments):
     """Registro equivalente ya completado aunque el modelo cambie de herramienta.
 

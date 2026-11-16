@@ -11,7 +11,9 @@ from html.parser import HTMLParser
 import ipaddress
 import json
 import re
+import shutil
 import socket
+import subprocess
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlencode, unquote, urljoin, urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
@@ -47,6 +49,27 @@ _MURO = re.compile(r'protected by|just a moment|attention required|access denied
 # Reintentar no cambia una negativa del servidor; sí cambia elegir otra fuente.
 _BLOQUEO_HTTP = {401: 'pide identificarse', 403: 'rechaza la lectura automática',
                  429: 'limita las lecturas automáticas', 451: 'no está disponible por motivos legales'}
+# Marca de los fallos de búsqueda que no dependen de las palabras: el 16/11 DuckDuckGo
+# contestó con su reto antibots y el 26B lanzó ocho consultas distintas en diez segundos.
+# El ejecutor corta las búsquedas del turno cuando ve esta frase (`ledger.blocked_search`).
+SIN_REINTENTO = 'repetir la búsqueda no cambiará la respuesta'
+TAVILY = 'https://api.tavily.com/search'
+_TAVILY_RANGO = {'dia': 'day', 'semana': 'week', 'mes': 'month', 'año': 'year', 'ano': 'year'}
+_TAVILY_HTTP = {401: 'la clave de Tavily no es válida',
+                429: 'Tavily limita el ritmo de búsquedas',
+                432: 'se ha agotado el cupo de búsquedas de Tavily de este mes',
+                433: 'se ha agotado el límite de pago por uso de Tavily'}
+MAX_SNIPPET = 500
+# Un PDF se lee por sus primeras páginas: con MAX_TEXT no cabe más, y un manual de 300
+# páginas no tiene que pasar entero por el extractor.
+PDF_PAGINAS = 30
+PDF_SEGUNDOS = 20
+# Lo que web.read no lee no deja de existir: el 16/11 el primer resultado era el manual
+# del Apple 1 en PDF y, con un «formato no legible», el 26B no le dio el enlace a la persona.
+ENLACE_VALIDO = ('El enlace es válido y la persona puede abrirlo en su navegador: dáselo, '
+                 'diciendo que tú no has podido leer lo que contiene')
+_FORMATOS = {'application/pdf': 'un PDF', 'application/zip': 'un archivo ZIP',
+             'application/octet-stream': 'un fichero para descargar'}
 
 
 def _meses(desde, hasta):
@@ -206,12 +229,14 @@ def _public_url(value, resolver=socket.getaddrinfo):
     return parsed.geturl()
 
 
-def _request(url, *, opener=None, resolver=socket.getaddrinfo, limit=MAX_DOWNLOAD):
+def _abrir(url, *, opener=None, resolver=socket.getaddrinfo):
+    """La respuesta abierta de una URL pública, tras seguir sus redirecciones de una en una."""
     opener = opener or build_opener(_NoRedirect())
     current = url
     for _ in range(6):
         current = _public_url(current, resolver)
-        request = Request(current, headers={'User-Agent': USER_AGENT, 'Accept': 'text/html,text/plain,application/json'})
+        request = Request(current, headers={'User-Agent': USER_AGENT,
+                                            'Accept': 'text/html,text/plain,application/json,application/pdf'})
         try:
             response = opener.open(request, timeout=12)
         except HTTPError as exc:
@@ -222,19 +247,108 @@ def _request(url, *, opener=None, resolver=socket.getaddrinfo, limit=MAX_DOWNLOA
                 raise ValueError(f'la fuente respondió HTTP {exc.code}: {_BLOQUEO_HTTP[exc.code]}; '
                                  'repetir la lectura no cambiará la respuesta') from exc
             raise ValueError(f'la fuente respondió HTTP {exc.code}') from exc
-        with response:
-            final = response.geturl()
-            _public_url(final, resolver)
-            content_type = response.headers.get_content_type()
-            charset = response.headers.get_content_charset() or 'utf-8'
-            raw = response.read(limit + 1)
-        cut = len(raw) > limit
-        return final, content_type, raw[:limit].decode(charset, errors='replace'), cut
+        try:
+            _public_url(response.geturl(), resolver)
+        except ValueError:
+            response.close()
+            raise
+        return response
     raise ValueError('demasiadas redirecciones web')
 
 
-def search(query, *, opener=None, limit=5, recency=None, today=None):
-    """Busca fuentes públicas. No abre ni guarda los resultados."""
+def _request(url, *, opener=None, resolver=socket.getaddrinfo, limit=MAX_DOWNLOAD, binario=False):
+    with _abrir(url, opener=opener, resolver=resolver) as response:
+        final = response.geturl()
+        content_type = response.headers.get_content_type()
+        charset = response.headers.get_content_charset() or 'utf-8'
+        raw = response.read(limit + 1)
+    cut = len(raw) > limit
+    if binario or content_type == 'application/pdf':
+        # Binario: se entrega en bytes, que decodificado ya no hay quien lo abra.
+        return final, content_type, raw[:limit], cut
+    return final, content_type, raw[:limit].decode(charset, errors='replace'), cut
+
+
+def asomar(url, *, opener=None, resolver=socket.getaddrinfo):
+    """Qué hay en una URL pública, sin bajarla: dirección final, tipo y tamaño si el servidor lo dice.
+
+    Con GET y sin leer el cuerpo: hay servidores que no contestan a HEAD o mienten en él.
+    """
+    with _abrir(url, opener=opener, resolver=resolver) as response:
+        largo = response.headers.get('Content-Length') or ''
+        return response.geturl(), response.headers.get_content_type(), int(largo) if largo.isdigit() else None
+
+
+def descargar(url, limit, *, opener=None, resolver=socket.getaddrinfo):
+    """Los bytes de una URL pública hasta `limit`: (dirección final, tipo, bytes, si se cortó)."""
+    return _request(url, opener=opener, resolver=resolver, limit=limit, binario=True)
+
+
+def _duckduckgo(query, clave, limit, filtro, opener):
+    campos = {'q': query}
+    if filtro:
+        campos['df'] = RECENCY[filtro]
+    request = Request('https://html.duckduckgo.com/html/', data=urlencode(campos).encode(),
+                      headers={'User-Agent': USER_AGENT,
+                               'Content-Type': 'application/x-www-form-urlencoded'})
+    try:
+        with (opener or build_opener()).open(request, timeout=12) as response:
+            raw = response.read(MAX_DOWNLOAD + 1)
+            charset = response.headers.get_content_charset() or 'utf-8'
+    except (OSError, HTTPError) as exc:
+        raise ValueError('el buscador web no respondió') from exc
+    if len(raw) > MAX_DOWNLOAD:
+        raise ValueError('la respuesta del buscador es demasiado grande')
+    html = raw.decode(charset, errors='replace')
+    parser = _SearchParser()
+    parser.feed(html)
+    parser.close()
+    if not parser.results and 'anomaly-modal' in html:
+        # Responde 202 con «selecciona los cuadros con un pato» en vez de resultados.
+        raise ValueError('DuckDuckGo ha bloqueado las búsquedas automáticas con un reto antibots; ' +
+                         SIN_REINTENTO + '. Se evita poniendo un buscador con clave en Ajustes, Web')
+    return parser.results[:limit]
+
+
+def _tavily(query, clave, limit, filtro, opener):
+    cuerpo = {'query': query, 'max_results': limit, 'search_depth': 'basic'}
+    if filtro:
+        cuerpo['time_range'] = _TAVILY_RANGO[filtro]
+    request = Request(TAVILY, data=json.dumps(cuerpo).encode(),
+                      headers={'User-Agent': USER_AGENT, 'Authorization': 'Bearer ' + clave,
+                               'Content-Type': 'application/json'})
+    try:
+        with (opener or build_opener()).open(request, timeout=20) as response:
+            raw = response.read(MAX_DOWNLOAD + 1)
+    except HTTPError as exc:
+        if exc.code in _TAVILY_HTTP:
+            raise ValueError(_TAVILY_HTTP[exc.code] + '; ' + SIN_REINTENTO +
+                             ('. La persona la cambia en Ajustes, Web' if exc.code == 401 else '')) from exc
+        raise ValueError(f'Tavily respondió HTTP {exc.code}') from exc
+    except OSError as exc:
+        raise ValueError('Tavily no respondió') from exc
+    try:
+        resultados = json.loads(raw)['results']
+    except (ValueError, KeyError, TypeError) as exc:
+        raise ValueError('Tavily devolvió una respuesta que no se entiende') from exc
+    items = []
+    for fila in resultados if isinstance(resultados, list) else []:
+        url = fila.get('url') if isinstance(fila, dict) else None
+        if isinstance(url, str) and urlparse(url).scheme in ('http', 'https'):
+            items.append({'title': _space(str(fila.get('title') or '')), 'url': url,
+                          'snippet': _space(str(fila.get('content') or ''))[:MAX_SNIPPET]})
+    return items[:limit]
+
+
+# Con clave se busca por la API del servicio; sin ella, rascando DuckDuckGo.
+_BUSCADORES = {'tavily': _tavily}
+
+
+def search(query, *, opener=None, limit=5, recency=None, today=None, proveedor=None):
+    """Busca fuentes públicas. No abre ni guarda los resultados.
+
+    `proveedor` es {'id', 'key'} de un buscador con clave (`ajustes.buscador`).
+    """
     if not isinstance(query, str) or not query.strip():
         raise ValueError('consulta web vacía')
     if type(limit) is not int or not 1 <= limit <= MAX_RESULTS:
@@ -245,25 +359,12 @@ def search(query, *, opener=None, limit=5, recency=None, today=None):
     if automatica:
         recency = 'año'
 
+    if proveedor is not None and proveedor.get('id') not in _BUSCADORES:
+        raise ValueError('buscador desconocido: ' + repr(proveedor.get('id')))
+    motor = _BUSCADORES[proveedor['id']] if proveedor else _duckduckgo
+
     def buscar(filtro):
-        campos = {'q': query.strip()}
-        if filtro:
-            campos['df'] = RECENCY[filtro]
-        request = Request('https://html.duckduckgo.com/html/', data=urlencode(campos).encode(),
-                          headers={'User-Agent': USER_AGENT,
-                                   'Content-Type': 'application/x-www-form-urlencoded'})
-        try:
-            with (opener or build_opener()).open(request, timeout=12) as response:
-                raw = response.read(MAX_DOWNLOAD + 1)
-                charset = response.headers.get_content_charset() or 'utf-8'
-        except (OSError, HTTPError) as exc:
-            raise ValueError('el buscador web no respondió') from exc
-        if len(raw) > MAX_DOWNLOAD:
-            raise ValueError('la respuesta del buscador es demasiado grande')
-        parser = _SearchParser()
-        parser.feed(raw.decode(charset, errors='replace'))
-        parser.close()
-        return parser.results[:limit]
+        return motor(query.strip(), proveedor and proveedor['key'], limit, filtro, opener)
 
     items = buscar(recency)
     if not items and automatica:
@@ -312,7 +413,32 @@ def _page_date(pattern, body):
     return None
 
 
-def read(url, *, opener=None, resolver=socket.getaddrinfo, today=None):
+def _pdf_text(data, lanzar=subprocess.run, paginas=PDF_PAGINAS, segundos=PDF_SEGUNDOS):
+    """El texto de las primeras páginas de un PDF, sacado con pdftotext dentro de una jaula.
+
+    El PDF viene de la web y su lector es un programa en C: se ejecuta con bubblewrap
+    viendo solo /usr, sin red, sin la carpeta personal y sin escribir en ningún sitio.
+    Sin las dos herramientas no se intenta.
+    """
+    pdftotext, bwrap = shutil.which('pdftotext'), shutil.which('bwrap')
+    if not pdftotext or not bwrap:
+        raise ValueError('es un PDF y este equipo no tiene con qué leerlo (poppler-utils y bubblewrap)')
+    orden = [bwrap, '--ro-bind', '/usr', '/usr', '--symlink', 'usr/lib', '/lib', '--symlink', 'usr/lib64', '/lib64',
+             '--symlink', 'usr/bin', '/bin', '--ro-bind-try', '/etc/fonts', '/etc/fonts', '--dev', '/dev',
+             '--proc', '/proc', '--tmpfs', '/tmp', '--unshare-all', '--new-session', '--die-with-parent',
+             '--clearenv', pdftotext, '-l', str(paginas), '-enc', 'UTF-8', '-q', '-', '-']
+    try:
+        hecho = lanzar(orden, input=data, capture_output=True, timeout=segundos)
+    except subprocess.TimeoutExpired as exc:
+        raise ValueError('el PDF tardó demasiado en abrirse') from exc
+    except OSError as exc:
+        raise ValueError('no se pudo abrir el PDF') from exc
+    if hecho.returncode != 0:
+        raise ValueError('el PDF no se pudo abrir: está dañado o protegido')
+    return hecho.stdout.decode('utf-8', errors='replace').replace('\f', '\n')
+
+
+def read(url, *, opener=None, resolver=socket.getaddrinfo, today=None, pdf=_pdf_text):
     """Lee texto de una URL pública, sin persistirlo ni seguir enlaces internos."""
     final, content_type, body, cut = _request(url, opener=opener, resolver=resolver)
     publicada = modificada = None
@@ -336,8 +462,21 @@ def read(url, *, opener=None, resolver=socket.getaddrinfo, today=None):
         title = ''
     elif content_type.startswith('text/'):
         title, text = '', body
+    elif content_type == 'application/pdf':
+        if cut:
+            raise ValueError(f'es un PDF de más de {MAX_DOWNLOAD // 1_000_000} MB y no se lee entero. ' + ENLACE_VALIDO)
+        try:
+            title, text = '', pdf(body)
+        except ValueError as exc:
+            raise ValueError(str(exc) + '. ' + ENLACE_VALIDO) from exc
+        if len(text.split()) < 20:
+            # Un escaneo o unos planos: páginas que son imágenes, sin letras que extraer.
+            raise ValueError('es un PDF sin texto que leer: son imágenes, como un escaneo o unos planos. ' +
+                             ENLACE_VALIDO)
+        cut = False
     else:
-        raise ValueError('formato web no legible; por ahora se admite HTML, texto y JSON')
+        raise ValueError('la fuente es ' + _FORMATOS.get(content_type, 'de tipo ' + content_type) +
+                         ', no una página: web.read solo lee HTML, texto, JSON y PDF. ' + ENLACE_VALIDO)
     was_truncated = cut or len(text) > MAX_TEXT
     text = text[:MAX_TEXT]
     if not text.strip():

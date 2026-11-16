@@ -12,6 +12,13 @@ Lista viva, apuntada el 2026-11-14. Lo que se cierre se quita de aquí.
 - **Ideas de orquestación del 26B sin hacer:** recordar notas por su cuenta cuando vienen a
   cuento, y más registros.
 - **`[[matrix]]` a rachas:** el modelo se copia a sí mismo; lo frena el tope de la interfaz.
+- **Web y descargas (16/11):** el buscador con clave (Tavily, en Ajustes), la lectura de PDF y el
+  cajón `descargas` están probados con el 26B en un turno real. Sin medir: las seis frases de
+  descargas del banco del selector, nada con el E4B, y la tarjeta de descarga vista solo en el
+  móvil. Las descargas van de una en una: si pide dos, la segunda se queda sin proponer.
+- **Tavily devuelve ruido a veces:** el 16/11, «Apple 1 schematics… bitsavers.org» trajo ofertas
+  de empleo y Scribd. Con `filetype:pdf` en la consulta acertó. Sin estudiar.
+- **Pegar en el campo de escribir:** sigue siendo de una línea y con tope de 4.000 caracteres.
 
 ## Agente
 

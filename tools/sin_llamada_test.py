@@ -210,9 +210,36 @@ class SinTarjetaTest(SinLlamadaTest):
             with self.subTest(respuesta=respuesta):
                 self.assertFalse(self.cierre(pedidos=('proyecto',), traza=traza, respuesta=respuesta)[2])
 
-    def test_en_el_chat_no_aplica(self):
-        self.assertFalse(self.cierre(ventana='chat', pedidos=(), traza=self.LEIDO,
-                                     respuesta='Aprueba el cambio en la tarjeta.')[2])
+    # Hasta el 16/11 en el Chat no había tarjetas y esta regla no aplicaba. Ahora tiene la de
+    # las descargas, y ese mismo día el 26B la anunció sin llamar a file_download.
+    DICHO_EL_16_11 = ('Puedo proponer la descarga para que tú la apruebes. Como son archivos PDF, una vez que le '
+                      'des al botón de la tarjeta que te aparecerá, HexOS se encargará de bajarlos a tu ordenador.')
+
+    def test_en_el_chat_la_tarjeta_que_falta_es_la_de_una_descarga(self):
+        runtime, turn, devuelto, otra = self.cierre(ventana='chat', pedidos=('descargas',),
+                                                    respuesta=self.DICHO_EL_16_11)
+        self.assertTrue(devuelto)
+        self.assertIn('file_download', turn.messages[0]['content'])
+        self.assertNotIn('project_write', turn.messages[0]['content'])
+        self.assertFalse(otra())
+
+    def test_en_el_chat_se_devuelve_con_el_grupo_de_descargas_declarado(self):
+        runtime = Runtime()
+        runtime.active_groups = ['notas']
+        self.assertTrue(self.cierre(ventana='chat', pedidos=(), runtime=runtime,
+                                    respuesta='Dale al botón de la tarjeta para bajarlo.')[2])
+        self.assertEqual(runtime.active_groups, ['notas', 'descargas'])
+
+    def test_en_el_chat_con_la_descarga_propuesta_o_explicando_la_tarjeta_no(self):
+        propuesta = (dict(tool='file.download', result=dict(status='pending_approval')),)
+        explicada = ('Cuando te dije "tarjeta", me refería a una notificación visual. HexOS genera una tarjeta '
+                     'con un botón de Aprobar. Si no te ha salido nada, es que no he lanzado la orden todavía.')
+        for traza, respuesta in ((propuesta, 'He propuesto la descarga: apruébala en la tarjeta.'),
+                                 ((), explicada), ((), 'Ya lo aprobaste en la tarjeta y está descargado.'),
+                                 ((), 'Te dejo los dos enlaces para que los abras.')):
+            with self.subTest(respuesta=respuesta):
+                self.assertFalse(self.cierre(ventana='chat', pedidos=('descargas',), traza=traza,
+                                             respuesta=respuesta)[2])
 
 
 class SinFicheroTest(unittest.TestCase):

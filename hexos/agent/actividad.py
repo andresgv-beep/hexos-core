@@ -22,7 +22,7 @@ NOTA_INTERFAZ = '[La persona '
 
 # Qué argumento dice de un vistazo lo que se pidió, por herramienta o por familia.
 PRINCIPAL = {
-    'terminal.read': ('command',), 'web.search': ('query',), 'web.read': ('url',),
+    'terminal.read': ('command',), 'web.search': ('query',), 'web.read': ('url',), 'file.download': ('url',),
     'system.package_plan': ('action', 'package', 'manager'),
     'history.search': ('query',), 'profile.recall': ('query',),
     'note.save': ('title',), 'media.prepare': ('title', 'path'),

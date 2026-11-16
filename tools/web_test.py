@@ -168,6 +168,53 @@ class WebBoundaryTest(unittest.TestCase):
         self.assertIn('Contenido verificable.', result['text'])
         self.assertNotIn('robar', result['text'])
 
+    def test_read_lee_un_pdf_con_texto_por_el_extractor(self):
+        visto = []
+        texto = 'Apple-1 Operation Manual. ' + 'The Apple Computer is a complete microprocessor system. ' * 8
+        respuesta = Response('%PDF-1.4 binario', url='https://example.com/manual.pdf', content_type='application/pdf')
+        salida = web.read('https://example.com/manual.pdf', opener=Opener(respuesta), resolver=public_resolver,
+                          pdf=lambda datos: visto.append(datos) or texto)
+        self.assertEqual(visto, [b'%PDF-1.4 binario'], 'el extractor recibe los bytes, sin decodificar')
+        self.assertEqual((salida['content_type'], salida['text'], salida['truncated']),
+                         ('application/pdf', texto, False))
+
+    def test_lo_que_no_se_puede_leer_deja_el_enlace_para_la_persona(self):
+        def leer(tipo, pdf=None, cuerpo='x'):
+            respuesta = Response(cuerpo, url='https://example.com/planos', content_type=tipo)
+            with self.assertRaises(ValueError) as fallo:
+                web.read('https://example.com/planos', opener=Opener(respuesta), resolver=public_resolver, pdf=pdf)
+            self.assertIn(web.ENLACE_VALIDO, str(fallo.exception))
+            return str(fallo.exception)
+
+        self.assertIn('sin texto que leer', leer('application/pdf', pdf=lambda datos: '\n\n 1 \n'))
+
+        def roto(datos):
+            raise ValueError('el PDF no se pudo abrir: está dañado o protegido')
+        self.assertIn('dañado o protegido', leer('application/pdf', pdf=roto))
+        self.assertIn('más de 5 MB', leer('application/pdf', pdf=lambda datos: 'no llega', cuerpo='x' * (web.MAX_DOWNLOAD + 1)))
+        self.assertIn('un archivo ZIP', leer('application/zip'))
+        self.assertIn('de tipo image/png', leer('image/png'))
+
+    def test_el_pdf_se_abre_en_una_jaula_sin_red_ni_carpeta_personal(self):
+        ordenes = []
+
+        class Hecho:
+            returncode, stdout = 0, 'página uno\fpágina dos'.encode()
+
+        texto = web._pdf_text(b'%PDF', lanzar=lambda orden, **k: ordenes.append((orden, k)) or Hecho)
+        orden, opciones = ordenes[0]
+        self.assertEqual(texto, 'página uno\npágina dos')
+        self.assertEqual((opciones['input'], opciones['timeout']), (b'%PDF', web.PDF_SEGUNDOS))
+        self.assertTrue(orden[0].endswith('bwrap'))
+        self.assertIn('--unshare-all', orden)
+        self.assertIn('--clearenv', orden)
+        self.assertNotIn(str(Path.home()), ' '.join(orden))
+        self.assertEqual(orden[orden.index('--ro-bind'):][:3], ['--ro-bind', '/usr', '/usr'])
+
+        Hecho.returncode = 1
+        with self.assertRaises(ValueError):
+            web._pdf_text(b'no es un pdf', lanzar=lambda orden, **k: Hecho)
+
     def test_read_rechaza_vias_hacia_la_red_privada(self):
         cases = ('file:///etc/passwd', 'http://127.0.0.1/', 'http://192.168.1.10/',
                  'http://user:pass@example.com/', 'https://example.com:8443/')

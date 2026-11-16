@@ -368,6 +368,16 @@ TOOLS = {
                           'Sigue con next_line hasta llegar a total_lines.',
                          {'id':'str'}, {'start':'int','count':'int'}),
     'document.search': spec('Buscar texto en un documento.', {'id':'str','query':'str'}),
+    'file.download': spec('Proponer la descarga a este PC de un fichero público de la web: un PDF, un manual, una '
+                          'imagen, un ZIP. url es su dirección exacta, vista en web_search o dada por la persona; '
+                          'name, opcional, el nombre con el que guardarlo. NO descarga nada: mira el tipo y el tamaño '
+                          'y a la persona le aparece una tarjeta para aprobarlo; HexOS lo baja y lo comprueba después. '
+                          'No se aprueba en el chat. Tras llamarla dile que lo apruebe en la tarjeta; nunca digas que '
+                          'ya está descargado. Un PDF o un texto descargado queda además como documento y se lee '
+                          'entero con document_read. No baja programas ni páginas web.',
+                          {'url':'str'}, {'name':'str'}),
+    'file.list': spec('Listar los ficheros ya descargados a este PC, del más reciente al más antiguo, con el '
+                      'documento con el que se lee cada uno. Sin argumentos.'),
 }
 
 # Compatibilidad de lectura/ejecución para trazas y clientes antiguos. Estas
@@ -526,11 +536,13 @@ GROUPS = {
     'informes': ('report.save', 'report.list', 'report.get', 'work.list', 'work.get',
                  'procedure.list', 'procedure.get', 'procedure.run',
                  'document.read', 'document.search'),
+    # Bajar ficheros de la web con aprobación. Lo descargado se lee como documento.
+    'descargas': ('file.download', 'file.list'),
 }
 
 # Grupos que uno arrastra consigo: `media.prepare` trabaja con el `scan_id` que devuelve
 # `nas.find`, así que multimedia sin archivos no sirve de nada.
-GROUP_REQUIRES = {'multimedia': ('archivos',)}
+GROUP_REQUIRES = {'multimedia': ('archivos',), 'descargas': ('informes',)}
 
 # Una línea por grupo, que es lo que ve el selector. No describe herramientas: describe
 # para qué sirve el grupo, porque elegir por nombres de función es lo que hacía fallar al
@@ -555,6 +567,8 @@ GROUP_GUIDANCE = {
     'multimedia': 'Convertir o comprimir vídeo y audio, y seguir esos trabajos.',
     'notas': 'Notas de la persona: guardarlas, listarlas, marcarlas y borrarlas.',
     'informes': 'Informes, trabajos, procedimientos y documentos propios.',
+    'descargas': ('Bajar o guardar en este PC un fichero de la web (un PDF, un manual, unos planos, una imagen), '
+                  'ver lo ya descargado y leer un PDF descargado.'),
 }
 
 ALWAYS = 'nucleo'
@@ -564,7 +578,7 @@ ALWAYS = 'nucleo'
 # tamaño de modelo necesita. El núcleo va en las dos, así que la memoria es la misma en
 # ambas y no acabas con dos asistentes que no se conocen.
 WINDOWS = {
-    'chat': ('notas', 'informes'),
+    'chat': ('notas', 'informes', 'descargas'),
     'agente': ('sistema', 'proyecto', 'equipos', 'archivos', 'multimedia'),
 }
 DEFAULT_WINDOW = 'chat'

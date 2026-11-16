@@ -18,9 +18,9 @@ def default_nas_read(workspace, **kwargs):
     return read(workspace, **kwargs)
 
 
-def default_web_search(query, limit=5, recency=None):
+def default_web_search(query, limit=5, recency=None, proveedor=None):
     from ..web import search
-    return search(query, limit=limit, recency=recency)
+    return search(query, limit=limit, recency=recency, proveedor=proveedor)
 
 
 def default_nas_files(workspace, *, operation, **kwargs):
@@ -69,6 +69,8 @@ class SessionState:
     system_request: dict | None = None
     # Cambio de project.write esperando lo mismo. El contenido entero se queda aquí.
     project_request: dict | None = None
+    # Descarga de file.download esperando lo mismo.
+    download_request: dict | None = None
     # Decisiones tomadas en una tarjeta que el modelo aún no ha visto: van con el turno siguiente.
     notas_interfaz: list = field(default_factory=list)
     # Fichas de técnica ya dadas en el contexto vivo: cada una va una vez.

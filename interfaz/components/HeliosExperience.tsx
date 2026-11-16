@@ -5,7 +5,7 @@ import { InferenceFooter } from "./InferenceFooter";
 import { type InferenceMetrics } from "@/lib/helios/metrics";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
-import { Activity, ArrowRight, Brain, Code2, Eraser, FolderOpen, HardDrive, History, ListChecks, MessageCircle, NotebookText, Square, Wrench, X } from "lucide-react";
+import { Activity, ArrowRight, Brain, Code2, Eraser, FolderOpen, HardDrive, History, ListChecks, MessageCircle, NotebookText, Settings, Square, Wrench, X } from "lucide-react";
 import { AttachmentButton, ChatAttachments, type Attachment } from "./ChatAttachments";
 import { VoiceButton } from "./VoiceButton";
 import { VoiceMode } from "./VoiceMode";
@@ -29,11 +29,13 @@ import { coreSectionForTools, createCoreClient, type NoteDetail } from "@/lib/he
 import { createMediaClient, isActive, type MediaControl, type MediaJob } from "@/lib/helios/media";
 import { MediaCard } from "./MediaCard";
 import { TasksPanel } from "./TasksPanel";
+import { SettingsWindow } from "./SettingsWindow";
 import { ProjectsPanel } from "./ProjectsPanel";
 import { ProjectChangeCard } from "./ProjectChangeCard";
+import { DownloadCard } from "./DownloadCard";
 import { ChangeChip, type ChangeState } from "./ChangeChip";
 import { AgentActivity, AgentNow } from "./AgentActivity";
-import type { Activity as AgentLog, Project } from "@/lib/helios/hexos";
+import type { Activity as AgentLog, DownloadRequest, Project } from "@/lib/helios/hexos";
 import { observationFor } from "@/lib/helios/previewProbe";
 import { assessCodeRevision, codeRevisionPrompt, extractHtmlPreview, extractReplyArtifact, type ReplyArtifact } from "@/lib/helios/preview";
 
@@ -79,6 +81,9 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const [systemPlan, setSystemPlan] = useState<SystemRequest | null>(null);
   const [systemBusy, setSystemBusy] = useState(false);
   const [systemError, setSystemError] = useState("");
+  const [downloadPlan, setDownloadPlan] = useState<DownloadRequest | null>(null);
+  const [downloadBusy, setDownloadBusy] = useState(false);
+  const [downloadError, setDownloadError] = useState("");
   const [projectChange, setProjectChange] = useState<ProjectChange | null>(null);
   const [changeBusy, setChangeBusy] = useState(false);
   const [changeError, setChangeError] = useState("");
@@ -295,6 +300,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const [coreOpen, setCoreOpen] = useState(false);
   const [systemOpen, setSystemOpen] = useState(false);
   const [tasksOpen, setTasksOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
   // La cola de vídeo se lee aparte del chat: la tarjeta avanza sin gastar turnos.
   const [mediaJobs, setMediaJobs] = useState<MediaJob[]>([]);
@@ -434,6 +440,11 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         if (!nuevo) return null;
         return previo && previo.planId === nuevo.planId ? previo : nuevo;
       });
+      setDownloadPlan(previo => {
+        const nuevo = estado.downloadRequest;
+        if (!nuevo) return null;
+        return previo && previo.planId === nuevo.planId ? previo : nuevo;
+      });
       // Helios pide el acceso a mitad de turno, así que hay que seguir mirando;
       // con una sola consulta al montar la ventana no aparecía nunca.
       setAccess(previo => {
@@ -514,6 +525,46 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     } finally {
       clearInterval(reloj);
       setSystemBusy(false);
+    }
+  }
+
+  /** Como decidirSistema: al aprobar, la tarjeta se cierra y queda un turno con lo que HexOS hace. */
+  async function decidirDescarga(approve: boolean) {
+    if (!downloadPlan || downloadBusy || !transport.decideDownload) return;
+    const plan = downloadPlan;
+    setDownloadBusy(true);
+    setDownloadError("");
+    const id = ++nextId.current;
+    if (approve) {
+      setDownloadPlan(null);
+      setTurns(items => [...items, { id, text: `Aprobado: ${plan.summary}`, pending: true,
+                                     generationStatus: `HexOS está descargando ${plan.name}…` }]);
+    }
+    try {
+      const r = await transport.decideDownload(plan.planId, approve);
+      setDownloadPlan(null);
+      const reply = r.cancelled ? `Cancelado: ${r.summary}. No se ha descargado nada.`
+        : r.executed && r.verified ? `Descargado y comprobado: ${r.check}.`
+        : r.executed ? `Se descargó, pero lo guardado no coincide con lo recibido: ${r.check}. No te fíes de ese fichero.`
+        : `No se descargó: ${r.refused ?? "hubo un error"}.`;
+      if (approve) {
+        setTurns(items => items.map(item => item.id === id
+          ? { ...item, pending: false, generationStatus: undefined, reply } : item));
+      } else {
+        setTurns(items => [...items, { id, text: `Cancelado: ${r.summary}`, pending: false, reply }]);
+      }
+      setRevealing(true);
+      setAnnouncement(reply);
+    } catch (error) {
+      const detalle = error instanceof Error ? error.message : "No se pudo enviar la decisión.";
+      if (approve) {
+        setTurns(items => items.map(item => item.id === id
+          ? { ...item, pending: false, generationStatus: undefined, error: detalle } : item));
+      } else {
+        setDownloadError(detalle);
+      }
+    } finally {
+      setDownloadBusy(false);
     }
   }
 
@@ -951,11 +1002,12 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const lateralAgente = !mobile && !workspaceOpen && ventana === "agente" && proyecto !== undefined && Boolean(transport.projects);
   // Lo que Helios hace ahora, en una línea. Una tarjeta abierta manda sobre todo lo demás:
   // mientras espera tu decisión, eso es lo que está pasando.
-  const ocupado = Boolean(systemPlan) || Boolean(projectChange) || systemBusy || changeBusy || sending || Boolean(herramientaEnCurso);
+  const ocupado = Boolean(systemPlan) || Boolean(projectChange) || Boolean(downloadPlan) || systemBusy || changeBusy || downloadBusy || sending || Boolean(herramientaEnCurso);
   const ahora = connection !== "ready" ? { clave: connection, texto: estado }
-    : systemPlan ? { clave: "plan", texto: "Esperando tu aprobación en la tarjeta" }
+    : systemPlan || downloadPlan ? { clave: "plan", texto: "Esperando tu aprobación en la tarjeta" }
     : projectChange ? { clave: "plan", texto: "Esperando que revises el cambio: pulsa su contador" }
     : systemBusy ? { clave: "sistema", texto: "HexOS está aplicando el cambio" }
+    : downloadBusy ? { clave: "descarga", texto: "HexOS está descargando el fichero" }
     : herramientaEnCurso ? { clave: `tool-${herramientaEnCurso.id}`, texto: `Ejecutando ${herramientaEnCurso.name.replace(".", "_")}` }
     : sending ? (etapa ?? { clave: "thinking", texto: "Pensando…" })
     : { clave: "idle", texto: "En reposo" };
@@ -995,6 +1047,8 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         <ListChecks size={21} />{tareasEnCurso > 0 && <span className="vision-rail-badge" aria-hidden="true">{tareasEnCurso}</span>}</button>
       <span className="vision-rail-gap" />
       <button type="button" aria-label="Estado del sistema" aria-pressed={systemOpen} onClick={() => { setTasksOpen(false); setProjectsOpen(false); setSystemOpen(open => !open); }}><Activity size={21} /></button>
+      {transport.settings && <button type="button" aria-label="Ajustes" title="Ajustes: buscador web y claves de servicios"
+        aria-pressed={settingsOpen} onClick={() => setSettingsOpen(true)}><Settings size={21} /></button>}
     </nav>
     <div className="vision-main">
       <header className="vision-header">
@@ -1006,6 +1060,8 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
           <FolderOpen size={15} aria-hidden="true" /> {proyecto === null ? "Sin proyecto"
             : proyectos.find(p => p.id === proyecto)?.name ?? proyecto}
         </button>}
+        {mobile && transport.settings && <button className="vision-chip" type="button" aria-label="Ajustes"
+          onClick={() => setSettingsOpen(true)}><Settings size={15} aria-hidden="true" /> Ajustes</button>}
         {/* En el Agente de escritorio estos tres viven en el lateral: la cabecera queda limpia. */}
         {!lateralAgente && <>
         {thinking !== null && <button className="vision-chip" type="button" aria-pressed={thinking}
@@ -1100,6 +1156,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       onRename={transport.renameProject ? (id, name) => ponerProyecto(async () => {
         await transport.renameProject!(id, name); return proyectoVisto.current ?? null; }) : undefined}
       onRemove={transport.removeProject ? id => ponerProyecto(() => transport.removeProject!(id)) : undefined} />}
+    {settingsOpen && <SettingsWindow transport={transport} onClose={() => { setSettingsOpen(false); inputRef.current?.focus(); }} />}
     {tasksOpen && !mobile && <TasksPanel media={mediaJobs} onControl={controlMedia} onClose={() => setTasksOpen(false)} />}
     {systemOpen && !mobile && <div className="vision-system" role="dialog" aria-label="Estado del sistema">
       <button type="button" className="icon-button vision-system-close" aria-label="Cerrar estado del sistema" onClick={() => setSystemOpen(false)}><X size={16} /></button>
@@ -1148,6 +1205,8 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         </div>
       </div>
     </div>}
+    {downloadPlan && !systemPlan && !access && <DownloadCard plan={downloadPlan} busy={downloadBusy}
+      error={downloadError} onDecide={approve => void decidirDescarga(approve)} />}
     {projectChange && changeOpen && !systemPlan && !access && <ProjectChangeCard change={projectChange} busy={changeBusy}
       error={changeError} onDecide={approve => void decidirCambio(approve)} onClose={() => setChangeOpen(false)} />}
     {changeShown && !(projectChange && changeOpen) && !systemPlan && !access && <ProjectChangeCard change={changeShown}

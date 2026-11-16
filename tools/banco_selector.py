@@ -81,6 +81,13 @@ CASOS = [
     ('chat', 'enséñame mis notas', ['notas']),
     ('chat', 'borra la nota de la cena', ['notas']),
     ('chat', '¿qué informes tengo guardados?', ['informes']),
+    # descargas: añadido el 16/11 con su guía, SIN MEDIR todavía con ningún modelo.
+    ('chat', 'descárgame ese PDF al ordenador', ['descargas']),
+    ('chat', 'bájame el manual del Apple 1', ['descargas']),
+    ('chat', 'guarda esos planos en mi PC', ['descargas']),
+    ('chat', '¿qué ficheros me he descargado?', ['descargas']),
+    ('chat', 'léete el PDF que bajaste antes y resúmemelo', ['descargas']),
+    ('chat', 'busca en la web los planos del Apple 1', []),
     ('chat', 'hola', []),
 ]
 

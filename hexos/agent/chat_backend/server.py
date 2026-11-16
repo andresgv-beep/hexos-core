@@ -5,7 +5,7 @@ import json
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
-from .. import actividad, core, notes, catalog
+from .. import actividad, ajustes, core, notes, catalog
 from ..work import strict_json, string
 from .images import decode_image
 from .audio import decode_audio
@@ -45,6 +45,7 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                                    'credential_request': agent.credential_request,
                                    'system_request': agent.system_request,
                                    'project_request': getattr(agent, 'project_request', None),
+                                   'download_request': getattr(agent, 'download_request', None),
                                    'thinking': agent.thinking(),
                                    'window': getattr(agent, 'ventana', None),
                                    'project': getattr(agent, 'proyecto', None),
@@ -56,6 +57,12 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                                    'mode':'native-experimental' if native_template else 'json'})
             elif self.path == '/api/projects':
                 self.respond(200, agent.projects())
+            elif self.path == '/api/settings':
+                # Qué servicios hay y cuáles tienen clave. La clave no viaja nunca hacia aquí.
+                try:
+                    self.respond(200, ajustes.listado(agent.env.workspace))
+                except (ValueError, OSError) as exc:
+                    self.respond(409, {'error': str(exc)})
             elif self.path == '/api/activity':
                 # Lo hecho en la conversación puesta, para el lateral: llamadas y cambios.
                 with agent.store() as store:
@@ -136,7 +143,8 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
         def do_POST(self):
             if self.path not in ('/api/chat', '/api/work', '/api/context/reset', '/api/window', '/api/credentials', '/api/system',
                                  '/api/projects', '/api/project', '/api/project/change', '/api/project/rename', '/api/project/remove',
-                                 '/api/thinking', '/api/cancel', '/api/model/warmup', '/api/media/control'):
+                                 '/api/thinking', '/api/cancel', '/api/model/warmup', '/api/media/control',
+                                 '/api/settings/web', '/api/settings/web/test', '/api/download'):
                 self.respond(404, {'error':'ruta inexistente'})
                 return
             # Una página abierta en otra pestaña no puede accionar el agente ni,
@@ -170,6 +178,8 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                         self.respond(200, {'state':'ready', 'ready':True})
                 elif self.path == '/api/system':
                     self.respond(200, agent.decide_system(strict_json(data.decode('utf-8'))))
+                elif self.path == '/api/download':
+                    self.respond(200, agent.decide_download(strict_json(data.decode('utf-8'))))
                 elif self.path == '/api/project/change':
                     self.respond(200, agent.decide_project_change(strict_json(data.decode('utf-8'))))
                 elif self.path == '/api/credentials':
@@ -185,6 +195,18 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                             # puede convertir ese hecho en «no se guardó».
                             saved['resume_error'] = str(exc)
                     self.respond(200, saved)
+                elif self.path == '/api/settings/web':
+                    # key con texto guarda la clave; key null la quita.
+                    payload = strict_json(data.decode('utf-8'))
+                    if not isinstance(payload, dict) or set(payload) != {'provider', 'key'}:
+                        raise ValueError('se espera {"provider": "servicio", "key": "clave" o null}')
+                    self.respond(200, ajustes.guardar(agent.env.workspace, payload['provider'], payload['key']))
+                elif self.path == '/api/settings/web/test':
+                    payload = strict_json(data.decode('utf-8'))
+                    if not isinstance(payload, dict) or set(payload) != {'provider'}:
+                        raise ValueError('se espera {"provider": "servicio"}')
+                    self.respond(200, ajustes.probar(agent.env.workspace, payload['provider'],
+                                                     agent.env.dependencies.web_search))
                 elif self.path == '/api/thinking':
                     payload = strict_json(data.decode('utf-8'))
                     if set(payload) != {'enabled'}:

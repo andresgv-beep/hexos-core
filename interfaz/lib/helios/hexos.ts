@@ -35,6 +35,21 @@ export interface SystemRequest {
   /** Paquetes que entran o salen según la simulación (los primeros 60). */
   affects: string[]; affectsCount: number;
 }
+/** Un fichero de la web que Helios propone bajar a este PC y espera tu aprobación.
+ *  Helios no puede descargarlo: solo lo baja HexOS cuando lo apruebas aquí. */
+export interface DownloadRequest {
+  planId: string; summary: string; name: string; host: string; url: string; kind: string;
+  /** Lo que el servidor dice que pesa; null si no lo declara. */
+  bytes: number | null; folder: string;
+}
+/** El `download_request` de /api/status, o null si no hay ninguno válido. */
+export function parseDownloadRequest(dr: unknown): DownloadRequest | null {
+  if (!isRecord(dr) || typeof dr.plan_id !== "string" || typeof dr.summary !== "string"
+      || typeof dr.name !== "string" || typeof dr.url !== "string") return null;
+  return { planId: dr.plan_id, summary: dr.summary, name: dr.name, host: String(dr.host ?? ""), url: dr.url,
+           kind: String(dr.kind ?? ""), bytes: typeof dr.bytes === "number" ? dr.bytes : null,
+           folder: String(dr.folder ?? "") };
+}
 /** Un fichero dentro de la tarjeta de cambios: qué se crea o cambia y sus líneas. */
 export interface FileChange {
   path: string; kind: "create" | "replace" | "edit"; added: number; removed: number;
@@ -146,6 +161,21 @@ function parseProject(value: unknown): Project | null {
     : null;
 }
 
+/** Un servicio externo que se enchufa con clave. La clave nunca viene: solo si está y cómo acaba. */
+export interface ServiceProvider { id: string; name: string; kind: string; site: string; note: string;
+  placeholder: string; configured: boolean; hint: string | null }
+/** `search` es el buscador que usa Helios ahora mismo. */
+export interface Settings { web: { search: string; providers: ServiceProvider[] } }
+
+export function parseSettings(data: unknown): Settings {
+  const web = isRecord(data) && isRecord(data.web) ? data.web : null;
+  if (!web || typeof web.search !== "string" || !Array.isArray(web.providers)) throw new Error("Ajustes de HexOS no válidos");
+  return { web: { search: web.search, providers: web.providers.filter(isRecord).map(item => ({
+    id: String(item.id), name: String(item.name), kind: String(item.kind), site: String(item.site ?? ""),
+    note: String(item.note ?? ""), placeholder: String(item.placeholder ?? ""),
+    configured: item.configured === true, hint: typeof item.hint === "string" ? item.hint : null })) } };
+}
+
 export interface HeliosTransport {
   /** `thinking` es null cuando el motor no tiene canal de pensamiento.
    *  `window` es null si el agente no reparte las herramientas por ventana. */
@@ -156,9 +186,13 @@ export interface HeliosTransport {
     project?: string | null;
     tools: ToolActivity[]; credentialRequest: CredentialRequest | null; systemRequest: SystemRequest | null;
     projectChange: ProjectChange | null;
+    /** `undefined` si este HexOS es anterior a las descargas. */
+    downloadRequest?: DownloadRequest | null;
     progress: Progress; generation?: Generation; metrics?: InferenceMetrics }>;
   /** Aprueba o rechaza el plan pendiente. Aprobarlo lo ejecuta HexOS y lo comprueba. */
   decideSystem(planId: string, approve: boolean, signal?: AbortSignal): Promise<SystemDecision>;
+  /** Aprueba o rechaza la descarga pendiente. Aprobarla la baja HexOS y comprueba lo guardado. */
+  decideDownload?(planId: string, approve: boolean, signal?: AbortSignal): Promise<SystemDecision>;
   /** Aprueba o rechaza el cambio de fichero pendiente. Aprobarlo lo escribe HexOS y lo relee. */
   decideProjectChange(planId: string, approve: boolean, signal?: AbortSignal): Promise<SystemDecision>;
   /** Guarda el acceso de un equipo. `host` fija su dirección: sin ella se busca
@@ -189,6 +223,12 @@ export interface HeliosTransport {
   renameProject?(id: string, name: string, signal?: AbortSignal): Promise<void>;
   /** Lo saca de la lista sin borrar su carpeta ni su conversación. Devuelve el que queda puesto. */
   removeProject?(id: string, signal?: AbortSignal): Promise<string | null>;
+  /** Servicios externos y cuáles tienen clave. */
+  settings?(signal?: AbortSignal): Promise<Settings>;
+  /** Guarda la clave de un servicio; con null la quita. Devuelve los ajustes como quedan. */
+  saveServiceKey?(provider: string, key: string | null, signal?: AbortSignal): Promise<Settings>;
+  /** Hace una llamada real al servicio con la clave guardada. Devuelve cuántos resultados trajo. */
+  testService?(provider: string, signal?: AbortSignal): Promise<number>;
   /** Avisa a HexOS al empezar a escribir. Inicia la carga, pero no bloquea la UI. */
   warmup(signal?: AbortSignal): Promise<"unloaded" | "loading" | "ready" | "unloading" | "error" | "closed">;
   history(signal?: AbortSignal): Promise<HistoryMessage[]>;
@@ -249,6 +289,7 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
       return { phase: phaseFromHexos(data.state), mode: data.mode, thinking, window: ventana, project,
                tools: parseToolActivities(data.active_tools, "running"), credentialRequest, systemRequest,
                projectChange: parseProjectChange(data.project_request),
+               downloadRequest: "download_request" in data ? parseDownloadRequest(data.download_request) : undefined,
                progress: parseProgress(data.progress), generation, metrics: parseInferenceMetrics(data.metrics) };
     },
     async saveAccess({ device, user, password, host, port }, signal) {
@@ -271,6 +312,16 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
     },
     async decideSystem(planId, approve, signal) {
       const data = await request("system", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan_id: planId, approve }), signal });
+      if (!isRecord(data) || typeof data.summary !== "string") throw new Error("HexOS no confirmó la decisión");
+      return { summary: data.summary, executed: data.executed === true,
+               verified: typeof data.verified === "boolean" ? data.verified : undefined,
+               cancelled: data.cancelled === true,
+               refused: typeof data.refused === "string" ? data.refused : undefined,
+               check: typeof data.check === "string" ? data.check : undefined };
+    },
+    async decideDownload(planId, approve, signal) {
+      const data = await request("download", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan_id: planId, approve }), signal });
       if (!isRecord(data) || typeof data.summary !== "string") throw new Error("HexOS no confirmó la decisión");
       return { summary: data.summary, executed: data.executed === true,
@@ -307,6 +358,19 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
         throw new Error("HexOS no confirmó el espacio de trabajo");
       }
       return data.window;
+    },
+    async settings(signal) {
+      return parseSettings(await request("settings", { signal }));
+    },
+    async saveServiceKey(provider, key, signal) {
+      return parseSettings(await request("settings/web", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, key }), signal }));
+    },
+    async testService(provider, signal) {
+      const data = await request("settings/web/test", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider }), signal });
+      if (!isRecord(data) || data.ok !== true || typeof data.results !== "number") throw new Error("HexOS no confirmó la prueba");
+      return data.results;
     },
     async activity(signal) {
       const data = await request("activity", { signal });

@@ -362,6 +362,54 @@ test('projects are listed, created and switched through their own routes', async
   await assert.rejects(async () => transport.createProject?.('   '), /nombre/);
 });
 
+test('service keys are saved, tested and removed without ever coming back', async () => {
+  const seen: Array<[string, unknown]> = [];
+  const ajustes = (configured: boolean) => ({ web: { search: configured ? 'Tavily' : 'DuckDuckGo', providers: [
+    { id: 'tavily', name: 'Tavily', kind: 'busqueda', site: 'https://app.tavily.com', note: 'Gratis', placeholder: 'tvly-…',
+      configured, hint: configured ? '…abcd' : null }, 'basura'] } });
+  const fetcher = (async (url, init) => {
+    const body = init?.body ? JSON.parse(String(init.body)) : null;
+    seen.push([String(url), body]);
+    if (String(url).endsWith('/test')) return Response.json({ ok: true, provider: 'tavily', results: 1 });
+    return Response.json(ajustes(Boolean(body?.key)));
+  }) as typeof fetch;
+  const transport = createHexosTransport('/api', fetcher);
+  assert.equal((await transport.settings?.())?.web.search, 'DuckDuckGo');
+  const guardado = await transport.saveServiceKey?.('tavily', 'tvly-secreta');
+  assert.deepEqual(guardado?.web.providers, [{ id: 'tavily', name: 'Tavily', kind: 'busqueda', site: 'https://app.tavily.com',
+    note: 'Gratis', placeholder: 'tvly-…', configured: true, hint: '…abcd' }]);
+  assert.equal(await transport.testService?.('tavily'), 1);
+  assert.equal((await transport.saveServiceKey?.('tavily', null))?.web.providers[0].configured, false);
+  assert.deepEqual(seen, [['/api/settings', null], ['/api/settings/web', { provider: 'tavily', key: 'tvly-secreta' }],
+    ['/api/settings/web/test', { provider: 'tavily' }], ['/api/settings/web', { provider: 'tavily', key: null }]]);
+  await assert.rejects(async () => createHexosTransport('/api', fixture({ web: {} })).settings?.(), /no válidos/);
+  await assert.rejects(async () => createHexosTransport('/api', fixture({ error: 'la clave de Tavily no es válida' }, 409))
+    .testService?.('tavily'), /no es válida/);
+});
+
+test('a proposed download reaches its card and is decided through its own route', async () => {
+  const { parseDownloadRequest } = await import('../lib/helios/hexos');
+  const pendiente = { plan_id: 'd1', summary: 'descargar manual.pdf (PDF, 2,0 MB) de example.com', name: 'manual.pdf',
+    host: 'example.com', url: 'https://example.com/manual.pdf', kind: 'PDF', bytes: 2018052, folder: '~/Helios/descargas' };
+  assert.deepEqual(parseDownloadRequest(pendiente), { planId: 'd1', summary: pendiente.summary, name: 'manual.pdf',
+    host: 'example.com', url: 'https://example.com/manual.pdf', kind: 'PDF', bytes: 2018052, folder: '~/Helios/descargas' });
+  assert.equal(parseDownloadRequest({ ...pendiente, bytes: null })?.bytes, null);
+  for (const malo of [null, undefined, 'x', {}, { ...pendiente, plan_id: 7 }, { ...pendiente, url: undefined }])
+    assert.equal(parseDownloadRequest(malo), null);
+  const estado = { state: 'idle', mode: 'native-experimental' };
+  assert.equal((await createHexosTransport('/api', fixture(estado)).status()).downloadRequest, undefined);
+  assert.equal((await createHexosTransport('/api', fixture({ ...estado, download_request: pendiente })).status())
+    .downloadRequest?.planId, 'd1');
+  const seen: Array<[string, unknown]> = [];
+  const fetcher = (async (url, init) => {
+    seen.push([String(url), JSON.parse(String(init?.body))]);
+    return Response.json({ summary: pendiente.summary, executed: true, verified: true, check: '2,0 MB en ~/Helios/descargas/manual.pdf' });
+  }) as typeof fetch;
+  const hecho = await createHexosTransport('/api', fetcher).decideDownload?.('d1', true);
+  assert.deepEqual([hecho?.executed, hecho?.verified, hecho?.check], [true, true, '2,0 MB en ~/Helios/descargas/manual.pdf']);
+  assert.deepEqual(seen, [['/api/download', { plan_id: 'd1', approve: true }]]);
+});
+
 test('pending project changes reach the card only when they are well formed', async () => {
   const { parseProjectChange } = await import('../lib/helios/hexos');
   const fichero = { path: 'src/main.cu', kind: 'edit', added: 1, removed: 1,

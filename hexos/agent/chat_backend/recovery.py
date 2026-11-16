@@ -88,11 +88,22 @@ ENTREGA_CODIGO = re.compile(r'^```[^\n]*\n(?:[^\n]*\n){5,}', re.M)
 # tarjeta y HexOS no tiene ninguna abierta. El 14/11 el E4B leyó el README, escribió en el
 # chat el antes y el después y cerró con «apruébalo en la tarjeta» sin llamar a project_write.
 # «Aprueba», «apruébalo»: pedir la aprobación. «Aprobaste», «aprobado» (ya ocurrió) no entran.
-TARJETA_DICHA = re.compile(r'\bapru[eé]b\w*\b[^.\n]{0,80}\btarjeta\b', re.I)
+# El 16/11, a «¿puedes descargarlos?», el 26B contestó «dale al botón de la tarjeta que te
+# aparecerá» con file_download declarada y sin llamarla: de ahí las dos formas de más.
+TARJETA_DICHA = re.compile(r'\bapru[eé]b\w*\b[^.\n]{0,80}\btarjeta\b'
+                           r'|\b(?:bot[oó]n|dale|pulsa\w*)\b[^.\n]{0,60}\btarjeta\b'
+                           r'|\btarjeta\b[^.\n]{0,40}\b(?:aparecer[áa]|saldr[áa]|saltar[áa])\b', re.I)
 SIN_TARJETA = ('AVISO DE HEXOS (no es la persona): la respuesta anterior habla de una tarjeta, pero no hay '
                'ninguna abierta: no se ha propuesto ningún cambio. Si la persona pidió crear o cambiar un '
                'fichero del proyecto, llama ahora a project_write con el cambio. Si no, contesta de nuevo '
                'sin mencionar ninguna tarjeta. No menciones este aviso.')
+SIN_TARJETA_DESCARGA = ('AVISO DE HEXOS (no es la persona): la respuesta anterior habla de una tarjeta, pero no '
+                        'hay ninguna abierta: no se ha propuesto ninguna descarga. Si la persona pidió bajar o '
+                        'guardar un fichero, llama ahora a file_download con su dirección exacta; si son varios, '
+                        'una llamada por fichero y van de uno en uno. Si no, contesta de nuevo sin mencionar '
+                        'ninguna tarjeta. No menciones este aviso.')
+# Las herramientas que abren una tarjeta: con una en la traza, la tarjeta de la que se habla existe.
+CON_TARJETA = ('project.write', 'system.package_plan', 'file.download')
 # También contra la traza: dice en primera persona haber creado o cambiado un fichero y en el
 # turno no hay ninguna propuesta. El 14/11 el 26B, a «procede», contestó «He creado el archivo
 # tools/time_tool.py» sin llamar a nada: no había fichero ni tarjeta.
@@ -250,14 +261,23 @@ class RecoveryController:
             turn.retries.traza_al_devolver = len(turn.trace)
             turn.messages = [dict(role='user', content=SIN_LLAMADA)]
             return True
-        if (not turn.retries.tarjeta_devuelta and getattr(self.agent, 'ventana', None) == 'agente'
+        if (not turn.retries.tarjeta_devuelta and getattr(self.agent, 'ventana', None) in ('agente', 'chat')
                 and TARJETA_DICHA.search(output.get('reply') or '')
                 and not getattr(self.agent, 'project_request', None)
                 and not getattr(self.agent, 'system_request', None)
+                and not getattr(self.agent, 'download_request', None)
                 and not getattr(self.agent.session, 'notas_interfaz', None)
-                and not any(paso.get('tool') in ('project.write', 'system.package_plan') for paso in turn.trace)):
+                and not any(paso.get('tool') in CON_TARJETA for paso in turn.trace)):
             turn.retries.tarjeta_devuelta = True
-            turn.messages = [dict(role='user', content=SIN_TARJETA)]
+            if self.agent.ventana == 'agente':
+                turn.messages = [dict(role='user', content=SIN_TARJETA)]
+                return True
+            # En el Chat la única tarjeta es la de una descarga. Se devuelve con su grupo
+            # declarado, por si el selector no lo había pedido en este turno.
+            if hasattr(self.agent.runtime, 'active_groups'):
+                activos = list(getattr(self.agent.runtime, 'active_groups', None) or [])
+                self.agent.runtime.active_groups = activos if 'descargas' in activos else activos + ['descargas']
+            turn.messages = [dict(role='user', content=SIN_TARJETA_DESCARGA)]
             return True
         if (not turn.retries.fichero_devuelto and getattr(self.agent, 'ventana', None) == 'agente'
                 and getattr(self.agent, 'proyecto', None) and not turn.decidido_en_tarjeta

@@ -5,14 +5,14 @@ import json
 import time
 from typing import TYPE_CHECKING
 from uuid import uuid4
-from .. import catalog, devices, entorno, hosts, notes, core, pc_status, project_files, terminal_read, workflow, procedures, system_packages
+from .. import ajustes, catalog, descargas, devices, entorno, hosts, notes, core, pc_status, project_files, terminal_read, web, workflow, procedures, system_packages
 from ..continuity import history_tool
 from ..progress import announcement
 from ..work import now
 from .state import Environment, SessionState, TurnState
 from .document_reading import document_lines
 from .reading_budget import exhausted, READ_TOOLS
-from .ledger import completed_call, completed_registration, failed_call
+from .ledger import blocked_search, completed_call, completed_registration, failed_call
 from .file_requests import validate_file_request
 
 if TYPE_CHECKING:
@@ -203,9 +203,36 @@ class ToolDispatcher:
             opciones = dict(limit=args.get('limit', 5))
             if args.get('recency'):
                 opciones['recency'] = args['recency']
+            # La clave la pone la persona en Ajustes; sin ella se busca como siempre.
+            buscador = ajustes.buscador(self.env.workspace)
+            if buscador:
+                opciones['proveedor'] = buscador
             return self.env.dependencies.web_search(args['query'], **opciones)
         if name == 'web.read':
             return self.env.dependencies.web_read(args['url'])
+        if name == 'file.download':
+            # Solo propone: baja el fichero la aprobación de la persona (/api/download).
+            pendiente = self.session.download_request
+            if descargas.mismo(pendiente, args['url']):
+                return dict(summary=pendiente['summary'], status='pending_approval',
+                            note='Esta descarga ya estaba pendiente y sigue sin decidir: la persona no la ha '
+                                 'aprobado ni rechazado todavía en la tarjeta de pantalla. No está descargada.')
+            if pendiente:
+                # Una tarjeta cada vez, y como resultado, no como error: no hay nada que corregir.
+                return dict(status='waiting_previous_plan', planned=False, pending=pendiente['summary'],
+                            note='No se ha propuesto esta descarga: van de una en una y «' + pendiente['summary'] +
+                                 '» sigue esperando en la tarjeta. No lo intentes otra vez en este turno. Dile a '
+                                 'la persona que decida esa primero.')
+            plan = descargas.proponer(args['url'], args.get('name'))
+            self.session.download_request = plan
+            return dict(summary=plan['summary'], name=plan['name'], kind=plan['kind'], size=descargas.tamano(plan['bytes']),
+                        source=plan['host'], folder=plan['folder'], status='pending_approval',
+                        note='Pendiente: NO se ha descargado nada. A la persona le ha aparecido una tarjeta en la '
+                             'pantalla con el nombre, el origen y el tamaño; la aprueba o la cancela ahí, no en el '
+                             'chat. Dile en una frase qué has propuesto bajar y que lo apruebe en la tarjeta. '
+                             'Cuando lo haga te llegará una nota «La persona aprobó en la interfaz…» con el resultado.')
+        if name == 'file.list':
+            return descargas.listado(store)
         if name == 'terminal.read':
             return terminal_read.read(args['command'], args.get('filter'), path=args.get('path'))
         if name == 'system.status':
@@ -366,6 +393,13 @@ class ToolExecutor:
                                  str((anterior.get('result') or {}).get('error')) +
                                  '. No se ha repetido. Cambia de fuente o de argumentos, '
                                  'o explica el bloqueo con lo que ya tienes.')
+            bloqueada = (blocked_search(turn, web.SIN_REINTENTO)
+                         if output['tool'] == 'web.search' else None)
+            if bloqueada is not None:
+                raise ValueError('La búsqueda web ya falló en este turno y otra consulta no lo arregla: ' +
+                                 str(bloqueada['result']['error']) +
+                                 '. No se ha buscado otra vez. Dile a la persona la causa tal cual y '
+                                 'contesta con lo que ya sabes, sin presentar nada como encontrado.')
             # Un aviso por cada llamada, no solo por la primera: en un turno
             # con cuatro herramientas se veía la primera y las otras tres
             # pasaban mudas, así que el recorrido era invisible.

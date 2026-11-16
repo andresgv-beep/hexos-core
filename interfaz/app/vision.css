@@ -796,3 +796,43 @@ button.vision-horizon-state:focus-visible { outline: 2px solid var(--v-gold); ou
 .change-chip[data-state="cancelado"] .change-chip-count { text-decoration: line-through; }
 .change-chip[data-state="fallo"] .change-chip-state { color: #ff9c8f; }
 .access-actions .change-close { margin-right: auto; }
+
+/* Ajustes: las secciones a la izquierda y la elegida a la derecha. */
+.access-panel.settings-panel { width: min(720px, 100%); padding: 0; display: flex; flex-direction: column; }
+.settings-head { display: flex; align-items: center; gap: 9px; padding: 14px 14px 12px 20px; border-bottom: 1px solid var(--v-line); color: var(--v-muted); }
+.settings-head h2 { flex: 1; margin: 0; font: 600 12px var(--v-font); letter-spacing: .12em; text-transform: uppercase; color: var(--v-muted); }
+.settings-body { display: flex; min-height: 320px; }
+.settings-nav { width: 148px; flex-shrink: 0; box-sizing: border-box; padding: 12px 8px; border-right: 1px solid var(--v-line); display: flex; flex-direction: column; gap: 4px; }
+.settings-nav button {
+  height: 36px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; color: var(--v-muted);
+  font: 600 13px var(--v-font); display: flex; align-items: center; gap: 9px; cursor: pointer; text-align: left;
+}
+.settings-nav button:hover, .settings-nav button[aria-current="page"] { color: var(--v-text); background: var(--v-line); }
+.settings-nav button:focus-visible { outline: 2px solid var(--v-gold); outline-offset: 2px; }
+.settings-content { flex: 1; min-width: 0; padding: 18px 20px 20px; }
+.settings-content h3 { margin: 0 0 6px; font: 600 15px var(--v-font); color: var(--v-text); }
+.settings-lead { margin: 0 0 14px; font-size: 13px; line-height: 1.6; color: var(--v-muted); }
+.settings-lead strong { color: var(--v-text); font-weight: 600; }
+.settings-lead a { color: var(--v-gold-soft); }
+.settings-provider { margin-bottom: 14px; padding: 14px 16px 16px; border: 1px solid var(--v-line-strong); border-radius: var(--v-radius); }
+.settings-provider > header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.settings-provider > header strong { font: 600 15px var(--v-font); color: var(--v-text); }
+.settings-pill { margin-left: auto; padding: 3px 9px; border: 1px solid var(--v-line); border-radius: 999px; font: 11px var(--v-mono); color: var(--v-muted); white-space: nowrap; }
+.settings-pill[data-on="true"] { color: #86d69a; border-color: rgba(134, 214, 154, 0.45); }
+.settings-row { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.settings-row .access-field { flex: 1; min-width: 200px; margin-bottom: 0; }
+.settings-secret:not(:placeholder-shown) { -webkit-text-security: disc; }
+.settings-status { margin: 12px 0 0; font-size: 12px; line-height: 1.55; color: var(--v-muted); overflow-wrap: anywhere; }
+.settings-status[data-kind="ok"] { color: #86d69a; }
+.settings-status[data-kind="error"] { color: #ff9d8a; }
+@media (max-width: 700px) {
+  .settings-body { flex-direction: column; min-height: 0; }
+  .settings-nav { width: auto; flex-direction: row; border-right: 0; border-bottom: 1px solid var(--v-line); }
+  .settings-content { padding: 16px; }
+}
+
+/* Tarjeta de descarga: lo que HexOS ha visto del fichero, en dos columnas. */
+.download-facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 10px 0 12px; font-size: 13px; }
+.download-facts dt { color: var(--v-muted); }
+.download-facts dd { margin: 0; color: var(--v-text); overflow-wrap: anywhere; }
+.download-url { font-family: var(--v-mono); overflow-wrap: anywhere; }

@@ -157,6 +157,41 @@ class Agent:
         return dict(result, note=note)
 
     @property
+    def download_request(self):
+        return self.session.download_request
+
+    def decide_download(self, payload, *, apply=None):
+        """La persona aprueba o rechaza la descarga pendiente de file.download.
+
+        Como decide_system: es el único camino a la descarga, viene de la interfaz y el plan
+        se retira antes de bajarlo, así que se baja una sola vez.
+        """
+        from .. import descargas
+        if set(payload) != {'plan_id', 'approve'} or not isinstance(payload['approve'], bool):
+            raise ValueError('se espera {"plan_id": "...", "approve": true|false}')
+        with self.system_lock:
+            pending = self.session.download_request
+            if not pending or pending['plan_id'] != payload['plan_id']:
+                raise ValueError('Esa descarga ya no está pendiente: la decidió otra pantalla o caducó')
+            self.session.download_request = None
+        with self.store() as store:
+            if payload['approve']:
+                result = (apply or descargas.aplicar)(store, pending)
+                estado = ('descargado y comprobado' if result['executed'] and result['verified'] else
+                          'descargado, pero lo guardado no coincide con lo recibido' if result['executed'] else
+                          'no se descargó: ' + (result['refused'] or 'error'))
+                note = ('[La persona aprobó en la interfaz: ' + pending['summary'] + '. HexOS: ' + estado +
+                        ' (' + result['check'] + ').]')
+            else:
+                result = dict(plan_id=pending['plan_id'], summary=pending['summary'], executed=False, cancelled=True)
+                note = '[La persona rechazó en la interfaz: ' + pending['summary'] + '. No se ha descargado nada.]'
+            store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
+                             (uuid4().hex, now(), 'user', note, note))
+            store.db.commit()
+        self.session.notas_interfaz.append(note)
+        return dict(result, note=note)
+
+    @property
     def project_request(self):
         from .. import project_files
         return project_files.publico(self.session.project_request)
