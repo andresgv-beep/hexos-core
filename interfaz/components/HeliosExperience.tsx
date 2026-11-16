@@ -1031,7 +1031,6 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       busy={sending} error={historyError} onBrowseNotes={() => setCoreOpen(true)}
       hasEarlier={historyNext !== null} olderLoading={olderLoading} onLoadEarlier={loadOlderHistory}
       onOpenFiles={() => setFileViewer({})}
-      onOpenDownloads={transport.downloads ? () => setDownloadsOpen(true) : undefined}
       onPreview={previewCode} turnExtras={turnExtras}
       ventana={ventana} ventanaBusy={ventanaBusy || sending} onVentana={destino => void irAVentana(destino)} />}
     <nav className="vision-rail" aria-label="Secciones">
@@ -1065,6 +1064,11 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
           <FolderOpen size={15} aria-hidden="true" /> {proyecto === null ? "Sin proyecto"
             : proyectos.find(p => p.id === proyecto)?.name ?? proyecto}
         </button>}
+        {/* En el móvil no hay raíl. El 16/11 el botón estaba al principio de la conversación, que
+            siempre se ve por el final: no lo encontraba nadie. Va en la cabecera, y solo en el
+            Chat, que es donde se descarga; en el Agente la cabecera ya lleva el proyecto. */}
+        {mobile && ventana !== "agente" && transport.downloads && <button className="vision-chip" type="button"
+          aria-label="Descargas" onClick={() => setDownloadsOpen(true)}><Download size={15} aria-hidden="true" /> Descargas</button>}
         {mobile && transport.settings && <button className="vision-chip" type="button" aria-label="Ajustes"
           onClick={() => setSettingsOpen(true)}><Settings size={15} aria-hidden="true" /> Ajustes</button>}
         {/* En el Agente de escritorio estos tres viven en el lateral: la cabecera queda limpia. */}

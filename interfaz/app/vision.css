@@ -263,6 +263,14 @@ body { background: var(--v-bg); color: var(--v-text); }
 .vision-layout.mobile-layout .vision-header { height: 64px; padding: 0 14px; }
 .vision-layout.mobile-layout .vision-header .vision-chip { margin-left: auto; }
 .vision-layout.mobile-layout .vision-header .vision-chip ~ .vision-chip { margin-left: 0; }
+/* Cinco iconos en un móvil de 375: se aprietan lo justo para que al estado («Ejecutando…») le
+   quede el mismo ancho que con cuatro, y si no cabe se corta antes que empujarlos fuera. */
+@media (max-width: 900px) {
+  .vision-layout.mobile-layout .vision-header { gap: 6px; }
+  .vision-layout.mobile-layout .vision-header .vision-chip { width: 34px; height: 34px; flex-shrink: 0; }
+}
+.vision-layout.mobile-layout .vision-brand { min-width: 0; }
+.vision-layout.mobile-layout .vision-brand span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vision-layout.mobile-layout .vision-conversation .conversation { position: fixed; left: 10px; right: 10px; width: auto; bottom: max(10px, env(safe-area-inset-bottom)); z-index: 16; }
 @media (prefers-reduced-motion: reduce) {
   .vision-layout *, .vision-layout *::before { animation: none !important; }
