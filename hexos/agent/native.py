@@ -174,7 +174,8 @@ def split_thinking(text, open_thought=False):
 
 
 _EMPTY_THOUGHT = re.compile(r'<\|channel>thought\n\s*<channel\|>')
-_MEDIA_MARKER = re.compile(r'<\|(?:image|audio)\|?>|<(?:image|audio)\|>|<\|video\|>')
+_MEDIA_MARKER = re.compile(r'<\|(?:image|audio)\|?>|<(?:image|audio)\|>|<\|video\|>'
+                           r'|<\|vision_start\|>|<\|vision_end\|>|<\|(?:image|video)_pad\|>')
 
 
 def calls_from_text(text):
@@ -609,6 +610,10 @@ class NativeRuntime:
                     # Con el audio delante el 12B respondía como si no lo oyera.
                     if isinstance(image, AudioClip):
                         message['content'] = message['content'] + '\n<|audio|>'
+                    elif getattr(self, 'qwen', False):
+                        # Qwen marca la imagen con un único relleno entre sus dos
+                        # tokens de visión; el motor lo cambia por los vectores.
+                        message['content'] = '<|vision_start|><|image_pad|><|vision_end|>' + message['content']
                     else:
                         message['content'] = '<|image|>\n' + message['content']
                     break
