@@ -7,7 +7,7 @@ import os
 from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import uuid4
-from .. import catalog, descargas, procedures, project_files, project_memory, projects, tecnicas, reproche, sin_resolver, system_packages, task_notices, tool_digest, tool_groups
+from .. import catalog, descargas, notes, procedures, project_files, project_memory, projects, tecnicas, reproche, sin_resolver, system_packages, task_notices, tool_digest, tool_groups
 from ..native_transport import AudioClip
 from ..context import native_messages
 from ..work import now
@@ -536,7 +536,8 @@ class ContextManager:
             rebuild = bool(turn.handoff) or not reusable
             turn.metadata += self.tecnicas_del_turno(store, turn, rebuild)
             if rebuild:
-                turn.metadata = profile + self.ficha_proyecto(store, turn) + turn.metadata
+                turn.metadata = (profile + notes.bloque_ancladas(store)
+                                 + self.ficha_proyecto(store, turn) + turn.metadata)
                 if hora_activa() and 'HORA LOCAL' not in turn.metadata:
                     turn.metadata += hora_local()
                 self.agent.runtime.call({'type': 'reset'})

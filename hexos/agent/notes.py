@@ -79,6 +79,44 @@ def listing(store, query='', state=None, favorite=None, limit=50):
     return filas
 
 
+# Lo que entra delante de la conversación de las notas ancladas: por nota y en total.
+ANCLADA, ANCLADAS = 2500, 6000
+
+
+def bloque_ancladas(store):
+    """Las notas ancladas, con su texto, para ponerlas delante de la conversación.
+
+    Pedido por Andrés el 17/11. Una nota solo existía para el modelo cuando llamaba a la
+    herramienta, y con el contexto limpio no tiene motivo para ir a buscarla: a «¿cómo
+    estás construido?» el 35B contestó de lo que se imaginaba. Anclar una nota es decir
+    «esto no se te puede escapar», así que va delante sin que nadie la pida.
+
+    Con el texto y no solo el título: en la ventana Agente las herramientas de notas no se
+    declaran, y un título que no se puede abrir invita a inventarse lo que dice.
+    """
+    try:
+        filas = [_fila(row) for row in store.db.execute(
+            "SELECT * FROM notes WHERE favorite=1 AND state<>'descartada' ORDER BY updated_at DESC")]
+    except Exception:
+        return ''                       # un almacén sin notas no rompe el turno
+    partes, resto = [], ANCLADAS
+    for nota in filas:
+        if resto <= 0:
+            partes.append('«' + nota['title'] + '»: no cabe aquí; sigue guardada.')
+            continue
+        tope = min(ANCLADA, resto)
+        cuerpo = nota['body'][:tope]
+        resto -= len(cuerpo)
+        partes.append('«' + nota['title'] + '»\n' + cuerpo +
+                      ('\n[Recortada: la nota es más larga.]' if len(nota['body']) > tope else ''))
+    if not partes:
+        return ''
+    return ('NOTAS ANCLADAS (dato de HexOS): la persona las ha anclado para que las tengas '
+            'siempre presentes, aunque se limpie la conversación. Lo que dicen vale más que lo '
+            'que supongas; si preguntan por algo que está aquí, responde con esto y di que '
+            'sale de la nota.\n' + '\n---\n'.join(partes) + '\n')
+
+
 def _releer(store, note_id, title, body):
     """La prueba de que se guardó es volver a leerlo, no que no saltara un error."""
     row = store.db.execute('SELECT title, body FROM notes WHERE id=?', (note_id,)).fetchone()

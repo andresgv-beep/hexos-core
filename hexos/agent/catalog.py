@@ -257,6 +257,9 @@ TOOLS = {
                                  ('quitar','quitad','quito'), ('recoger','recogid','recojo'))),
     'note.mark': spec('Cambiar el estado de una nota o anclarla a favoritos. state es pendiente, hecha o '
                       'descartada; favorite es sí o no. Para borrar o eliminar una nota, state descartada: sale de la lista. '
+                      'Una nota anclada (favorite sí) la tendrás delante en todas las conversaciones, aunque se '
+                      'limpie el contexto: si te piden que recuerdes, memorices o tengas siempre presente una '
+                      'nota, ánclala; si te piden que la olvides o la sueltes, favorite no. '
                       'Con n marcas la nota número n de la última lista.',
                       {}, {'id':'str','n':'int','state':'str','favorite':'bool'}, effect='write', verify='self',
                       announces=(('marcar','marcad','marco'), ('anclar','anclad','anclo'))),
@@ -473,7 +476,8 @@ NATIVE_DESCRIPTIONS = {
                   'búscala antes con note_list.'),
     'note.hide': 'Cerrar una nota por id o n; sin ambos cierra todas las abiertas.',
     'note.mark': ('Cambiar state (pendiente, hecha o descartada) o favorite de una nota por id '
-                  'o por n de la última lista. Borrar una nota es state descartada.'),
+                  'o por n de la última lista. Borrar una nota es state descartada. Recordar o memorizar '
+                  'una nota es anclarla (favorite sí): así la tienes siempre delante.'),
     'web.search': ('Buscar información pública actual. Devuelve enlaces, fragmentos y la fecha de hoy; abre '
                    'las fuentes necesarias con web_read antes de responder. recency (dia, semana, mes o año) '
                    'limita a lo reciente cuando pidan lo último.'),

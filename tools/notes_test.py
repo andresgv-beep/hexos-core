@@ -31,6 +31,36 @@ class NotasTest(unittest.TestCase):
                 self.assertEqual(row['truncated'], length > 2000)
                 self.assertEqual(notes.get(self.store, note['id'])['body'], body)
 
+    def test_las_ancladas_van_delante_con_su_texto(self):
+        self.assertEqual(notes.bloque_ancladas(self.store), '')
+        suelta = self.crear(title='Lista de la compra', body='Pan y leche.')
+        self.assertEqual(notes.bloque_ancladas(self.store), '')     # sin anclar no entra
+        mia = self.crear(title='Arquitectura de Helios', body='Motor Hector debajo, HexOS encima.')
+        notes.mark(self.store, mia['id'], favorite=True)
+        bloque = notes.bloque_ancladas(self.store)
+        self.assertIn('NOTAS ANCLADAS', bloque)
+        self.assertIn('«Arquitectura de Helios»', bloque)
+        self.assertIn('Motor Hector debajo', bloque)
+        self.assertNotIn('Pan y leche', bloque)
+        self.assertNotIn(mia['id'], bloque)                          # sin ids que pueda volcar
+        # Descartada o desanclada deja de entrar.
+        notes.mark(self.store, mia['id'], state='descartada')
+        self.assertEqual(notes.bloque_ancladas(self.store), '')
+        notes.mark(self.store, mia['id'], state='pendiente', favorite=False)
+        self.assertEqual(notes.bloque_ancladas(self.store), '')
+        self.assertTrue(suelta['id'])
+
+    def test_las_ancladas_tienen_tope_por_nota_y_en_total(self):
+        for i in range(4):
+            nota = self.crear(title='Larga ' + str(i), body=str(i) * 5000)
+            notes.mark(self.store, nota['id'], favorite=True)
+        bloque = notes.bloque_ancladas(self.store)
+        self.assertLess(len(bloque), notes.ANCLADAS + 1200)
+        self.assertIn('[Recortada: la nota es más larga.]', bloque)
+        self.assertIn('no cabe aquí', bloque)                        # la cuarta, al menos nombrada
+        for i in range(4):
+            self.assertIn('«Larga ' + str(i) + '»', bloque)
+
     def test_una_nota_nueva_nace_pendiente_y_se_relee(self):
         n = self.crear()
         self.assertTrue(n['created'])

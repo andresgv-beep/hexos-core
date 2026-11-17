@@ -42,6 +42,29 @@ class ReportContextTest(unittest.TestCase):
                 self.assertNotIn('electricista', text)
                 self.assertIn('profile_recall', text)
 
+    def test_la_nota_anclada_va_delante_una_vez_y_vuelve_al_limpiar(self):
+        from hexos.agent import notes
+        runtime = self.agent.runtime
+        runtime.messages = []
+        with self.agent.store() as store:
+            nota = notes.dispatch(store, 'note.save', dict(
+                title='Arquitectura de Helios', body='Motor Hector debajo, HexOS encima.'), 'turno-0')
+            notes.mark(store, nota['id'], favorite=True)
+            primero = TurnState(text='¿cómo estás construido?')
+            self.agent.context.prepare(store, primero)
+            delante = json.dumps(primero.messages, ensure_ascii=False)
+            self.assertIn('NOTAS ANCLADAS', delante)
+            self.assertIn('Motor Hector debajo', delante)
+            runtime.messages = list(primero.messages)
+            sigue = TurnState(text='¿y qué más?')
+            self.agent.context.prepare(store, sigue)
+            self.assertEqual(sigue.messages, [dict(role='user', content='¿y qué más?')])
+            # Contexto limpio: vuelve a entrar sin que nadie la pida.
+            runtime.messages = []
+            limpio = TurnState(text='hola')
+            self.agent.context.prepare(store, limpio)
+            self.assertEqual(json.dumps(limpio.messages, ensure_ascii=False).count('NOTAS ANCLADAS'), 1)
+
     def test_continuing_turns_do_not_accumulate_static_context(self):
         runtime = self.agent.runtime
         runtime.messages = []
