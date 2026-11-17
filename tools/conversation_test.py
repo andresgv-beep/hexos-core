@@ -208,6 +208,24 @@ class Tests(unittest.TestCase):
             with agent.store() as store:
                 self.assertEqual(store.db.execute('SELECT COUNT(*) FROM tool_events').fetchone()[0], 12)
 
+    def test_una_escritura_en_condicional_no_es_una_afirmacion(self):
+        from hexos.agent.chat_backend.completion import ReplyPolicy
+        # La frase del 35B del 17/11, tal cual salió.
+        supuesto = ('Si tú me has dado instrucciones explícitas ("recuerda esto") o si hemos creado '
+                    'una Nota persistente (`note_save`) sobre mi arquitectura, esa información '
+                    'permanece intacta en el almacenamiento persistente de Helios.')
+        self.assertIsNone(ReplyPolicy.canta_escritura(supuesto))
+        self.assertIsNone(ReplyPolicy.unsupported_claim(supuesto, []))
+        self.assertIsNone(ReplyPolicy.canta_escritura('Cuando hayamos guardado la nota te aviso.'))
+        self.assertIsNone(ReplyPolicy.canta_escritura('Una vez que he creado la nota, se queda ahí.'))
+        # Lo que sí es cantar una escritura sigue contando.
+        for dicho in ('He guardado la nota.', 'Listo, he apuntado la cita del viernes.',
+                      'Si quieres, he guardado también el resumen.',
+                      'Sí, he creado el archivo `main.py`.',
+                      'Si la buscas la verás. He guardado la nota con ese título.'):
+            self.assertIsNotNone(ReplyPolicy.canta_escritura(dicho), dicho)
+            self.assertIn('escritura', ReplyPolicy.unsupported_claim(dicho, []))
+
     def test_decir_que_ha_revisado_sin_mirar_nada_no_pasa(self):
         from hexos.agent.chat_backend.completion import ReplyPolicy
         self.assertIn('terminal_read', ReplyPolicy.unsupported_claim('He revisado el sistema y los registros.', []))

@@ -339,7 +339,7 @@ class RecoveryController:
         if (not turn.retries.sin_llamada_devuelto
                 and getattr(self.agent, 'ventana', None) == catalog.DEFAULT_WINDOW
                 and getattr(self.agent.runtime, 'native', False)
-                and ReplyPolicy.ESCRITURA_DICHA.search(output.get('reply') or '')
+                and ReplyPolicy.canta_escritura(output.get('reply') or '')
                 and not any(catalog.TOOLS.get(paso.get('tool'), {}).get('effect') != 'read'
                             for paso in turn.trace)):
             turn.retries.sin_llamada_devuelto = True

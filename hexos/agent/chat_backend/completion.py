@@ -102,6 +102,25 @@ class ReplyPolicy:
         r'|(?<!no )\b(?:he|hemos)\s+tomado\s+nota\b'
         r'|\b(?:guardad|anotad|apuntad)[oa]s?\s+en\s+una\s+nota\b', re.I)
 
+    # Dentro de una condicional no afirma nada: «o si hemos creado una Nota sobre mi
+    # arquitectura, esa información permanece» describe un supuesto. El 17/11 tumbó una
+    # explicación del 35B en el chat, y el aviso lo empujó a guardar una nota que nadie
+    # había pedido. Se mira solo el tramo de la frase que lleva al verbo, hasta la coma:
+    # «si quieres, he guardado la nota» sigue siendo una afirmación.
+    SUPUESTO = re.compile(
+        r'\b(?:si|cuando|aunque|una\s+vez(?:\s+que)?|en\s+cuanto|siempre\s+que|'
+        r'a\s+menos\s+que|suponiendo\s+que|en\s+caso\s+de\s+que)\b[^.!?;:,\n]*$', re.I)
+
+    @classmethod
+    def canta_escritura(cls, reply):
+        """La primera escritura que la respuesta da por hecha, o None."""
+        if not isinstance(reply, str):
+            return None
+        for encontrada in cls.ESCRITURA_DICHA.finditer(reply):
+            if not cls.SUPUESTO.search(reply[max(0, encontrada.start() - 200):encontrada.start()]):
+                return encontrada
+        return None
+
     # El 31/10 dijo «he revisado el sistema y los registros» sin llamar a nada, y
     # el informe salió de un registro de ejemplo que había en el historial.
     # Con el chat largo tampoco hace falta la frase: «sigue fallando» y «el estado
@@ -215,7 +234,7 @@ class ReplyPolicy:
             return ('La respuesta dice haber comprobado algo, pero en este turno no se ejecutó '
                     'ninguna herramienta. Este PC se mira con terminal_read y el NAS con nas_read: '
                     'compruébalo, o di que no lo has comprobado.')
-        if not isinstance(reply, str) or not cls.ESCRITURA_DICHA.search(reply):
+        if not cls.canta_escritura(reply):
             return None
         escrituras = [paso['tool'] for paso in trace
                       if catalog.TOOLS.get(paso.get('tool'), {}).get('effect') != 'read']
