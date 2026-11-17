@@ -218,6 +218,20 @@ export function parseSettings(data: unknown): Settings {
     configured: item.configured === true, hint: typeof item.hint === "string" ? item.hint : null })) } };
 }
 
+/** Un modelo de la lista de HexOS. `available` es false si su fichero no está (disco sin montar). */
+export type ModelChoice = { id: string; name: string; ctx: number; active: boolean; available: boolean };
+
+function parseModels(data: unknown): ModelChoice[] {
+  if (!isRecord(data) || !Array.isArray(data.models)) throw new Error("Lista de modelos de HexOS no válida");
+  return data.models.map(item => {
+    if (!isRecord(item) || typeof item.id !== "string" || typeof item.name !== "string" || typeof item.ctx !== "number"
+        || typeof item.active !== "boolean" || typeof item.available !== "boolean") {
+      throw new Error("Lista de modelos de HexOS no válida");
+    }
+    return { id: item.id, name: item.name, ctx: item.ctx, active: item.active, available: item.available };
+  });
+}
+
 export interface HeliosTransport {
   /** `thinking` es null cuando el motor no tiene canal de pensamiento.
    *  `window` es null si el agente no reparte las herramientas por ventana. */
@@ -275,6 +289,11 @@ export interface HeliosTransport {
   saveServiceKey?(provider: string, key: string | null, signal?: AbortSignal): Promise<Settings>;
   /** Hace una llamada real al servicio con la clave guardada. Devuelve cuántos resultados trajo. */
   testService?(provider: string, signal?: AbortSignal): Promise<number>;
+  /** Los modelos entre los que se puede elegir. Vacío si el servicio arrancó con uno solo. */
+  models?(signal?: AbortSignal): Promise<ModelChoice[]>;
+  /** Cambia de modelo: el que había se descarga y el nuevo empieza a cargarse. Devuelve la
+   *  lista como queda. Falla, sin cambiar nada, si hay un turno en marcha. */
+  selectModel?(id: string, signal?: AbortSignal): Promise<ModelChoice[]>;
   /** Avisa a HexOS al empezar a escribir. Inicia la carga, pero no bloquea la UI. */
   warmup(signal?: AbortSignal): Promise<"unloaded" | "loading" | "ready" | "unloading" | "error" | "closed">;
   history(signal?: AbortSignal): Promise<HistoryMessage[]>;
@@ -483,6 +502,13 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
       const data = await request("context/reset", { method: "POST",
         headers: { "Content-Type": "application/json" }, body: "{}", signal });
       if (!isRecord(data) || data.ok !== true) throw new Error("HexOS no confirmó la limpieza");
+    },
+    async models(signal) {
+      return parseModels(await request("models", { signal }));
+    },
+    async selectModel(id, signal) {
+      return parseModels(await request("model/select", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }), signal }));
     },
     async warmup(signal) {
       const data = await request("model/warmup", { method: "POST",

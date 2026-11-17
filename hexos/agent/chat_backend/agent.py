@@ -562,6 +562,47 @@ class Agent:
                     note='Con el canal abierto el modelo decide cuánto pensar: en charla normal '
                          'gasta cero. El coste solo aparece en los turnos que hacen trabajo.')
 
+    def models_snapshot(self):
+        """Los modelos entre los que se puede elegir y cuál está puesto."""
+        catalogo = getattr(self, 'modelos', None)
+        return dict(models=catalogo.lista() if catalogo else [], active=catalogo.activo if catalogo else None)
+
+    def select_model(self, identificador):
+        """Cambia de modelo y lo deja cargando. Se guarda, como la ventana: es una
+        preferencia de la persona y no debe depender de cómo se lanzó el servicio."""
+        catalogo = getattr(self, 'modelos', None)
+        if not catalogo:
+            raise ValueError('Este servicio arrancó con un solo modelo; no hay entre cuáles elegir')
+        if not isinstance(identificador, str):
+            raise ValueError('id debe ser texto')
+        if self.lock.locked():
+            raise RuntimeError('Hay un turno en marcha; cambia de modelo cuando termine')
+        cambiado = catalogo.elegir(identificador, self.runtime)
+        if cambiado:
+            with self.store() as store:
+                store.db.execute("INSERT INTO agent_state VALUES ('model',?) "
+                                 'ON CONFLICT(key) DO UPDATE SET value=excluded.value', (identificador,))
+                store.db.commit()
+        estado = self.runtime.warmup()
+        return dict(self.models_snapshot(), changed=cambiado, model=estado)
+
+    def restore_model(self):
+        """El modelo guardado, si sigue en la lista y su fichero está; si no, el primero."""
+        catalogo = getattr(self, 'modelos', None)
+        if not catalogo:
+            return None
+        try:
+            with self.store() as store:
+                fila = store.db.execute("SELECT value FROM agent_state WHERE key='model'").fetchone()
+        except Exception:
+            fila = None
+        if fila and fila[0] != catalogo.activo:
+            try:
+                catalogo.elegir(fila[0], self.runtime)
+            except (ValueError, RuntimeError):
+                pass
+        return catalogo.activo
+
     def restore_thinking(self):
         """Preferencia guardada por encima del flag de arranque, si la hay."""
         if not hasattr(self.runtime, 'thinking'):

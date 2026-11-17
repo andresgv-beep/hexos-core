@@ -231,6 +231,46 @@ class ModelLifecycle:
                 self._start_loading_locked()
             return self.status()
 
+    def switch(self, factory, ctx):
+        """Cambia de modelo: descarga el que haya y deja el nuevo para la próxima carga.
+
+        Los dos no caben a la vez, así que no hay transición: el anterior se cierra antes
+        de devolver. La conversación no se pierde: ContextManager ve un runtime vacío y la
+        reconstruye del archivo, igual que tras una descarga por inactividad.
+        """
+        with self._condition:
+            if self._closed:
+                raise RuntimeError('HexOS se está cerrando')
+            if self._busy:
+                raise RuntimeError('Hay un turno en marcha; cambia de modelo cuando termine')
+            if self._state in ('loading', 'unloading'):
+                raise RuntimeError('El modelo se está cargando o descargando; espera a que termine')
+            if self._state == 'error' and self._runtime is not None:
+                raise RuntimeError('No se pudo cerrar el modelo anterior: ' + str(self._error))
+            runtime = self._runtime
+            self._runtime = None
+            self._factory = factory
+            self.ctx = ctx
+            self._error = None
+            self._reload_requested = False
+            self._state = 'unloading' if runtime is not None else 'unloaded'
+        if runtime is None:
+            return
+        error = None
+        try:
+            runtime.close()
+        except Exception as exc:
+            error = exc
+        with self._condition:
+            self._state = 'closed' if self._closed else ('error' if error else 'unloaded')
+            self._error = error
+            if error:
+                # Conserva el proceso si no se pudo confirmar su cierre.
+                self._runtime = runtime
+            self._condition.notify_all()
+        if error:
+            raise RuntimeError('No se pudo cerrar el modelo anterior: ' + str(error))
+
     def acquire_turn(self, stop=None):
         if self._turn_acquired:
             return

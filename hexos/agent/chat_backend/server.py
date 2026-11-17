@@ -39,6 +39,8 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                 self.wfile.write(data)
             elif self.path == '/api/files' or self.path.startswith('/api/files/'):
                 serve_file(self, agent.env.workspace)
+            elif self.path == '/api/models':
+                self.respond(200, agent.models_snapshot())
             elif self.path == '/api/status':
                 self.respond(200, {'state': agent.state, 'progress':agent.progress,
                                    'active_tools':[dict(item) for item in agent.active_tools],
@@ -49,9 +51,10 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                                    'thinking': agent.thinking(),
                                    'window': getattr(agent, 'ventana', None),
                                    'project': getattr(agent, 'proyecto', None),
-                                   'model': (agent.runtime.status()
-                                             if hasattr(agent.runtime, 'status') else
-                                             {'state':'ready', 'ready':True}),
+                                   'model': dict(agent.runtime.status()
+                                                 if hasattr(agent.runtime, 'status') else
+                                                 {'state':'ready', 'ready':True},
+                                                 id=agent.models_snapshot()['active']),
                                    'generation': agent.generation_snapshot(),
                                    'metrics': agent.metrics_snapshot(),
                                    'mode':'native-experimental' if native_template else 'json'})
@@ -146,7 +149,7 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
         def do_POST(self):
             if self.path not in ('/api/chat', '/api/work', '/api/context/reset', '/api/window', '/api/credentials', '/api/system',
                                  '/api/projects', '/api/project', '/api/project/change', '/api/project/rename', '/api/project/remove',
-                                 '/api/thinking', '/api/cancel', '/api/model/warmup', '/api/media/control',
+                                 '/api/thinking', '/api/cancel', '/api/model/warmup', '/api/model/select', '/api/media/control',
                                  '/api/settings/web', '/api/settings/web/test', '/api/download'):
                 self.respond(404, {'error':'ruta inexistente'})
                 return
@@ -179,6 +182,11 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
                         self.respond(202, agent.runtime.warmup())
                     else:
                         self.respond(200, {'state':'ready', 'ready':True})
+                elif self.path == '/api/model/select':
+                    payload = strict_json(data.decode('utf-8'))
+                    if set(payload) != {'id'}:
+                        raise ValueError('se espera {"id": "…"}')
+                    self.respond(200, agent.select_model(payload['id']))
                 elif self.path == '/api/system':
                     self.respond(200, agent.decide_system(strict_json(data.decode('utf-8'))))
                 elif self.path == '/api/download':

@@ -33,6 +33,8 @@ def main():
     parser.add_argument('--multimodal', help='HNF de imagen/audio que acompaña al de texto (Gemma 4 12B)')
     parser.add_argument('--native-template', help='Gemma nativo con plantilla oficial; usar --runtime helios_runtime para progreso y cancelación')
     parser.add_argument('--native-thinking', action='store_true', help='Activar pensamiento de Gemma en el adaptador nativo')
+    parser.add_argument('--models', help='JSON con los modelos entre los que elegir (modelos.py); '
+                        'sin él solo existe el de --model')
     parser.add_argument('--model-idle-seconds', type=int, default=600,
                         help='Descargar el modelo tras estos segundos sin actividad (por defecto: 600)')
     args = parser.parse_args()
@@ -50,19 +52,38 @@ def main():
         parser.error('Falta el programa de memoria ' + args.hera +
                      ': compílalo con «make -C ' + str(Path(args.hera).parent.parent) + '»')
     Path(args.workspace).mkdir(parents=True, exist_ok=True)
+    if args.models and not args.native_template:
+        parser.error('--models requiere --native-template')
+    catalogo = None
     if args.native_template:
         from ..native import NativeRuntime
+        from . import modelos
+        # El de la línea de órdenes es el único, salvo que haya lista: entonces manda ella.
+        lista = [dict(id='principal', nombre=Path(args.model).stem, hnf=args.model,
+                      plantilla=args.native_template, ctx=args.ctx,
+                      pensamiento=args.native_thinking, multimodal=args.multimodal)]
+        if args.models:
+            try:
+                lista = modelos.leer(args.models)
+            except ValueError as exc:
+                parser.error(str(exc))
+        def fabrica(modelo):
+            return lambda: NativeRuntime(args.runtime, modelo['hnf'], modelo['ctx'], args.workspace,
+                                         modelo['plantilla'], thinking=modelo.get('pensamiento', False),
+                                         multimodal=modelo.get('multimodal'))
+        catalogo = modelos.Modelos(lista, fabrica)
+        primero = catalogo.especificacion()
         runtime = ModelLifecycle(
-            lambda: NativeRuntime(args.runtime,args.model,args.ctx,args.workspace,
-                                  args.native_template,thinking=args.native_thinking,
-                                  multimodal=args.multimodal),
-            ctx=args.ctx, thinking=args.native_thinking,
+            catalogo.fabrica(), ctx=primero['ctx'], thinking=primero.get('pensamiento', False),
             idle_seconds=args.model_idle_seconds, native=True,
             progressive=Path(args.runtime).name != 'helios_formatted')
     else:
         runtime = Runtime(args.runtime, args.model, args.ctx, args.workspace)
     agent = Agent(args.workspace, runtime,
                   HeraProfile(args.hera, args.memory_home) if args.hera else None)
+    agent.modelos = catalogo
+    # El modelo que la persona dejó puesto manda sobre el primero de la lista.
+    agent.restore_model()
     # Lo que la persona dejó puesto manda sobre el flag con que se arrancó.
     agent.restore_thinking()
     agent.restore_window()

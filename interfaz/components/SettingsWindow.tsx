@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Globe, Palette, Settings as SettingsIcon, X } from "lucide-react";
-import type { HeliosTransport, ServiceProvider, Settings } from "@/lib/helios/hexos";
+import { Cpu, Globe, Palette, Settings as SettingsIcon, X } from "lucide-react";
+import type { HeliosTransport, ModelChoice, ServiceProvider, Settings } from "@/lib/helios/hexos";
 import { CLAVE_TEMA, MANDOS, TEMA_ATAJOS, TEMA_BASE, TEMA_MANDOS, aplicarTema, guardarTema, leerTema, mismoTema,
          type Tema } from "@/lib/helios/tema";
 
 /** Las secciones de la ventana. Una nueva (chat…) es otra entrada aquí y su panel abajo. */
 const SECCIONES = [{ id: "web", nombre: "Web", Icono: Globe },
+                   { id: "modelo", nombre: "Modelo", Icono: Cpu },
                    { id: "apariencia", nombre: "Apariencia", Icono: Palette }] as const;
 type Seccion = typeof SECCIONES[number]["id"];
 
@@ -115,7 +116,55 @@ function Apariencia() {
   </>;
 }
 
-/** Ajustes de Helios: «Web», los servicios externos y sus claves, y «Apariencia», el tema. */
+/** Qué modelo corre. Solo cabe uno a la vez: elegir otro descarga el que hay y carga el nuevo,
+ *  y la conversación sigue donde estaba porque HexOS la reconstruye de su archivo. */
+function Modelo({ transport }: { transport: HeliosTransport }) {
+  const [modelos, setModelos] = useState<ModelChoice[] | null>(null);
+  const [ocupado, setOcupado] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+
+  useEffect(() => {
+    const control = new AbortController();
+    transport.models!(control.signal).then(setModelos)
+      .catch(reason => { if (!control.signal.aborted) setAviso({ kind: "error", text: error(reason) }); });
+    return () => control.abort();
+  }, [transport]);
+
+  async function elegir(modelo: ModelChoice) {
+    if (modelo.active || ocupado) return;
+    setOcupado(modelo.id);
+    setAviso(null);
+    try {
+      setModelos(await transport.selectModel!(modelo.id));
+      setAviso({ kind: "ok", text: `${modelo.name} se está cargando. Puedes cerrar esta ventana y escribir cuando quieras.` });
+    } catch (reason) {
+      setAviso({ kind: "error", text: error(reason) });
+    } finally {
+      setOcupado(null);
+    }
+  }
+
+  const miles = (n: number) => `${Math.round(n / 1000)}k`;
+  return <>
+    <h3>Modelo</h3>
+    <p className="settings-lead">Solo cabe uno a la vez. Al elegir otro, el que está se descarga y el nuevo se carga;
+      la conversación sigue donde estaba.</p>
+    {!modelos && !aviso && <p className="settings-lead">Cargando…</p>}
+    {modelos && modelos.length < 2 && <p className="access-note">Este servicio arrancó con un solo modelo.</p>}
+    {modelos && modelos.length >= 2 && <div className="theme-group" role="group" aria-label="Modelo">
+      <span>Modelo</span>
+      <div>{modelos.map(modelo => <button key={modelo.id} type="button" aria-pressed={modelo.active}
+        disabled={!modelo.available || ocupado !== null} onClick={() => elegir(modelo)}
+        title={modelo.available ? `Ventana de ${miles(modelo.ctx)} tokens` : "Su fichero no está: ¿está montado el disco?"}>
+        {modelo.name}{modelo.available ? ` · ${miles(modelo.ctx)}` : " · no disponible"}
+      </button>)}</div>
+    </div>}
+    {aviso && <p className="settings-status" data-kind={aviso.kind} role={aviso.kind === "error" ? "alert" : "status"}>{aviso.text}</p>}
+  </>;
+}
+
+/** Ajustes de Helios: «Web», los servicios externos y sus claves; «Modelo», cuál corre; y
+ *  «Apariencia», el tema. */
 export function SettingsWindow({ transport, onClose }: { transport: HeliosTransport; onClose: () => void }) {
   const [seccion, setSeccion] = useState<Seccion>("web");
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -156,6 +205,9 @@ export function SettingsWindow({ transport, onClose }: { transport: HeliosTransp
         </nav>
         <div className="settings-content">
           {seccion === "apariencia" && <Apariencia />}
+          {seccion === "modelo" && (transport.models && transport.selectModel
+            ? <Modelo transport={transport} />
+            : <p className="settings-lead">Este motor no permite elegir modelo.</p>)}
           {seccion === "web" && fallo && <p className="settings-status" data-kind="error" role="alert">{fallo}</p>}
           {seccion === "web" && !settings && !fallo && <p className="settings-lead">Cargando…</p>}
           {settings && seccion === "web" && <>

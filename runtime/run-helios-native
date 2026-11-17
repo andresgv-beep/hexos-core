@@ -26,7 +26,13 @@ if [[ -n "${HEXOS_MEMORY_HOME:-}" ]]; then
     fi
     memory=(--hera "$hera_binary" --memory-home "$HEXOS_MEMORY_HOME")
 fi
+# Con HEXOS_MODELS, la lista de modelos entre los que elegir desde la interfaz (modelos.py).
+# El de la línea de órdenes se queda como respaldo si la lista falta.
+models=()
+if [[ -n "${HEXOS_MODELS:-}" && -f "$HEXOS_MODELS" ]]; then
+    models=(--models "$HEXOS_MODELS")
+fi
 cd -- "$repo_dir"
 exec python3 -u -m hexos.agent.chat --workspace "$workspace_path" \
     --runtime "$engine_binary" --model "$model_path" --native-template "$template_path" \
-    --ctx "${4:-16384}" --port "${5:-8080}" "${memory[@]}"
+    --ctx "${4:-16384}" --port "${5:-8080}" "${memory[@]}" "${models[@]}"
