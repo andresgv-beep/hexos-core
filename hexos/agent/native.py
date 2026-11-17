@@ -268,7 +268,19 @@ class NativeRuntime:
 
     def __init__(self,binary,model,ctx,workspace,template,thinking=False,multimodal=None):
         from jinja2 import Environment
-        env=Environment()
+        from jinja2.ext import Extension
+
+        class Generacion(Extension):
+            # {% generation %}…{% endgeneration %} es una marca de transformers para saber
+            # qué parte escribe el modelo al entrenar. Jinja a secas no la conoce y la
+            # plantilla de Qwen3.6 no cargaba. Aquí no significa nada: se pinta lo de dentro.
+            tags = {'generation'}
+
+            def parse(self, parser):
+                next(parser.stream)
+                return parser.parse_statements(['name:endgeneration'], drop_needle=True)
+
+        env=Environment(extensions=[Generacion])
         # tojson escapaba cada tilde como \u00ed: seis caracteres y varios tokens
         # por letra en un catálogo escrito en español. Mismo JSON, sin escapar.
         env.policies['json.dumps_kwargs']=dict(sort_keys=True,ensure_ascii=False)
