@@ -116,6 +116,9 @@ body { background: var(--hud-bg); color: var(--hud-text); }
 :is(.hud-chat-scroll,.hud-sidebar,.hud-content-body,.hud-activity,.viewer-list,.history-messages,.window-content,.reply-code pre,.mobile-page)::-webkit-scrollbar-thumb { background: var(--hud-pink); border-radius: 0; }
 :is(.hud-chat-scroll,.hud-sidebar,.hud-content-body,.hud-activity,.viewer-list,.history-messages,.window-content,.reply-code pre,.mobile-page)::-webkit-scrollbar-track { background: var(--hud-track); }
 .hud-chat-scroll { scrollbar-gutter: stable; overflow-anchor: none; padding-right: 12px; }
+/* Una respuesta en bucle soltó una «palabra» de miles de letras sin espacios y el chat ganó
+   una barra horizontal de 15.000 px. Partir lo que no cabe; tablas y código mantienen lo suyo. */
+.hud-chat-messages { overflow-wrap: break-word; }
 .hud-chat-messages > .stream-turn { margin-bottom: 28px; animation: none; }
 .hud-saved-message { margin: 0 0 20px; padding: 16px; background: var(--hud-heliosBubble); border-left: 2px solid var(--hud-accent); }
 .hud-saved-message.user { margin-left: 12%; background: var(--hud-userBubble); border-left: 0; border-right: 2px solid var(--hud-pink); }
