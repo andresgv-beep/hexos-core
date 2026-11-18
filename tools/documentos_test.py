@@ -432,6 +432,86 @@ class QwenDel18(Base):
         self.assertEqual(VerificationService.closure([bien, fallo])['reason'], 'parcial')
 
 
+TRES_HOJAS = """## Hoja: Gastos
+| Fecha | Concepto | Categoría | Importe |
+|---|---|---|---|
+| 05/01 | Alquiler | Vivienda | 850,00 € |
+| 10/01 | Supermercado | Comida | 120,50 € |
+| 05/02 | Alquiler | Vivienda | 850,00 € |
+| 08/02 | Cine | Ocio | 29,50 € |
+
+## Hoja: Resumen
+| Categoría | Total |
+|---|---|
+| Vivienda | =SUMAR.SI(Gastos!C:C;"Vivienda";Gastos!D:D) |
+| Comida | =SUMIF(gastos!C2:C5;"Comida";gastos!D2:D5) |
+| Ocio | =SUMIF(Gastos!C:C;"Ocio";Gastos!D:D) |
+| **TOTAL** | **=SUM(B2:B4)** |
+
+## Hoja: Dashboard
+| Categoría | % del total |
+|---|---|
+| Vivienda | =Resumen!B2/Resumen!B5 |
+| Comida | =Resumen!B3/Resumen!$B$5 |
+"""
+
+
+class EntreHojas(Base):
+    """El Excel que pidió Andrés el 18/11: el Resumen suma la hoja Gastos y el Dashboard divide
+    entre el total del Resumen. Antes todas esas fórmulas quedaban como texto."""
+
+    def test_las_formulas_de_otra_hoja_se_calculan_y_se_guardan_como_formulas(self):
+        from openpyxl import load_workbook
+        hecho = self.crear('xlsx', 'Tres', TRES_HOJAS)
+        contenido = hecho['contents']
+        self.assertNotIn('formulas_guardadas_como_texto', contenido)
+        self.assertNotIn('formulas_con_error', contenido)
+        self.assertEqual(contenido['formulas'], [
+            'Resumen!B2 =SUMIF(Gastos!C:C,"Vivienda",Gastos!D:D) = 1.700,00 €',
+            'Resumen!B3 =SUMIF(Gastos!C2:C5,"Comida",Gastos!D2:D5) = 120,50 €',
+            'Resumen!B4 =SUMIF(Gastos!C:C,"Ocio",Gastos!D:D) = 29,50 €',
+            'Resumen!B5 =SUM(B2:B4) = 1.850,00 €',
+            'Dashboard!B2 =Resumen!B2/Resumen!B5 = 91,9 %',
+            'Dashboard!B3 =Resumen!B3/Resumen!$B$5 = 6,5 %'])
+        libro = load_workbook(self.casa / 'documentos' / 'Tres.xlsx')
+        celda = libro['Resumen']['B2']
+        self.assertEqual((celda.value, celda.data_type), ('=SUMIF(Gastos!C:C,"Vivienda",Gastos!D:D)', 'f'))
+        self.assertEqual(libro['Dashboard']['B2'].number_format, '0.##%')
+
+    def test_una_hoja_con_espacios_va_entre_comillas_y_una_que_no_existe_es_error(self):
+        texto = ('## Hoja: Mis gastos\n| Cosa | Importe |\n|---|---|\n| a | 10 |\n| b | 5 |\n\n'
+                 "## Hoja: Total\n| Qué | Cuánto |\n|---|---|\n| suma | =SUM('MIS GASTOS'!B2:B3) |\n"
+                 '| otra | =Ventas!B2 |\n')
+        contenido = documentos.resumen(texto, 'xlsx')
+        self.assertEqual(contenido['formulas'], ["Total!B2 =SUM('Mis gastos'!B2:B3) = 15"])
+        self.assertEqual(contenido['formulas_con_error'],
+                         ['Total!B3 =VENTAS!B2 = error: no hay ninguna hoja que se llame «VENTAS»'])
+
+    def test_otro_fichero_no_es_una_hoja(self):
+        self.assertFalse(documentos.formula_segura("='[otro.xlsx]Hoja'!A1"))
+        self.assertFalse(documentos.formula_segura('=[otro.xlsx]Hoja!A1'))
+        self.assertTrue(documentos.formula_segura("='Mis gastos'!A1*2"))
+
+    def test_la_tarta_va_al_resumen_por_categoria_y_no_a_los_gastos_sueltos(self):
+        texto = documentos.con_grafico(TRES_HOJAS, 'tarta')
+        hojas = {nombre: graficos for nombre, _, graficos in documentos.hojas(texto)}
+        self.assertEqual(hojas, {'Gastos': [], 'Resumen': ['tarta'], 'Dashboard': []})
+        lineas = documentos.con_grafico(TRES_HOJAS.replace('05/01', '05/01/2024'), 'lineas')
+        self.assertEqual(documentos.hojas(lineas)[0][2], ['lineas'])     # sobre fechas, sí
+
+    def test_los_totales_del_resumen_heredan_los_euros_de_lo_que_suman(self):
+        contenido = documentos.resumen(TRES_HOJAS, 'xlsx')
+        self.assertEqual(contenido['formulas'][:4], [
+            'Resumen!B2 =SUMIF(Gastos!C:C,"Vivienda",Gastos!D:D) = 1.700,00 €',
+            'Resumen!B3 =SUMIF(Gastos!C2:C5,"Comida",Gastos!D2:D5) = 120,50 €',
+            'Resumen!B4 =SUMIF(Gastos!C:C,"Ocio",Gastos!D:D) = 29,50 €',
+            'Resumen!B5 =SUM(B2:B4) = 1.850,00 €'])
+
+    def test_una_formula_que_apunta_a_otra_aun_sin_calcular(self):
+        calculado = documentos.calcular([['n', 'v'], ['a', '=B3+1'], ['b', '=2*3']])
+        self.assertEqual(calculado[(2, 2)][0], 7.0)
+
+
 class Herramienta(Base):
     def test_esta_en_el_chat_y_declara_sus_verbos(self):
         self.assertEqual(catalog.group_of('document.create'), 'descargas')

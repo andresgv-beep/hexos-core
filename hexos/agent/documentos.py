@@ -268,8 +268,13 @@ def traducir(formula):
     return ''.join(salida)
 
 
+# Otra hoja delante de una celda o rango: «Gastos!C:C», «'Mi resumen'!B2». Sin «[», «\\» ni «/»
+# dentro de las comillas: así no cabe una referencia a otro fichero ([libro.xlsx]Hoja!A1).
+_PREFIJO = r"(?:'(?:[^'\[\]\\/:*?]|'')+'|[^\W\d][\w.]*)!"
+
+
 def formula_segura(formula):
-    sin_textos = re.sub(r'"[^"]*"', '""', formula)
+    sin_textos = re.sub(_PREFIJO, '', re.sub(r'"[^"]*"', '""', formula))
     return (bool(re.match(r'^=[A-Z0-9:$+\-*/().,<>=&%^" ]+$', sin_textos))
             and set(re.findall(r'([A-Z][A-Z.]*)\(', sin_textos)) <= FUNCIONES)
 
@@ -317,7 +322,9 @@ class ErrorFormula(ValueError):
 
 
 _TOKEN = re.compile(r'\s*(?:(?P<num>\d+(?:\.\d+)?%?)|(?P<str>"[^"]*")'
-                    r'|(?P<rango>\$?[A-Z]{1,3}\$?\d+:\$?[A-Z]{1,3}\$?\d+)|(?P<celda>\$?[A-Z]{1,3}\$?\d+)'
+                    r'|(?P<rango>(?:' + _PREFIJO + r')?\$?[A-Z]{1,3}\$?\d+:\$?[A-Z]{1,3}\$?\d+)'
+                    r'|(?P<columnas>(?:' + _PREFIJO + r')?\$?[A-Z]{1,3}:\$?[A-Z]{1,3}(?![\w$]))'
+                    r'|(?P<celda>(?:' + _PREFIJO + r')?\$?[A-Z]{1,3}\$?\d+)'
                     r'|(?P<fn>[A-Z][A-Z.]*)\(|(?P<op><>|<=|>=|[-+*/^&=<>(),]))')
 
 
@@ -353,11 +360,30 @@ def _cumple(valor, criterio):
 
 class Calculo:
     """Calcula las fórmulas de una hoja para la vista previa y el resumen. No es Excel: solo
-    las funciones de FUNCIONES, referencias de la propia hoja y aritmética."""
+    las funciones de FUNCIONES, referencias a celdas (de esta hoja o de otra del libro) y aritmética.
 
-    def __init__(self, rejilla):
+    El 18/11 el Gemma 4 26B hizo el Excel que se pide siempre: Gastos, un Resumen con
+    =SUMAR.SI(Gastos!C:C;"Vivienda";Gastos!D:D) y un Dashboard con =Resumen!B2/Resumen!B7. Aquí
+    cada hoja se calculaba sola y el «!» no pasaba la comprobación, así que todas esas fórmulas
+    se guardaron como texto y el Excel no tenía ni una que funcionara."""
+
+    def __init__(self, rejilla, libro=None):
         self.rejilla = rejilla          # {(columna, fila): valor o '=fórmula'}
+        self.libro = libro if libro is not None else {}     # nombre en minúsculas -> Calculo
         self.hechos, self.en_curso = {}, set()
+        self.tokens, self.pos = [], 0
+
+    def _hoja(self, texto):
+        """(Calculo de la hoja, referencia sin la hoja) para «Hoja!A1» o «A1»."""
+        if '!' not in texto:
+            return self, texto
+        nombre, resto = texto.rsplit('!', 1)
+        if nombre.startswith("'"):
+            nombre = nombre[1:-1].replace("''", "'")
+        otra = self.libro.get(nombre.casefold())
+        if otra is None:
+            raise ErrorFormula(f'no hay ninguna hoja que se llame «{nombre}»')
+        return otra, resto
 
     def valor(self, columna, fila):
         clave = (columna, fila)
@@ -377,6 +403,15 @@ class Calculo:
         return resultado
 
     def evaluar(self, formula):
+        # Una celda que apunta a otra fórmula vuelve a entrar aquí a mitad de la primera: sin
+        # guardar dónde iba, =B3+1 con B3 =2*3 daba 6.
+        guardado = self.tokens, self.pos
+        try:
+            return self._evaluar(formula)
+        finally:
+            self.tokens, self.pos = guardado
+
+    def _evaluar(self, formula):
         texto, pos, self.tokens = formula[1:], 0, []
         while pos < len(texto):
             if texto[pos].isspace():
@@ -458,9 +493,14 @@ class Calculo:
         if tipo == 'str':
             return texto[1:-1]
         if tipo == 'celda':
-            return self.valor(*_ref(texto))
+            hoja, ref = self._hoja(texto)
+            return hoja.valor(*_ref(ref))
         if tipo == 'rango':
-            return self._rango(texto)
+            hoja, ref = self._hoja(texto)
+            return hoja._rango(ref)
+        if tipo == 'columnas':
+            hoja, ref = self._hoja(texto)
+            return hoja._columnas(ref)
         if tipo == 'fn':
             argumentos = []
             if self._mira()[1] != ')':
@@ -483,6 +523,12 @@ class Calculo:
         (c1, f1), (c2, f2) = _ref(a), _ref(b)
         return [self.valor(c, f) for f in range(min(f1, f2), max(f1, f2) + 1)
                 for c in range(min(c1, c2), max(c1, c2) + 1)]
+
+    def _columnas(self, texto):
+        """«C:C» o «C:D»: esas columnas enteras, de la fila 1 a la última que tenga algo."""
+        a, b = (_columna(x.replace('$', '')) for x in texto.split(':'))
+        ultima = max((f for (_, f) in self.rejilla), default=0)
+        return [self.valor(c, f) for f in range(1, ultima + 1) for c in range(min(a, b), max(a, b) + 1)]
 
     @staticmethod
     def _plano(argumentos):
@@ -549,8 +595,8 @@ def rejilla(filas):
     return celdas
 
 
-def _calcular_rejilla(celdas):
-    calculo = Calculo(celdas)
+def _calcular_rejilla(celdas, calculo=None):
+    calculo = calculo or Calculo(celdas)
     salida = {}
     for clave, crudo in celdas.items():
         if isinstance(crudo, str) and crudo.startswith('=') and formula_segura(crudo):
@@ -576,6 +622,14 @@ def formato_columna(filas, columna):
     for formato in ('#,##0.00 €', '0.##%'):
         if formatos and formatos.count(formato) * 2 >= len(formatos):
             return formato
+    # Una columna toda de fórmulas no tiene datos de los que copiarlo: lo dice su título
+    # («% del Total» daba 0,75 en vez de 75 %).
+    if not formatos and len(filas[0]) >= columna:
+        titulo = plano(filas[0][columna - 1])
+        if '%' in titulo:
+            return '0.##%'
+        if '€' in titulo:
+            return '#,##0.00 €'
     return None
 
 
@@ -693,8 +747,19 @@ def libro(texto):
                 actual['tablas'][-1]['pedido'] = bloque[1]
         else:
             pendiente = None
-    for hoja in hojas_:
-        hoja['calculado'] = _calcular_rejilla(hoja['celdas'])
+    # Las fórmulas que nombran otra hoja, con su nombre tal como queda en el Excel; y todas las
+    # hojas calculadas juntas, para que el Resumen sume la hoja Gastos.
+    nombres = _nombres(hojas_)
+    reales = {n.casefold(): n for n in nombres}
+    calculos = {}
+    for nombre, hoja in zip(nombres, hojas_):
+        for clave, valor in hoja['celdas'].items():
+            if isinstance(valor, str) and valor.startswith('=') and '!' in valor:
+                hoja['celdas'][clave] = _con_hojas(valor, reales)
+        calculos[nombre.casefold()] = Calculo(hoja['celdas'], calculos)
+    for nombre, hoja in zip(nombres, hojas_):
+        hoja['calculado'] = _calcular_rejilla(hoja['celdas'], calculos[nombre.casefold()])
+    _heredar_formatos(hojas_, nombres)
     # Cada gráfico, a una tabla que se pueda dibujar: la suya, o la más cercana de antes.
     todas = [(hoja, t) for hoja in hojas_ for t in hoja['tablas']]
     for indice, (hoja, tabla) in enumerate(todas):
@@ -707,6 +772,62 @@ def libro(texto):
                 otra['grafico'] = tipo
                 break
     return hojas_
+
+
+_REFERENCIA = re.compile(r'(?<![\w$.])(' + _PREFIJO + r')?(\$?[A-Z]{1,3}\$?\d+(?::\$?[A-Z]{1,3}\$?\d+)?'
+                         r'|\$?[A-Z]{1,3}:\$?[A-Z]{1,3}(?![\w$]))')
+
+
+def _heredar_formatos(hojas_, nombres):
+    """Una fórmula sin formato toma el de las celdas que usa, si todas llevan el mismo: el
+    =SUMAR.SI(Gastos!C:C;…;Gastos!D:D) de un Resumen sale en euros como la columna Importe, y su
+    =SUMA(B2:B6) y su =B7/6 también. Un cociente entre dos celdas (un porcentaje) no hereda."""
+    por_nombre = {n.casefold(): h for n, h in zip(nombres, hojas_)}
+    for _ in range(4):                      # cadenas Gastos → Resumen → total → media
+        cambio = False
+        for hoja in hojas_:
+            for clave, valor in hoja['celdas'].items():
+                if clave in hoja['formatos'] or not (isinstance(valor, str) and valor.startswith('=')):
+                    continue
+                sin_textos = re.sub(r'"[^"]*"', '""', valor)
+                referencias = _REFERENCIA.findall(sin_textos)
+                if not referencias or ('/' in sin_textos and len(referencias) > 1):
+                    continue
+                formatos = set()
+                for prefijo, ref in referencias:
+                    nombre = prefijo[:-1].strip("'").replace("''", "'").casefold() if prefijo else None
+                    otra = por_nombre.get(nombre) if nombre else hoja
+                    if otra is None:
+                        continue
+                    a, _, b = ref.replace('$', '').partition(':')
+                    if re.fullmatch(r'[A-Z]+', a):              # columnas enteras
+                        columnas = range(_columna(a), _columna(b) + 1)
+                        formatos.update(f for (j, i), f in otra['formatos'].items() if j in columnas and f != '@')
+                    else:
+                        (c1, f1), (c2, f2) = _ref(a), _ref(b or a)
+                        formatos.update(f for (j, i), f in otra['formatos'].items()
+                                        if c1 <= j <= c2 and f1 <= i <= f2 and f != '@')
+                if len(formatos) == 1:
+                    hoja['formatos'][clave] = formatos.pop()
+                    cambio = True
+        if not cambio:
+            break
+
+
+def _con_hojas(formula, reales):
+    """«GASTOS!C:C» (traducir lo pasa a mayúsculas) como «Gastos!C:C», y entre comillas si el
+    nombre lleva espacios: «'Gastos Mensuales'!C:C». Una hoja que no existe se deja: el cálculo
+    lo dirá como error."""
+    def poner(m):
+        nombre = m.group(0)[:-1]
+        if nombre.startswith("'"):
+            nombre = nombre[1:-1].replace("''", "'")
+        real = reales.get(nombre.casefold())
+        if real is None:
+            return m.group(0)
+        return (real if re.fullmatch(r'[^\W\d][\w.]*', real) else "'" + real.replace("'", "''") + "'") + '!'
+    partes = re.split(r'("[^"]*")', formula)
+    return ''.join(p if i % 2 else re.sub(_PREFIJO, poner, p) for i, p in enumerate(partes))
 
 
 def filas_grafico(tabla):
@@ -1162,6 +1283,16 @@ def grafico_pedido(mensajes):
     return None
 
 
+_FECHA = re.compile(r'^\d{1,4}[/.-]\d{1,2}(?:[/.-]\d{1,4})?$')
+
+
+def _por_categorias(puntos):
+    """Si los puntos de un gráfico son categorías (pocas, sin repetir, no fechas)."""
+    etiquetas = [e.strip().casefold() for e, _ in puntos]
+    return (len(etiquetas) <= 12 and len(set(etiquetas)) == len(etiquetas)
+            and not any(_FECHA.match(e) for e in etiquetas))
+
+
 def con_grafico(texto, tipo):
     """El markdown con un «Gráfico: tipo» bajo la primera tabla que se pueda dibujar, si ninguna
     lleva ya el suyo. ValueError si no hay ninguna tabla con nombres y números."""
@@ -1173,9 +1304,17 @@ def con_grafico(texto, tipo):
         return texto
     lineas = texto.replace('\r\n', '\n').split('\n')
     tablas = _tablas(lineas)
-    for (hoja, tabla), posicion in zip([(h, t) for h in hojas_ for t in h['tablas']], tablas):
-        if datos_grafico(hoja, tabla):
-            return '\n'.join(lineas[:posicion['fin']] + ['', f'Gráfico: {tipo}', ''] + lineas[posicion['fin']:])
+    dibujables = [(posicion, datos_grafico(hoja, tabla)) for (hoja, tabla), posicion
+                  in zip([(h, t) for h in hojas_ for t in h['tablas']], tablas)]
+    dibujables = [(posicion, datos) for posicion, datos in dibujables if datos]
+    # Una tarta, un rosco o unas barras van a la tabla por categorías, no a la de los datos
+    # sueltos: el 18/11 la tarta salió sobre los 30 gastos, una porción por fecha, con el
+    # Resumen por categoría dos hojas más allá. Las líneas sí van bien sobre fechas.
+    if tipo != 'lineas':
+        dibujables = [d for d in dibujables if _por_categorias(d[1][2])] or dibujables
+    if dibujables:
+        posicion = dibujables[0][0]
+        return '\n'.join(lineas[:posicion['fin']] + ['', f'Gráfico: {tipo}', ''] + lineas[posicion['fin']:])
     raise ValueError(f'Se ha pedido un gráfico de {tipo} y ninguna tabla tiene una primera columna con nombres y '
                      'otra con números: añade esa tabla y vuelve a llamar a document_create.')
 
