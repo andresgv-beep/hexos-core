@@ -664,13 +664,15 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   }
 
   // Empezar de cero en esta ventana. La pantalla se vacía porque Helios ya no tiene eso
-  // delante; lo anterior sigue en el archivo y vuelve al recargar o desde Historial.
+  // delante, y sigue vacía al recargar o en otro equipo: HexOS sirve el historial desde la
+  // limpieza. Lo anterior no se borra; se pide de nuevo para que quede tras «anteriores».
   async function limpiarContexto() {
     if (!transport.clearContext || sending || limpiando) return;
     setLimpiando(true);
     try {
       await transport.clearContext();
-      setTurns([]); setPrevious([]); setLimpio(true);
+      setTurns([]); setPrevious([]); setHistoryNext(null); setLimpio(true);
+      setConversacion(n => n + 1);
     } catch {
       setHistoryError("No se pudo limpiar el contexto. Helios sigue con la conversación anterior.");
     } finally {

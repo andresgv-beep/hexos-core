@@ -25,15 +25,36 @@ def _documentos(store, mensajes):
     return mensajes
 
 
+def _limpieza(store):
+    """Hasta qué mensaje llegaba la conversación cuando la persona pulsó «Limpiar contexto»."""
+    from .context import LIMPIEZA
+    from .persistence import clave
+    fila = store.db.execute('SELECT value FROM agent_state WHERE key=?', (clave(store, LIMPIEZA),)).fetchone()
+    try:
+        return int(fila[0]) if fila else 0
+    except (TypeError, ValueError):
+        return 0
+
+
 def history_page(store, *, before=None, limit=100):
     if type(limit) is not int or not 1 <= limit <= 100:
         raise ValueError('limit debe estar entre 1 y 100')
     if before is not None and (type(before) is not int or not 1 <= before <= 2**63-1):
         raise ValueError('before debe ser un cursor positivo')
+    # La primera página empieza tras la última limpieza. Antes solo se vaciaba la pantalla
+    # y al recargar, o desde el móvil, volvía la conversación entera (18/11: «limpias
+    # contexto pero la conversación sigue en el chat»). Lo de antes no se borra: queda
+    # detrás de «anteriores», como cualquier página vieja.
     where, values = ('WHERE rowid<?', [before]) if before is not None else ('', [])
+    limpieza = _limpieza(store) if before is None else 0
+    if limpieza:
+        where, values = 'WHERE rowid>?', [limpieza]
     rows = store.db.execute('SELECT rowid AS cursor,id,ts,role,text FROM esta_ventana ' + where +
                             ' ORDER BY rowid DESC LIMIT ?', values + [limit+1]).fetchall()
     more = len(rows) > limit
     messages = _documentos(store, [dict(row) for row in rows[:limit]][::-1])
-    return dict(messages=messages, next_before=messages[0]['cursor'] if more else None,
-                has_more=more)
+    if more:
+        return dict(messages=messages, next_before=messages[0]['cursor'], has_more=True)
+    if limpieza and store.db.execute('SELECT 1 FROM esta_ventana WHERE rowid<=? LIMIT 1', (limpieza,)).fetchone():
+        return dict(messages=messages, next_before=limpieza + 1, has_more=True, cleared=True)
+    return dict(messages=messages, next_before=None, has_more=False)

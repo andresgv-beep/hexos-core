@@ -84,6 +84,31 @@ class ContinuityTest(unittest.TestCase):
             store.db.commit()
             self.assertIsNone(listing_followup(store,'now','muestrame todas'))
 
+    def test_tras_limpiar_el_chat_empieza_vacio_y_lo_anterior_queda_detras(self):
+        # 18/11: «limpias contexto pero la conversación sigue en el chat» al recargar.
+        from hexos.agent.chat_backend.context import LIMPIEZA
+        from hexos.agent.chat_backend.persistence import clave
+        with self.agent.store() as store:
+            for n in range(6):
+                store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
+                    ('a%d' % n,'2026-11-18','user' if n%2==0 else 'assistant','a','a'))
+            corte = store.db.execute('SELECT MAX(rowid) FROM esta_ventana').fetchone()[0]
+            store.db.execute('INSERT INTO agent_state VALUES (?,?)', (clave(store, LIMPIEZA), str(corte)))
+            store.db.commit()
+            vacia = history_page(store)
+            self.assertEqual(vacia['messages'], [])
+            self.assertTrue(vacia['has_more'])
+            antes = history_page(store, before=vacia['next_before'])
+            self.assertEqual([r['id'] for r in antes['messages']], ['a%d' % n for n in range(6)])
+            for n in range(2):
+                store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
+                    ('b%d' % n,'2026-11-18','user' if n%2==0 else 'assistant','b','b'))
+            store.db.commit()
+            nueva = history_page(store)
+            self.assertEqual([r['id'] for r in nueva['messages']], ['b0', 'b1'])
+            self.assertEqual([r['id'] for r in history_page(store, before=nueva['next_before'])['messages']],
+                             ['a%d' % n for n in range(6)])
+
     def test_history_cursor_survives_new_messages_without_gaps(self):
         with self.agent.store() as store:
             for n in range(245):
