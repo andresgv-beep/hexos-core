@@ -1,6 +1,6 @@
 /** El aspecto de la interfaz: unos pocos mandos independientes que se guardan en este dispositivo.
  *  Cada uno pone un atributo `data-*` en <html> y `app/temas.css` le da valor. El primero de
- *  cada lista es el de siempre y no pone atributo: sin nada guardado, Helios se ve como antes. */
+ *  cada lista es el aspecto clásico y no pone atributo. Sin nada guardado se usa TEMA_INICIAL. */
 export const TEMA_MANDOS = {
   fondo: { nombre: "Fondo", opciones: [
     { id: "carbon", nombre: "Carbón", muestra: "#161616" },
@@ -29,7 +29,11 @@ export type Tema = { [M in Mando]: typeof TEMA_MANDOS[M]["opciones"][number]["id
 export const MANDOS = Object.keys(TEMA_MANDOS) as Mando[];
 
 export const TEMA_BASE: Tema = { fondo: "carbon", lienzo: "textura", contorno: "encendido", forma: "redondo", color: "oro" };
+/** Lo que ve un dispositivo que no ha elegido nada. Lo eligió Andrés el 18/11 en el móvil:
+ *  negro, liso, contornos discretos, forma suave y color hueso. */
+export const TEMA_INICIAL: Tema = { fondo: "negro", lienzo: "liso", contorno: "discreto", forma: "suave", color: "hueso" };
 export const TEMA_ATAJOS: ReadonlyArray<{ nombre: string; tema: Tema }> = [
+  { nombre: "Predeterminado", tema: TEMA_INICIAL },
   { nombre: "Clásico", tema: TEMA_BASE },
   { nombre: "Oscuro", tema: { ...TEMA_BASE, fondo: "negro", lienzo: "liso", contorno: "discreto", forma: "suave" } },
   { nombre: "Oscuro y seco", tema: { ...TEMA_BASE, fondo: "negro", lienzo: "liso", contorno: "discreto", forma: "recto", color: "hueso" } },
@@ -39,16 +43,17 @@ export const CLAVE_TEMA = "helios.tema";
 const valido = (mando: Mando, valor: unknown): boolean =>
   TEMA_MANDOS[mando].opciones.some(opcion => opcion.id === valor);
 
-/** El tema guardado. Lo que falte o no se reconozca (un tema que ya no existe) vuelve al de siempre. */
+/** El tema guardado. Sin nada guardado (o roto), el inicial. De uno guardado, lo que falte o no se
+ *  reconozca (un mando que no existía, un tema que ya no existe) va como el clásico. */
 export function leerTema(texto: string | null | undefined): Tema {
   let guardado: unknown = null;
   try { guardado = texto ? JSON.parse(texto) : null; } catch { /* un valor roto es como no tener ninguno */ }
+  if (!guardado || typeof guardado !== "object" || Array.isArray(guardado)) return { ...TEMA_INICIAL };
   const tema = { ...TEMA_BASE } as Record<Mando, string>;
-  if (guardado && typeof guardado === "object")
-    for (const mando of MANDOS) {
-      const valor = (guardado as Record<string, unknown>)[mando];
-      if (valido(mando, valor)) tema[mando] = valor as string;
-    }
+  for (const mando of MANDOS) {
+    const valor = (guardado as Record<string, unknown>)[mando];
+    if (valido(mando, valor)) tema[mando] = valor as string;
+  }
   return tema as Tema;
 }
 
@@ -65,16 +70,18 @@ export function aplicarTema(raiz: RaizTema, tema: Tema): void {
   }
 }
 
-/** Guarda el tema en este navegador. Sin almacenamiento (modo privado) el tema dura lo que la página. */
+/** Guarda el tema en este navegador. Sin almacenamiento (modo privado) el tema dura lo que la página.
+ *  El inicial no se guarda: así, si un día cambia, le llega a quien no eligió otro. */
 export function guardarTema(tema: Tema, almacen: Pick<Storage, "setItem" | "removeItem"> | null | undefined): void {
   try {
-    if (mismoTema(tema, TEMA_BASE)) almacen?.removeItem(CLAVE_TEMA);
+    if (mismoTema(tema, TEMA_INICIAL)) almacen?.removeItem(CLAVE_TEMA);
     else almacen?.setItem(CLAVE_TEMA, JSON.stringify(tema));
   } catch { /* cuota llena o almacenamiento bloqueado: no es motivo para romper Ajustes */ }
 }
 
 /** Lo mismo que leerTema + aplicarTema, en un guion que va en el <head> y corre antes de pintar:
  *  así la página no sale un instante con el tema de siempre y luego salta al guardado. */
-export const GUION_TEMA = `try{var t=JSON.parse(localStorage.getItem(${JSON.stringify(CLAVE_TEMA)})||"{}")||{},v=${
+export const GUION_TEMA = `try{var t=null;try{t=JSON.parse(localStorage.getItem(${JSON.stringify(CLAVE_TEMA)})||"null")}catch(e){}if(!t||typeof t!=="object"||Array.isArray(t))t=${
+  JSON.stringify(TEMA_INICIAL)};var v=${
   JSON.stringify(Object.fromEntries(MANDOS.map(mando => [mando, TEMA_MANDOS[mando].opciones.map(opcion => opcion.id)])))
 },b=${JSON.stringify(TEMA_BASE)},d=document.documentElement;for(var k in v)if(v[k].indexOf(t[k])>=0&&t[k]!==b[k])d.setAttribute("data-"+k,t[k])}catch(e){}`;

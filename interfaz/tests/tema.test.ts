@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { CLAVE_TEMA, GUION_TEMA, MANDOS, TEMA_ATAJOS, TEMA_BASE, TEMA_MANDOS, aplicarTema, guardarTema, leerTema,
-         mismoTema, type Tema } from '../lib/helios/tema';
+import { CLAVE_TEMA, GUION_TEMA, MANDOS, TEMA_ATAJOS, TEMA_BASE, TEMA_INICIAL, TEMA_MANDOS, aplicarTema, guardarTema,
+         leerTema, mismoTema, type Tema } from '../lib/helios/tema';
 
 const oscuro: Tema = { fondo: 'negro', lienzo: 'liso', contorno: 'discreto', forma: 'recto', color: 'hueso' };
 
@@ -14,8 +14,10 @@ function raizFalsa() {
 test('a saved theme is read back, and anything missing or unknown falls back to the usual look', () => {
   assert.deepEqual(leerTema(JSON.stringify(oscuro)), oscuro);
   assert.deepEqual(leerTema(JSON.stringify({ fondo: 'negro', color: 'fucsia', forma: 7, otra: 'cosa' })), { ...TEMA_BASE, fondo: 'negro' });
+  // Sin nada guardado, o con algo roto, el inicial que eligió Andrés.
   for (const roto of [null, undefined, '', 'no es json', '[]', '"negro"', 'null'])
-    assert.deepEqual(leerTema(roto), TEMA_BASE);
+    assert.deepEqual(leerTema(roto), TEMA_INICIAL);
+  assert.deepEqual(TEMA_INICIAL, { fondo: 'negro', lienzo: 'liso', contorno: 'discreto', forma: 'suave', color: 'hueso' });
   assert.ok(mismoTema(leerTema('{}'), TEMA_BASE));
   // Un tema guardado antes de que existiera un mando sigue valiendo: lo que no trae va como siempre.
   assert.deepEqual(leerTema(JSON.stringify({ fondo: 'negro', color: 'cian' })), { ...TEMA_BASE, fondo: 'negro', color: 'cian' });
@@ -35,7 +37,10 @@ test('the theme is kept in this browser, and the usual look keeps nothing', () =
   const almacen = { setItem: (k: string, v: string) => { guardado[k] = v; }, removeItem: (k: string) => { delete guardado[k]; } };
   guardarTema(oscuro, almacen);
   assert.deepEqual(leerTema(guardado[CLAVE_TEMA]), oscuro);
+  // El clásico ya no es lo que sale sin nada: se guarda como cualquier otro.
   guardarTema(TEMA_BASE, almacen);
+  assert.deepEqual(leerTema(guardado[CLAVE_TEMA]), TEMA_BASE);
+  guardarTema(TEMA_INICIAL, almacen);
   assert.deepEqual(guardado, {});
   guardarTema(oscuro, null);
   guardarTema(oscuro, { setItem: () => { throw new Error('QuotaExceededError'); }, removeItem: () => {} });
@@ -56,11 +61,14 @@ test('the script in the head applies the same theme before the first paint', () 
     aplicarTema(esperado, tema);
     assert.deepEqual(correr(JSON.stringify(tema)), esperado.puestos);
   }
-  assert.deepEqual(correr(null), { lang: 'es' });
-  assert.deepEqual(correr('null'), { lang: 'es' });
-  assert.deepEqual(correr('no es json'), { lang: 'es' });
+  const inicial = raizFalsa();
+  delete inicial.puestos['data-fondo'];
+  aplicarTema(inicial, TEMA_INICIAL);
+  for (const nada of [null, 'null', 'no es json', '[]', '"negro"'])
+    assert.deepEqual(correr(nada), inicial.puestos, `nothing saved (${nada}) gives the initial theme`);
+  assert.deepEqual(correr(JSON.stringify(oscuro), true), inicial.puestos, 'blocked storage gives the initial theme');
   assert.deepEqual(correr(JSON.stringify({ color: 'fucsia', fondo: 'negro' })), { lang: 'es', 'data-fondo': 'negro' });
-  assert.deepEqual(correr(JSON.stringify(oscuro), true), { lang: 'es' }, 'blocked storage leaves the usual look');
+  assert.deepEqual(correr('{}'), { lang: 'es' }, 'a saved theme with nothing in it is the classic look');
 });
 
 test('every option has its block in the theme stylesheet, and the stylesheet has no orphan blocks', () => {

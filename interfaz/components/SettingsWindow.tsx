@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Cpu, Globe, Palette, Settings as SettingsIcon, X } from "lucide-react";
 import type { HeliosTransport, ModelChoice, ServiceProvider, Settings } from "@/lib/helios/hexos";
-import { CLAVE_TEMA, MANDOS, TEMA_ATAJOS, TEMA_BASE, TEMA_MANDOS, aplicarTema, guardarTema, leerTema, mismoTema,
+import { CLAVE_TEMA, MANDOS, TEMA_ATAJOS, TEMA_INICIAL, TEMA_MANDOS, aplicarTema, guardarTema, leerTema, mismoTema,
          type Tema } from "@/lib/helios/tema";
 
 /** Las secciones de la ventana. Una nueva (chat…) es otra entrada aquí y su panel abajo. */
@@ -112,7 +112,8 @@ function Apariencia() {
         {"muestra" in opcion && <i style={{ background: opcion.muestra }} aria-hidden="true" />}{opcion.nombre}
       </button>)}</div>
     </div>)}
-    {!mismoTema(tema, TEMA_BASE) && <p className="access-note">«Clásico» devuelve el aspecto de siempre.</p>}
+    {!mismoTema(tema, TEMA_INICIAL) && <p className="access-note">«Predeterminado» vuelve al aspecto de partida;
+      «Clásico», al de antes de los temas.</p>}
   </>;
 }
 
