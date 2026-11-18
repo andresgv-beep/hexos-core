@@ -92,9 +92,13 @@ class ReplyPolicy:
         # «había» es ambiguo entre yo y él, así que solo cuenta con un pronombre
         # delante —«te había preparado y guardado»—, que es como falló de verdad.
         # Y «no he guardado nada» no es una afirmación de haber guardado.
-        r'(?<!no )\b(?:he|hemos|hab[íi]amos)\b(?:\s+\w+)?(?:\s+y)?\s+(?:' + CLARO + r')[oa]s?\b'
-        r'|(?<!no )\bhe\b(?:\s+\w+)?(?:\s+y)?\s+(?:' + VAGO + r')[oa]s?\b'
-        r'|(?<!no )\b(?:hemos|hab[íi]amos)\b(?:\s+\w+)?(?:\s+y)?\s+(?:' + VAGO + r')[oa]s?\s+' + GUARDABLE +
+        # Ni el reflexivo: «me he guardado el cumplido» es callárselo, y «me he apuntado»
+        # es inscribirse. El 18/11 el 26B, contándole a Andrés la charla con su amigo, se
+        # llevó un aviso de escritura por esa frase. «me lo he apuntado» sigue contando:
+        # delante de «he» va «lo», no «me».
+        r'(?<!no )(?<!\bme )(?<!\bnos )\b(?:he|hemos|hab[íi]amos)\b(?:\s+\w+)?(?:\s+y)?\s+(?:' + CLARO + r')[oa]s?\b'
+        r'|(?<!no )(?<!\bme )\bhe\b(?:\s+\w+)?(?:\s+y)?\s+(?:' + VAGO + r')[oa]s?\b'
+        r'|(?<!no )(?<!\bnos )\b(?:hemos|hab[íi]amos)\b(?:\s+\w+)?(?:\s+y)?\s+(?:' + VAGO + r')[oa]s?\s+' + GUARDABLE +
         r'|\b(?:me|te|le|lo|la|se)\s+hab[íi]a\b(?:\s+\w+)?(?:\s+y)?\s+(?:' + HECHO + r')[oa]s?\b'
         r'|\bqued[óo]\s+(?:guardad|anotad|apuntad)[oa]s?\b'
         # «he tomado nota» no lleva participio de los de arriba y es de las formas

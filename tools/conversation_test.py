@@ -218,11 +218,18 @@ class Tests(unittest.TestCase):
         self.assertIsNone(ReplyPolicy.unsupported_claim(supuesto, []))
         self.assertIsNone(ReplyPolicy.canta_escritura('Cuando hayamos guardado la nota te aviso.'))
         self.assertIsNone(ReplyPolicy.canta_escritura('Una vez que he creado la nota, se queda ahí.'))
+        # Reflexivo: guardárselo es callárselo (la charla del 26B del 18/11).
+        dicho = ('Ha estado preguntando si eres un genio (que, bueno, no le he dicho que no, pero me '
+                 'he guardado el cumplido para no subírmelo a la cabeza).')
+        self.assertIsNone(ReplyPolicy.canta_escritura(dicho))
+        self.assertIsNone(ReplyPolicy.unsupported_claim(dicho, []))
+        self.assertIsNone(ReplyPolicy.canta_escritura('Nos hemos apuntado a la carrera del domingo.'))
         # Lo que sí es cantar una escritura sigue contando.
         for dicho in ('He guardado la nota.', 'Listo, he apuntado la cita del viernes.',
                       'Si quieres, he guardado también el resumen.',
                       'Sí, he creado el archivo `main.py`.',
-                      'Si la buscas la verás. He guardado la nota con ese título.'):
+                      'Si la buscas la verás. He guardado la nota con ese título.',
+                      'Me lo he apuntado para el viernes.', 'Te he guardado la nota.'):
             self.assertIsNotNone(ReplyPolicy.canta_escritura(dicho), dicho)
             self.assertIn('escritura', ReplyPolicy.unsupported_claim(dicho, []))
 
