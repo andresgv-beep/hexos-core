@@ -46,6 +46,18 @@ class SistemaPorVentanaTest(unittest.TestCase):
         self.assertIn('llama primero a web_search', chat)
         self.assertIn('ventana Agente', chat)
 
+    def test_sabe_con_que_modelo_funciona(self):
+        # El 26B se tomó por el 35B de una nota con estrella.
+        for ventana in ('chat', 'agente'):
+            texto = ' '.join(native.sistema(ventana, 'Gemma 4 26B').split())
+            self.assertIn('Ahora mismo funcionas con Gemma 4 26B', texto)
+            self.assertIn('habla de ese, no de ti', texto)
+            self.assertIn('Héctor', texto)
+            self.assertIn('HexOS', texto)
+        sin_nombre = native.sistema('chat')
+        self.assertIn('Héctor', sin_nombre)
+        self.assertNotIn('Ahora mismo funcionas', sin_nombre)
+
     def test_sin_ventana_queda_el_contrato_de_siempre(self):
         self.assertEqual(native.sistema(None), native.POLICY)
 

@@ -70,7 +70,8 @@ def main():
         def fabrica(modelo):
             return lambda: NativeRuntime(args.runtime, modelo['hnf'], modelo['ctx'], args.workspace,
                                          modelo['plantilla'], thinking=modelo.get('pensamiento', False),
-                                         multimodal=modelo.get('multimodal'))
+                                         multimodal=modelo.get('multimodal'),
+                                         nombre=modelo.get('nombre'))
         catalogo = modelos.Modelos(lista, fabrica)
         primero = catalogo.especificacion()
         runtime = ModelLifecycle(
