@@ -1,5 +1,6 @@
 "use client";
-import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { elegirSaludo } from "@/lib/helios/saludo";
 import type { HistoryMessage } from "@/lib/helios/hexos";
 import type { ReplyArtifact } from "@/lib/helios/preview";
 import type { NoteDetail } from "@/lib/helios/core";
@@ -24,6 +25,10 @@ export function MobileWorkspace({ previous, turns, notes, artifact, busy, error,
   onVentana?: (destino: "chat" | "agente") => void;
 }) {
   const [page, setPage] = useState(1);
+  // El mismo saludo variable que en el escritorio, elegido al quedarse vacío el chat.
+  const vacio = !previous.length && !turns.length;
+  const [saludo, setSaludo] = useState("");
+  useEffect(() => { if (vacio) setSaludo(elegirSaludo(new Date(), Math.random())); }, [vacio]);
   const rail = useRef<HTMLDivElement>(null);
   const chat = useRef<HTMLElement>(null);
   const following = useRef(true);
@@ -91,8 +96,8 @@ export function MobileWorkspace({ previous, turns, notes, artifact, busy, error,
         {onOpenFiles && <button className="history-code-open" onClick={onOpenFiles}>Archivos del NAS</button>}
         {hasEarlier && <button type="button" className="history-code-open" disabled={olderLoading}
           onClick={() => void loadEarlier()}>{olderLoading ? "Cargando mensajes…" : "Cargar mensajes anteriores"}</button>}
-        {!previous.length && !turns.length && <p>{ventana === "agente" ? "Pídele al agente algo de este equipo. Su conversación va aparte de la del Chat."
-          : "Habla con Helios. Tu conversación continúa aquí."}</p>}
+        {vacio && <p>{ventana === "agente" ? "Pídele al agente algo de este equipo. Su conversación va aparte de la del Chat."
+          : saludo || "Habla con Helios. Tu conversación continúa aquí."}</p>}
         {previous.map((message, index) => <article className={`history-entry ${message.role}`} key={index}>
           <span className="message-author">{message.role === 'user' ? 'TÚ' : 'HELIOS'}</span>
           <ReplyMarkdown text={message.text} onPreviewCode={onPreview} previewHtmlOnly={ventana === "chat"} />

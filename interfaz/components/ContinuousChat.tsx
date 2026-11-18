@@ -1,6 +1,7 @@
 "use client";
 
-import { useLayoutEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { elegirSaludo } from '@/lib/helios/saludo';
 import type { HistoryMessage } from '@/lib/helios/hexos';
 import { TurnoVisible, type Turn } from './ConversationStream';
 import { ReplyMarkdown, type CodeActions } from './ReplyMarkdown';
@@ -15,6 +16,11 @@ export function ContinuousChat({ previous, turns, historyError, hasEarlier, olde
   hasEarlier: boolean; olderLoading: boolean; onLoadEarlier: () => Promise<void>;
   onReplyComplete: () => void;
 } & CodeActions) {
+  // Se elige en el navegador y cada vez que el chat se queda vacío (al abrir, al limpiar):
+  // hacerlo al pintar en el servidor daba otro distinto al hidratar.
+  const vacio = !previous.length && !turns.length;
+  const [saludo, setSaludo] = useState('');
+  useEffect(() => { if (vacio) setSaludo(elegirSaludo(new Date(), Math.random())); }, [vacio]);
   const viewport = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const following = useRef(true);
@@ -55,7 +61,7 @@ export function ContinuousChat({ previous, turns, historyError, hasEarlier, olde
       {turns.map((turn, index) => <TurnoVisible key={turn.id} turn={turn} settled={index < turns.length - 1} extra={turnExtras?.[turn.id]}
         onReplyComplete={index === turns.length - 1 ? onReplyComplete : undefined}
         onPreviewCode={onPreviewCode} previewHtmlOnly={previewHtmlOnly} />)}
-      {!previous.length && !turns.length && <div className="hud-welcome"><h2>Hablemos, socio.</h2>
+      {vacio && <div className="hud-welcome"><h2>{saludo || '\u00a0'}</h2>
         <p>Escribe a Helios o abre el historial para retomar una conversación.</p></div>}
     </div>
   </div>;
