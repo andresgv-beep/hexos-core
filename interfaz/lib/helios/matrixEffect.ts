@@ -47,6 +47,9 @@ export function runMatrix(box: HTMLElement, canvas: HTMLCanvasElement, live: boo
         nodo.replaceWith(trozo);
       }
       box.classList.add("matrix-ready");
+      // La marca sola, sin texto debajo (el Qwen3.6 35B, 17/11: «[[matrix]]» y nada más):
+      // no hay letras que soltar, pero que llueva; una respuesta en blanco parecía un fallo.
+      if (!letras.length) box.classList.add("matrix-solo");
     }
     const marco = box.getBoundingClientRect();
     const ancho = Math.max(1, Math.round(marco.width)), alto = Math.max(live ? 96 : 1, Math.round(marco.height));

@@ -792,7 +792,7 @@ button.vision-horizon-state:focus-visible { outline: 2px solid var(--v-gold); ou
 
 /* Respuesta en cascada ([[matrix]]): la lluvia va en un lienzo encima del texto. */
 .matrix-reply { position: relative; }
-.matrix-reply.matrix-live { min-height: 96px; }
+.matrix-reply.matrix-live, .matrix-reply.matrix-solo:not(.matrix-done) { min-height: 96px; }
 .matrix-reply canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; transition: opacity .5s; }
 .matrix-reply.matrix-done canvas { opacity: 0; }
 .matrix-reply.matrix-ready .matrix-letter { opacity: 0; }

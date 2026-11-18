@@ -94,6 +94,24 @@ test("la marca de cascada se reconoce y nunca se pinta", async () => {
   assert.equal(JSON.stringify(bloques).includes("matrix"), false);
 });
 
+test("la marca de cascada vale sola en cualquier línea", async () => {
+  const { parseReply, replyEffect } = await import("../lib/helios/markdown");
+  // Lo que escribió el Qwen3.6 35B el 17/11: un saludo delante, o la marca al final.
+  assert.deepEqual(replyEffect("Hola Andrés.\n\n[[matrix]]\nJajaja, me encanta el apodo."),
+    { effect: "matrix", text: "Hola Andrés.\n\nJajaja, me encanta el apodo." });
+  assert.deepEqual(replyEffect("Ahí va, sin preámbulos:\n\n[[matrix]]"), { effect: "matrix", text: "Ahí va, sin preámbulos:" });
+  assert.equal(replyEffect("Hola.\n  [[Matrix]]  \nAdiós.").effect, "matrix");
+  assert.equal(JSON.stringify(parseReply("Hola Andrés.\n\n[[matrix]]\nJajaja.")).includes("matrix"), false);
+  // Llegando a trozos tras el saludo: el pedazo de marca no se enseña, y aún no hay efecto.
+  assert.deepEqual(replyEffect("Hola Andrés.\n\n[[matr"), { effect: null, text: "Hola Andrés." });
+  // Hablar de la marca no la activa: entre comillas de código, en una frase o en un bloque.
+  const hablando = "Te juro que escribo `[[matrix]]` justo al principio.";
+  assert.deepEqual(replyEffect(hablando), { effect: null, text: hablando });
+  const bloque = "Se pone así:\n```\n[[matrix]]\n```\nY ya.";
+  assert.deepEqual(replyEffect(bloque), { effect: null, text: bloque });
+  assert.equal(replyEffect("Mira:\n```\n[[mat").text, "Mira:\n```\n[[mat");
+});
+
 test("la cascada no se encadena: tras una, hay que esperar o pedirla", async () => {
   const { matrixAllowed } = await import("../lib/helios/matrixEffect");
   assert.equal(matrixAllowed(101, "socio tienes nueva habilidad"), true);

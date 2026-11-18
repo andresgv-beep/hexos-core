@@ -73,14 +73,29 @@ function markEntries(bloques: Block[]) {
   return bloques;
 }
 
-/** La marca con la que Helios pide que su respuesta caiga en cascada. Va sola en la primera línea. */
+/** La marca con la que Helios pide que su respuesta caiga en cascada. Va sola en una línea. */
 export const MATRIX_MARK = "[[matrix]]";
 
-/** Separa la marca de efecto del texto. Mientras llega a trozos («[[mat») tampoco se enseña. */
+/** Separa la marca de efecto del texto. Mientras llega a trozos («[[mat») tampoco se enseña.
+ *  Vale sola en cualquier línea, no solo en la primera: el Qwen3.6 35B la pone tras un saludo
+ *  («Hola Andrés.» y debajo la marca) o al final, y el 17/11 se quedó escrita y sin cascada.
+ *  En mitad de una frase o dentro de un bloque de código es texto: ahí se habla de ella. */
 export function replyEffect(text: string): { effect: "matrix" | null; text: string } {
   const inicio = text.trimStart();
   if (inicio.toLowerCase().startsWith(MATRIX_MARK)) return { effect: "matrix", text: inicio.slice(MATRIX_MARK.length).trimStart() };
-  if (inicio.length < MATRIX_MARK.length && inicio.startsWith("[[") && MATRIX_MARK.startsWith(inicio.toLowerCase())) return { effect: null, text: "" };
+  const lineas = text.split("\n");
+  const resto: string[] = [];
+  let enCodigo = false, marcada = false;
+  for (const linea of lineas) {
+    if (CERCA.test(linea)) enCodigo = !enCodigo;
+    else if (!enCodigo && linea.trim().toLowerCase() === MATRIX_MARK) { marcada = true; continue; }
+    resto.push(linea);
+  }
+  if (marcada) return { effect: "matrix", text: resto.join("\n").replace(/\n{3,}/g, "\n\n").trim() };
+  const ultima = lineas[lineas.length - 1].trim();
+  if (!enCodigo && ultima.length < MATRIX_MARK.length && ultima.startsWith("[[") && MATRIX_MARK.startsWith(ultima.toLowerCase())) {
+    return { effect: null, text: lineas.slice(0, -1).join("\n").trimEnd() };
+  }
   return { effect: null, text };
 }
 
