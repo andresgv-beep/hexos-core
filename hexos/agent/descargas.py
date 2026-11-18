@@ -36,7 +36,9 @@ TIPOS_EJECUTABLES = frozenset(('application/x-executable', 'application/x-msdown
                                'application/vnd.android.package-archive', 'application/x-apple-diskimage',
                                'application/vnd.appimage'))
 CLASES = {'application/pdf': 'PDF', 'application/zip': 'ZIP', 'application/json': 'JSON', 'text/plain': 'texto',
-          'text/csv': 'CSV', 'text/markdown': 'Markdown', 'application/epub+zip': 'EPUB'}
+          'text/csv': 'CSV', 'text/markdown': 'Markdown', 'application/epub+zip': 'EPUB',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'Excel'}
 _RARO = re.compile(r'[^\w .()+-]')
 # Lo que el navegador puede enseñar sin riesgo dentro de la interfaz. Lo demás solo se entrega
 # para guardar: un SVG o un HTML abiertos desde el origen de Helios ejecutarían lo que traigan.
@@ -245,7 +247,7 @@ def listado(store, limit=30):
     total = store.db.execute('SELECT count(*) FROM downloads').fetchone()[0]
     return dict(folder=_corta(raiz()), count=total, downloads=[
         dict(name=f['name'], kind=_clase(f['content_type'], f['name']), size=tamano(f['bytes']), when=f['ts'][:10],
-             source=urlparse(f['url']).hostname, document=f['document'], on_disk=Path(f['path']).exists())
+             source=_fuente(f['url']), document=f['document'], on_disk=Path(f['path']).exists())
         for f in filas],
         note='Los que traen document se leen con document_read usando ese id. Lo que no esté en disco '
              '(on_disk falso) lo ha movido o borrado la persona.')
@@ -260,37 +262,67 @@ def _visible(tipo):
     return None
 
 
+def _fuente(url):
+    return 'hecho por Helios' if url.startswith('helios:') else urlparse(url).hostname
+
+
 def panel(store, limit=200):
-    """Lo descargado, para el panel de la interfaz: lo más nuevo primero."""
+    """Lo descargado, para el panel de la interfaz: lo más nuevo primero. Incluye los
+    documentos que Helios ha creado (documentos.py), que se ven con su vista previa."""
+    from . import documentos
     initialize(store)
     filas = store.db.execute('SELECT * FROM downloads ORDER BY ts DESC LIMIT ?', (limit,)).fetchall()
     return dict(folder=_corta(raiz()), downloads=[
         dict(id=f['id'], name=f['name'], kind=_clase(f['content_type'], f['name']), bytes=f['bytes'], ts=f['ts'],
-             source=urlparse(f['url']).hostname, url=f['url'], on_disk=Path(f['path']).is_file(),
-             viewable=_visible(f['content_type']) is not None, readable=bool(f['document']))
+             source=_fuente(f['url']), url=f['url'], on_disk=Path(f['path']).is_file(),
+             viewable=_visible(f['content_type']) is not None or documentos.con_vista(f),
+             preview=documentos.con_vista(f), readable=bool(f['document']))
         for f in filas])
 
 
 def servir(handler, store):
-    """GET /api/downloads, /api/downloads/<id> (verlo) y /api/downloads/<id>/download (guardarlo).
+    """GET /api/downloads, /api/downloads/<id> (verlo), /api/downloads/<id>/download (guardarlo)
+    y /api/downloads/<id>/preview (la vista previa de un Word o un Excel hecho por Helios).
 
-    Solo por identificador y solo lo que HexOS descargó y sigue en su carpeta: la ruta
+    Solo por identificador y solo lo que HexOS descargó o creó y sigue en su carpeta: la ruta
     guardada se vuelve a comprobar, porque la carpeta es de la persona y puede haber cambiado.
     """
+    from . import documentos
     partes = urlparse(handler.path).path.split('/')
     if len(partes) == 3:
         handler.respond(200, panel(store))
         return
-    guardar = len(partes) == 5 and partes[4] == 'download'
-    if len(partes) not in (4, 5) or (len(partes) == 5 and not guardar):
+    accion = partes[4] if len(partes) == 5 else None
+    if len(partes) not in (4, 5) or accion not in (None, 'download', 'preview'):
         handler.respond(404, {'error': 'ruta inexistente'})
         return
+    guardar = accion == 'download'
     initialize(store)
     fila = store.db.execute('SELECT * FROM downloads WHERE id=?', (partes[3],)).fetchone()
     ruta = Path(fila['path']) if fila else None
+    carpeta = (documentos.raiz() if fila and documentos.es_suyo(fila) else raiz()).resolve()
     if (ruta is None or ruta.is_symlink() or not ruta.is_file()
-            or raiz().resolve() not in ruta.resolve().parents or ruta.stat().st_size > MAX_BYTES):
+            or carpeta not in ruta.resolve().parents or ruta.stat().st_size > MAX_BYTES):
         handler.respond(404, {'error': 'ese fichero ya no está entre las descargas'})
+        return
+    if accion == 'preview':
+        if not documentos.con_vista(fila):
+            handler.respond(404, {'error': 'ese fichero no tiene vista previa'})
+            return
+        guardado = store.db.execute('SELECT content FROM documents WHERE id=?', (fila['document'],)).fetchone()
+        if not guardado:
+            handler.respond(404, {'error': 'falta el texto de ese documento'})
+            return
+        pagina = documentos.vista(fila, guardado[0])
+        handler.send_response(200)
+        handler.send_header('Content-Type', 'text/html; charset=utf-8')
+        handler.send_header('Content-Length', str(len(pagina)))
+        # Todo el texto va escapado; aun así, que nada de esa página pueda ejecutarse.
+        handler.send_header('Content-Security-Policy', "sandbox; default-src 'none'; style-src 'unsafe-inline'")
+        handler.send_header('X-Content-Type-Options', 'nosniff')
+        handler.send_header('Cache-Control', 'private, no-store')
+        handler.end_headers()
+        handler.wfile.write(pagina)
         return
     contenido = ruta.read_bytes()
     visible = None if guardar else _visible(fila['content_type'])

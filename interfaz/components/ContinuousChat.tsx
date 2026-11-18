@@ -4,6 +4,7 @@ import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import type { HistoryMessage } from '@/lib/helios/hexos';
 import { TurnoVisible, type Turn } from './ConversationStream';
 import { ReplyMarkdown, type CodeActions } from './ReplyMarkdown';
+import { CreatedDocuments } from './CreatedDocuments';
 
 /** A single scroll surface; incoming text follows only while the reader is at the bottom. */
 export function ContinuousChat({ previous, turns, historyError, hasEarlier, olderLoading, onLoadEarlier,
@@ -49,6 +50,7 @@ export function ContinuousChat({ previous, turns, historyError, hasEarlier, olde
       {previous.map((message, index) => <article key={`saved-${index}`} className={`hud-saved-message ${message.role}`}>
         <span className="message-author">{message.role === 'user' ? 'TÚ' : 'HELIOS'}</span>
         <ReplyMarkdown text={message.text} onPreviewCode={onPreviewCode} previewHtmlOnly={previewHtmlOnly} />
+        {!!message.documents?.length && <CreatedDocuments documents={message.documents} />}
       </article>)}
       {turns.map((turn, index) => <TurnoVisible key={turn.id} turn={turn} settled={index < turns.length - 1} extra={turnExtras?.[turn.id]}
         onReplyComplete={index === turns.length - 1 ? onReplyComplete : undefined}

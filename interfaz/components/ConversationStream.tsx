@@ -1,6 +1,7 @@
 "use client";
 
-import { AUTO_CHECK_LABEL, type ProjectChange } from "@/lib/helios/hexos";
+import { AUTO_CHECK_LABEL, type CreatedDocument, type ProjectChange } from "@/lib/helios/hexos";
+import { CreatedDocuments } from "./CreatedDocuments";
 import type { ChangeState } from "./ChangeChip";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ProgressiveReply } from "./ProgressiveReply";
@@ -25,6 +26,8 @@ export interface Turn {
   progress?: string[];
   /** Las herramientas que el turno ha llamado, en el orden en que empezaron. */
   tools?: ToolActivity[];
+  /** Los PDF, Word y Excel que Helios ha creado en este turno, para verlos o bajarlos. */
+  documents?: CreatedDocument[];
   /** Solo cuando la respuesta NO se sostiene entera en lo comprobado. */
   caveat?: { note: string; tools: string[] };
   /** Un cambio de código ya decidido. El turno no lleva texto: se pinta como contador. */
@@ -59,6 +62,17 @@ export function ConversationStream({ turn, onReplyComplete, onPreviewCode, previ
   </section>;
 }
 
+// La cascada tapa el texto mientras llega. Con una respuesta larga eso eran minutos de lluvia sin
+// nada que leer (18/11: un relato de 7.600 tokens, cuatro minutos «bloqueado»): pasado un trozo, o
+// si la respuesta es muy larga, se ve como cualquier otra.
+const CASCADA_EN_VIVO = 300;
+const CASCADA_MAXIMA = 2500;
+function conCascada(turn: Turn): boolean {
+  const texto = turn.reply || turn.preview || "";
+  if (replyEffect(texto).effect !== "matrix" || texto.length > CASCADA_MAXIMA) return false;
+  return !(turn.pending && (turn.preview?.length ?? 0) > CASCADA_EN_VIVO);
+}
+
 export function TurnoVisible({ turn, saliendo, settled = false, extra, onReplyComplete, onPreviewCode, previewHtmlOnly }:
   { turn: Turn; saliendo?: boolean; settled?: boolean; extra?: ReactNode; onReplyComplete?: (id: number) => void } & CodeActions) {
   return <article className={`stream-turn${saliendo ? " leaving" : ""}`} aria-hidden={saliendo || undefined}>
@@ -76,7 +90,7 @@ export function TurnoVisible({ turn, saliendo, settled = false, extra, onReplyCo
       </p>}
       {(turn.preview || turn.reply) && (saliendo || settled
         ? <ReplyMarkdown text={turn.reply || turn.preview || ""} onPreviewCode={onPreviewCode} previewHtmlOnly={previewHtmlOnly} />
-        : replyEffect(turn.reply || turn.preview || "").effect === "matrix" && matrixAllowed(turn.id, turn.text)
+        : conCascada(turn) && matrixAllowed(turn.id, turn.text)
         ? <MatrixReply text={turn.reply || turn.preview || ""} live={Boolean(turn.pending)}
             onComplete={() => onReplyComplete?.(turn.id)} />
         : <div className={turn.pending ? "reply-preview" : undefined}
@@ -85,6 +99,7 @@ export function TurnoVisible({ turn, saliendo, settled = false, extra, onReplyCo
             onComplete={() => onReplyComplete?.(turn.id)}
             onPreviewCode={onPreviewCode} previewHtmlOnly={previewHtmlOnly} />
         </div>)}
+      {!turn.pending && !!turn.documents?.length && <CreatedDocuments documents={turn.documents} />}
       {extra}
       {/* El reparo viaja pegado a la respuesta: es lo que evita creerse lo que no pasó. */}
       {turn.caveat && <p className="reply-caveat" role="note">

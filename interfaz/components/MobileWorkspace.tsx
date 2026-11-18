@@ -6,6 +6,7 @@ import type { NoteDetail } from "@/lib/helios/core";
 import { ReplyMarkdown } from "./ReplyMarkdown";
 import { TurnoVisible, type Turn } from "./ConversationStream";
 import { CodeWorkspace } from "./CodeWorkspace";
+import { CreatedDocuments } from "./CreatedDocuments";
 
 const panels = ["Notas", "Chat", "Código", "Visualización"];
 /** Presentation only: no second transport, conversation or agent. */
@@ -95,6 +96,7 @@ export function MobileWorkspace({ previous, turns, notes, artifact, busy, error,
         {previous.map((message, index) => <article className={`history-entry ${message.role}`} key={index}>
           <span className="message-author">{message.role === 'user' ? 'TÚ' : 'HELIOS'}</span>
           <ReplyMarkdown text={message.text} onPreviewCode={onPreview} previewHtmlOnly={ventana === "chat"} />
+          {!!message.documents?.length && <CreatedDocuments documents={message.documents} />}
         </article>)}
         {turns.map(turn => <TurnoVisible key={turn.id} turn={turn} extra={turnExtras?.[turn.id]} onPreviewCode={onPreview} previewHtmlOnly={ventana === "chat"} />)}
       </section>

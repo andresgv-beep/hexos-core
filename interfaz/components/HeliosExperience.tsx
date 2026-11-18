@@ -34,6 +34,7 @@ import { ProjectsPanel } from "./ProjectsPanel";
 import { ProjectChangeCard } from "./ProjectChangeCard";
 import { DownloadCard } from "./DownloadCard";
 import { DownloadsWindow } from "./DownloadsWindow";
+import { ABRIR_DESCARGAS } from "./CreatedDocuments";
 import { ChangeChip, type ChangeState } from "./ChangeChip";
 import { AgentActivity, AgentNow } from "./AgentActivity";
 import type { Activity as AgentLog, DownloadRequest, Project } from "@/lib/helios/hexos";
@@ -303,6 +304,12 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const [tasksOpen, setTasksOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [downloadsOpen, setDownloadsOpen] = useState(false);
+  // La tarjeta de un documento creado abre Descargas desde dentro de la conversación.
+  useEffect(() => {
+    const abrir = () => setDownloadsOpen(true);
+    window.addEventListener(ABRIR_DESCARGAS, abrir);
+    return () => window.removeEventListener(ABRIR_DESCARGAS, abrir);
+  }, []);
   const [voiceOpen, setVoiceOpen] = useState(false);
   // La cola de vídeo se lee aparte del chat: la tarjeta avanza sin gastar turnos.
   const [mediaJobs, setMediaJobs] = useState<MediaJob[]>([]);
@@ -628,7 +635,8 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
           : undefined;
         setTurnTools(mergeToolActivities([], result.tools));
         setTurns(items => [...items, { id, text: guardado.resumedRequest ?? guardado.resume ?? "Continuar operación pendiente",
-                                      pending: false, reply: result.reply, caveat: reparo, tools: result.tools }]);
+                                      pending: false, reply: result.reply, caveat: reparo, tools: result.tools,
+                                      documents: result.documents }]);
         setRevealing(Boolean(result.reply));
         setAnnouncement(`Acceso guardado y operación reanudada para ${guardado.device}`);
       } else if (guardado.resumeError) {
@@ -883,7 +891,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         setRevealing(Boolean(visibleReply) && !streamedRequest.current && !result.cancelled);
         setTurns(items => items.map(item => item.id === id ? { ...item, pending: false, reply: visibleReply,
           streamed: item.streamed || result.cancelled, caveat: reparo,
-          tools: result.tools.length ? result.tools : item.tools } : item));
+          tools: result.tools.length ? result.tools : item.tools, documents: result.documents } : item));
         setAnnouncement(result.cancelled ? "Generación detenida" : `Helios ha respondido en la conversación ${id}`);
       }
     } catch (error) {

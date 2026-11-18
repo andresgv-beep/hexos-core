@@ -78,6 +78,37 @@ ORDEN_DE_BORRAR = re.compile(r'^\W*(?:\w+[,!. ]+){0,3}(?:b[oó]rra|elim[ií]na|d
 BORRALA = ('AVISO DE HEXOS (no es la persona): la nota sigue ahí, todavía no se ha descartado. '
            'Descártala ahora: n es su número en la lista que acabas de ver y state es descartada. '
            'Después confírmaselo en una frase. No menciones este aviso.')
+# Pedir un documento: nombra el formato y lo ordena («hazme un PDF», «pásalo a Excel»), o
+# lo nombra y la respuesta dice haberlo hecho. El 18/11 el Qwen3.6 35B contestó a «primero
+# el PDF, invéntate lo que sea» con «¡Hecho! He creado un documento PDF…» sin llamar a
+# document_create, con la herramienta declarada. Bajar, leer o resumir un PDF no es esto.
+# «world» por «Word», que se escribe así a menudo (Andrés, 18/11: «puedes hacer un world bien currado?»).
+DOCUMENTO = re.compile(r'\b(?:pdf|excel|word|docx|xlsx|hojas? de c[aá]lculo)\b|\b(?:un|el|en|a)\s+world\b', re.I)
+# Uno concreto («un Word», «en PDF»), no hablar de ellos en general («¿sabes hacer PDFs?»).
+DOCUMENTO_CONCRETO = re.compile(r'\b(?:un|una|el|la|en|a)\s+(?:pdf|excel|word|world|docx|xlsx|hoja de c[aá]lculo)\b',
+                                re.I)
+# Pedirlo como pregunta: «¿puedes hacer un Word…?», «¿me haces un Excel…?».
+ORDEN_PREGUNTA = re.compile(r'\b(?:puedes|podr[ií]as|me)\s+(?:hacer|crear|generar|preparar|pasar|montar|escribir|'
+                            r'haces|creas|generas|preparas|pasas|montas|escribes)\w*\b', re.I)
+# La respuesta lo deja para luego: «Dame un segundo que lo redacto», «Te voy a escribir un relato…».
+ANUNCIA = re.compile(r'\b(?:te (?:lo |la )?(?:voy a|preparo|hago|redacto|escribo|monto|genero|creo)'
+                     r'|voy a (?:crear|generar|preparar|hacer|escribir|redactar|montar)'
+                     r'|dame un (?:segundo|momento)|ahora mismo|enseguida|lo redacto|me pongo)\b', re.I)
+ORDEN_DE_DOCUMENTO = re.compile(r'\b(?:h[aá]z(?:me|lo|la)?|cr[eé]a(?:me|lo|la)?|gen[eé]ra(?:me|lo|la)?'
+                                r'|prep[aá]ra(?:me|lo|la)?|p[aá]sa(?:me|lo|la)?|conv[ií]erte(?:lo|la)?'
+                                r'|exp[oó]rta(?:lo|la)?|d[aá]me|quiero)\b', re.I)
+NO_ES_CREAR = re.compile(r'\b(?:b[aá]j|descarg|le[eé]r?\b|lee(?:me|lo)|res[uú]m|abre|https?:)', re.I)
+DICE_HECHO = re.compile(r'\b(?:he (?:creado|generado|preparado|hecho)|(?:est[aá]|queda) (?:listo|creado|generado)'
+                        r'|ya (?:tienes|lo tienes))', re.I)
+# «Y ahora un Word con…»: la orden sin verbo, detrás de otro documento.
+ORDEN_ELIPTICA = re.compile(r'^\W*(?:y\s+)?(?:ahora|otro|otra)\b', re.I)
+FORMATO_PEDIDO = ((re.compile(r'\b(?:word|world|docx)\b', re.I), 'docx'), (re.compile(r'\bpdf\b', re.I), 'pdf'),
+                  (re.compile(r'\b(?:excel|xlsx|hojas? de c[aá]lculo)\b', re.I), 'xlsx'))
+# A partir de aquí una respuesta es el documento pegado, no una frase sobre él.
+PEGADO = 1500
+HAZ_DOCUMENTO = ('AVISO DE HEXOS (no es la persona): todavía no existe ningún fichero, en este turno no se ha '
+                 'llamado a document_create. Créalo ahora con el documento entero en content, y después díselo '
+                 'en una frase. No menciones este aviso.')
 SIN_LLAMADA_CHAT = ('AVISO DE HEXOS (no es la persona): la respuesta anterior dice haber guardado algo, '
                     'pero en este turno no se ejecutó ninguna escritura: no se ha guardado nada. Si la '
                     'persona pidió apuntarlo, llama ahora a la herramienta; si no lo pidió, contesta '
@@ -224,8 +255,40 @@ class RecoveryController:
             return RETRY
         return output
 
+    def _documento_pegado(self, store, turn: TurnState, output: dict, texto: str) -> bool:
+        """Si la respuesta es el documento que la persona pidió, pegado en el chat, lo crea con ese
+        texto y deja en el chat una línea con su tarjeta. Es la única acción que se hace aquí: es
+        exactamente lo pedido, no sale del PC y la persona lo ve antes de bajarlo."""
+        from .. import documentos
+        respuesta = output.get('reply') or ''
+        formato = next((f for patron, f in FORMATO_PEDIDO if patron.search(texto)), None)
+        if (store is None or not formato or len(respuesta) < PEGADO
+                or getattr(self.agent, 'ventana', None) != catalog.DEFAULT_WINDOW
+                or not DOCUMENTO_CONCRETO.search(texto) or NO_ES_CREAR.search(texto)
+                or any(p.get('tool') == 'document.create' and not p.get('failed') for p in turn.trace)):
+            return False
+        contenido = re.sub(r'(?im)^\s*\[\[matrix\]\]\s*$', '', respuesta).strip()
+        titulo = re.search(r'(?m)^#{1,3}\s+(.+)$', contenido)
+        nombre = titulo.group(1).strip() if titulo else 'Documento de Helios'
+        try:
+            hecho = documentos.crear(store, formato, nombre, contenido)
+        except ValueError:
+            return False
+        hecho = dict(hecho, status='created', note='Creado por HexOS con el texto que el modelo pegó en el chat.')
+        turn.trace.append(dict(tool='document.create', arguments=dict(format=formato, name=nombre),
+                               effect='write', changes_state=True, verification='confirmada', evidence='hecho',
+                               ts=now(), seconds=0.0, failed=False, delivered_to_model=False, result=hecho))
+        store.db.execute('INSERT INTO tool_events(turn_id,ts,body) VALUES (?,?,?)',
+                         (turn.uid, now(), json.dumps(turn.trace[-1], ensure_ascii=False)))
+        store.db.commit()
+        clase = {'docx': 'un Word', 'pdf': 'un PDF', 'xlsx': 'un Excel'}[formato]
+        output['reply'] = (f'Te lo he dejado en {clase}: «{hecho["name"]}». Puedes verlo o descargarlo en la tarjeta '
+                           'de aquí abajo.')
+        return True
+
     def before_completion(self, store, turn: TurnState, output: dict) -> bool:
-        """True pide otra generación; no ejecuta acciones por su cuenta."""
+        """True pide otra generación. La única acción que hace por su cuenta es guardar como
+        documento el que el modelo pegó en el chat (`_documento_pegado`)."""
         # «He revisado» sin haber mirado nada: la siguiente generación empieza en una
         # lectura, como tras un reproche. Avisarle no basta, y una sola vez: si tras
         # mirar sigue afirmando algo, ya hay traza con la que contrastarlo.
@@ -328,6 +391,30 @@ class RecoveryController:
             turn.retries.sin_llamada_devuelto = True
             if self.agent.runtime.require_note('note.mark'):
                 turn.messages = [dict(role='user', content=BORRALA)]
+                return True
+        # Pidió un PDF, un Word o un Excel y el modelo pegó el documento entero en el chat: lo
+        # crea HexOS con ese texto, sin otra generación. El 18/11 el Qwen3.6 35B pegó un relato
+        # de 7.600 tokens en el chat; pedirle que lo repitiera eran otros dos minutos.
+        texto = turn.text or ''
+        if self._documento_pegado(store, turn, output, texto):
+            return False
+        # Pidió un PDF, un Word o un Excel y el turno acaba sin crearlo: se arranca en la
+        # llamada. Avisarle sin forzarla no bastó: contestó «Me adelanté al baile».
+        if (not turn.retries.sin_llamada_devuelto
+                and getattr(self.agent, 'ventana', None) == catalog.DEFAULT_WINDOW
+                and DOCUMENTO.search(texto) and not NO_ES_CREAR.search(texto)
+                and (ORDEN_DE_DOCUMENTO.search(texto) or DICE_HECHO.search(output.get('reply') or '')
+                     or (DOCUMENTO_CONCRETO.search(texto) and (ORDEN_PREGUNTA.search(texto)
+                                                               or ORDEN_ELIPTICA.search(texto)
+                                                               or ANUNCIA.search(output.get('reply') or ''))))
+                and not any(paso.get('tool') == 'document.create' for paso in turn.trace)
+                and hasattr(self.agent.runtime, 'require_note')):
+            if hasattr(self.agent.runtime, 'active_groups'):
+                activos = list(getattr(self.agent.runtime, 'active_groups', None) or [])
+                self.agent.runtime.active_groups = activos if 'descargas' in activos else activos + ['descargas']
+            if self.agent.runtime.require_note('document.create'):
+                turn.retries.sin_llamada_devuelto = True
+                turn.messages = [dict(role='user', content=HAZ_DOCUMENTO)]
                 return True
         # En el chat no vale la señal del selector: allí se habla DE las notas sin pedir
         # nada («y notas tienes, ¿verdad?»), y devolver ese turno cambió una respuesta

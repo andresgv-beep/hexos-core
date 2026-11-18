@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Download, Eye, File, FileText, Image as ImageIcon, X } from "lucide-react";
+import { Download, Eye, File, FileSpreadsheet, FileText, Image as ImageIcon, X } from "lucide-react";
 import type { DownloadedFile, Downloads, HeliosTransport } from "@/lib/helios/hexos";
 
 const megas = new Intl.NumberFormat("es-ES", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -16,8 +16,9 @@ function cuando(ts: string): string {
 }
 
 function Fila({ file, transport }: { file: DownloadedFile; transport: HeliosTransport }) {
-  const Icono = file.kind === "PDF" || file.readable ? FileText : file.kind.startsWith("imagen") ? ImageIcon : File;
-  const ver = transport.downloadUrl!(file.id);
+  const Icono = file.kind === "Excel" ? FileSpreadsheet : file.kind === "PDF" || file.readable ? FileText
+    : file.kind.startsWith("imagen") ? ImageIcon : File;
+  const ver = file.preview && transport.previewUrl ? transport.previewUrl(file.id) : transport.downloadUrl!(file.id);
   const guardar = transport.downloadUrl!(file.id, true);
   // Lo que el navegador sabe enseñar se abre en otra pestaña; lo demás, al pulsarlo, se guarda.
   const principal = file.viewable ? { href: ver, target: "_blank", rel: "noreferrer" } : { href: guardar, download: file.name };
@@ -70,7 +71,7 @@ export function DownloadsWindow({ transport, onClose }: { transport: HeliosTrans
         {fallo && <p className="settings-status" data-kind="error" role="alert">{fallo}</p>}
         {!lista && !fallo && <p className="settings-lead">Cargando…</p>}
         {lista && !lista.files.length && <p className="settings-lead">Todavía no hay nada. Pídele a Helios en el Chat
-          que te baje un PDF o un fichero de la web: lo aprobarás en una tarjeta y aparecerá aquí.</p>}
+          que te baje un PDF de la web, que aprobarás en una tarjeta, o que te haga un PDF, un Word o un Excel.</p>}
         {lista && lista.files.length > 0 && <>
           <p className="settings-lead">{lista.files.length === 1 ? "Un fichero" : `${lista.files.length} ficheros`},
             {" "}lo más nuevo primero. Están en el PC, en <strong>{lista.folder}</strong>.</p>

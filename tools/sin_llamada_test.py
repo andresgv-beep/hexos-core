@@ -168,6 +168,51 @@ class SinLlamadaTest(unittest.TestCase):
             runtime, _, devuelto = self.orden(texto, 'Hecho.', traza=[self.LISTA])
             self.assertFalse(devuelto, texto)
 
+    def test_si_pide_un_documento_y_no_se_crea_se_arranca_en_crearlo(self):
+        # 18/11, Qwen3.6 35B: «primero el PDF invéntate lo que sea» -> «¡Hecho! He creado un PDF…».
+        casos = (('Venga por orden socio primero el PDF invéntate lo que sea', '¡Hecho! He creado un documento PDF.'),
+                 ('hazme un excel con los gastos', 'Claro, aquí va la tabla: | a | b |'),
+                 ('pásalo a word', 'Vale.'))
+        for texto, respuesta in casos:
+            runtime, turn, devuelto = self.orden(texto, respuesta, pedidos=('descargas',))
+            self.assertTrue(devuelto, texto)
+            self.assertEqual((runtime.notas, runtime.pedida), (1, 'document.create'))
+            self.assertIn('document_create', turn.messages[0]['content'])
+
+    def test_pedido_como_pregunta_o_dejado_para_luego_tambien_se_crea(self):
+        # 18/11, Gemma 4 26B: «Puedes hacer un world bien currado…?» -> «Dame un segundo que lo redacto»
+        # y nada hasta que Andrés dijo «Okey».
+        casos = (('Puedes hacer un world bien currado de lo que sea? Una narración o lo que te venga en gusto',
+                  'Me pides que me luzca. Te voy a escribir un relato corto. Dame un segundo que lo redacto.'),
+                 ('me haces un excel con mis gastos?', 'Claro.'),
+                 ('quiero el informe en PDF', 'Te lo preparo ahora mismo.'),
+                 ('Y ahora un world con una historia como la de diablo 3', 'Vale, ¿de qué va?'))
+        for texto, respuesta in casos:
+            runtime, _, devuelto = self.orden(texto, respuesta, pedidos=('descargas',))
+            self.assertTrue(devuelto, texto)
+            self.assertEqual(runtime.pedida, 'document.create', texto)
+
+    def test_preguntar_si_sabe_hacerlos_no_es_pedir_uno(self):
+        for texto, respuesta in (('sabes hacer PDFs?', 'Sí, puedo crearlos.'),
+                                 ('puedes hacer excels con gráficos?', 'Sí: dime cuál y te lo preparo.'),
+                                 ('hello world en python', 'print("hello world")')):
+            runtime, _, devuelto = self.orden(texto, respuesta, pedidos=('descargas',))
+            self.assertFalse(devuelto and runtime.pedida == 'document.create', texto)
+
+    def test_bajar_leer_o_hablar_de_un_pdf_no_es_crearlo(self):
+        casos = (('bájame el pdf del manual', 'Te he preparado la tarjeta.'),
+                 ('lee el pdf que bajamos', 'Dice que…'),
+                 ('resume este pdf', 'Trata de…'),
+                 ('qué es un pdf?', 'Un formato de documento.'),
+                 ('ya puedes crear pdf excel y word', '¡Qué buena noticia!'))
+        for texto, respuesta in casos:
+            runtime, _, devuelto = self.orden(texto, respuesta, pedidos=('descargas',))
+            self.assertFalse(devuelto and runtime.pedida == 'document.create', texto)
+        hecho = [dict(tool='document.create', arguments={}, result={'id': 'd1'}, failed=False)]
+        runtime, _, devuelto = self.orden('hazme un pdf', 'Hecho.', pedidos=('descargas',), traza=hecho)
+        self.assertFalse(devuelto)
+        self.assertEqual(runtime.notas, 0)
+
     def test_hablar_de_apuntar_no_es_una_orden(self):
         for texto in ('a okey, y notas tienes verdad?', 'me gusta apuntar cosas en papel', 'que notas tengo?'):
             runtime, _, devuelto = self.orden(texto, 'Sí, puedo llevar tus notas.')

@@ -8,9 +8,9 @@ import { displayUserText } from "./voice";
 export interface ContextCut { at: string; messages: number; characters: number }
 /** Cómo se cierra el turno según lo COMPROBADO, no según lo que diga la respuesta. */
 export interface Closure { reason: string; note: string; unverified: { tool: string; verification?: string; evidence?: string }[] }
-export interface ChatReply { reply: string; tools: ToolActivity[]; notes: string[]; closeNotes: string[] | "todas" | null; fileIds?: string[]; document?: unknown; contextCut?: ContextCut; closure?: Closure; cancelled?: boolean; incomplete?: boolean; /** Lo que Helios entendió de un mensaje de voz. */ transcript?: string }
+export interface ChatReply { reply: string; tools: ToolActivity[]; documents?: CreatedDocument[]; notes: string[]; closeNotes: string[] | "todas" | null; fileIds?: string[]; document?: unknown; contextCut?: ContextCut; closure?: Closure; cancelled?: boolean; incomplete?: boolean; /** Lo que Helios entendió de un mensaje de voz. */ transcript?: string }
 export interface Generation { requestId: string; phase: string; text: string; processed: number; total: number; cancellable: boolean; cancelling: boolean }
-export interface HistoryMessage { role: "user" | "assistant"; text: string }
+export interface HistoryMessage { role: "user" | "assistant"; text: string; documents?: CreatedDocument[] }
 export interface HistoryPage { messages: HistoryMessage[]; nextBefore: number | null }
 /** Lo que Helios dice que va a hacer, antes de hacerlo. Lo escribe el modelo, no
  *  HexOS, y llega a mitad de turno: por eso viaja aparte de la respuesta. */
@@ -58,15 +58,37 @@ export function parseDownloadRequest(dr: unknown): DownloadRequest | null {
   }
   return { planId: dr.plan_id, summary: dr.summary, folder: String(dr.folder ?? ""), items };
 }
-/** Un fichero ya descargado. `viewable`: el navegador puede enseñarlo; `readable`: Helios puede leerlo. */
+/** Un fichero ya descargado. `viewable`: el navegador puede enseñarlo; `readable`: Helios puede leerlo;
+ *  `preview`: «Ver» abre una vista previa hecha por HexOS (los Word y Excel que crea Helios). */
 export interface DownloadedFile { id: string; name: string; kind: string; bytes: number; ts: string; source: string;
-  onDisk: boolean; viewable: boolean; readable: boolean }
+  onDisk: boolean; viewable: boolean; readable: boolean; preview?: boolean }
+/** Un documento que Helios acaba de crear en este turno (document.create), con sus dos enlaces. */
+export interface CreatedDocument { id: string; name: string; kind: string; bytes: number; viewUrl: string; saveUrl: string }
+/** Los documentos creados en un turno, sacados de su traza de herramientas. */
+export function createdDocuments(tools: unknown, endpoint: string): CreatedDocument[] {
+  if (!Array.isArray(tools)) return [];
+  return documentLinks(tools.filter(isRecord)
+    .filter(t => t.tool === "document.create" && t.failed !== true && isRecord(t.result))
+    .map(t => t.result), endpoint);
+}
+/** Cada documento con su enlace para verlo (el PDF tal cual; Word y Excel, su vista previa) y para bajarlo. */
+export function documentLinks(items: unknown, endpoint: string): CreatedDocument[] {
+  if (!Array.isArray(items)) return [];
+  return items.filter(isRecord)
+    .filter(r => typeof r.id === "string" && /^[a-f0-9]{32}$/.test(r.id) && typeof r.name === "string")
+    .map(r => {
+      const base = `${endpoint}/downloads/${r.id as string}`;
+      const kind = String(r.kind ?? "");
+      return { id: r.id as string, name: r.name as string, kind, bytes: typeof r.bytes === "number" ? r.bytes : 0,
+               viewUrl: kind === "PDF" ? base : `${base}/preview`, saveUrl: `${base}/download` };
+    });
+}
 export interface Downloads { folder: string; files: DownloadedFile[] }
 export function parseDownloads(data: unknown): Downloads {
   if (!isRecord(data) || !Array.isArray(data.downloads)) throw new Error("Lista de descargas no válida");
   return { folder: String(data.folder ?? ""), files: data.downloads.filter(isRecord)
     .filter(f => typeof f.id === "string" && typeof f.name === "string")
-    .map(f => ({ id: String(f.id), name: String(f.name), kind: String(f.kind ?? ""),
+    .map(f => ({ id: String(f.id), name: String(f.name), kind: String(f.kind ?? ""), preview: f.preview === true,
       bytes: typeof f.bytes === "number" ? f.bytes : 0, ts: String(f.ts ?? ""), source: String(f.source ?? ""),
       onDisk: f.on_disk === true, viewable: f.viewable === true, readable: f.readable === true })) };
 }
@@ -155,7 +177,7 @@ function parseProgress(value: unknown): Progress {
       .map(m => ({ id: String(m.id), text: String(m.text) })),
   };
 }
-function parseChatReply(data: unknown): ChatReply {
+function parseChatReply(data: unknown, endpoint = "/api"): ChatReply {
   if (!isRecord(data) || typeof data.reply !== "string" || !data.reply.trim() || !Array.isArray(data.tools)) {
     throw new Error("HexOS no devolvió una respuesta completa");
   }
@@ -172,7 +194,7 @@ function parseChatReply(data: unknown): ChatReply {
                        verification: typeof u.verification === "string" ? u.verification : undefined,
                        evidence: typeof u.evidence === "string" ? u.evidence : undefined })) }
     : undefined;
-  return { reply: data.reply, tools: parseToolActivities(data.tools, "done"),
+  return { reply: data.reply, tools: parseToolActivities(data.tools, "done"), documents: createdDocuments(data.tools, endpoint),
            ...(typeof data.transcript === "string" && data.transcript.trim() ? { transcript: data.transcript } : {}),
            fileIds: data.tools.filter(isRecord).filter(item => item.tool === 'nas.file_open' && !item.failed)
              .map(item => isRecord(item.result) ? item.result.file_id : null)
@@ -253,6 +275,8 @@ export interface HeliosTransport {
   downloads?(signal?: AbortSignal): Promise<Downloads>;
   /** La dirección de un fichero descargado: para verlo en el navegador o, con `save`, para guardarlo. */
   downloadUrl?(id: string, save?: boolean): string;
+  /** La vista previa de un Word o un Excel creado por Helios. */
+  previewUrl?(id: string): string;
   /** Aprueba o rechaza el cambio de fichero pendiente. Aprobarlo lo escribe HexOS y lo relee. */
   decideProjectChange(planId: string, approve: boolean, signal?: AbortSignal): Promise<SystemDecision>;
   /** Guarda el acceso de un equipo. `host` fija su dirección: sin ella se busca
@@ -372,7 +396,7 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
                host: data.host, pinned: data.pinned === true,
                resume: typeof data.resume === "string" && data.resume.trim() ? data.resume : undefined,
                resumedRequest: typeof data.resumed_request === "string" ? data.resumed_request : undefined,
-               resumed: data.resumed === undefined ? undefined : parseChatReply(data.resumed),
+               resumed: data.resumed === undefined ? undefined : parseChatReply(data.resumed, endpoint),
                resumeError: typeof data.resume_error === "string" ? data.resume_error : undefined };
     },
     async decideSystem(planId, approve, signal) {
@@ -404,6 +428,9 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
     },
     downloadUrl(id, save) {
       return `${endpoint}/downloads/${encodeURIComponent(id)}${save ? "/download" : ""}`;
+    },
+    previewUrl(id) {
+      return `${endpoint}/downloads/${encodeURIComponent(id)}/preview`;
     },
     async decideProjectChange(planId, approve, signal) {
       const data = await request("project/change", { method: "POST", headers: { "Content-Type": "application/json" },
@@ -529,7 +556,11 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
           !data.messages.every(row => isRecord(row) && (row.role === "user" || row.role === "assistant") && typeof row.text === "string") ||
           !(data.next_before === null || (Number.isSafeInteger(data.next_before) && Number(data.next_before) > 0)))
         throw new Error("Página de historial de HexOS no válida");
-      return { messages: data.messages.map(({ role, text }) => ({ role, text: role === "user" ? displayUserText(String(text)) : text })), nextBefore: data.next_before as number | null };
+      return { messages: data.messages.map(row => ({ role: row.role as HistoryMessage["role"],
+                 text: row.role === "user" ? displayUserText(String(row.text)) : String(row.text),
+                 ...(row.role === "assistant" && Array.isArray(row.documents) && row.documents.length
+                   ? { documents: documentLinks(row.documents, endpoint) } : {}) })),
+               nextBefore: data.next_before as number | null };
     },
     async cancel(requestId) {
       const data = await request("cancel", { method: "POST", headers: { "Content-Type": "application/json" },
@@ -551,7 +582,7 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
           headers: { "Content-Type": "application/json" }, body: JSON.stringify({ request_id: requestId }) }).catch(() => {});
       };
       signal?.addEventListener("abort", stop, { once: true });
-      try { return parseChatReply(await request("chat", init)); }
+      try { return parseChatReply(await request("chat", init), endpoint); }
       finally { signal?.removeEventListener("abort", stop); }
     },
   };

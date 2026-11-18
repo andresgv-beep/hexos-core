@@ -444,7 +444,7 @@ test('downloaded files are listed and addressed by id, to view or to save', asyn
     source: 'example.com', url: 'https://example.com/manual.pdf', on_disk: true, viewable: true, readable: true };
   const transport = createHexosTransport('/api/helios', fixture({ folder: '~/Helios/descargas', downloads: [fila, 'basura', { name: 'sin id' }] }));
   assert.deepEqual(await transport.downloads?.(), { folder: '~/Helios/descargas', files: [{ id: 'a b/1', name: 'manual.pdf',
-    kind: 'PDF', bytes: 2018052, ts: '2026-11-16T09:21:56+00:00', source: 'example.com', onDisk: true, viewable: true, readable: true }] });
+    kind: 'PDF', bytes: 2018052, ts: '2026-11-16T09:21:56+00:00', source: 'example.com', onDisk: true, viewable: true, readable: true, preview: false }] });
   assert.equal(transport.downloadUrl?.('a b/1'), '/api/helios/downloads/a%20b%2F1');
   assert.equal(transport.downloadUrl?.('x', true), '/api/helios/downloads/x/download');
   await assert.rejects(async () => createHexosTransport('/api', fixture({})).downloads?.(), /no válida/);
@@ -473,4 +473,36 @@ test('a turn keeps every call, also when the same tool runs eight times', async 
   vistas = turnToolActivities(vistas, [0, 1, 2, 3, 4, 5, 6].map(i => lectura(i, 'done')).concat(lectura(7, 'running')));
   assert.equal(vistas.length, 8);
   assert.deepEqual(vistas.map(tool => tool.status), [...Array(7).fill('done'), 'running']);
+});
+
+test('documents Helios creates in a turn come with a link to see them and one to save them', async () => {
+  const id = 'a'.repeat(32), otro = 'b'.repeat(32);
+  const fetcher = (async () => Response.json({ reply: 'Hecho.', tools: [
+    { tool: 'document.create', result: { id, name: 'Cuentas.xlsx', kind: 'Excel', bytes: 5361 } },
+    { tool: 'document.create', result: { id: otro, name: 'Informe.pdf', kind: 'PDF', bytes: 44839 } },
+    { tool: 'document.create', failed: true, result: { error: 'x' } },
+    { tool: 'document.create', result: { id: '../x', name: 'malo' } },
+    { tool: 'note.save', result: { id: 'c'.repeat(32), name: 'nota' } },
+  ] })) as typeof fetch;
+  const result = await createHexosTransport('/api/helios', fetcher).send('Hazme un Excel');
+  assert.deepEqual(result.documents, [
+    { id, name: 'Cuentas.xlsx', kind: 'Excel', bytes: 5361,
+      viewUrl: `/api/helios/downloads/${id}/preview`, saveUrl: `/api/helios/downloads/${id}/download` },
+    { id: otro, name: 'Informe.pdf', kind: 'PDF', bytes: 44839,
+      viewUrl: `/api/helios/downloads/${otro}`, saveUrl: `/api/helios/downloads/${otro}/download` },
+  ]);
+});
+
+test('a reloaded conversation keeps each reply\'s documents', async () => {
+  const id = 'd'.repeat(32);
+  const fetcher = (async () => Response.json({ next_before: null, messages: [
+    { role: 'user', text: 'hazme un excel' },
+    { role: 'assistant', text: 'Aquí lo tienes.', documents: [{ id, name: 'Cuentas.xlsx', kind: 'Excel', bytes: 5361 }] },
+    { role: 'assistant', text: 'Otra.', documents: [{ id: '../x', name: 'malo' }] },
+  ] })) as typeof fetch;
+  const page = await createHexosTransport('/api/helios', fetcher).historyPage!();
+  assert.deepEqual(page.messages[1].documents, [{ id, name: 'Cuentas.xlsx', kind: 'Excel', bytes: 5361,
+    viewUrl: `/api/helios/downloads/${id}/preview`, saveUrl: `/api/helios/downloads/${id}/download` }]);
+  assert.equal(page.messages[0].documents, undefined);
+  assert.deepEqual(page.messages[2].documents, []);
 });

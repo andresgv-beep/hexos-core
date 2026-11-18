@@ -901,6 +901,15 @@ button.vision-horizon-state:focus-visible { outline: 2px solid var(--v-gold); ou
 .downloads-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .downloads-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--v-line); border-radius: var(--v-radius); color: var(--v-muted); }
 .downloads-row[data-missing="true"] { opacity: .55; }
+/* Lo que Helios crea en un turno va bajo su respuesta, con el mismo aspecto que en Descargas. */
+/* Lo que Helios crea va bajo su respuesta: el aviso de que está hecho, el acceso a Descargas y cada fichero. */
+.reply-documents { margin: 12px 0 4px; max-width: 560px; display: flex; flex-direction: column; gap: 8px; }
+.reply-documents-head { margin: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  font: 600 13px var(--v-font); color: var(--v-text); }
+.reply-documents-head button {
+  display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 1px solid var(--v-line-strong);
+  border-radius: calc(7px * var(--v-forma)); background: transparent; color: var(--v-text); font: 600 12px var(--v-font); cursor: pointer; }
+.reply-documents-head button:hover { border-color: var(--v-rim); background: rgba(var(--v-gold-rgb), 0.10); }
 .downloads-what { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .downloads-what > :is(a, span) { font: 600 14px var(--v-font); color: var(--v-text); text-decoration: none; overflow-wrap: anywhere; }
 .downloads-what > a:hover { color: var(--v-gold-soft); }

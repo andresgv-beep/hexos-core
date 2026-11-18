@@ -8,6 +8,10 @@ from .completion import ReplyPolicy
 from .state import Environment
 
 
+# Herramientas cuyo intento rechazado no hizo nada y se repite hasta salir bien.
+REINTENTABLES = frozenset({'document.create'})
+
+
 class VerificationService:
     def __init__(self, env: Environment):
         self.env = env
@@ -20,6 +24,13 @@ class VerificationService:
         decoración: se calcula de la traza, que es donde están las comprobaciones.
         No cambia la respuesta ni cuesta otra inferencia; dice lo que se sostiene.
         """
+        # Un documento rechazado antes de hacer nada y creado después en el mismo turno llegó a su
+        # objetivo: el 18/11 un Excel bien hecho al tercer intento salió con «Alguna operación no
+        # llegó a su objetivo. Sin comprobar: document.create, document.create».
+        trace = [paso for i, paso in enumerate(trace)
+                 if not (paso.get('tool') in REINTENTABLES and paso.get('failed')
+                         and any(p.get('tool') == paso['tool'] and p.get('verification') == 'confirmada'
+                                 for p in trace[i + 1:]))]
         estados = [paso.get('verification') for paso in trace]
         pendientes = [dict(tool=paso['tool'], verification=paso.get('verification'),
                            evidence=paso.get('evidence'))

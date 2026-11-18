@@ -535,11 +535,15 @@ class NativeRuntime:
         Con name='note.mark' empieza marcándola: es el «borra la nota» que se quedaba en
         buscarla y decir «voy a descartarla».
 
-        Es la única escritura que se arranca así, y solo cuando la persona la ha ordenado
-        con todas las letras («apunta…», «anota…»): con la herramienta delante el E4B
-        contestaba «Anotado» o «De acuerdo, lo anoto» sin llamar, y avisarle no bastó.
+        Con name='document.create' empieza creando el documento: el «¡Hecho! He creado el
+        PDF» del Qwen3.6 35B sin llamar (18/11).
+
+        Son las únicas escrituras que se arrancan así, y solo cuando la persona las ha ordenado
+        con todas las letras («apunta…», «anota…», «hazme un PDF»): con la herramienta delante
+        el E4B contestaba «Anotado» o «De acuerdo, lo anoto» sin llamar, y avisarle no bastó.
         """
-        if name not in ('note.save', 'note.mark') or name not in self.names.values() or self.pending:
+        if (name not in ('note.save', 'note.mark', 'document.create') or name not in self.names.values()
+                or self.pending):
             return False
         self._required_read = name.replace('.', '_')
         self._nota_ordenada = True

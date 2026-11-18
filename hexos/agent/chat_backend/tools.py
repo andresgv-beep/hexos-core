@@ -253,6 +253,35 @@ class ToolDispatcher:
                              '«La persona aprobó en la interfaz…» con el resultado.')
         if name == 'file.list':
             return descargas.listado(store)
+        if name == 'document.create':
+            from .. import documentos
+            # Tres intentos fallidos en un turno y se para: el 18/11 el Gemma 4 26B lo reintentó
+            # once veces seguidas, cada vez un poco peor.
+            if turn_id:
+                fallidos = sum(1 for (cuerpo,) in store.db.execute(
+                    "SELECT body FROM tool_events WHERE turn_id=? AND body LIKE '%document.create%'", (turn_id,))
+                    if json.loads(cuerpo).get('failed'))
+                if fallidos >= 3:
+                    return dict(status='stopped', error='Ya van tres intentos sin poder crear el documento en este '
+                                'turno. No lo intentes otra vez: dile a la persona en una frase qué fallaba según '
+                                'el último error y pregúntale si lo reintentas.')
+            # El gráfico, del argumento o de lo que la persona ha pedido en sus últimos mensajes: el
+            # modelo se olvidaba de pedirlo y lo sustituía por instrucciones o macros inventadas.
+            # El deducido nunca impide crear: solo se pone si hay una tabla que se pueda dibujar.
+            grafico = args.get('chart')
+            if not grafico and args.get('format', '').lower() in ('xlsx', 'excel', 'pdf'):
+                pedidos = [fila[0] for fila in store.db.execute(
+                    "SELECT text FROM esta_ventana WHERE role='user' ORDER BY rowid DESC LIMIT 3")]
+                pedido = documentos.grafico_pedido(pedidos)
+                grafico = pedido if pedido and documentos.dibujable(args['content']) else None
+            hecho = documentos.crear(store, args['format'], args['name'], args['content'], grafico=grafico)
+            return dict(hecho, status='created',
+                        note='Hecho y comprobado: a la persona le ha aparecido en el chat una tarjeta con «Ver» y '
+                             '«Descargar», y el fichero queda también en su ventana de Descargas. contents dice lo que '
+                             'hay DE VERDAD en el fichero: hojas, filas, fórmulas con su resultado y gráficos. Cuéntale '
+                             'solo eso, en dos o tres frases y con esos números; no menciones nada que no esté ahí. Si '
+                             'falta algo que querías poner, vuelve a crearlo entero. No le pegues el contenido. Lo '
+                             f'escrito queda como documento {hecho["document"]}.')
         if name == 'terminal.read':
             return terminal_read.read(args['command'], args.get('filter'), path=args.get('path'))
         if name == 'system.status':

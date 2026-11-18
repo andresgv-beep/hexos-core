@@ -382,6 +382,24 @@ TOOLS = {
                           {'url':'str'}, {'name':'str'}),
     'file.list': spec('Listar los ficheros ya descargados a este PC, del más reciente al más antiguo, con el '
                       'documento con el que se lee cada uno. Sin argumentos.'),
+    'document.create': spec('Crear para la persona un documento PDF, Word (docx) o Excel (xlsx) y dejárselo para ver y '
+                            'descargar. format: pdf, docx o xlsx. name: el nombre del fichero, sin extensión. content: '
+                            'el documento ENTERO en markdown (# títulos, párrafos, listas, **negrita**, tablas). '
+                            'Tablas: fila de títulos, debajo |---|---|, y cada fila con | al principio, entre cada celda y '
+                            'al final, y las MISMAS celdas que los títulos; si no cuadra, no se crea y te llega el error. '
+                            'Excel: las tablas van en la misma hoja, una debajo de otra, y la primera empieza en la fila '
+                            '1 (títulos) con los datos desde la 2 y la primera columna en la A; un título ## con la '
+                            'palabra Hoja empieza otra hoja. El texto suelto va a la hoja Notas. Los totales, con '
+                            'fórmula y no calculados por ti: en una fila Total, =SUMA() suma su columna sola; también '
+                            '=SUMA(D2:D9), =SUMAR.SI(C2:C9;"Ocio";D2:D9), =PROMEDIO, =CONTAR.SI, =SI, =REDONDEAR. '
+                            'chart: rosco, tarta, barras o lineas dibuja un gráfico de la tabla de datos (primera '
+                            'columna, nombres; la primera con números, valores) en Excel y PDF; ponlo siempre que '
+                            'pidan un gráfico. Word no lleva gráficos. Úsala cuando la persona pida un PDF, un Word, un '
+                            'Excel o una hoja de cálculo; no le pegues el contenido en el chat.',
+                            {'format': 'str', 'name': 'str', 'content': 'str'}, {'chart': 'str'},
+                            effect='write', verify='self',
+                            announces=(('crear', 'cread', 'creo'), ('generar', 'generad', 'genero'),
+                                       ('preparar', 'preparad', 'preparo'))),
 }
 
 # Compatibilidad de lectura/ejecución para trazas y clientes antiguos. Estas
@@ -542,7 +560,7 @@ GROUPS = {
                  'procedure.list', 'procedure.get', 'procedure.run',
                  'document.read', 'document.search'),
     # Bajar ficheros de la web con aprobación. Lo descargado se lee como documento.
-    'descargas': ('file.download', 'file.list'),
+    'descargas': ('file.download', 'file.list', 'document.create'),
 }
 
 # Grupos que uno arrastra consigo: `media.prepare` trabaja con el `scan_id` que devuelve
@@ -573,7 +591,8 @@ GROUP_GUIDANCE = {
     'notas': 'Notas de la persona: guardarlas, listarlas, marcarlas y borrarlas.',
     'informes': 'Informes, trabajos, procedimientos y documentos propios.',
     'descargas': ('Bajar o guardar en este PC un fichero de la web (un PDF, un manual, unos planos, una imagen), '
-                  'ver lo ya descargado y leer un PDF descargado.'),
+                  'ver lo ya descargado y leer un PDF descargado. Crear un documento PDF, Word o Excel '
+                  '(una hoja de cálculo) para la persona.'),
 }
 
 ALWAYS = 'nucleo'
@@ -655,6 +674,12 @@ def validate(name, args):
         raise ValueError('arguments debe ser un objeto')
     if name == 'project.plan' and 'steps' in args:
         args['steps'] = pasos_como_texto(args['steps'])
+    # Un campo opcional vacío es un campo que no viene. El 18/11 el Qwen3.6 35B mandó un Word con
+    # chart="" (Word no lleva gráficos), la llamada se rechazó y en el reintento, que no deja
+    # escribir, pegó en el chat las 7.600 palabras del relato.
+    for key in [k for k, v in args.items() if k in definition['optional'] and isinstance(v, str)
+                and not v.strip() and (name, k) not in EMPTY_STRING_FIELDS]:
+        del args[key]
     missing = set(definition['required']) - set(args)
     extra = set(args) - set(definition['required']) - set(definition['optional'])
     if missing or extra:
