@@ -35,6 +35,7 @@ import { ProjectChangeCard } from "./ProjectChangeCard";
 import { DownloadCard } from "./DownloadCard";
 import { DownloadsWindow } from "./DownloadsWindow";
 import { ABRIR_DESCARGAS } from "./CreatedDocuments";
+import { esCorteDeRed, recogerRespuesta } from "@/lib/helios/recogida";
 import { ChangeChip, type ChangeState } from "./ChangeChip";
 import { AgentActivity, AgentNow } from "./AgentActivity";
 import type { Activity as AgentLog, DownloadRequest, Project } from "@/lib/helios/hexos";
@@ -895,7 +896,18 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         setAnnouncement(result.cancelled ? "Generación detenida" : `Helios ha respondido en la conversación ${id}`);
       }
     } catch (error) {
-      if (!controller.signal.aborted) {
+      if (!controller.signal.aborted && esCorteDeRed(error)) {
+        // Se cortó la red, no Helios: el turno sigue en el PC. Se espera a que acabe y se trae
+        // su respuesta guardada. Lo que se veía llegando puede ser un borrador que HexOS descartó.
+        setTurns(items => items.map(item => item.id === id ? { ...item, preview: undefined, error: undefined,
+          generationStatus: "Se cortó la conexión con el PC. Helios sigue allí: recojo su respuesta…" } : item));
+        const recogida = await recogerRespuesta(transport, visibleQuestion);
+        setTurns(items => items.map(item => item.id !== id ? item : recogida
+          ? { ...item, pending: false, generationStatus: undefined, reply: recogida.text, documents: recogida.documents }
+          : { ...item, pending: false, generationStatus: undefined,
+              error: "Se cortó la conexión con el PC y no he podido recoger la respuesta. Recarga la página: si llegó, estará ahí." }));
+        setAnnouncement(recogida ? `Helios ha respondido en la conversación ${id}` : `Se cortó la conexión en la conversación ${id}`);
+      } else if (!controller.signal.aborted) {
         const detail = error instanceof Error ? error.message : "No se pudo recibir la respuesta.";
         setTurns(items => items.map(item => item.id === id ? { ...item, pending: false, error: detail } : item));
         setAnnouncement(`No se pudo completar la conversación ${id}: ${detail}`);
