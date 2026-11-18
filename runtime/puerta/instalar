@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Instala la puerta de Helios como servicios de usuario (sin root) y la deja escuchando en
+# 127.0.0.1:8095. No abre nada fuera: eso se hace después con Tailscale (README.md de aquí).
+#   runtime/puerta/instalar https://equipo.tuxxxx.ts.net:8443
+# El argumento es la dirección por la que se entrará: la interfaz solo acepta peticiones
+# de los orígenes que se le declaran.
+set -euo pipefail
+if [[ $# -ne 1 || ! "$1" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?$ ]]; then
+    echo "Uso: $0 https://nombre.tailnet.ts.net[:puerto]" >&2
+    exit 2
+fi
+origen=$1
+repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
+unidades=$HOME/.config/systemd/user
+mkdir -p "$unidades/hexos-interfaz.service.d"
+for unidad in hexos-puerta.service hexos-puerta-nginx.service; do
+    sed "s|@REPO@|$repo|g" "$repo/runtime/puerta/$unidad" > "$unidades/$unidad"
+done
+# Los orígenes que ya tenía la interfaz, más este.
+# Se leen de la unidad sin este fichero: si no, una segunda instalación partiría de sí misma.
+rm -f "$unidades/hexos-interfaz.service.d/puerta.conf"
+systemctl --user daemon-reload
+actuales=$(systemctl --user show -p Environment --value hexos-interfaz | tr ' ' '\n' | sed -n 's/^HELIOS_UI_ORIGINS=//p')
+case ",$actuales," in *",$origen,"*) nuevos=$actuales ;; "" | ",,") nuevos=$origen ;; *) nuevos=$actuales,$origen ;; esac
+printf '# La puerta (runtime/puerta): la interfaz acepta también el origen por el que se entra con login.\n[Service]\nEnvironment=HELIOS_UI_ORIGINS=%s\n' "$nuevos" \
+    > "$unidades/hexos-interfaz.service.d/puerta.conf"
+systemctl --user daemon-reload
+systemctl --user enable --now hexos-puerta.service hexos-puerta-nginx.service
+echo "Puerta en http://127.0.0.1:8095. La interfaz necesita reiniciarse para aceptar $origen:"
+echo "  systemctl --user restart hexos-interfaz"

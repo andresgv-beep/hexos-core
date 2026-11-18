@@ -1,0 +1,11 @@
+[Unit]
+Description=HEXOS puerta: usuarios y sesiones delante de la interfaz
+
+[Service]
+WorkingDirectory=@REPO@
+ExecStart=/usr/bin/python3 -u -m hexos.puerta servir --puerto 8096
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target
