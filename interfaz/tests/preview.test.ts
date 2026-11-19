@@ -121,3 +121,16 @@ test("la cascada no se encadena: tras una, hay que esperar o pedirla", async () 
   assert.equal(matrixAllowed(104, "jeje"), false);
   assert.equal(matrixAllowed(109, "buenas noches"), true);
 });
+
+test("una orden para la persona se queda en la respuesta; un archivo sale al espacio de trabajo", () => {
+  const orden = "Arranca sin errores.\n\nÁbrelo con:\n```\npython3 /home/andres/Helios/proyectos/snake-35b/snake_game.py\n```";
+  assert.equal(extractReplyArtifact(orden), null);
+  assert.equal(extractReplyArtifact("Instálalo:\n```bash\nsudo apt install python3-pygame\n```"), null);
+  // Con un archivo al lado, el archivo sale y la orden sigue en el texto, con su cerca.
+  const mixto = extractReplyArtifact("Aquí va:\n```python\nprint(1)\n```\nEjecútalo con:\n```\npython3 a.py\n```");
+  assert.equal(mixto?.code, "print(1)");
+  assert.equal(mixto?.reply, "Aquí va:\nEjecútalo con:\n```\npython3 a.py\n```");
+  // Un guion de terminal largo sí es un archivo.
+  const guion = extractReplyArtifact("```bash\n" + ["set -e", "cd /tmp", "make", "make install"].join("\n") + "\n```");
+  assert.equal(guion?.language, "bash");
+});

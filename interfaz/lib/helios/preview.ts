@@ -60,6 +60,17 @@ export function extractHtmlPreview(reply: string): string | null {
   return block ? block.lines.map(line => line.map(part => part.text).join("")).join("\n") : null;
 }
 
+const DE_TERMINAL = new Set(["", "bash", "sh", "shell", "zsh", "console", "terminal"]);
+const LINEAS_DE_ORDEN = 3;
+
+/** Una orden para que la persona la ejecute («Ábrelo con: python3 …») no es un archivo:
+ *  se queda en la respuesta. Sacada al espacio de trabajo, en vivo desaparecía del chat
+ *  —quedaba «Ábrelo con:» y nada debajo— y solo se veía al recargar (19/11). */
+function esOrden(language: string | undefined, code: string[]): boolean {
+  return DE_TERMINAL.has((language ?? "").toLowerCase())
+    && code.filter(line => line.trim()).length <= LINEAS_DE_ORDEN;
+}
+
 /** Separa la explicación de los archivos cercados que entrega el modelo. */
 export function extractReplyArtifact(text: string): ReplyArtifact | null {
   const lines = text.split("\n");
@@ -67,11 +78,13 @@ export function extractReplyArtifact(text: string): ReplyArtifact | null {
   const blocks: { language?: string; code: string }[] = [];
   let language: string | undefined;
   let code: string[] | null = null;
+  let apertura = "";
   for (const line of lines) {
     const fence = /^\s*```([^\s`]*)\s*$/.exec(line);
     if (code !== null) {
       if (fence) {
-        blocks.push({ language, code: code.join("\n") });
+        if (esOrden(language, code)) reply.push(apertura, ...code, line);
+        else blocks.push({ language, code: code.join("\n") });
         code = null;
         language = undefined;
       } else code.push(line);
@@ -80,9 +93,13 @@ export function extractReplyArtifact(text: string): ReplyArtifact | null {
     if (fence) {
       language = fence[1] || undefined;
       code = [];
+      apertura = line;
     } else reply.push(line);
   }
-  if (code !== null) blocks.push({ language, code: code.join("\n") });
+  if (code !== null) {
+    if (esOrden(language, code)) reply.push(apertura, ...code);
+    else blocks.push({ language, code: code.join("\n") });
+  }
   if (!blocks.length) return null;
   const html = [...blocks].reverse().find(block => ["html", "htm"].includes((block.language ?? "").toLowerCase()));
   const primary = [...blocks].reverse().find(block => !["html", "htm"].includes((block.language ?? "").toLowerCase())) ?? html!;
