@@ -784,8 +784,10 @@ void hexos_cleanup(void) {
  * ============================================================================ */
 
 int main(int argc, char *argv[]) {
-    (void)argc;
-    (void)argv;
+    if (argc == 2 && strcmp(argv[1], "--help") == 0) {
+        puts("Usage: hexos [--help]\nStart the interactive HEXOS supervisor.");
+        return 0;
+    }
     
     hexos_result_t result = hexos_init(".", NULL);
     

@@ -11,7 +11,7 @@ from .. import catalog, descargas, notes, procedures, project_files, project_mem
 from ..native_transport import AudioClip
 from ..context import native_messages
 from ..work import now
-from .memory import AFIRMACION
+from .memory import pide_extraccion
 from .settings import PROMPT
 from .document_reading import document_lines
 from .state import TurnState
@@ -136,41 +136,50 @@ class ContextManager:
             used += len(text)
             if len(selected) >= HANDOFF_MESSAGES:
                 break
-        last = store.db.execute(
-            'SELECT body FROM tool_events ORDER BY seq DESC LIMIT 1').fetchone()
-        operation = None
-        if last:
-            try:
-                event = json.loads(last['body'])
-                rendered = json.dumps(event.get('result'), ensure_ascii=False)
-                operation = dict(tool=event.get('tool'), arguments=event.get('arguments'),
-                                 result=self._excerpt(rendered, 900),
-                                 partial=len(rendered) > 900)
-            except (TypeError, ValueError):
-                # Una traza antigua dañada no puede impedir conservar el diálogo.
-                operation = dict(note='La última operación quedó archivada pero no se pudo leer aquí.')
-        handoff = dict(version=1, boundary=boundary, created_at=now(),
-                       dialogue=list(reversed(selected)),
-                       active=procedures.state(store), last_operation=operation,
-                       last_listing=self._last_listing(store))
+        handoff = dict(version=2, boundary=boundary, created_at=now(),
+                       dialogue=list(reversed(selected)), active=procedures.state(store))
+        self._scope_handoff(store, handoff)
         store.db.execute("INSERT INTO agent_state VALUES (?,?) "
                          'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
                          (clave(store, HANDOFF_KEY), json.dumps(handoff, ensure_ascii=False)))
         store.db.commit()
         return handoff
 
-    @staticmethod
-    def _last_listing(store):
-        """Rutas y scan_id de la última búsqueda con resultados.
-
-        El JSON crudo empieza por titular, cobertura y errores: 900 caracteres
-        no llegaban ni al primer archivo. Tras el corte hacen falta las rutas
-        exactas y el scan_id, que es lo que piden media.prepare y nas.file_open.
-        """
-        for (body,) in store.db.execute('SELECT body FROM tool_events ORDER BY seq DESC LIMIT 20'):
+    @classmethod
+    def _scope_handoff(cls, store, handoff):
+        """El traspaso usa la evidencia de esta conversación hasta el corte guardado."""
+        boundary = handoff['boundary']
+        marca = store.db.execute('SELECT value FROM agent_state WHERE key=?',
+                                 (clave(store, LIMPIEZA),)).fetchone()
+        desde = int(marca[0]) if marca else 0
+        rows = store.db.execute(
+            'SELECT e.body FROM tool_events e JOIN esta_ventana c ON c.id=e.turn_id '
+            'WHERE c.rowid>? AND c.rowid<=? ORDER BY e.seq DESC LIMIT 20', (desde, boundary))
+        events = []
+        for (body,) in rows:
             try:
                 event = json.loads(body)
             except (TypeError, ValueError):
+                event = None
+            events.append(event if isinstance(event, dict) else None)
+        last = events[0] if events else None
+        operation = None
+        if last is not None:
+            rendered = json.dumps(last.get('result'), ensure_ascii=False)
+            operation = dict(tool=last.get('tool'), arguments=last.get('arguments'),
+                             result=cls._excerpt(rendered, 900), partial=len(rendered) > 900)
+        handoff['last_operation'] = operation
+        handoff['last_listing'] = cls._last_listing(events)
+        active = handoff.get('active') or {}
+        if active and not store.db.execute('SELECT 1 FROM esta_ventana WHERE id=? AND rowid>? AND rowid<=?',
+                                           (active.get('source_turn'), desde, boundary)).fetchone():
+            handoff['active'] = None
+
+    @staticmethod
+    def _last_listing(events):
+        """Rutas y scan_id del último resultado con ficheros en esta conversación."""
+        for event in events:
+            if event is None:
                 continue
             result = event.get('result')
             items = result.get('items') if isinstance(result, dict) else None
@@ -201,7 +210,13 @@ class ContextManager:
             value = json.loads(row[0])
         except (TypeError, ValueError):
             return None
-        return value if isinstance(value, dict) and isinstance(value.get('dialogue'), list) else None
+        if not isinstance(value, dict) or not isinstance(value.get('dialogue'), list):
+            return None
+        if value.get('version') != 2:
+            if type(value.get('boundary')) is not int:
+                return None
+            ContextManager._scope_handoff(store, value)
+        return value
 
     @staticmethod
     def handoff_text(handoff):
@@ -298,6 +313,10 @@ class ContextManager:
             # No se pudo fiar: todo lo que la ventana permite, no el catálogo entero.
             runtime.active_groups = list(catalog.groups_in(ventana))
             return
+        # Una lectura seguida de «y guárdalo en una nota» necesita las notas aunque
+        # el selector se quede en el primer verbo. Declararlas no ejecuta la escritura.
+        if 'notas' not in elegidos and tool_groups.NOTA_TRAS_LECTURA.search(turn.text):
+            elegidos = [*elegidos, 'notas']
         turn.grupos_pedidos = list(elegidos)
         from ..native import temperatura_del_turno
         runtime.temperatura = temperatura_del_turno(ventana, elegidos, turn.prompt_text)
@@ -337,7 +356,7 @@ class ContextManager:
         # Si el mensaje trae un dato suyo, la cosecha lo guardará al cerrar
         # el turno: se le retira la herramienta para que no lo haga él también.
         cosechara = bool(self.agent.profile and hasattr(self.agent.runtime, 'extract_facts')
-                         and AFIRMACION.search(turn.text or ''))
+                         and pide_extraccion(turn.text))
         if hasattr(self.agent.runtime, 'harvest_pending') or cosechara:
             self.agent.runtime.harvest_pending = cosechara
         self._elegir_grupos(turn)

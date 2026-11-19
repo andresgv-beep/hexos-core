@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import re
 import time
-from .. import web
 from ..native_transport import TurnCancelled
 from ..work import now, string
 from ..continuity import history_tool
@@ -17,7 +16,7 @@ from .state import Environment
 AFIRMACION = re.compile(
     r'\b(me llamo|mi nombre es|me puedes llamar|llámame'
     r'|soy (?:de |el |la |un |una )?\w'
-    r'|vivo en|resido en|estoy en'
+    r'|vivo en|resido en|me he mudado a|estoy en'
     r'|trabajo (?:de|en|como)|me dedico a|soy programador|soy \w+ de profesión'
     r'|mi \w+ se llama|a mi \w+ le llamo'
     r'|prefiero|me gusta|no me gusta|odio|suelo'
@@ -200,6 +199,35 @@ def validated_fact(args, quote):
     return (key if '/' in key else 'yo/' + key), value
 
 
+# Solo afirmaciones completas en primera persona permiten corregir estos datos sin
+# nombrar el valor anterior. Una pregunta, un supuesto o una cita no son correcciones.
+ATRIBUTOS_PERSONALES = {
+    'yo/ciudad': r'(?:vivo en|resido en|me he mudado a)',
+    'yo/nombre': r'(?:me llamo|mi nombre es)',
+    'yo/apodo': r'(?:mi apodo es|llámame)',
+}
+
+
+def respalda_correccion(clave, valor, anterior, mensaje):
+    inicio = ATRIBUTOS_PERSONALES.get(clave)
+    if not inicio:
+        # Otros atributos pueden tener varios valores. Conserva la regla anterior.
+        return anterior.casefold() in mensaje.casefold()
+    patron = r'(?:yo |ahora |ahora mismo |en realidad |actualmente )*' + inicio + r'\s+' + re.escape(valor)
+    # Cada frase debe afirmar el valor entero. No cortar en «?» ni en signos de cita.
+    # «Ya no vivo en Cuenca, ahora vivo en Teruel» contiene las dos partes.
+    antes = r'(?:(?:ya )?no ' + inicio + r'\s+' + re.escape(anterior) + r',\s*)?'
+    return any(re.fullmatch(antes + patron, frase.strip(), re.I)
+               for frase in re.split(r'[.!;\n]', mensaje))
+
+
+def pide_extraccion(text):
+    # «¿Cómo me llamo?» pide recordar. En «¿Cómo me llamo? Me llamo Lidia»
+    # queda una afirmación y sí corresponde pasar el mensaje al extractor.
+    sin_pregunta_nombre = re.sub(r'\bc[oó]mo me llamo\s*\?', '', text or '', flags=re.I)
+    return bool(AFIRMACION.search(sin_pregunta_nombre))
+
+
 class MemoryService:
     def __init__(self, env: Environment):
         self.env = env
@@ -252,10 +280,9 @@ class MemoryService:
             return dict(saved=False, unchanged=True, key=clave, value=value,
                         note='Ya estaba guardado con ese mismo valor; no se ha tocado nada.')
         else:
-            if automatic and not del_trato and anterior.casefold() not in quote.casefold():
-                raise ValueError('Conflicto de memoria: una extracción automática no puede '
-                                 'reemplazar otro hecho sin una referencia literal al valor anterior. '
-                                 'Usa una clave específica para un asunto distinto.')
+            if automatic and not del_trato and not respalda_correccion(clave, value, anterior, quote):
+                return dict(saved=False, conflict=True, key=clave, previous=anterior, value=value,
+                            note='El dato propuesto entra en conflicto con el perfil vigente.')
             self.env.profile.correct(clave, value, texto, quote[:1000])
         return dict(saved=True, corrected=anterior is not None, previous=anterior,
                     key=clave, value=value, source='user_statement',
@@ -275,7 +302,7 @@ class MemoryService:
         empezado = time.monotonic()
         try:
             # Pide un dato de ahora: lo del último año, no lo que el buscador ponga arriba.
-            encontrados = web.search(text.strip()[:200], recency='año')
+            encontrados = self.env.dependencies.web_search(text.strip()[:200], recency='año')
         except Exception as exc:
             return dict(tool='web.search', arguments=dict(query=text.strip()[:200]),
                         effect='read', changes_state=False, ts=now(),
@@ -351,7 +378,7 @@ class MemoryService:
         """
         if not self.env.profile or not hasattr(self.env.runtime, 'extract_facts'):
             return ''
-        if not AFIRMACION.search(text or ''):
+        if not pide_extraccion(text):
             return ''
         empezado = time.monotonic()
         try:
@@ -367,7 +394,7 @@ class MemoryService:
                              (turn_id, now(), json.dumps(generacion, ensure_ascii=False)))
             store.db.commit()
         anotado = []
-        guardados = []
+        guardados, conflictos, sin_cambios = [], [], []
         # Una extracción no es una secuencia de correcciones de la persona.
         # Dos candidatos para la misma clave no deben pisarse por orden de salida.
         row = store.db.execute("SELECT text FROM conversation WHERE id=? AND role='user'",
@@ -396,7 +423,15 @@ class MemoryService:
                 resultado = self.remember_fact(store, hecho, turn_id, automatic=True)
             except (ValueError, TypeError):
                 continue      # no estaba en su mensaje, o HERA lo rechazó
+            if resultado.get('conflict'):
+                conflictos.append(dict(key=resultado['key'], previous=resultado['previous'],
+                                       proposed=resultado['value']))
+                anotado.append('Sigue guardado ' + resultado['key'] + ' = ' + resultado['previous']
+                               + '. Para cambiarlo, indica el nuevo valor de ese dato')
+                continue
             if not resultado.get('saved'):
+                if resultado.get('unchanged'):
+                    sin_cambios.append(resultado['key'])
                 continue
             sujeto, _, atributo = resultado['key'].partition('/')
             # Con «yo» basta el atributo; con otro sujeto hay que nombrarlo, o
@@ -411,15 +446,18 @@ class MemoryService:
         # Queda en la traza como cualquier otra escritura. Sin esto, el turno decía
         # «he anotado tu trato» con la traza vacía y el cierre lo marcaba como
         # afirmación sin respaldo: el hecho estaba en HERA, pero no constaba.
-        if guardados and trace is not None:
-            trace.append(dict(tool='profile.remember', arguments=dict(count=len(guardados)),
-                              effect='write', changes_state=True, ts=now(),
-                              seconds=round(time.monotonic() - empezado, 3), failed=False,
-                              verification='confirmada',
-                              evidence='releído del perfil: ' + ', '.join(guardados),
-                              result=dict(saved=guardados, requested_by='hexos',
-                                          note='Lo guardó HexOS al ver que la persona contaba un dato '
-                                               'suyo; el modelo no lo pidió. Las palabras son '
-                                               'suyas y HERA conserva la frase como evidencia.')))
+        if guardados or conflictos or sin_cambios:
+            event = dict(tool='profile.remember', arguments=dict(count=len(candidatos)),
+                         effect='write', changes_state=bool(guardados), ts=now(),
+                         seconds=round(time.monotonic() - empezado, 3), failed=bool(conflictos),
+                         verification='no_cumplida' if conflictos else 'confirmada',
+                         evidence='confirmado por HERA: ' + ', '.join(guardados) if guardados else None,
+                         result=dict(saved=guardados, conflicts=conflictos, unchanged=sin_cambios,
+                                     requested_by='hexos'))
+            store.db.execute('INSERT INTO tool_events(turn_id,ts,body) VALUES (?,?,?)',
+                             (turn_id, event['ts'], json.dumps(event, ensure_ascii=False)))
+            store.db.commit()
+            if trace is not None:
+                trace.append(event)
         # Decirlo siempre: si se equivoca, que se vea en el momento y no dentro de un mes.
         return '· ' + '. '.join(anotado) + '.' if anotado else ''

@@ -142,7 +142,7 @@ def history_tool(store, name, args):
                 'order': 'oldest_to_newest',
                 'search_type': 'literal_substring',
                 'note': 'Cero coincidencias no demuestra ausencia. Prueba una palabra más corta o history.recent.'}
-    row = store.db.execute('SELECT id,ts,role,text FROM conversation WHERE id=?',
+    row = store.db.execute('SELECT id,ts,role,text FROM esta_ventana WHERE id=?',
                            (args['id'],)).fetchone()
     if row is None:
         raise ValueError('mensaje inexistente')

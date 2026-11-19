@@ -165,6 +165,53 @@ class ConversacionTest(Base):
         self.agente.chat('sigue')
         self.assertIn('azafrán', self.runtime.vistos[-1])
 
+    def test_cada_proyecto_recupera_su_encargo_incluso_desde_la_clave_antigua(self):
+        for proyecto in ('uno', 'dos'):
+            self.agente.create_project(proyecto)
+            self.agente.chat('prepara el informe')
+            with self.agente.store() as store:
+                uid = store.db.execute("SELECT id FROM esta_ventana WHERE role='user'").fetchone()[0]
+                self.agente.tool(store, 'task.focus', dict(intent=proyecto, question='¿Cuál?'), turn_id=uid)
+                if proyecto == 'uno':
+                    store.db.execute("UPDATE agent_state SET key='active' WHERE key='active:agente:uno'")
+                    store.db.commit()
+                    persistence.initialize(store)
+        for proyecto in ('uno', 'dos'):
+            self.agente.set_project(proyecto)
+            with self.agente.store() as store:
+                self.assertEqual(self.agente.tool(store, 'task.current', {})['intent'], proyecto)
+        self.agente.set_window('chat')
+        with self.agente.store() as store:
+            self.assertIsNone(self.agente.tool(store, 'task.current', {}))
+
+    def test_traspaso_y_lectura_por_id_respetan_el_proyecto(self):
+        from hexos.agent.continuity import history_tool
+        for proyecto in ('uno', 'dos'):
+            self.agente.create_project(proyecto)
+            self.agente.chat('busca los ficheros de ' + proyecto)
+            with self.agente.store() as store:
+                turno = store.db.execute("SELECT id FROM esta_ventana WHERE role='user'").fetchone()[0]
+                evento = dict(tool='nas.find', result=dict(items=[dict(path='/' + proyecto)]))
+                store.db.execute('INSERT INTO tool_events(turn_id,ts,body) VALUES (?,?,?)',
+                                 (turno, 'hoy', json.dumps(evento)))
+                store.db.commit()
+
+        self.agente.set_project('uno')
+        with self.agente.store() as store:
+            with self.assertRaisesRegex(ValueError, 'mensaje inexistente'):
+                history_tool(store, 'history.read', {'id': turno})
+            self.agente.window(store, 'nuevo', True, 1)
+            traspaso = self.agente.context.load_handoff(store)
+            self.assertEqual(traspaso['last_listing']['items'], ['/uno'])
+            self.assertIn('/uno', traspaso['last_operation']['result'])
+            # Un traspaso v1 sobrevivió al reinicio con resultados del otro proyecto.
+            traspaso.update(version=1, last_listing={'items': ['/dos']}, last_operation=None)
+            store.db.execute('UPDATE agent_state SET value=? WHERE key=?',
+                             (json.dumps(traspaso), persistence.clave(store, 'context_handoff')))
+            actualizado = self.agente.context.load_handoff(store)
+            self.assertEqual(actualizado['last_listing']['items'], ['/uno'])
+            self.assertIn('/uno', actualizado['last_operation']['result'])
+
     def test_cambiar_vacia_el_contexto_del_modelo_y_repetir_no(self):
         self.agente.create_project('uno')
         self.runtime.llamadas.clear()

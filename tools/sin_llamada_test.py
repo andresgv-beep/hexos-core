@@ -123,6 +123,43 @@ class SinLlamadaTest(unittest.TestCase):
         devuelto = agent.runner.recovery.before_completion(None, turn, dict(reply=respuesta, work=None))
         return runtime, turn, devuelto
 
+    def test_lectura_y_nota_solo_se_reintenta_el_paso_pendiente(self):
+        texto = 'Busca la edición del manual y guarda su código en una nota.'
+        fuente = dict(tool='web.read', result={'text': 'SC-8174'}, failed=False)
+        runtime, turn, devuelto = self.orden(texto, traza=[fuente])
+        self.assertTrue(devuelto)
+        self.assertTrue(turn.retries.nota_tras_lectura)
+        self.assertIn('note_save', turn.messages[0]['content'])
+        self.assertEqual(runtime.notas, 0)  # no fuerza una escritura incondicional
+        for pasos in ([dict(fuente, failed=True)], [fuente, dict(tool='note.save', failed=False, result={'id': 'n1'})]):
+            self.assertFalse(self.orden(texto, traza=pasos)[1].retries.nota_tras_lectura)
+        for msg in ('Lee el manual sin guardar una nota', texto + ' Solo si la edición está agotada.'):
+            self.assertFalse(self.orden(msg, traza=[fuente])[1].retries.nota_tras_lectura)
+
+    def test_cierre_parcial_si_lee_la_fuente_y_no_consigue_guardarla(self):
+        from hexos.agent.chat_backend.state import AgentDependencies
+
+        class Motor:
+            def __init__(self):
+                self.pasos = iter([
+                    dict(tool='web.read', arguments=dict(url='https://example.org/manual')),
+                    dict(reply='El código es SC-8174.', work=None),
+                    dict(reply='El código es SC-8174.', work=None)])
+
+            def call(self, request): pass
+            def generate(self, messages): return next(self.pasos)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            deps = AgentDependencies(web_read=lambda url: dict(url=url, text='SC-8174'))
+            agente = Agent(tmp, Motor(), dependencies=deps)
+            agente.set_window('agente')
+            res = agente.chat('Lee el manual y guarda su código en una nota.')
+            with agente.store() as store:
+                self.assertEqual(store.db.execute('SELECT COUNT(*) FROM notes').fetchone()[0], 0)
+        self.assertEqual(res['closure']['reason'], 'parcial')
+        self.assertIn('SC-8174', res['reply'])
+        self.assertIn('nota ha quedado pendiente', res['reply'])
+
     def test_si_ordeno_apuntar_y_no_se_guardo_se_arranca_en_la_nota(self):
         # «apúntame que mañana llamo a mamá» -> «De acuerdo, lo anoto.» y ninguna llamada.
         for texto in ('apunta que el viernes tengo dentista', 'anota: comprar pan',

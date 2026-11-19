@@ -94,6 +94,14 @@ class NasSimuladoTest(unittest.TestCase):
         abierto = self.herramienta('file_open', scan_id=hallado['scan_id'], path=banco.DOCUMENTO['path'])
         self.assertIn('sdc', self.herramienta('file_read', file_id=abierto['file_id'])['text'])
 
+    def test_la_busqueda_automatica_usa_el_mismo_buscador_del_banco(self):
+        from hexos.agent.chat_backend.memory import MemoryService
+        from hexos.agent.chat_backend.state import Environment
+        env = Environment(self.root, None, dependencies=banco.dependencias(self.root, self.nas))
+        resultado = MemoryService(env).recall_web('¿Cuál es la última versión de Home Assistant?')['result']
+        self.assertEqual(resultado['count'], len(resultado['items']))
+        self.assertIn(banco.WEB['buena'], [item['url'] for item in resultado['items']])
+
     def test_la_web_bloquea_una_fuente_y_deja_la_otra(self):
         with self.assertRaises(ValueError):
             banco.leer_web(banco.WEB['mala'])

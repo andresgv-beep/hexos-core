@@ -7,6 +7,7 @@ from uuid import uuid4
 from .. import notes, task_notices
 from ..work import KINDS, now, string, strings
 from .references import PEDIR_CERRAR, PEDIR_VER, NOTA_MENCIONADA
+from .completion import ReplyPolicy
 from .recovery import RETRY
 from .state import TurnState
 from .file_responses import file_listing_reply
@@ -93,6 +94,14 @@ class TurnFinalizer:
                                '\n\n· No hacía falta preguntar: he ' +
                                ('cerrado' if cerrar else 'abierto') + ' «' +
                                turn.pointed_note.get('title', '') + '» en tu pantalla.')
+        nota_pendiente = turn.retries.nota_tras_lectura and not any(
+            s['tool'] == 'note.save' and not s.get('failed') for s in turn.trace)
+        if nota_pendiente:
+            aviso = 'La fuente está leída. La nota ha quedado pendiente.'
+            if ReplyPolicy.canta_escritura(output['reply']):
+                output['reply'] = aviso
+            else:
+                output['reply'] = output['reply'].rstrip() + '\n\n· ' + aviso
         # Las fuentes visibles salen de la traza, no de la memoria del modelo.
         # Si ya citó una URL no se duplica; las que omita se añaden como registro
         # mecánico de lo que realmente leyó en este turno.
@@ -122,15 +131,18 @@ class TurnFinalizer:
         # El siguiente bloque ya tiene este turno archivado: el traspaso solo
         # existe para cruzar el corte o sobrevivir a un reinicio a mitad de turno.
         self.agent.context.consume_handoff(store, turn.handoff)
-        if listing is not None or turn.document_read_corrected:
+        if listing is not None or turn.document_read_corrected or nota_pendiente:
             # La respuesta visible es la vista estructurada, no el borrador del
             # modelo. Reconstruir desde el archivo mantiene ambos diálogos iguales.
             self.agent.runtime.call({'type': 'reset'})
         corte_avisado, self.agent.context_cut = self.agent.context_cut, None
         extra = {'transcript': turn.transcript} if turn.transcript else {}
+        cierre = self.agent.closure(turn.trace, output['reply'])
+        if nota_pendiente:
+            cierre.update(reason='parcial', note=aviso)
         return dict(reply=output['reply'], work=job, document=turn.document, tools=turn.trace, context_sources=turn.context_sources, progress=self.agent.progress,
             **extra,
-            context_cut=corte_avisado, closure=self.agent.closure(turn.trace, output['reply']),
+            context_cut=corte_avisado, closure=cierre,
             diagnostics=dict(format_retries=turn.retries.format_retries, schema_retries=turn.retries.schema_retries,
                              recovery_requests=turn.retries.recovery_requests,
                              context_retries=turn.retries.context_retries,

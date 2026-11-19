@@ -44,6 +44,7 @@ class ModelLifecycle:
         self._turn_acquired = False
         self._harvest_pending = False
         self._pending_image = None
+        self.output_checkpoint = None
         self._on_update = None
         self._active_groups = None
         self._ventana = None
@@ -374,7 +375,15 @@ class ModelLifecycle:
         return self._invoke('begin_request', callback)
 
     def generate(self, messages):
-        return self._invoke('generate', messages)
+        with self._io_lock, self._use() as runtime:
+            checkpoint, self.output_checkpoint = self.output_checkpoint, None
+            if checkpoint is None:
+                return runtime.generate(messages)
+            runtime.output_checkpoint = checkpoint
+            try:
+                return runtime.generate(messages)
+            finally:
+                runtime.output_checkpoint = None
 
     def call(self, request):
         # Si no hay proceso, reset ya está cumplido: no cargues 5 GiB solo para

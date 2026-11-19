@@ -265,21 +265,6 @@ int main(int argc, char *argv[]) {
     }
     
     /* ======================================================================== */
-    print_header("VERIFY INTEGRITY");
-    /* ======================================================================== */
-    
-    hnf_integrity_result_t integrity;
-    res = hnf_ext_verify(&integrity);
-    if (res == HNF_OK) {
-        if (integrity.valid) {
-            print_ok("Integrity check PASSED");
-        } else {
-            print_info("Integrity check FAILED: %s", integrity.error_message);
-        }
-        printf("    Checksum: 0x%016lX\n", integrity.actual_checksum);
-    }
-    
-    /* ======================================================================== */
     print_header("EXPORT TO JSON");
     /* ======================================================================== */
     
@@ -312,20 +297,35 @@ int main(int argc, char *argv[]) {
     /* ======================================================================== */
     
     res = hnf_ext_save();
-    if (res == HNF_OK) print_ok("Saved to disk");
+    if (res != HNF_OK) {
+        fprintf(stderr, "Unable to save test block (%d)\n", res);
+        return 1;
+    }
+    print_ok("Saved to disk");
     
     /* Close and reload */
     hnf_ext_close();
     print_info("Closed block");
     
     res = hnf_ext_load(filepath);
-    if (res == HNF_OK) {
-        print_ok("Reloaded from disk");
-        print_info("Name after reload: %s", hnf_ext_get_name());
-        print_info("Memory count: %u", hnf_ext_get_memory_count());
+    if (res != HNF_OK) {
+        fprintf(stderr, "Unable to reload test block (%d)\n", res);
+        return 1;
     }
-    
-    /* ======================================================================== */
+    print_ok("Reloaded from disk");
+    print_info("Name after reload: %s", hnf_ext_get_name());
+    print_info("Memory count: %u", hnf_ext_get_memory_count());
+
+    print_header("VERIFY INTEGRITY");
+    hnf_integrity_result_t integrity;
+    res = hnf_ext_verify(&integrity);
+    if (res != HNF_OK || !integrity.valid) {
+        fprintf(stderr, "Integrity check failed (%d): %s\n", res,
+                res == HNF_OK ? integrity.error_message : "verification error");
+        return 1;
+    }
+    print_ok("Integrity check PASSED");
+
     print_header("SHUTDOWN");
     /* ======================================================================== */
     

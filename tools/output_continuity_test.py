@@ -86,6 +86,20 @@ class ContinuityTest(unittest.TestCase):
         self.assertEqual(rt.last_generation['context_rollovers'], 1)
         rt._transport.control.assert_called_once_with(dict(type='reset', session='0'))
 
+    def test_el_servidor_entrega_el_checkpoint_al_motor_del_turno(self):
+        from hexos.agent.chat_backend.model_lifecycle import ModelLifecycle
+        rt = self.runtime(iter([('context_full', 'Primer párrafo.'), ('eos', ' Fin.')]))
+        rt._transport = SimpleNamespace(control=Mock())
+        rt.close = Mock()
+        capa = ModelLifecycle(lambda: rt, ctx=4096)
+        self.addCleanup(capa.close)
+        capa.output_checkpoint = dict(request='Dos párrafos', evidence=[{'result': 'dato leído'}])
+        self.assertEqual(capa.generate([])['reply'], 'Primer párrafo. Fin.')
+        self.assertIn('dato leído', rt.messages[1]['content'])
+        self.assertEqual(rt.send.call_count, 2)
+        self.assertIsNone(rt.output_checkpoint)
+        self.assertIsNone(capa.output_checkpoint)
+
     def test_rollover_is_bounded_and_does_not_execute_a_new_call(self):
         for reason, ending in [('context_full', 'fin'), ('stop', '<|tool_call>call:nas_file_read{}<tool_call|>')]:
             rt = self.runtime(iter([('context_full', 'texto'), (reason, ending)]))

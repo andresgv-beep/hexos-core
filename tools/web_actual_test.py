@@ -11,6 +11,7 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from hexos.agent.chat_backend.state import Environment
 from hexos.agent.chat_backend.memory import MemoryService, pide_dato_de_ahora
 
 
@@ -54,10 +55,10 @@ class PuertaTest(unittest.TestCase):
 
 class ServicioTest(unittest.TestCase):
     def servicio(self):
-        return MemoryService.__new__(MemoryService)
+        return MemoryService(Environment(Path("."), None))
 
     def test_entrega_los_resultados_como_dato_y_dice_quién_buscó(self):
-        with patch('hexos.agent.chat_backend.memory.web.search',
+        with patch('hexos.agent.web.search',
                    return_value=dict(query='ubuntu', count=1, note='x',
                                      items=[dict(title='Ubuntu 26.04', url='https://ubuntu.com/',
                                                  snippet='…')])):
@@ -71,14 +72,14 @@ class ServicioTest(unittest.TestCase):
         self.assertIn('web_read', paso['result']['note'])
 
     def test_sin_red_no_tumba_el_turno_y_se_dice(self):
-        with patch('hexos.agent.chat_backend.memory.web.search',
+        with patch('hexos.agent.web.search',
                    side_effect=OSError('sin salida a internet')):
             paso = self.servicio().recall_web('cual es la ultima version de ubuntu')
         self.assertTrue(paso['failed'])
         self.assertIn('sin salida a internet', paso['result']['error'])
 
     def test_si_no_aplica_no_se_llama_a_la_web(self):
-        with patch('hexos.agent.chat_backend.memory.web.search') as buscar:
+        with patch('hexos.agent.web.search') as buscar:
             self.assertIsNone(self.servicio().recall_web('revisa los contenedores del nas'))
             buscar.assert_not_called()
 
@@ -112,7 +113,7 @@ class TrazaTest(unittest.TestCase):
             runtime = self.Runtime([{'reply': 'La más actual es la 26.04.', 'work': None},
                                     {'reply': 'Según ubuntu.com, la más actual es la 26.04.', 'work': None}])
             agent = Agent(tmp, runtime)
-            with patch('hexos.agent.chat_backend.memory.web.search', return_value=buscado):
+            with patch('hexos.agent.web.search', return_value=buscado):
                 r = agent.chat('cual es la ultima version de ubuntu')
         pasos = [p['tool'] for p in r['tools']]
         self.assertIn('web.search', pasos, 'la búsqueda de HexOS tiene que estar en la traza')

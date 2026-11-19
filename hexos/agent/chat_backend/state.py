@@ -98,6 +98,7 @@ class RetryState:
     web_read_guided: bool = False
     read_claim_checked: bool = False
     sin_llamada_devuelto: bool = False
+    nota_tras_lectura: bool = False
     tarjeta_devuelta: bool = False
     fichero_devuelto: bool = False
     # La respuesta que se devolvió en el chat, por si repetir no sirve de nada.

@@ -1,4 +1,4 @@
-"""Inicialización del almacén existente; no introduce migraciones nuevas."""
+"""Esquema del almacén de conversación y actualización de datos de versiones anteriores."""
 from __future__ import annotations
 
 from .. import catalog, procedures, workflow, notes, devices, projects
@@ -78,3 +78,16 @@ def initialize(store):
     devices.initialize(store)
     projects.initialize(store)
     por_ventana(store)                         # después: lee agent_state, que crea procedures
+    # La antigua clave global pertenece a la conversación del turno que inició el encargo.
+    # Los turnos sin etiqueta ya pertenecen a Chat y conservan su clave histórica.
+    with store.db:
+        store.db.execute('BEGIN IMMEDIATE')
+        anterior = store.db.execute("""
+            SELECT s.value, v.ventana FROM agent_state s JOIN conversation_ventana v
+            ON v.id=json_extract(s.value,'$.source_turn')
+            WHERE s.key='active' AND json_valid(s.value) AND v.ventana<>?
+        """, (catalog.DEFAULT_WINDOW,)).fetchone()
+        if anterior:
+            store.db.execute('INSERT OR IGNORE INTO agent_state VALUES (?,?)',
+                             ('active:' + anterior['ventana'], anterior['value']))
+            store.db.execute("DELETE FROM agent_state WHERE key='active'")

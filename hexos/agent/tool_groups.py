@@ -31,13 +31,27 @@ INSTRUCCION = (
 )
 
 
+# La segunda acción de un encargo compuesto puede necesitar notas aunque la primera sea una lectura.
+NOTA_TRAS_LECTURA = re.compile(
+    r'\by\s+(?:gu[aá]rd(?:a|alo|ala)|ap[uú]nt(?:a|alo|ala)|an[oó]t(?:a|alo|ala))\b'
+    r'[^.!?;\n]{0,120}\b(?:una|la) nota\b', re.I)
+
+
+def _extracto(texto, limite):
+    if len(texto) <= limite:
+        return texto
+    separador = '\n[…]\n'
+    final = limite // 2
+    return texto[:limite - final - len(separador)] + separador + texto[-final:]
+
+
 def _prompt(runtime, ultimo_asistente, mensaje, ventana):
     permitidos = catalog.groups_in(ventana)
     grupos = '\n'.join(f'- {g}: {catalog.GROUP_GUIDANCE[g]}' for g in permitidos)
     messages = [
         {'role': 'system', 'content': INSTRUCCION + '\n\nGrupos:\n' + grupos},
         {'role': 'user', 'content': json.dumps(
-            {'ultimo_asistente': (ultimo_asistente or '')[:600], 'mensaje': mensaje[:1200]},
+            {'ultimo_asistente': _extracto(ultimo_asistente or '', 600), 'mensaje': _extracto(mensaje, 1200)},
             ensure_ascii=False)},
     ]
     return runtime.template.render(messages=messages, tools=[], bos_token='<bos>',

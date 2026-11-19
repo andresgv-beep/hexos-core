@@ -17,8 +17,15 @@ def initialize(store):
 
 
 def state(store):
-    row = store.db.execute("SELECT value FROM agent_state WHERE key='active'").fetchone()
+    from .chat_backend.persistence import clave
+    row = store.db.execute('SELECT value FROM agent_state WHERE key=?', (clave(store, 'active'),)).fetchone()
     return json.loads(row[0]) if row else None
+
+
+def save_state(store, value):
+    from .chat_backend.persistence import clave
+    store.db.execute('INSERT INTO agent_state VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+                     (clave(store, 'active'), json.dumps(value, ensure_ascii=False)))
 
 
 def dispatch(store, name, args, *, turn_id=None):
@@ -35,8 +42,7 @@ def dispatch(store, name, args, *, turn_id=None):
         active = dict(intent=intent, question=question, status='awaiting_clarification',
                       authority='model_interpretation', source_turn=turn_id,
                       source_text=source[0][:2000], source_partial=len(source[0]) > 2000)
-        store.db.execute("INSERT INTO agent_state VALUES ('active',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-                         (json.dumps(active, ensure_ascii=False),))
+        save_state(store, active)
         store.db.commit()
         return active
     if name == 'report.list':

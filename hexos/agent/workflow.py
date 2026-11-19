@@ -2,6 +2,7 @@
 import json
 from uuid import uuid4
 from .work import now
+from .procedures import save_state as active, state
 
 
 PROCEDURE = dict(id='pending_report', version=2,
@@ -20,12 +21,6 @@ def initialize(store):
     ''')
 
 
-def active(store, value):
-    store.db.execute("INSERT INTO agent_state VALUES ('active',?) "
-                     'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
-                     (json.dumps(value, ensure_ascii=False),))
-
-
 def dispatch(store, name, args, turn_id):
     if name == 'procedure.list':
         return [PROCEDURE]
@@ -36,8 +31,7 @@ def dispatch(store, name, args, turn_id):
     if name == 'result.get':
         result_id = args.get('id')
         if result_id is None:
-            state = store.db.execute("SELECT value FROM agent_state WHERE key='active'").fetchone()
-            result_id = json.loads(state[0]).get('result_id') if state else None
+            result_id = (state(store) or {}).get('result_id')
             if result_id is None:
                 raise ValueError('no hay un resultado preparado en el encargo activo')
         row = store.db.execute('SELECT body FROM agent_results WHERE id=?', (result_id,)).fetchone()

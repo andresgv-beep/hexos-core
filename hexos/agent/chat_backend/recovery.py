@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 from typing import TYPE_CHECKING
+from ..tool_groups import NOTA_TRAS_LECTURA
 from .. import catalog
 from ..context import native_messages
 from ..decisions import InvalidDecision, validate_reply
@@ -69,6 +70,9 @@ FRAGMENTOS = ('responde con lo que dicen los fragmentos del buscador, diciendo q
 
 # La orden de la persona, no una frase del modelo: «apunta», «anótame», «toma nota».
 ORDEN_DE_APUNTAR = re.compile(r'^\W*(?:\w+[,!. ]+){0,3}(?:ap[uú]nta(?:me|lo)?|an[oó]ta(?:me|lo)?|toma nota)\b', re.I)
+# Si el guardado depende de una condición del usuario, una lectura sin nota puede
+# ser el cierre correcto. En ese caso decide el modelo con el resultado delante.
+NOTA_CONDICIONAL = re.compile(r'\b(?:si|solo cuando|s[oó]lo en caso de|a menos que|salvo que)\b', re.I)
 APUNTALO = ('AVISO DE HEXOS (no es la persona): todavía no se ha guardado nada. Guarda ahora la nota '
             'con lo que ha pedido, con sus palabras y sin quitarle el día ni la hora, y después '
             'confírmaselo en una frase. No menciones este aviso.')
@@ -361,6 +365,16 @@ class RecoveryController:
                 activos = list(getattr(self.agent.runtime, 'active_groups', None) or [])
                 self.agent.runtime.active_groups = activos if 'proyecto' in activos else activos + ['proyecto']
             turn.messages = [dict(role='user', content=SIN_PROPUESTA)]
+            return True
+        if (not turn.retries.nota_tras_lectura and getattr(self.agent, 'ventana', None) in catalog.WINDOWS
+                and NOTA_TRAS_LECTURA.search(turn.text) and not NOTA_CONDICIONAL.search(turn.text)
+                and any(s['tool'] == 'web.read' and not s.get('failed') for s in turn.trace)
+                and not any(s['tool'] == 'note.save' for s in turn.trace)):
+            turn.retries.nota_tras_lectura = True
+            turn.messages = [dict(role='user', content=
+                'AVISO DE HEXOS: ya se leyó la fuente. Comprueba si la persona pidió guardar '
+                'el resultado en una nota y si se cumplen sus condiciones. Si corresponde, '
+                'usa note_save con lo leído. Si no puedes, explica el motivo.')]
             return True
         # La persona ordenó apuntar algo, el selector declaró las notas y el turno acaba
         # sin guardar nada. Aquí no se mira la respuesta sino la orden, que es suya, y la

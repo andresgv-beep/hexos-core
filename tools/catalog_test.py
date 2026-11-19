@@ -45,7 +45,9 @@ class DeclarablesTest(unittest.TestCase):
             # descripciones de otros grupos sin poder medirlos costaba más que 60 caracteres en
             # un caso que solo se da cuando el selector falla. El tope por grupo no se mueve.
             with self.subTest(ventana=ventana, caso='todos sus grupos'):
-                self.assertLess(pesa(catalog.tools_for(grupos, ventana)), 7200)
+                # Agente también puede declarar las seis operaciones de notas (+680).
+                limite = 7900 if ventana == 'agente' else 7200
+                self.assertLess(pesa(catalog.tools_for(grupos, ventana)), limite)
             # El caso normal: el núcleo y un grupo, con los que arrastre.
             for grupo in grupos:
                 with self.subTest(ventana=ventana, grupo=grupo):

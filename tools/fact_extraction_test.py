@@ -182,6 +182,33 @@ class FactExtractionTest(unittest.TestCase):
         self.assertIn('He corregido', aviso)
         self.assertIn('antes Andrés', aviso)
 
+    def test_mudanza_actualiza_la_ciudad_y_persiste_la_traza(self):
+        aviso, perfil, _ = self.cosechar('Me he mudado. Ahora vivo en Teruel.',
+                                         [dict(key='yo/ciudad', value='Teruel')],
+                                         confirmados={'yo/ciudad': 'Cuenca'})
+        self.assertEqual(perfil.confirmados['yo/ciudad'], 'Teruel')
+        self.assertIn('antes Cuenca', aviso)
+        with Agent(self.tmp.name, SinExtraccion()).store() as store:
+            import json
+            row = store.db.execute('SELECT e.body, c.text FROM tool_events e '
+                                   'JOIN conversation c ON c.id=e.turn_id').fetchone()
+        self.assertIn('Ahora vivo en Teruel', row['text'])
+        self.assertEqual(json.loads(row['body'])['result']['saved'], ['yo/ciudad = Teruel'])
+
+    def test_una_ciudad_ajena_o_hipotetica_no_reemplaza_la_propia(self):
+        for mensaje in ('Recuerda que mi hermana vive en Teruel.', '¿Y si vivo en Teruel?',
+                        'No vivo en Teruel.', 'Si vivo en Teruel tendré menos gastos.',
+                        'Vivo en Cuenca y mi hermana vive en Teruel.'):
+            _, perfil, _ = self.cosechar(mensaje, [dict(key='yo/ciudad', value='Teruel')],
+                                         confirmados={'yo/ciudad': 'Cuenca'})
+            self.assertEqual(perfil.confirmados['yo/ciudad'], 'Cuenca', mensaje)
+
+    def test_preguntar_el_nombre_solo_extrae_si_hay_una_afirmacion(self):
+        for mensaje, llamadas in [('¿Cómo me llamo? Responde solo con el nombre.', 0),
+                                  ('¿Cómo me llamo? Me llamo Lidia.', 1)]:
+            _, _, runtime = self.cosechar(mensaje, [])
+            self.assertEqual(runtime.llamadas, llamadas)
+
     def test_repetir_el_mismo_dato_no_dice_nada(self):
         aviso, perfil, _ = self.cosechar('me llamo Andrés',
                                          [dict(key='yo/nombre', value='Andrés')],

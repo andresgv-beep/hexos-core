@@ -39,6 +39,8 @@ import subprocess
 import sys
 import time
 from collections import Counter
+from contextlib import ExitStack
+from unittest.mock import patch
 from pathlib import Path
 
 sys.dont_write_bytecode = True
@@ -196,7 +198,7 @@ def lectura_nas(workspace, *, device=None, section=None, **_):
 
 
 def buscar_web(query, limit=5, recency=None):
-    return dict(query=query, results=[
+    return dict(query=query, count=2, items=[
         dict(title='Última versión de Home Assistant - foro', url=WEB['mala'], snippet='Hilo sobre la última versión.'),
         dict(title='Home Assistant 2026.10 release', url=WEB['buena'], snippet='Notas de la versión de octubre.')])
 
@@ -383,16 +385,19 @@ def medir(eventos_caso):
 
 
 def ejecutar(caso, root, runtime, nas, media, solo_grupo=False):
+    from hexos.agent import catalog
     from hexos.agent.chat import Agent
     preparar(root, media)
-    runtime.call(dict(type='reset'))
-    completas = runtime.tools
-    if solo_grupo:
-        nombres = {n.replace('.', '_') for n in caso.grupo}
-        runtime.tools = [t for t in completas if t['function']['name'] in nombres]
     agent = Agent(root, runtime, dependencies=dependencias(root, nas))
+    agent.set_window('agente')
     charla, ok, detalle, empujones, inicio = [], False, '', 0, time.time()
-    try:
+    with ExitStack() as ofertas:
+        if solo_grupo:
+            nombres = {n.replace('.', '_') for n in caso.grupo}
+            grupos = sorted({catalog.group_of(n) for n in caso.grupo} - {catalog.ALWAYS, None})
+            declaradas = [t for t in runtime.tools if t['function']['name'] in nombres]
+            ofertas.enter_context(patch.object(runtime, 'tools', declaradas))
+            ofertas.enter_context(patch.object(runtime, 'elegir_grupos', return_value=grupos, create=True))
         pendientes = list(caso.turnos)
         while True:
             texto = pendientes.pop(0) if pendientes else EMPUJON
@@ -409,8 +414,6 @@ def ejecutar(caso, root, runtime, nas, media, solo_grupo=False):
                 if ok or empujones == MAX_EMPUJONES:
                     break
                 empujones += 1
-    finally:
-        runtime.tools = completas
     return dict(caso=caso.id, ok=bool(ok), detalle=detalle, empujones=max(0, empujones - caso.confirmar), segundos=round(time.time() - inicio, 1),
                 contexto=getattr(runtime, 'kv_position', None), **medir(eventos(agent)), charla=charla)
 
@@ -493,7 +496,7 @@ def main():
                                                        'herramientas', 'detalle')}, ensure_ascii=False), flush=True)
     finally:
         runtime.close()
-    resumen, texto = resumir(filas, modo)
+    resumen, texto = resumir(filas, modo if args.grupo_correcto else 'selector de Agente')
     (carpeta / 'resumen.json').write_text(json.dumps(resumen, ensure_ascii=False, indent=1))
     (carpeta / 'resumen.md').write_text(texto)
     print('RESUMEN', json.dumps(resumen, ensure_ascii=False), flush=True)

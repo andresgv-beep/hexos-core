@@ -110,6 +110,19 @@ class SelectorTest(unittest.TestCase):
         self.assertEqual(tool_groups.elegir(r, 'hola', 'busca el pdf', 'agente'), ['archivos'])
         self.assertTrue(r.enviado[1], 'la elección no puede ensuciar la conversación')
 
+    def test_un_mensaje_largo_conserva_el_principio_y_la_orden_final(self):
+        import json
+        from unittest.mock import Mock
+        r = self.Falso('[]')
+        r.template.render = Mock(return_value='prompt')
+        texto = 'Empieza aquí. ' + 'datos ' * 250 + 'Guárdalo en una nota.'
+        tool_groups._prompt(r, texto, texto, 'agente')
+        datos = json.loads(r.template.render.call_args.kwargs['messages'][1]['content'])
+        for campo, limite in [('mensaje', 1200), ('ultimo_asistente', 600)]:
+            self.assertEqual(len(datos[campo]), limite)
+            self.assertTrue(datos[campo].startswith('Empieza aquí.'))
+            self.assertTrue(datos[campo].endswith('Guárdalo en una nota.'))
+
     def test_un_grupo_de_la_otra_ventana_no_cuela(self):
         """Por defecto se conversa: pedir el NAS en charla no se da por bueno."""
         self.assertIsNone(tool_groups.elegir(self.Falso('["archivos"]'), '', 'busca el pdf'))
@@ -132,9 +145,12 @@ class VentanasTest(unittest.TestCase):
         en_ventanas = {g for grupos in catalog.WINDOWS.values() for g in grupos}
         self.assertEqual(en_ventanas | {catalog.ALWAYS}, set(catalog.GROUPS))
 
-    def test_ninguna_ventana_repite_grupo_de_la_otra(self):
+    def test_las_notas_se_pueden_pedir_desde_ambas_ventanas(self):
         chat, agente = set(catalog.WINDOWS['chat']), set(catalog.WINDOWS['agente'])
-        self.assertEqual(chat & agente, set())
+        self.assertEqual(chat & agente, {'notas'})
+        for ventana in catalog.WINDOWS:
+            self.assertIn('note.save', catalog.tools_for(['notas'], ventana))
+            self.assertNotIn('note.save', catalog.tools_for([], ventana))
 
     def test_en_charla_no_se_puede_pedir_el_nas_ni_inventandolo(self):
         self.assertIsNone(tool_groups.interpretar('["archivos"]', 'chat'))

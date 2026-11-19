@@ -588,9 +588,9 @@ GROUP_GUIDANCE = {
     'equipos': ('Otros ordenadores y el NAS de la casa, cuando se nombran: listarlos, conectarse a ellos, mirar la '
                 'red, y del NAS su salud, el espacio que le queda y lo que corre en él.'),
     'multimedia': 'Convertir o comprimir vídeo y audio, y seguir esos trabajos.',
-    'notas': 'Notas de la persona: guardarlas, listarlas, marcarlas y borrarlas.',
+    'notas': 'Guardar notas, también con el resultado de una consulta. Listarlas, marcarlas y borrarlas.',
     'informes': 'Informes, trabajos, procedimientos y documentos propios.',
-    'descargas': ('Bajar o guardar en este PC un fichero de la web (un PDF, un manual, unos planos, una imagen), '
+    'descargas': ('Cuando se pide una copia local: descargar un fichero de la web a este PC, '
                   'ver lo ya descargado y leer un PDF descargado. Crear un documento PDF, Word o Excel '
                   '(una hoja de cálculo) para la persona.'),
 }
@@ -603,7 +603,7 @@ ALWAYS = 'nucleo'
 # ambas y no acabas con dos asistentes que no se conocen.
 WINDOWS = {
     'chat': ('notas', 'informes', 'descargas'),
-    'agente': ('sistema', 'proyecto', 'equipos', 'archivos', 'multimedia'),
+    'agente': ('sistema', 'proyecto', 'equipos', 'archivos', 'multimedia', 'notas'),
 }
 DEFAULT_WINDOW = 'chat'
 

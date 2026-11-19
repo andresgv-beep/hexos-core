@@ -33,6 +33,11 @@ def native_messages(history, metadata, request, tool_events=None, memory_evidenc
     for row, _ in selected:
         kept = []
         for event in reversed(tool_events.get(row['id'], [])):
+            # La cosecha de HERA ocurre al cerrar el turno. Su aviso ya figura
+            # en la respuesta archivada; el modelo nunca emitió esa llamada.
+            if (event['tool'] == 'profile.remember' and isinstance(event['result'], dict)
+                    and event['result'].get('requested_by') == 'hexos'):
+                continue
             event = tool_digest.compact_archived(dict(event), row['id'] == newest, effects)
             encoded = json.dumps(event['result'], ensure_ascii=False)
             if len(encoded) > 4000:

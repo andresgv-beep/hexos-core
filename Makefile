@@ -72,7 +72,7 @@ test: all
 	@$(MAKE) -C hexos runtime-policy-test
 	@echo ""
 	@echo "Running HEXOS test..."
-	@cd hexos && ./bin/hexos --help || true
+	@cd hexos && ./bin/hexos --help
 	@echo ""
 	@echo "Running Memory Core test..."
 	@cd memory_core && ./bin/mc_test

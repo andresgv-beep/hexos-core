@@ -74,6 +74,7 @@ CASOS = [
     ('agente', 'hola, ¿qué tal?', []),
     ('agente', 'gracias', []),
     ('agente', 'jajaja vale', []),
+    ('agente', 'lee el manual de la web y guarda el código en una nota', ['notas']),
     ('agente', 'explícame en dos frases qué es la cuantización de un modelo', []),
     ('agente', '¿qué opinas de medir antes de optimizar?', []),
     # --- ventana Chat
