@@ -35,3 +35,14 @@ export function addStep(steps: string[] | undefined, line: string): string[] {
   if (!line || current.some(step => key(step) === key(line))) return current;
   return [...current, line];
 }
+
+/** Los anuncios que hay que añadir al turno en pantalla; todos quedan anotados en `seen`.
+ *
+ *  Sin turno en curso también se anotan, aunque no se pinten: son de un turno que esta página
+ *  no envió (otro dispositivo, o ella misma antes de recargar). Si se dejaban sin anotar, el
+ *  siguiente mensaje se los encontraba todavía en el estado y los enseñaba como suyos. */
+export function freshAnnouncements<T extends { id: string }>(messages: T[], seen: Set<string>, inProgress: boolean): T[] {
+  const fresh = messages.filter(m => !seen.has(m.id));
+  fresh.forEach(m => seen.add(m.id));
+  return inProgress ? fresh : [];
+}

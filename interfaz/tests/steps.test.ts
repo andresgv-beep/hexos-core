@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { addStep, isNewGeneration, stepFromDiscarded } from '../lib/helios/steps';
+import { addStep, freshAnnouncements, isNewGeneration, stepFromDiscarded } from '../lib/helios/steps';
 
 test('live text that only grows is the same generation; a restart is a new one', () => {
   const primero = 'Para que la interfaz sea realmente moderna voy a aplicar';
@@ -27,4 +27,16 @@ test('the same notice is not listed twice when it arrives both live and as an an
   pasos = addStep(pasos, '');
   pasos = addStep(pasos, 'Voy a ejecutar el programa.');
   assert.deepEqual(pasos, ['Voy a leer el contenido de main.py.', 'Voy a ejecutar el programa.']);
+});
+
+test('announcements left over from a turn this page did not send never reach the next one', () => {
+  const vistos = new Set<string>();
+  const excel = { id: 'a1', text: 'Voy a prepararte el archivo Excel.' };
+  // Página recién cargada, sin turno propio: el anuncio de ayer no se pinta, pero queda anotado.
+  assert.deepEqual(freshAnnouncements([excel], vistos, false), []);
+  // Se envía «hazme un Snake» y el estado todavía trae el anuncio viejo mientras carga el modelo.
+  assert.deepEqual(freshAnnouncements([excel], vistos, true), []);
+  const snake = { id: 'b2', text: 'Voy a empezar el proyecto.' };
+  assert.deepEqual(freshAnnouncements([snake], vistos, true), [snake]);
+  assert.deepEqual(freshAnnouncements([snake], vistos, true), []);
 });

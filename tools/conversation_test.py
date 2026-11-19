@@ -100,6 +100,21 @@ class Tests(unittest.TestCase):
             self.assertEqual(first['progress']['messages'][0]['text'],'Reviso lo que hablamos.')
             self.assertEqual(second['progress']['messages'][0]['text'],'Me pongo con ello y te cuento el resultado.')
 
+    def test_previous_announcements_are_gone_before_the_model_loads(self):
+        # Cargar el modelo va antes de preparar el contexto y puede tardar; mientras tanto el
+        # estado no puede seguir enseñando lo que anunció el turno anterior.
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime=runtime_with_outputs('Reviso lo que hablamos.\n<|tool_call>call:history_recent{}<tool_call|>',
+                                         'Listo.', 'Hola.')
+            agent=Agent(tmp,runtime)
+            durante_la_carga=[]
+            runtime.acquire_turn=lambda stop=None: durante_la_carga.append(list(agent.progress['messages']))
+            runtime.release_turn=lambda: None
+            first=agent.chat('Busca en el historial.')
+            self.assertEqual(len(first['progress']['messages']),1)
+            agent.chat('Hola.')
+            self.assertEqual(durante_la_carga,[[],[]])
+
     def test_acceptance_keeps_original_proposal_in_dialogue(self):
         with tempfile.TemporaryDirectory() as tmp:
             proposal = 'Puedo consultar los vecinos de la red. ¿Quieres que lo haga?'

@@ -47,6 +47,10 @@ class TurnRunner:
             raise RuntimeError('Ya hay un turno en curso')
         self.agent.state = 'thinking'
         self.agent.active_tools = []
+        # Los anuncios del turno anterior se retiran ya, no al preparar el contexto: antes va la
+        # carga del modelo, que con el 35B son muchos segundos, y en ese rato /api/status seguía
+        # sirviendo «Voy a prepararte el archivo Excel…» a un turno que pedía un Snake (19/11).
+        self.agent.progress = {'turn_id': None, 'messages': []}
         turn = None
         transcript = None
         try:

@@ -24,7 +24,7 @@ import { phases } from "@/lib/helios/state";
 import { AUTO_CHECK_LABEL, createHexosTransport, downloadReply, type ContextCut, type CredentialRequest, type HeliosTransport, type HistoryMessage,
          type ProjectChange, type SystemRequest } from "@/lib/helios/hexos";
 import { mergeToolActivities, turnToolActivities, type ToolActivity } from "@/lib/helios/tools";
-import { addStep, isNewGeneration, stepFromDiscarded } from "@/lib/helios/steps";
+import { addStep, isNewGeneration, stepFromDiscarded, freshAnnouncements } from "@/lib/helios/steps";
 import { coreSectionForTools, createCoreClient, type NoteDetail } from "@/lib/helios/core";
 import { createMediaClient, isActive, type MediaControl, type MediaJob } from "@/lib/helios/media";
 import { MediaCard } from "./MediaCard";
@@ -431,10 +431,9 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       // Lo que Helios dice que va a hacer, mientras lo hace. Sin esto la ventana
       // se quedaba en «pensando…» y lo anunciado —que lo escribe el modelo, no
       // nosotros— se perdía; el chat viejo sí lo enseñaba.
-      const nuevos = estado.progress.messages.filter(m => !anunciosVistos.current.has(m.id));
       const destino = ventanaEnCurso.current;
+      const nuevos = freshAnnouncements(estado.progress.messages, anunciosVistos.current, destino !== null);
       if (nuevos.length && destino !== null) {
-        nuevos.forEach(m => anunciosVistos.current.add(m.id));
         setTurns(items => items.map(item => item.id === destino
           ? { ...item, progress: nuevos.reduce((pasos, m) => addStep(pasos, m.text), item.progress ?? []) }
           : item));
