@@ -39,6 +39,12 @@ class GenerationInterrupted(RuntimeError):
 
 def visible_preview(text, open_thought=False):
     """Provisional text only: never expose thought/tool channels, even split tokens."""
+    # Qwen con el pensamiento activado: la plantilla ya dejó «<think>» abierto en el prompt,
+    # así que lo generado empieza dentro del pensamiento sin traer la marca. Sin reponerla,
+    # el razonamiento se enseñaba en vivo como si fuera la respuesta y, al cancelar, se
+    # guardaba como tal («The user (Andrés) wants to know…», 19/11).
+    if open_thought == '<think>':
+        text, open_thought = '<think>' + text, False
     text = text.lstrip()
     if text.startswith('<think>'):
         end = text.find('</think>')
@@ -77,6 +83,8 @@ def visible_preview(text, open_thought=False):
 # sin azar: el nombre y los argumentos tienen que salir exactos aunque se esté charlando
 # con temperatura.
 GREEDY_DESDE = ('<|tool_call>',)
+# Qwen: su llamada y, además, el cierre del pensamiento. Piensa con muestreo y contesta sin azar.
+GREEDY_DESDE_QWEN = ('<tool_call>', '</think>')
 
 
 class NativeTransport:
@@ -180,16 +188,22 @@ class NativeTransport:
         # Solo la conversación lleva temperatura, y solo si quien dirige el turno la puso.
         # Las generaciones auxiliares (selector, extractor) deciden: siempre sin azar.
         temperatura = 0 if auxiliar else float(getattr(self, 'temperature', 0) or 0)
+        # Pensamiento que el prompt deja abierto: el motor le pone tope y lo cierra él si se
+        # agota. De un solo uso: lo pone quien dirige esa generación y no pasa a la siguiente.
+        pensar = 0 if auxiliar else int(getattr(self, 'thinking_budget', 0) or 0)
+        if not auxiliar:
+            self.thinking_budget = 0
         rid = uuid4().hex
         with self.state_lock:
             self.active = rid
         self.pending = (rid, session, attachments)
         self.write(dict(type='turn', request_id=rid, session=session,
             messages=[dict(role='user', content=prompt)], attachment_ids=attachments,
-            generation=dict(temperature=temperatura, max_visible_tokens=3072, max_thinking_tokens=0,
+            generation=dict(temperature=temperatura, max_visible_tokens=3072, max_thinking_tokens=pensar,
                 preformatted=True, reuse_prefix=True, close_turn=False,
                 stop_tokens=getattr(self, 'stop_tokens', ['<|tool_response>']), prefill_progress=True,
-                **(dict(greedy_after_tokens=list(GREEDY_DESDE)) if temperatura else {}))))
+                **(dict(thinking_open=True) if pensar else {}),
+                **(dict(greedy_after_tokens=list(getattr(self, 'greedy_after', GREEDY_DESDE))) if temperatura else {}))))
 
     def finish(self, update=None):
         rid, session, attachments = self.pending

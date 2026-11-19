@@ -34,6 +34,53 @@ class Tests(unittest.TestCase):
         self.assertEqual(visible_preview('<think>private'), '')
         self.assertEqual(visible_preview('<think>private</think>Hola'), 'Hola')
 
+    def test_el_pensamiento_que_el_prompt_deja_abierto_no_se_ensena(self):
+        # La plantilla acaba en «<think>\n»: lo generado no trae la marca de apertura.
+        self.assertEqual(visible_preview('The user wants to know how', '<think>'), '')
+        self.assertEqual(visible_preview('Let me search.\n</think>\n\nPara verlo', '<think>'), 'Para verlo')
+        # Sin pensamiento activado, el texto es la respuesta.
+        self.assertEqual(visible_preview('Para verlo'), 'Para verlo')
+
+    def test_qwen_piensa_con_muestreo_y_tope_y_contesta_sin_azar(self):
+        import threading
+        from types import SimpleNamespace
+        from hexos.agent import native
+        from hexos.agent.native_transport import NativeTransport, GREEDY_DESDE_QWEN
+        prompt = '<|im_start|>assistant\n<think>\n'
+        self.assertTrue(native.pensamiento_abierto(True, prompt))
+        self.assertFalse(native.pensamiento_abierto(True, prompt, 'razono</think>\n\nHola'))   # continuación
+        self.assertFalse(native.pensamiento_abierto(False, prompt))                              # Gemma
+        self.assertFalse(native.pensamiento_abierto(True, '<|im_start|>assistant\n<think>\n\n</think>\n\n'))
+        transport = NativeTransport.__new__(NativeTransport)
+        writes = []
+        transport.control = lambda request, payload=b'': {'request_id': 'a1'}
+        transport.write = lambda request, payload=b'': writes.append(request)
+        transport.poisoned = False
+        transport.cancelled = SimpleNamespace(is_set=lambda: False)
+        transport.reset_sessions = set()
+        transport.aux_ready = True
+        transport.state_lock = threading.Lock()
+        transport.stop_tokens = []
+        transport.greedy_after = GREEDY_DESDE_QWEN
+        transport.temperature = native.temperatura_de_pensar()
+        transport.thinking_budget = native.presupuesto_de_pensar()
+        transport.start(prompt)
+        g = writes[-1]['generation']
+        self.assertEqual((g['temperature'], g['max_thinking_tokens'], g['thinking_open']), (0.6, 1024, True))
+        self.assertEqual(g['greedy_after_tokens'], ['<tool_call>', '</think>'])
+        # El tope es de un solo uso: la generación siguiente no lo hereda.
+        transport.temperature = 0
+        transport.start('<|im_start|>assistant\n<think>\n\n</think>\n\n')
+        g = writes[-1]['generation']
+        self.assertEqual((g['temperature'], g['max_thinking_tokens']), (0, 0))
+        self.assertNotIn('thinking_open', g)
+        self.assertNotIn('greedy_after_tokens', g)
+        # Una generación auxiliar (selector, anuncio) nunca piensa ni gasta el tope de otra.
+        transport.thinking_budget = 512
+        transport.start('selector', auxiliar=True)
+        self.assertEqual(writes[-1]['generation']['max_thinking_tokens'], 0)
+        self.assertEqual(transport.thinking_budget, 512)
+
 
 class CoderTest(unittest.TestCase):
     """Qwen3-Coder llama con etiquetas: <function=…> y <parameter=…>, con el valor en crudo."""

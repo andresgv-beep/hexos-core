@@ -10,7 +10,8 @@ import subprocess
 import threading
 import time
 
-from .native_transport import AudioClip, NativeTransport, TurnCancelled, GenerationInterrupted, visible_preview
+from .native_transport import (AudioClip, NativeTransport, TurnCancelled, GenerationInterrupted, visible_preview,
+                               GREEDY_DESDE_QWEN)
 from . import catalog
 from .control_markers import neutral_messages, quoted, restore
 from . import qwen_protocol
@@ -113,6 +114,27 @@ def _temperatura_env(nombre, defecto):
         return min(1.5, max(0.0, float(os.environ.get(nombre, defecto))))
     except ValueError:
         return defecto
+
+# Qwen piensa con muestreo, no eligiendo siempre la palabra más probable. A temperatura 0 el
+# razonamiento se muerde la cola: el 19/11 el 35B repitió siete veces «Or maybe "Sitel"?
+# Let's search for…» hasta que lo pararon a los 1.054 tokens. Su propia ficha pide muestreo.
+# La respuesta y las llamadas siguen sin azar: el motor baja a 0 al cerrar el pensamiento.
+def temperatura_de_pensar():
+    return _temperatura_env('HEXOS_TEMP_PENSAR', 0.6)
+
+
+# Tope del pensamiento, en tokens. Agotado, el motor escribe «</think>» y el modelo contesta.
+def presupuesto_de_pensar():
+    try:
+        return min(2048, max(64, int(os.environ.get('HEXOS_PENSAR_TOKENS', 1024))))
+    except ValueError:
+        return 1024
+
+
+def pensamiento_abierto(qwen, prompt, completion=''):
+    """¿Sigue esta generación dentro del «<think>» que la plantilla de Qwen dejó abierto?"""
+    return bool(qwen) and prompt.endswith('<think>\n') and '</think>' not in completion
+
 
 # El texto con el que la interfaz envuelve un retoque del código abierto (preview.ts).
 REVISION_DE_CODIGO = 'Estás trabajando directamente sobre la implementación abierta'
@@ -352,6 +374,8 @@ class NativeRuntime:
             try:
                 self._transport = NativeTransport(binary, model, ctx, self.log, multimodal)
                 self._transport.stop_tokens = [] if self.qwen else ['<|tool_response>']
+                if self.qwen:
+                    self._transport.greedy_after = GREEDY_DESDE_QWEN
                 self.proc = self._transport.proc
             except Exception:
                 self.log.close()
@@ -404,6 +428,8 @@ class NativeRuntime:
                                      total=event.get('total_tokens', 0)))
             result = self._transport.finish(update)
             stats, times = result['usage'], result['timings']
+            if not self._aux_generation:
+                self._thinking_tokens = stats.get('thinking_tokens')
             if not self._aux_generation:
                 self.kv_position = result['model_state']['cache_position']
                 self.notify(dict(decode_sample=dict(tokens=stats['generated_tokens'],
@@ -657,7 +683,8 @@ class NativeRuntime:
                                     add_generation_prompt=True,enable_thinking=getattr(self, 'thinking', False) and not required_read)
         prompt += prefix
         self._completion_prefix = prefix
-        self._completion_open_thought = prompt.endswith('<|channel>thought\n')
+        pensando = pensamiento_abierto(getattr(self, 'qwen', False), prompt)
+        self._completion_open_thought = '<think>' if pensando else prompt.endswith('<|channel>thought\n')
         completion = ''
         segments = []
         context_rollovers = 0
@@ -668,10 +695,15 @@ class NativeRuntime:
         if getattr(self, '_transport', None):
             sin_azar = (required_read or getattr(self, 'repair_call', False) or getattr(self, 'qwen', False)
                         or (self.messages and self.messages[-1].get('role') == 'tool'))
-            self._transport.temperature = 0 if sin_azar else float(getattr(self, 'temperatura', 0) or 0)
+            temperatura = 0 if sin_azar else float(getattr(self, 'temperatura', 0) or 0)
         for chunk in range(4):
             self._completion_prefix = prefix + completion
             self._stream_completion = ''
+            if getattr(self, '_transport', None):
+                # Una continuación llega con el pensamiento ya cerrado: ni tope ni muestreo.
+                abierto = pensando and pensamiento_abierto(True, prompt, completion)
+                self._transport.thinking_budget = presupuesto_de_pensar() if abierto else 0
+                self._transport.temperature = temperatura_de_pensar() if abierto else temperatura
             try:
                 data = self.send(prompt + completion, image)
                 header, fragment = self.event()
@@ -734,6 +766,7 @@ class NativeRuntime:
             stopped_on_token=header[3]=='1', tokens=sum(s['tokens'] for s in segments), ms=sum(s['ms'] for s in segments),
             prefill_tokens=int(header[5]) if len(header)>6 else None,
             prefill_reused=int(header[6]) if len(header)>6 else None,
+            thinking_tokens=getattr(self, '_thinking_tokens', None) if pensando else None,
             prompt=prompt, prompt_sha256=hashlib.sha256(prompt.encode()).hexdigest())
         # Cuánto ocupa el KV después de esta generación. Es el número del motor, no
         # una estimación: lo que decide si el turno siguiente cabe. Sin esto el
