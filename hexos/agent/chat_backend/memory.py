@@ -124,6 +124,45 @@ def recall_terms(text, limite=3):
     terminos.sort(key=len, reverse=True)
     return terminos[:limite]
 
+# Cuántas líneas distintas caben en el trato de la ficha. Pocas a propósito: va delante en cada turno.
+MAX_TRATOS = 4
+
+
+def _raices(texto):
+    return {sin_tildes(p)[:6] for p in re.findall(r"[\wáéíóúüñ]{4,}", (texto or '').casefold())
+            if sin_tildes(p) not in PALABRAS_VACIAS}
+
+
+def hueco_del_trato(confirmados, nuevo):
+    """En qué hueco va una petición de trato, para que la ficha no acumule repeticiones.
+
+    Lo mismo dicho con otras palabras sustituye a su línea: «no eres un asistente
+    comercial» y «eres un compañero, no un asistente» eran dos entradas y son una
+    intención. Lo que es otra cosa («no uses emojis») ocupa hueco nuevo, hasta el tope;
+    lleno, no entra solo: la persona dice cuál cambia. HERA sigue guardando una cita
+    literal por hueco, y cada cambio queda en su historial.
+    """
+    from .profile_context import tratos
+    vigentes = tratos(confirmados)
+    for clave, valor in vigentes:
+        if valor.casefold() == ' '.join(nuevo.split()).casefold():
+            return clave
+    raices = _raices(nuevo)
+    for clave, valor in vigentes:
+        suyas = _raices(valor)
+        comunes = raices & suyas
+        if len(comunes) >= 2 or (comunes and len(comunes) == min(len(raices), len(suyas))):
+            return clave
+    if len(vigentes) >= MAX_TRATOS:
+        raise ValueError('La ficha ya tiene %d líneas de trato y esta no sustituye a ninguna: ' % MAX_TRATOS
+                         + '; '.join('«%s»' % valor for _, valor in vigentes)
+                         + '. No se ha guardado. Dile cuáles son y que elija cuál cambia.')
+    usados = {clave for clave, _ in vigentes}
+    # Un hueco retirado (repetía a otro) se aprovecha antes de abrir uno más.
+    huecos = ['yo/trato'] + ['yo/trato %d' % n for n in range(2, 40)]
+    return next(h for h in huecos if h not in usados)
+
+
 # Segunda persona dentro de un dato: se refiere a quien escucha, que es Helios.
 A_HELIOS = re.compile(r'\b(?:tu|tus|tú|ti|te|contigo|tuyo|tuya|tuyos|tuyas)\b', re.I)
 
@@ -138,7 +177,7 @@ def frase_del_hecho(clave, valor):
     # guardaba como «Su rol es tu creador» y al leerlo contestó «como tu creador,
     # espero que…». Las comillas y la aclaración dejan dicho a quién se lo decía.
     if sujeto == 'yo' and atributo.startswith('trato'):
-        # Varias peticiones conviven (trato, trato 2…): se leen como lo que son.
+        # Lo que pidió sobre el trato, con sus palabras. En la ficha va en su propio bloque.
         return 'Te pidió: «' + valor + '»'
     if A_HELIOS.search(valor):
         valor = '«' + valor + '» (lo dijo hablándote a ti, Helios)'
@@ -187,14 +226,18 @@ class MemoryService:
         # cambia es si ya había un hecho vigente. HERA reemplaza de forma atómica
         # y conserva la cadena en `hera historial <clave>`.
         confirmados = self.env.profile.keys()
-        # El trato se acumula. «háblame como un colega» y después «no uses emojis» son
-        # dos peticiones, no una corrección: la segunda se descartaba por no citar la
-        # primera. Cada una ocupa su hueco (trato, trato 2…) salvo que ya esté dicha.
-        if clave == 'yo/trato' and confirmados.get(clave) not in (None, value):
-            dichos = {k: v for k, v in confirmados.items() if k.startswith('yo/trato')}
-            repetido = next((k for k, v in dichos.items() if v.casefold() == value.casefold()), None)
-            clave = repetido or next('yo/trato %d' % n for n in range(2, 40)
-                                     if 'yo/trato %d' % n not in dichos)
+        # El trato de la ficha son pocas líneas sin repetir (hueco_del_trato). «háblame como
+        # un colega» y después «no uses emojis» son dos peticiones y conviven; la misma dicha
+        # de otra forma sustituye a la que había. Antes cada una abría hueco nuevo (trato 2,
+        # trato 3…) y el perfil acababa con la misma idea tres veces.
+        del_trato = clave == 'yo/trato'
+        if del_trato:
+            try:
+                clave = hueco_del_trato(confirmados, value)
+            except ValueError as exc:
+                if not automatic:
+                    raise
+                return dict(saved=False, unchanged=True, key=clave, value=value, note=str(exc))
             texto = frase_del_hecho(clave, value)
         anterior = confirmados.get(clave)
         if anterior is None and getattr(self.env.profile, 'unreadable', None):
@@ -205,11 +248,11 @@ class MemoryService:
                              repr(clave) + ' ya estaba. No se guarda para no duplicarlo.')
         if anterior is None:
             self.env.profile.remember(clave, value, texto, quote[:1000])
-        elif anterior == value:
+        elif anterior == value or (del_trato and anterior.casefold() == value.casefold()):
             return dict(saved=False, unchanged=True, key=clave, value=value,
                         note='Ya estaba guardado con ese mismo valor; no se ha tocado nada.')
         else:
-            if automatic and anterior.casefold() not in quote.casefold():
+            if automatic and not del_trato and anterior.casefold() not in quote.casefold():
                 raise ValueError('Conflicto de memoria: una extracción automática no puede '
                                  'reemplazar otro hecho sin una referencia literal al valor anterior. '
                                  'Usa una clave específica para un asunto distinto.')
@@ -375,8 +418,8 @@ class MemoryService:
                               verification='confirmada',
                               evidence='releído del perfil: ' + ', '.join(guardados),
                               result=dict(saved=guardados, requested_by='hexos',
-                                          note='Lo guardó HexOS al ver que la persona contaba algo '
-                                               'de sí misma; el modelo no lo pidió. Las palabras son '
+                                          note='Lo guardó HexOS al ver que la persona contaba un dato '
+                                               'suyo; el modelo no lo pidió. Las palabras son '
                                                'suyas y HERA conserva la frase como evidencia.')))
         # Decirlo siempre: si se equivoca, que se vea en el momento y no dentro de un mes.
         return '· ' + '. '.join(anotado) + '.' if anotado else ''

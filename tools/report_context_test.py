@@ -124,7 +124,7 @@ class PerfilEnElChatTest(unittest.TestCase):
     """En el chat lo que la persona ha dicho de sí misma va delante; en el agente, no."""
     class Perfil:
         def read(self): return 'PERFIL DE LA PERSONA ACTUAL:\n- Su nombre es Andrés\n- Su trato es de colega, sin fórmulas'
-        def keys(self): return {'yo/nombre': 'Andrés'}
+        def keys(self): return {'yo/nombre': 'Andrés', 'yo/trato': 'de colega, sin fórmulas'}
 
     def contexto(self, ventana, perfil=None):
         tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
@@ -148,14 +148,27 @@ class PerfilEnElChatTest(unittest.TestCase):
 
     def test_un_perfil_ilegible_no_tumba_el_turno(self):
         class Roto(self.Perfil):
-            def read(self): raise FileNotFoundError('hera')
+            def keys(self): raise FileNotFoundError('hera')
         self.assertIn('profile_recall', self.contexto('chat', Roto()))
 
     def test_un_perfil_largo_se_recorta_y_lo_dice(self):
         class Largo(self.Perfil):
-            def read(self): return 'x' * 5000
+            def keys(self): return {'yo/nota %d' % n: 'x' * 190 for n in range(30)}
         texto = self.contexto('chat', Largo())
         self.assertIn('Hay más: profile_recall', texto)
         self.assertLess(texto.count('x'), 1600)
+
+    def test_la_ficha_tiene_un_bloque_de_trato_sin_repetir_y_siempre_el_mismo_orden(self):
+        class Acumulado(self.Perfil):
+            def keys(self): return {'yo/trato 3': 'sin dramatismo', 'yo/rol': 'creador',
+                                    'yo/trato': 'compañero y socio', 'gato/nombre': 'Turbo',
+                                    'yo/trato 2': 'Compañero y socio', 'yo/ciudad': 'Vigo', 'yo/nombre': 'Marta'}
+        texto = json.loads(self.contexto('chat', Acumulado()))[0]['content']
+        lineas = texto[texto.index('PERFIL DE LA PERSONA ACTUAL'):].strip().split('\n')
+        self.assertNotRegex(texto, r'\b[Ee]lla\b')      # ni «ella misma» ni «lo fijó ella»
+        self.assertEqual(lineas[1:], ['- Su nombre es Marta', '- Su ciudad es Vigo', '- Su rol es creador',
+                                      '- Su gato se llama Turbo',
+                                      'CÓMO QUIERE QUE LE TRATES (lo ha pedido la propia persona; vale siempre, desde la primera frase):',
+                                      '- compañero y socio', '- sin dramatismo'])
 
 if __name__ == '__main__': unittest.main()

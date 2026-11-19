@@ -351,6 +351,56 @@ class TratoTest(unittest.TestCase):
                 self.assertIsNone(AFIRMACION.search(texto), texto)
 
 
+class TratoDeLaFichaTest(unittest.TestCase):
+    """El trato de la ficha son pocas líneas: lo repetido sustituye a su línea, no se acumula."""
+
+    def guardar(self, perfil, frase):
+        from hexos.agent.chat import Agent
+        tmp = tempfile.TemporaryDirectory(prefix='hexos-trato-'); self.addCleanup(tmp.cleanup)
+        agent = Agent(tmp.name, FakeRuntime(), perfil)
+        with agent.store() as store:
+            store.db.execute("INSERT INTO conversation VALUES ('t1','2026-11-19T10:00:00+00:00','user',?,?)",
+                             ('recuerda: ' + frase, 'recuerda: ' + frase))
+            return agent.memory.remember_fact(store, {'key': 'trato', 'value': frase}, 't1')
+
+    def test_la_misma_idea_con_otras_palabras_sustituye_a_su_linea(self):
+        from hexos.agent.chat_backend.profile_context import tratos
+        perfil = FakeProfile()
+        for frase in ('no ser un asistente comercial helios, somos compañeros de trabajo',
+                      'no eres un asistente comercial, helios, es decir, tu eres helios y no un asistente jajaj',
+                      'eres un compañero no un asistente'):
+            self.guardar(perfil, frase)
+        self.assertEqual(perfil.confirmados, {'yo/trato': 'eres un compañero no un asistente'})
+        self.assertEqual((len(perfil.guardados), len(perfil.corregidos)), (1, 2))
+        r = self.guardar(perfil, 'ERES UN COMPAÑERO NO UN ASISTENTE')
+        self.assertTrue(r.get('unchanged'))
+        self.assertEqual(tratos(perfil.confirmados), [('yo/trato', 'eres un compañero no un asistente')])
+
+    def test_otra_peticion_convive_hasta_el_tope_y_despues_no_entra_sola(self):
+        from hexos.agent.chat_backend.profile_context import tratos
+        perfil = FakeProfile({'yo/trato': 'eres un compañero no un asistente'})
+        for frase in ('no uses emojis', 'háblame claro y corto', 'sin dramatismo'):
+            self.guardar(perfil, frase)
+        self.assertEqual([v for _, v in tratos(perfil.confirmados)],
+                         ['eres un compañero no un asistente', 'no uses emojis', 'háblame claro y corto', 'sin dramatismo'])
+        with self.assertRaisesRegex(ValueError, 'ya tiene 4 líneas'):
+            self.guardar(perfil, 'tutéame siempre')
+        # Lo que sustituye a una línea que ya está sí entra, en el hueco de esa línea.
+        self.guardar(perfil, 'no uses emojis ni iconos')
+        self.assertEqual(perfil.confirmados['yo/trato 2'], 'no uses emojis ni iconos')
+        self.assertEqual(len(tratos(perfil.confirmados)), 4)
+
+    def test_un_hueco_que_repite_a_otro_esta_retirado_y_se_aprovecha(self):
+        from hexos.agent.chat_backend.profile_context import recall, tratos
+        perfil = FakeProfile({'yo/trato': 'simpático y natural', 'yo/trato 2': 'Simpático y natural',
+                              'yo/trato 3': 'simpático y natural', 'yo/trato 4': 'socio'})
+        self.assertEqual(tratos(perfil.confirmados), [('yo/trato', 'simpático y natural'), ('yo/trato 4', 'socio')])
+        self.assertEqual([f['key'] for f in recall(perfil, 'trato')['facts']], ['yo/trato', 'yo/trato 4'])
+        self.guardar(perfil, 'no uses emojis')
+        self.assertEqual(perfil.confirmados['yo/trato 2'], 'no uses emojis')
+        self.assertNotIn('yo/trato 5', perfil.confirmados)
+
+
 class TrazaDelPerfilTest(unittest.TestCase):
     """Lo que HexOS guarda en el perfil tiene que constar, o el propio cierre lo
     lee como una afirmación sin respaldo."""
