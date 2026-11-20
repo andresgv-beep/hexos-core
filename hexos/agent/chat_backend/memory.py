@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+import sqlite3
 import time
 from ..native_transport import TurnCancelled
 from ..work import now, string
@@ -112,7 +113,8 @@ def sin_tildes(palabra):
 
 def recall_terms(text, limite=3):
     """Las palabras de la pregunta que sirven para buscar: las más largas primero,
-    porque «contenedores» encuentra el mensaje y «cosa» encuentra media noche."""
+    porque «contenedores» encuentra el mensaje y «cosa» encuentra media noche.
+    Con `limite=None`, todas."""
     vistas, terminos = set(), []
     for palabra in re.findall(r"[\wáéíóúüñÁÉÍÓÚÜÑ]{3,}", (text or '').casefold()):
         plano = sin_tildes(palabra)
@@ -121,7 +123,73 @@ def recall_terms(text, limite=3):
         vistas.add(plano)
         terminos.append(palabra)
     terminos.sort(key=len, reverse=True)
-    return terminos[:limite]
+    return terminos[:limite] if limite else terminos
+
+
+def raiz(termino):
+    """«contraseñas» también es «contraseña»: el plural no debe esconder el mensaje."""
+    if len(termino) > 5 and termino.endswith('es'):
+        return termino[:-2]
+    if len(termino) > 4 and termino.endswith('s'):
+        return termino[:-1]
+    return termino
+
+
+def por_rareza(store, terminos, salvo=None, limite=6):
+    """Los mensajes de esta ventana que mejor casan con esas palabras, el mejor primero.
+
+    Texto completo de SQLite (FTS5) ordenado por BM25: pesa más la palabra rara que la
+    que sale en media conversación, cuentan todas las palabras de la pregunta y no gana
+    lo más reciente por serlo. La búsqueda anterior cogía las 20 coincidencias más
+    nuevas de cada palabra, y lo antiguo quedaba enterrado: «¿te acuerdas del libro?»
+    dejó de traer el libro en cuanto la palabra volvió a salir veinte veces. Medido en
+    helios-memoria (2026-11-20) con las preguntas que pasan el portón: de 10 a 17 de 22.
+
+    El índice se hace en memoria para cada búsqueda, con lo que hay en la ventana: con
+    unos miles de mensajes son milisegundos, y así no hay tabla nueva que mantener ni
+    que migrar. Si este SQLite no trae FTS5, sqlite3.OperationalError: quien llama
+    busca como antes.
+    """
+    filas = store.db.execute('SELECT rowid, id, ts, role, text FROM esta_ventana').fetchall()
+    indice = sqlite3.connect(':memory:')
+    try:
+        # Sin tildes ni mayúsculas, y cada palabra vale como principio de otra:
+        # «taller» encuentra «talleres» y «diagnostico», «diagnóstico».
+        indice.execute("CREATE VIRTUAL TABLE pasajes USING fts5(text, tokenize='unicode61 remove_diacritics 2')")
+        # El propio mensaje de este turno siempre casa consigo mismo: no entra.
+        indice.executemany('INSERT INTO pasajes(rowid, text) VALUES (?,?)',
+                           ((fila['rowid'], fila['text']) for fila in filas if fila['id'] != salvo))
+        consulta = ' OR '.join('"%s"*' % raiz(termino).replace('"', '') for termino in terminos)
+        mejores = [fila[0] for fila in indice.execute(
+            'SELECT rowid FROM pasajes WHERE pasajes MATCH ? ORDER BY bm25(pasajes) LIMIT ?', (consulta, limite))]
+    finally:
+        indice.close()
+    por_rowid = {fila['rowid']: fila for fila in filas}
+    return [dict(id=por_rowid[n]['id'], ts=por_rowid[n]['ts'], role=por_rowid[n]['role'],
+                 excerpt=por_rowid[n]['text'][:500]) for n in mejores]
+
+
+def por_coincidencia_literal(store, terminos, salvo=None, limite=6):
+    """La búsqueda de antes, para un SQLite sin FTS5: término a término con LIKE, las 20
+    coincidencias más recientes de cada uno, y manda quien casa con más términos.
+    Devuelve los mensajes y las consultas que hizo."""
+    hallazgos, aciertos, consultas = {}, {}, []
+    for termino in terminos:
+        # «contraseñas» no encuentra «contraseña»: LIKE es literal. Probar
+        # el singular cuesta una pasada de 400 filas, o sea nada.
+        for consulta in dict.fromkeys((termino, raiz(termino))):
+            consultas.append(consulta)
+            encontrado = [fila for fila in
+                          history_tool(store, 'history.search', {'query': consulta})['matches']
+                          if fila['id'] != salvo]
+            if encontrado:
+                for fila in encontrado:
+                    hallazgos[fila['id']] = fila
+                    aciertos[fila['id']] = aciertos.get(fila['id'], 0) + 1
+                break
+    mejores = sorted(hallazgos.values(),
+                     key=lambda fila: (aciertos[fila['id']], fila['ts']), reverse=True)[:limite]
+    return mejores, consultas
 
 # Cuántas líneas distintas caben en el trato de la ficha. Pocas a propósito: va delante en cada turno.
 MAX_TRATOS = 4
@@ -322,47 +390,31 @@ class MemoryService:
         """Buscar en el archivo cuando la pregunta apunta al pasado, sin esperar a
         que el modelo lo pida. Devuelve la entrada de traza, o None si no aplica.
 
-        Se busca término a término y se ordena por cuántos coinciden: quien
-        aparece con «contenedores» y «synology» a la vez pesa más que quien solo
-        trae uno. Un fallo aquí no puede tumbar el turno.
+        Se busca con todas las palabras útiles de la pregunta y se ordena por rareza
+        (por_rareza). Un fallo aquí no puede tumbar el turno.
         """
         if not RECUERDO.search(text or ''):
             return None
-        terminos = recall_terms(text)
+        terminos = recall_terms(text, limite=None)
         if not terminos:
             return None
         empezado = time.monotonic()
         try:
-            hallazgos, aciertos, consultas = {}, {}, []
-            for termino in terminos:
-                variantes = [termino]
-                # «contraseñas» no encuentra «contraseña»: LIKE es literal. Probar
-                # el singular cuesta una pasada de 400 filas, o sea nada.
-                if len(termino) > 5 and termino.endswith('es'):
-                    variantes.append(termino[:-2])
-                elif len(termino) > 4 and termino.endswith('s'):
-                    variantes.append(termino[:-1])
-                for consulta in variantes:
-                    consultas.append(consulta)
-                    encontrado = [fila for fila in
-                                  history_tool(store, 'history.search', {'query': consulta})['matches']
-                                  # El propio mensaje de este turno siempre casa consigo mismo.
-                                  if fila['id'] != turn_id]
-                    if encontrado:
-                        for fila in encontrado:
-                            hallazgos[fila['id']] = fila
-                            aciertos[fila['id']] = aciertos.get(fila['id'], 0) + 1
-                        break
+            try:
+                mejores, consultas = por_rareza(store, terminos, salvo=turn_id), [raiz(t) for t in terminos]
+                tipo = 'full_text_bm25'
+            except sqlite3.OperationalError:
+                # Este SQLite no trae FTS5: se busca como antes, con las tres palabras más largas.
+                mejores, consultas = por_coincidencia_literal(store, recall_terms(text), salvo=turn_id)
+                tipo = 'literal_substring'
         except Exception:
             return None
-        mejores = sorted(hallazgos.values(),
-                         key=lambda fila: (aciertos[fila['id']], fila['ts']), reverse=True)[:6]
         mejores.sort(key=lambda fila: fila['ts'])
         return dict(tool='history.recall', arguments=dict(terms=terminos, queries=consultas),
                     effect='read', changes_state=False, ts=now(),
                     seconds=round(time.monotonic() - empezado, 3), failed=False,
                     result=dict(matches=mejores, historical_data=True,
-                                search_type='literal_substring',
+                                search_type=tipo,
                                 requested_by='hexos', order='oldest_to_newest',
                                 note='Lo buscó HexOS al ver que la pregunta miraba al pasado; '
                                      'el modelo no lo pidió. Cero coincidencias no demuestra '

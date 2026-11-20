@@ -98,6 +98,56 @@ class RecallTest(unittest.TestCase):
         primero = recuerdo['result']['matches'][0]['excerpt']
         self.assertIn('synology', primero)
 
+    # --- El orden: por rareza, no por fecha ---
+
+    def test_lo_antiguo_no_queda_enterrado_por_lo_reciente(self):
+        # «¿Te acuerdas del libro?» funcionó una semana y dejó de traer el libro: la
+        # palabra había vuelto a salir en más de veinte mensajes nuevos, y la búsqueda
+        # solo miraba los veinte más recientes.
+        self.poblar(('user', 'mi libro se llama Biblia Lumínica'))
+        self.poblar(*[('assistant', 'Seguimos con lo de hoy, que es largo y va de muchas cosas distintas a la vez; '
+                                    'ya retomaremos el libro cuando toque, ahora vamos con el punto %d.' % n)
+                      for n in range(25)])
+        recuerdo = self.preguntar('¿te acuerdas del libro?')
+        self.assertIn('mi libro se llama Biblia Lumínica', [m['excerpt'] for m in recuerdo['result']['matches']])
+        self.assertEqual(recuerdo['result']['search_type'], 'full_text_bm25')
+        self.assertEqual(len(recuerdo['result']['matches']), 6)
+
+    def test_cuentan_todas_las_palabras_y_no_solo_las_tres_mas_largas(self):
+        # «nas» es la más corta y la única que distingue el mensaje.
+        self.poblar(('user', 'el nas hace un ruido raro por las noches'))
+        recuerdo = self.preguntar('¿recuerdas aquella conversación larguísima sobre el dichoso nas?')
+        self.assertEqual(len(recuerdo['arguments']['terms']), 4)
+        self.assertEqual([m['excerpt'] for m in recuerdo['result']['matches']], ['el nas hace un ruido raro por las noches'])
+
+    def test_ni_las_tildes_ni_el_plural_esconden_el_mensaje(self):
+        self.poblar(('user', 'el diagnóstico del taller fue la bomba de agua'))
+        for pregunta in ('¿te acuerdas de los diagnosticos?', '¿te acuerdas de los talleres?'):
+            self.assertEqual(len(self.preguntar(pregunta)['result']['matches']), 1, pregunta)
+
+    def test_la_palabra_rara_pesa_mas_que_la_que_sale_en_todas_partes(self):
+        self.poblar(*[('assistant', 'el coche esto, el coche lo otro, punto %d' % n) for n in range(10)])
+        self.poblar(('user', 'al coche le hace falta pasar por la floresta'))
+        self.poblar(*[('assistant', 'más cosas del coche, punto %d' % n) for n in range(10)])
+        recuerdo = self.preguntar('¿te acuerdas de lo del coche y la floresta?')
+        self.assertIn('al coche le hace falta pasar por la floresta', [m['excerpt'] for m in recuerdo['result']['matches']])
+
+    def test_sin_fts5_busca_como_antes(self):
+        import sqlite3
+        from hexos.agent.chat_backend import memory
+        self.poblar(('user', 'revisa el estado de los contenedores del synology'))
+        original = memory.por_rareza
+
+        def sin_fts5(*_, **__):
+            raise sqlite3.OperationalError('no such module: fts5')
+        memory.por_rareza = sin_fts5
+        try:
+            recuerdo = self.preguntar('¿te acuerdas de qué te pedí sobre los contenedores?')
+        finally:
+            memory.por_rareza = original
+        self.assertEqual(recuerdo['result']['search_type'], 'literal_substring')
+        self.assertEqual(len(recuerdo['result']['matches']), 1)
+
     def test_sin_coincidencias_lo_dice_en_vez_de_callar(self):
         recuerdo = self.preguntar('¿te acuerdas de lo del tractor amarillo?')
         self.assertEqual(recuerdo['result']['matches'], [])
