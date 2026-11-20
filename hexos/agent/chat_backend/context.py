@@ -317,6 +317,11 @@ class ContextManager:
         # el selector se quede en el primer verbo. Declararlas no ejecuta la escritura.
         if 'notas' not in elegidos and tool_groups.NOTA_TRAS_LECTURA.search(turn.text):
             elegidos = [*elegidos, 'notas']
+        # Llega el contenido de una nota encargada en el mensaje anterior: ese mensaje, suelto,
+        # no pide nada, y sin las notas declaradas no habría con qué guardarlo.
+        if ('notas' not in elegidos and getattr(turn, 'contenido_de_nota', None)
+                and 'notas' in catalog.groups_in(ventana)):
+            elegidos = [*elegidos, 'notas']
         turn.grupos_pedidos = list(elegidos)
         from ..native import temperatura_del_turno
         runtime.temperatura = temperatura_del_turno(ventana, elegidos, turn.prompt_text)
@@ -353,6 +358,16 @@ class ContextManager:
         turn.document = None
         turn.archived_text = ''
         turn.prompt_text = turn.model_request or turn.text
+        # Un encargo de nota sin contenido («…te lo guardas en una nota:») se queda esperando,
+        # y el mensaje siguiente es su contenido. Una vez: si luego habla de otra cosa, se olvida.
+        from .. import nota_pendiente
+        sesion = getattr(self.agent, 'session', None)
+        turn.nota_sin_contenido = nota_pendiente.sin_contenido(turn.text)
+        if sesion is not None:
+            if turn.nota_sin_contenido:
+                sesion.nota_pendiente = nota_pendiente.encargo(turn.text)
+            elif getattr(sesion, 'nota_pendiente', None):
+                turn.contenido_de_nota, sesion.nota_pendiente = sesion.nota_pendiente, None
         # Si el mensaje trae un dato suyo, la cosecha lo guardará al cerrar
         # el turno: se le retira la herramienta para que no lo haga él también.
         cosechara = bool(self.agent.profile and hasattr(self.agent.runtime, 'extract_facts')
@@ -442,6 +457,10 @@ class ContextManager:
         turn.reproche = bool(aviso_reproche)
         bloque_recuerdo += aviso_reproche
         bloque_recuerdo += sin_resolver.bloque(store, turn.uid)
+        if turn.nota_sin_contenido:
+            bloque_recuerdo += nota_pendiente.ESPERA
+        elif turn.contenido_de_nota:
+            bloque_recuerdo += nota_pendiente.bloque_contenido(turn.contenido_de_nota)
         # Lo decidido en una tarjeta se apunta en el archivo, pero con el prefijo vivo el
         # modelo no relee el archivo: el 14/11, tras aprobar un fichero, a «¿está ya?» el E4B
         # contestó que seguía pendiente. Va delante del turno siguiente, una vez.

@@ -79,6 +79,9 @@ APUNTALO = ('AVISO DE HEXOS (no es la persona): todavía no se ha guardado nada.
 # También la orden de la persona: «borra la nota de la cena», «elimina esa». No «quita»,
 # que igual pide cerrarla en pantalla.
 ORDEN_DE_BORRAR = re.compile(r'^\W*(?:\w+[,!. ]+){0,3}(?:b[oó]rra|elim[ií]na|desc[aá]rta)(?:me|la|lo|las|los)?\b', re.I)
+MIRA_Y_BORRA = ('AVISO DE HEXOS (no es la persona): no se ha descartado ninguna nota. Aquí tienes las '
+                'que hay: descarta la que pide con note_mark, n su número en esta lista y state '
+                'descartada. No digas que está borrada sin haberlo hecho. No menciones este aviso.')
 BORRALA = ('AVISO DE HEXOS (no es la persona): la nota sigue ahí, todavía no se ha descartado. '
            'Descártala ahora: n es su número en la lista que acabas de ver y state es descartada. '
            'Después confírmaselo en una frase. No menciones este aviso.')
@@ -383,6 +386,8 @@ class RecoveryController:
                 and getattr(self.agent, 'ventana', None) == catalog.DEFAULT_WINDOW
                 and 'notas' in (turn.grupos_pedidos or ())
                 and ORDEN_DE_APUNTAR.search(turn.text or '')
+                # «apunta esto:» sin el esto: no hay nada que guardar todavía.
+                and not getattr(turn, 'nota_sin_contenido', False)
                 and not any(paso.get('tool') == 'note.save' for paso in turn.trace)
                 and hasattr(self.agent.runtime, 'require_note')):
             turn.retries.sin_llamada_devuelto = True
@@ -393,6 +398,21 @@ class RecoveryController:
         # cerró el turno con «Voy a descartar la nota…» sin descartarla (medido 3 de 3 con
         # el E4B). Solo si en este turno hay una lista con algo: sin nota a la vista no se
         # arranca una escritura a ciegas.
+        # Un paso antes: ordenó borrar y el turno acaba sin mirar siquiera qué notas hay. El
+        # 20/11 el 26B contestó «¡Oído cocina! Borrada de inmediato» a «Socio bórrala» sin
+        # llamar a nada, y la nota —anclada, con su propio contexto dentro— siguió ahí. Se le
+        # arranca en la lista, que es una lectura; con ella delante, la red de abajo exige
+        # el descarte.
+        if (not turn.retries.borrado_listado and not turn.retries.sin_llamada_devuelto
+                and getattr(self.agent, 'ventana', None) == catalog.DEFAULT_WINDOW
+                and 'notas' in (turn.grupos_pedidos or ())
+                and ORDEN_DE_BORRAR.search(turn.text or '')
+                and not any(paso.get('tool') in ('note.mark', 'note.list') for paso in turn.trace)
+                and hasattr(self.agent.runtime, 'require_read')):
+            turn.retries.borrado_listado = True
+            if self.agent.runtime.require_read('note.list'):
+                turn.messages = [dict(role='user', content=MIRA_Y_BORRA)]
+                return True
         if (not turn.retries.sin_llamada_devuelto
                 and getattr(self.agent, 'ventana', None) == catalog.DEFAULT_WINDOW
                 and 'notas' in (turn.grupos_pedidos or ())

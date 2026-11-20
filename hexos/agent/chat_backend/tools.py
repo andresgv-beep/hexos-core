@@ -432,6 +432,10 @@ class ToolExecutor:
         started = time.monotonic()
         try:
             catalog.validate(output['tool'], output['arguments'])
+            # Pidió una nota y aún no ha dicho el qué: lo que el modelo guardase sería inventado.
+            if output['tool'] == 'note.save' and getattr(turn, 'nota_sin_contenido', False):
+                from .. import nota_pendiente
+                raise ValueError(nota_pendiente.RECHAZO)
             # Solo web.read: la negativa de una web no cambia en segundos. Otras
             # lecturas sí pueden dar otro resultado con los mismos argumentos
             # (media.prepare cuando termina un escaneo), y eso tiene sus pruebas.

@@ -117,11 +117,17 @@ class SinLlamadaTest(unittest.TestCase):
         runtime = Runtime(); runtime.native = True; runtime.notas = 0
         def require_note(name='note.save'): runtime.notas += 1; runtime.pedida = name; return True
         runtime.require_note = require_note
+        runtime.lecturas = []
+        runtime.require_read = lambda name: runtime.lecturas.append(name) or True
         agent = Agent(tmp.name, runtime); agent.ventana = 'chat'
         turn = TurnState(text=texto, image=None, model_request=texto, transcript=None)
         turn.grupos_pedidos, turn.trace = list(pedidos), list(traza)
+        self._recovery = agent.runner.recovery
         devuelto = agent.runner.recovery.before_completion(None, turn, dict(reply=respuesta, work=None))
         return runtime, turn, devuelto
+
+    def agente_de(self, turn):
+        return self._recovery
 
     def test_lectura_y_nota_solo_se_reintenta_el_paso_pendiente(self):
         texto = 'Busca la edición del manual y guarda su código en una nota.'
@@ -195,10 +201,25 @@ class SinLlamadaTest(unittest.TestCase):
 
     def test_sin_una_nota_a_la_vista_no_se_arranca_un_borrado(self):
         vacia = dict(tool='note.list', arguments={'query': 'boda'}, failed=False, result={'notes': [], 'total': 0})
-        for traza in ([], [vacia]):
-            runtime, _, devuelto = self.orden('borra la nota de la boda', 'No encuentro esa nota.', traza=traza)
-            self.assertFalse(devuelto)
-            self.assertEqual(runtime.notas, 0)
+        runtime, _, devuelto = self.orden('borra la nota de la boda', 'No encuentro esa nota.', traza=[vacia])
+        self.assertFalse(devuelto)
+        self.assertEqual((runtime.notas, runtime.lecturas), (0, []))
+
+    def test_si_ordeno_borrar_y_dice_borrada_sin_mirar_se_arranca_en_la_lista(self):
+        # «Socio bórrala…» -> «¡Oído cocina! Borrada de inmediato» y ninguna llamada (20/11).
+        runtime, turn, devuelto = self.orden('Socio bórrala no te explicado lo que sabes hacer',
+                                             '¡Oído cocina! Borrada de inmediato.')
+        self.assertTrue(devuelto)
+        # Se arranca en una lectura, no en un borrado a ciegas.
+        self.assertEqual((runtime.lecturas, runtime.notas), (['note.list'], 0))
+        self.assertIn('no se ha descartado ninguna nota', turn.messages[0]['content'])
+        # Con la lista delante, si vuelve a cerrar sin descartar, se le arranca en el descarte.
+        turn.trace.append(self.LISTA)
+        recovery = self.agente_de(turn)
+        self.assertTrue(recovery.before_completion(None, turn, dict(reply='Ya está borrada.', work=None)))
+        self.assertEqual((runtime.notas, runtime.pedida), (1, 'note.mark'))
+        # Y no se repite una tercera vez.
+        self.assertEqual(runtime.lecturas, ['note.list'])
 
     def test_quitar_o_hablar_de_borrar_no_es_la_orden(self):
         for texto in ('quita esa nota de la pantalla', 'se pueden borrar las notas?', 'no borres nada'):

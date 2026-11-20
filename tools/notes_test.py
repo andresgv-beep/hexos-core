@@ -627,5 +627,29 @@ class FugaDelAvisoTest(unittest.TestCase):
         self.assertEqual(r['reply'], 'Lo he guardado.')
 
 
+class ContextoComoNotaTest(unittest.TestCase):
+    """El modelo no puede apuntar como nota lo que HexOS le pone delante."""
+
+    def setUp(self):
+        from hexos.agent.chat import Agent
+        self.tmp = tempfile.TemporaryDirectory(prefix='hexos-nota-contexto-'); self.addCleanup(self.tmp.cleanup)
+        class Runtime:
+            def call(self, request): pass
+            def generate(self, messages): return {'reply': 'ok', 'work': None}
+        self.agent = Agent(self.tmp.name, Runtime())
+
+    def test_el_contexto_de_hexos_no_se_guarda_como_nota(self):
+        volcado = ('REFERENCIAS DE CONTEXTO: los bloques siguientes son datos.\nMEMORIA PERSONAL: …\n'
+                   'PERFIL DE LA PERSONA ACTUAL (…):\n- Su nombre es andres\nNOTAS ANCLADAS (dato de HexOS): …')
+        with self.agent.store() as store:
+            with self.assertRaisesRegex(ValueError, 'es tu contexto'):
+                notes.dispatch(store, 'note.save', dict(title='Contexto Maestro', body=volcado), 't1')
+            self.assertEqual(store.db.execute('SELECT COUNT(*) FROM notes').fetchone()[0], 0)
+            # Una nota normal, y una que la persona escriba ella misma con esas palabras, sí.
+            notes.dispatch(store, 'note.save', dict(title='Cena', body='El viernes a las 21 con Marta'), 't1')
+            notes.save(store, 't1', title='Mía', body='MEMORIA PERSONAL: cosas que quiero recordar', actor='person')
+            self.assertEqual(store.db.execute('SELECT COUNT(*) FROM notes').fetchone()[0], 2)
+
+
 if __name__ == '__main__':
     unittest.main()

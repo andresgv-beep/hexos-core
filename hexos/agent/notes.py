@@ -127,7 +127,19 @@ def _releer(store, note_id, title, body):
     return 'hecho', 'releído del almacén: ' + str(len(body)) + ' caracteres bajo ' + repr(title)
 
 
+# Rótulos de lo que HexOS le pone delante al modelo. Si aparecen en el cuerpo de una nota,
+# el modelo está apuntando su propio contexto: el 20/11, a «…te lo guardas en una nota y lo
+# marcas como favorito:» (sin que la persona hubiera dicho aún el qué) el 26B guardó y ancló
+# 3.961 letras de perfil y notas ancladas. Anclada, esa nota volvía a entrar en cada turno.
+CONTEXTO_DE_HEXOS = ('REFERENCIAS DE CONTEXTO:', 'MEMORIA PERSONAL:', 'PERFIL DE LA PERSONA ACTUAL',
+                     'NOTAS ANCLADAS (dato de HexOS)', 'REGISTRO DE ESTE MENSAJE (dato de HexOS', 'ARCHIVO DE CONVERSACIÓN:')
+
+
 def save(store, turn_id, *, id=None, title=None, body=None, tags=None, revision=None, actor='model'):
+    if actor == 'model' and isinstance(body, str) and any(rotulo in body for rotulo in CONTEXTO_DE_HEXOS):
+        raise ValueError('Eso no es algo que haya dicho la persona: es tu contexto (perfil, notas ancladas). '
+                         'No se guarda. Apunta solo lo que ella te haya pedido apuntar; si todavía no ha '
+                         'dicho el qué, pregúntaselo.')
     if id is None:
         if title is None or body is None:
             raise ValueError('una nota nueva necesita title y body')

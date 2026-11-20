@@ -76,6 +76,8 @@ class SessionState:
     cards_lock: Any = field(default_factory=threading.Lock)
     # Decisiones tomadas en una tarjeta que el modelo aún no ha visto: van con el turno siguiente.
     notas_interfaz: list = field(default_factory=list)
+    # Encargo de nota cuyo contenido llega en el mensaje siguiente (agent/nota_pendiente.py).
+    nota_pendiente: dict | None = None
     # Fichas de técnica ya dadas en el contexto vivo: cada una va una vez.
     tecnicas_dadas: set = field(default_factory=set)
     context_cut: dict | None = None
@@ -98,6 +100,8 @@ class RetryState:
     web_read_guided: bool = False
     read_claim_checked: bool = False
     sin_llamada_devuelto: bool = False
+    # Ordenó borrar una nota y se le arrancó en la lista para que la viera.
+    borrado_listado: bool = False
     nota_tras_lectura: bool = False
     tarjeta_devuelta: bool = False
     fichero_devuelto: bool = False
@@ -127,6 +131,8 @@ class TurnState:
     grupos_pedidos: list = field(default_factory=list)
     registro: str | None = None      # broma, charla, tecnico o reflexion: ver agent/registro.py
     decidido_en_tarjeta: bool = False    # en este turno se le ha contado una decisión de una tarjeta
+    nota_sin_contenido: bool = False     # pide una nota y el mensaje acaba en dos puntos: aún no hay qué apuntar
+    contenido_de_nota: dict | None = None    # este mensaje es el contenido del encargo anterior
     reading_started: float | None = None
     document_read_mark: tuple | None = None
     document_read_retries: int = 0
