@@ -264,6 +264,30 @@ class CierreTest(unittest.TestCase):
         self.assertEqual(r['reason'], 'parcial')
         self.assertEqual([p['tool'] for p in r['unverified']], ['t1'])
 
+    def test_la_misma_llamada_repetida_con_lo_que_faltaba_no_deja_reparo(self):
+        # «Bórrala»: note.mark sin decir cuál («di qué nota»), y otra vez con su id, comprobada.
+        mala = dict(tool='note.mark', arguments={'state': 'descartada'}, failed=True, verification='no_cumplida',
+                    result={'error': 'di qué nota: id, o n con el número de la lista'})
+        buena = dict(tool='note.mark', arguments={'id': 'n1', 'state': 'descartada'}, failed=False,
+                     verification='confirmada', evidence='hecho', result={'state': 'descartada'})
+        r = Agent.closure([mala, buena])
+        self.assertEqual((r['reason'], r['unverified']), ('comprobado', []))
+        # Al revés no: lo que falla después de salir bien sigue contando.
+        self.assertEqual(Agent.closure([buena, mala])['reason'], 'parcial')
+
+    def test_fallar_con_una_y_acertar_con_otra_no_es_un_reintento(self):
+        # Descartar la nota A falla y se descarta la B: A sigue sin hacerse.
+        a = dict(tool='note.mark', arguments={'id': 'A', 'state': 'descartada'}, failed=True,
+                 verification='no_cumplida', result={'error': 'nota inexistente'})
+        b = dict(tool='note.mark', arguments={'id': 'B', 'state': 'descartada'}, failed=False,
+                 verification='confirmada', result={'state': 'descartada'})
+        r = Agent.closure([a, b])
+        self.assertEqual(r['reason'], 'parcial')
+        self.assertEqual([p['tool'] for p in r['unverified']], ['note.mark'])
+        # Ni vale repetir exactamente lo mismo: si la primera falló, algo cambió entre medias.
+        igual = dict(a, failed=False, verification='confirmada', result={'state': 'descartada'})
+        self.assertEqual(Agent.closure([a, igual])['reason'], 'parcial')
+
     def test_no_poder_comprobar_deja_el_turno_incierto(self):
         r = self.cierre('confirmada', 'desconocida')
         self.assertEqual(r['reason'], 'incierto')

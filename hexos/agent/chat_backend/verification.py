@@ -27,10 +27,24 @@ class VerificationService:
         # Un documento rechazado antes de hacer nada y creado después en el mismo turno llegó a su
         # objetivo: el 18/11 un Excel bien hecho al tercer intento salió con «Alguna operación no
         # llegó a su objetivo. Sin comprobar: document.create, document.create».
-        trace = [paso for i, paso in enumerate(trace)
-                 if not (paso.get('tool') in REINTENTABLES and paso.get('failed')
-                         and any(p.get('tool') == paso['tool'] and p.get('verification') == 'confirmada'
-                                 for p in trace[i + 1:]))]
+        # Y, con cualquier herramienta, la misma llamada repetida con lo que le faltaba: el 20/11
+        # el 26B pidió descartar una nota sin decir cuál («di qué nota»), repitió con su id y
+        # quedó descartada y comprobada; el turno salió con «Sin comprobar: note.mark». Solo
+        # si la buena lleva TODO lo que llevaba la fallida y algo más: descartar la nota A, que
+        # falle, y descartar la B no es un reintento, y A sigue sin hacerse.
+        def superada(i, paso):
+            if not paso.get('failed'):
+                return False
+            if paso.get('tool') in REINTENTABLES:
+                return any(p.get('tool') == paso['tool'] and p.get('verification') == 'confirmada'
+                           for p in trace[i + 1:])
+            pedido = paso.get('arguments')
+            return isinstance(pedido, dict) and any(
+                p.get('tool') == paso['tool'] and p.get('verification') == 'confirmada'
+                and isinstance(p.get('arguments'), dict) and len(p['arguments']) > len(pedido)
+                and all(p['arguments'].get(k) == v for k, v in pedido.items())
+                for p in trace[i + 1:])
+        trace = [paso for i, paso in enumerate(trace) if not superada(i, paso)]
         estados = [paso.get('verification') for paso in trace]
         pendientes = [dict(tool=paso['tool'], verification=paso.get('verification'),
                            evidence=paso.get('evidence'))
