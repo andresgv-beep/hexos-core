@@ -1,4 +1,5 @@
 """El portón del recuerdo: HexOS busca en el archivo cuando la pregunta mira atrás."""
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import sys
 import tempfile
@@ -23,11 +24,13 @@ class RecallTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def poblar(self, *mensajes):
+    def poblar(self, *mensajes, hace=3600):
+        """Mensajes de una conversación anterior: de hace una hora, salvo que se diga otra cosa."""
+        cuando = (datetime.now(timezone.utc) - timedelta(seconds=hace)).isoformat()
         with self.agent.store() as store:
             for role, texto in mensajes:
                 store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
-                                 (uuid4().hex, now(), role, texto, texto))
+                                 (uuid4().hex, cuando, role, texto, texto))
             store.db.commit()
 
     def preguntar(self, texto):
@@ -52,6 +55,62 @@ class RecallTest(unittest.TestCase):
                       'vale gracias', 'hola socio', '¿qué le pasa al disco del NAS?']:
             self.assertIsNone(RECUERDO.search(texto), texto)
             self.assertIsNone(self.preguntar(texto), texto)
+
+    # --- Otras formas de mirar atrás ---
+
+    def test_pasa_lo_que_se_dijeron(self):
+        from hexos.agent.chat_backend.memory import mira_al_pasado
+        for texto in ['¿qué modelo de vapeador me dijiste que era el de la foto?', '¿en qué zona te dije que estaba?',
+                      '¿qué talleres me recomendaste?', '¿cómo dijiste que se llamaba?', 'eso ya me lo contaste']:
+            self.assertTrue(mira_al_pasado(texto), texto)
+        for texto in ['me cuentas un chiste?', 'te pido que revises el nas', 'me lo pasé el 4 y se quedó aparcado']:
+            self.assertFalse(mira_al_pasado(texto), texto)
+
+    def test_pasa_la_pregunta_por_algo_suyo(self):
+        from hexos.agent.chat_backend.memory import mira_al_pasado
+        for texto in ['que vapeador tengo?', '¿qué pantalla tiene mi esp32?', 'Que tengo en notas?',
+                      '¿de cuántas pulgadas es la pantalla de mi Seat León?', '¿qué clase llevaba yo en el WoW?',
+                      'hola socio!!! como ha ido la conversacion con mi amigo?']:
+            self.assertTrue(mira_al_pasado(texto), texto)
+        # Un encargo, una opinión o una frase suelta no son preguntas por lo suyo.
+        for texto in ['Puedes revisar procesos de mi equipo Linux?', 'puedes crear una calculadora para mi sistema linux?',
+                      'y por que no uso otros programas si ya existen?', 'Que va, tengo que terminar la jornada de 8h',
+                      '¿qué le pasa al disco del NAS?', 'revisa mi disco', 'podria contruir el mio propio?']:
+            self.assertFalse(mira_al_pasado(texto), texto)
+
+    def test_una_pregunta_corta_hereda_el_tema_de_la_anterior(self):
+        self.poblar(('user', 'mi libro se llama Biblia Lumínica'))
+        self.assertIsNotNone(self.preguntar('¿recuerdas el libro que estaba escribiendo?'))
+        recuerdo = self.preguntar('como se llamaba?')
+        self.assertIsNotNone(recuerdo)
+        self.assertIn('libro', recuerdo['arguments']['terms'])
+        self.assertIn('libro', recuerdo['arguments']['inherited'])
+        self.assertIn('mi libro se llama Biblia Lumínica', [m['excerpt'] for m in recuerdo['result']['matches']])
+
+    def test_recuerdas_sin_mas_busca_lo_de_la_pregunta_anterior(self):
+        self.poblar(('user', 'mi vapeador es un Ontech mecánico'))
+        self.assertEqual(self.preguntar('que vapeador tengo?')['arguments']['terms'], ['vapeador'])
+        recuerdo = self.preguntar('no recuerdas nada?')
+        self.assertEqual((recuerdo['arguments']['terms'], recuerdo['arguments']['inherited']), (['vapeador'], ['vapeador']))
+        self.assertIn('mi vapeador es un Ontech mecánico', [m['excerpt'] for m in recuerdo['result']['matches']])
+
+    def test_una_pregunta_corta_suelta_no_busca(self):
+        self.poblar(('user', 'mi libro se llama Biblia Lumínica'))
+        self.assertIsNone(self.preguntar('como se llamaba?'))
+        # Ni detrás de un mensaje que no miraba atrás, ni si entre medias se habló de otra cosa.
+        self.assertIsNone(self.preguntar('revisa el estado del synology'))
+        self.assertIsNone(self.preguntar('como se llamaba?'))
+        self.assertIsNotNone(self.preguntar('¿te acuerdas del libro?'))
+        self.assertIsNone(self.preguntar('vale, ahora arranca el contenedor de plex y dime cómo queda'))
+        self.assertIsNone(self.preguntar('como se llamaba?'))
+
+    def test_el_seguimiento_caduca(self):
+        self.poblar(('user', 'mi libro se llama Biblia Lumínica'))
+        with self.agent.store() as store:
+            store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
+                             (uuid4().hex, '2026-01-01T10:00:00+00:00', 'user', '¿te acuerdas del libro?', ''))
+            store.db.commit()
+        self.assertIsNone(self.preguntar('como se llamaba?'))
 
     # --- Los términos ---
 
@@ -131,6 +190,46 @@ class RecallTest(unittest.TestCase):
         self.poblar(*[('assistant', 'más cosas del coche, punto %d' % n) for n in range(10)])
         recuerdo = self.preguntar('¿te acuerdas de lo del coche y la floresta?')
         self.assertIn('al coche le hace falta pasar por la floresta', [m['excerpt'] for m in recuerdo['result']['matches']])
+
+    # --- El ruido ---
+
+    def test_el_relleno_no_es_una_palabra_que_buscar(self):
+        # La frase real: ganó «okey», y «pasa» trajo un «me he pasado de dramático».
+        self.assertEqual(sorted(recall_terms('okey no pasa nada, recuerdas de un libro que estaba escribiendo>?', None)),
+                         ['escribiendo', 'libro'])
+        self.assertEqual(recall_terms('jajaja vale socio, ¿te acuerdas del nas?'), ['nas'])
+        self.poblar(('user', 'Okey'), ('user', 'Okey, aprobado'), ('assistant', 'Me he pasado de dramático con el guion'),
+                    ('user', 'mi libro se llama Biblia Lumínica'))
+        recuerdo = self.preguntar('okey no pasa nada, recuerdas de un libro que estaba escribiendo>?')
+        self.assertEqual([m['excerpt'] for m in recuerdo['result']['matches']], ['mi libro se llama Biblia Lumínica'])
+
+    def test_una_palabra_no_vale_como_principio_de_otra_mas_larga(self):
+        self.poblar(('user', 'ese contenedor lo tiré'), ('user', 'los contenedores del synology van bien'),
+                    ('user', 'el contenido del disco está contento'))
+        recuerdo = self.preguntar('¿te acuerdas del contenedor?')
+        self.assertEqual(len(recuerdo['result']['matches']), 2)             # singular y plural; «contenido» no
+
+    def test_lo_de_hace_un_momento_no_es_un_recuerdo(self):
+        self.poblar(('user', 'mi vaper es un Ontech mecánico'))
+        self.poblar(('user', 'y el vaper de mi primo?'), ('assistant', 'De ese vaper no sé nada.'), hace=60)
+        recuerdo = self.preguntar('¿te acuerdas de mi vaper?')
+        self.assertEqual([m['excerpt'] for m in recuerdo['result']['matches']], ['mi vaper es un Ontech mecánico'])
+
+    def test_si_solo_casa_lo_recien_dicho_no_se_anuncia_que_no_hay_nada(self):
+        self.poblar(('user', 'mi vaper es un Ontech mecánico'), hace=60)
+        self.assertIsNone(self.preguntar('¿te acuerdas de mi vaper?'))
+        # Sin nada en ningún sitio, sí se dice.
+        self.assertEqual(self.preguntar('¿te acuerdas de lo del tractor amarillo?')['result']['matches'], [])
+
+    def test_el_seguimiento_no_trae_la_pregunta_que_hereda(self):
+        self.poblar(('user', 'mi vapeador es un Ontech mecánico'))
+        self.preguntar('que vapeador tengo?')
+        with self.agent.store() as store:
+            store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
+                             (uuid4().hex, now(), 'assistant', 'No hay ni rastro de un vapeador.', ''))
+            store.db.commit()
+        recuerdo = self.preguntar('no recuerdas nada?')
+        self.assertEqual([m['excerpt'] for m in recuerdo['result']['matches']], ['mi vapeador es un Ontech mecánico'])
 
     def test_sin_fts5_busca_como_antes(self):
         import sqlite3

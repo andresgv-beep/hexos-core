@@ -1,6 +1,7 @@
 """Perfil HERA, extracción de hechos y recuperación literal del historial."""
 from __future__ import annotations
 
+from datetime import datetime
 import json
 import re
 import sqlite3
@@ -90,6 +91,91 @@ RECUERDO = re.compile(
     r'|anoche|ayer|el otro d[ií]a|la otra vez|la primera vez|en su momento'
     r'|la [uú]ltima vez|antes te dije)\b', re.I)
 
+# El portón de arriba solo conoce quien avisa de que recuerda («te acuerdas», «ayer»). La
+# primera noche con la búsqueda nueva (2026-11-20) tres de cuatro preguntas de memoria ni
+# buscaron: «que vapeador tengo?», «no recuerdas nada?» y «como se llamaba?». Tres formas
+# más de mirar atrás, medidas sobre los 731 mensajes reales del archivo: de buscar en 9
+# se pasa a buscar en 15, y los seis nuevos venían a cuento.
+
+# 1. Lo que se dijeron: «¿qué modelo me dijiste que era?», «¿en qué zona te dije que estaba?».
+#    Solo formas de pasado: «me cuentas» o «te pido» son de ahora.
+DICHO = re.compile(
+    r'\b(?:(?:me|te|nos)(?:\s+l[oa]s?)?\s+(?:dijiste|dije|dijimos|contaste|cont[eé]|comentaste|coment[eé]'
+    r'|recomendaste|ense[ñn]aste|ense[ñn][eé]|explicaste|expliqu[eé]|preguntaste|pregunt[eé]|pediste|ped[ií]'
+    r'|diste|mandaste|mand[eé]|propusiste|sugeriste|bajaste|buscaste)|dijiste)\b', re.I)
+
+# 2. Una pregunta por algo suyo: «¿qué vapeador tengo?», «¿qué pantalla tiene mi esp32?». Eso
+#    solo puede salir de lo que contó. Tiene que empezar preguntando (qué, cuál, cómo…) y ser
+#    corta: «¿puedes revisar los procesos de mi equipo?» es un encargo, y «¿por qué no uso
+#    otro programa?» pide una opinión.
+EMPIEZA_PREGUNTANDO = re.compile(
+    r'(?:^|[.!?¿,;]\s*)\s*(?:y\s+|oye\s+|pero\s+|entonces\s+)?(?:(?:de|en|a|con|para|sobre)\s+)?'
+    r'(?:qu[eé]|cu[aá]l(?:es)?|c[oó]mo|d[oó]nde|cu[aá]nt[oa]s?|qui[eé]n(?:es)?|cu[aá]ndo)\b', re.I)
+LO_SUYO = re.compile(r'\b(?:mi|mis|m[ií][oa]s?|tengo|ten[ií]a|yo|llevaba|usaba|quer[ií]a)\b', re.I)
+PALABRAS_DE_PREGUNTA_PROPIA = 14
+
+# 3. La pregunta de seguimiento: «¿cómo se llamaba?» no dice de qué habla; lo dijo la anterior.
+#    Si es corta y la persona acaba de preguntar por el pasado, se busca con las palabras de
+#    aquella. Vale también para «¿no recuerdas nada?», que pasa el portón sin traer palabras.
+PALABRAS_DE_SEGUIMIENTO = 6
+SEGUNDOS_DE_SEGUIMIENTO = 600
+
+
+def pregunta_por_lo_suyo(text):
+    return ('?' in text and len(text.split()) <= PALABRAS_DE_PREGUNTA_PROPIA
+            and bool(EMPIEZA_PREGUNTANDO.search(text)) and bool(LO_SUYO.search(text)))
+
+
+def mira_al_pasado(text):
+    """¿Pide el mensaje, por sí solo, algo que solo puede estar en el archivo?"""
+    text = text or ''
+    return bool(RECUERDO.search(text) or DICHO.search(text) or pregunta_por_lo_suyo(text))
+
+
+def pregunta_corta(text):
+    text = text or ''
+    return len(text.split()) <= PALABRAS_DE_SEGUIMIENTO and ('?' in text or bool(EMPIEZA_PREGUNTANDO.search(text)))
+
+
+def preguntas_recientes(store, turn_id, cuantas=3):
+    """Lo último que escribió la persona en esta ventana justo antes de este turno, de lo más
+    reciente a lo más antiguo. Lo que HexOS apunta en su nombre («[La persona aprobó…») no cuenta."""
+    este = store.db.execute('SELECT rowid, ts FROM esta_ventana WHERE id=?', (turn_id,)).fetchone()
+    if este is None:
+        return []
+    ahora, recientes = datetime.fromisoformat(este['ts']), []
+    for fila in store.db.execute("SELECT ts, text FROM esta_ventana WHERE role='user' AND rowid<? "
+                                 'ORDER BY rowid DESC LIMIT 8', (este['rowid'],)):
+        if fila['text'].startswith('['):
+            continue
+        if (ahora - datetime.fromisoformat(fila['ts'])).total_seconds() > SEGUNDOS_DE_SEGUIMIENTO:
+            break
+        recientes.append(fila['text'])
+    return recientes[:cuantas]
+
+
+def terminos_de_recuerdo(store, text, turn_id):
+    """Con qué palabras buscar en el archivo, o ninguna si el mensaje no mira atrás.
+
+    Devuelve (términos, heredados): heredados son los que vienen de la pregunta anterior,
+    cuando esta es un seguimiento.
+    """
+    text = text or ''
+    propios, directo = recall_terms(text, limite=None), mira_al_pasado(text)
+    if directo and propios:
+        return propios, []
+    if not (directo or pregunta_corta(text)):
+        return [], []
+    for anterior in preguntas_recientes(store, turn_id):
+        suyos = recall_terms(anterior, limite=None)
+        if mira_al_pasado(anterior) and suyos:
+            vistos = {sin_tildes(t) for t in suyos}
+            return suyos + [t for t in propios if sin_tildes(t) not in vistos], suyos
+        if not pregunta_corta(anterior):
+            break                       # entre medias se habló de otra cosa
+    return [], []
+
+
 # Palabras que no distinguen un mensaje de otro: buscarlas devuelve media
 # conversación. Incluye las del propio portón, que salen en toda pregunta.
 PALABRAS_VACIAS = frozenset(
@@ -106,6 +192,21 @@ PALABRAS_VACIAS = frozenset(
     'dio ese esa eso tal aun asi hoy dia'.split())
 
 
+# Relleno de conversación: no es de ningún tema, pero tampoco sale en todas partes, así que
+# una búsqueda por rareza le da peso. La primera noche, a «okey no pasa nada, recuerdas de un
+# libro que estaba escribiendo?» le ganó «okey»: cuatro de los seis mensajes traídos eran un
+# «Okey» suelto. Sacadas de las palabras que más repite la persona en su archivo. Va aparte
+# de PALABRAS_VACIAS, que también decide qué líneas de trato se parecen.
+RELLENO = frozenset(
+    'okey okay vale venga bueno buena buenos buenas bien mal mejor peor claro gracias hola adios '
+    'socio oye mira dale ostia osea esque verdad realmente bastante igual todavia ahi alli aqui '
+    'tan menos sin puedes puede puedo podria podrias podemos sabes sabe saber crees creo veo ves '
+    'parece dime quiero quieres necesito gustaria has han hemos habia eres estoy estas estaba '
+    'estabas estaban estabamos tienes tenia tenias seria sea echo hecho hice hiciste pasa paso '
+    'pasar sigue seguir'.split())
+RISA = re.compile(r'(?:[jh][aeiou]+)+[jh]?')        # jaja, jajaj, jeje, haha
+
+
 def sin_tildes(palabra):
     tabla = str.maketrans('áéíóúüàèìòùâêîôû', 'aeiouuaeiouaeiou')
     return palabra.translate(tabla)
@@ -118,7 +219,7 @@ def recall_terms(text, limite=3):
     vistas, terminos = set(), []
     for palabra in re.findall(r"[\wáéíóúüñÁÉÍÓÚÜÑ]{3,}", (text or '').casefold()):
         plano = sin_tildes(palabra)
-        if plano in PALABRAS_VACIAS or plano in vistas:
+        if plano in PALABRAS_VACIAS or plano in RELLENO or RISA.fullmatch(plano) or plano in vistas:
             continue
         vistas.add(plano)
         terminos.append(palabra)
@@ -135,8 +236,16 @@ def raiz(termino):
     return termino
 
 
+def formas(termino):
+    """La palabra y su plural o su singular, nada más. Como principio de cualquier otra
+    («pasa» → «pasado») traía mensajes que no tenían que ver."""
+    base = raiz(termino)
+    return list(dict.fromkeys((termino, base, base + 's', base + 'es')))
+
+
 def por_rareza(store, terminos, salvo=None, limite=6):
-    """Los mensajes de esta ventana que mejor casan con esas palabras, el mejor primero.
+    """Los mensajes de esta ventana que mejor casan con esas palabras, el mejor primero, y
+    cuántos de los que casaban se dejaron fuera por ser de hace un momento.
 
     Texto completo de SQLite (FTS5) ordenado por BM25: pesa más la palabra rara que la
     que sale en media conversación, cuentan todas las palabras de la pregunta y no gana
@@ -145,28 +254,40 @@ def por_rareza(store, terminos, salvo=None, limite=6):
     dejó de traer el libro en cuanto la palabra volvió a salir veinte veces. Medido en
     helios-memoria (2026-11-20) con las preguntas que pasan el portón: de 10 a 17 de 22.
 
+    Lo de los últimos minutos no es un recuerdo: el modelo ya lo tiene delante. Sin
+    quitarlo, a «¿no recuerdas nada?» le llegaban la pregunta que acababa de hacer la
+    persona y la respuesta en que Helios decía no saberlo.
+
     El índice se hace en memoria para cada búsqueda, con lo que hay en la ventana: con
     unos miles de mensajes son milisegundos, y así no hay tabla nueva que mantener ni
     que migrar. Si este SQLite no trae FTS5, sqlite3.OperationalError: quien llama
     busca como antes.
     """
     filas = store.db.execute('SELECT rowid, id, ts, role, text FROM esta_ventana').fetchall()
+    este = next((fila for fila in filas if fila['id'] == salvo), None)
+    recientes = set()
+    if este is not None:
+        ahora = datetime.fromisoformat(este['ts'])
+        recientes = {fila['rowid'] for fila in filas if fila['id'] != salvo
+                     and abs((ahora - datetime.fromisoformat(fila['ts'])).total_seconds()) <= SEGUNDOS_DE_SEGUIMIENTO}
     indice = sqlite3.connect(':memory:')
     try:
-        # Sin tildes ni mayúsculas, y cada palabra vale como principio de otra:
-        # «taller» encuentra «talleres» y «diagnostico», «diagnóstico».
+        # Sin tildes ni mayúsculas: «diagnostico» encuentra «diagnóstico».
         indice.execute("CREATE VIRTUAL TABLE pasajes USING fts5(text, tokenize='unicode61 remove_diacritics 2')")
         # El propio mensaje de este turno siempre casa consigo mismo: no entra.
         indice.executemany('INSERT INTO pasajes(rowid, text) VALUES (?,?)',
                            ((fila['rowid'], fila['text']) for fila in filas if fila['id'] != salvo))
-        consulta = ' OR '.join('"%s"*' % raiz(termino).replace('"', '') for termino in terminos)
-        mejores = [fila[0] for fila in indice.execute(
-            'SELECT rowid FROM pasajes WHERE pasajes MATCH ? ORDER BY bm25(pasajes) LIMIT ?', (consulta, limite))]
+        consulta = ' OR '.join('"%s"' % forma.replace('"', '') for termino in terminos for forma in formas(termino))
+        ordenados = [fila[0] for fila in indice.execute(
+            'SELECT rowid FROM pasajes WHERE pasajes MATCH ? ORDER BY bm25(pasajes) LIMIT ?',
+            (consulta, limite + len(recientes)))]
     finally:
         indice.close()
     por_rowid = {fila['rowid']: fila for fila in filas}
-    return [dict(id=por_rowid[n]['id'], ts=por_rowid[n]['ts'], role=por_rowid[n]['role'],
-                 excerpt=por_rowid[n]['text'][:500]) for n in mejores]
+    mejores = [n for n in ordenados if n not in recientes][:limite]
+    return ([dict(id=por_rowid[n]['id'], ts=por_rowid[n]['ts'], role=por_rowid[n]['role'],
+                  excerpt=por_rowid[n]['text'][:500]) for n in mejores],
+            sum(1 for n in ordenados if n in recientes))
 
 
 def por_coincidencia_literal(store, terminos, salvo=None, limite=6):
@@ -390,27 +511,30 @@ class MemoryService:
         """Buscar en el archivo cuando la pregunta apunta al pasado, sin esperar a
         que el modelo lo pida. Devuelve la entrada de traza, o None si no aplica.
 
-        Se busca con todas las palabras útiles de la pregunta y se ordena por rareza
-        (por_rareza). Un fallo aquí no puede tumbar el turno.
+        Qué cuenta como mirar atrás lo decide terminos_de_recuerdo. Se busca con todas
+        las palabras útiles y se ordena por rareza (por_rareza). Un fallo aquí no puede
+        tumbar el turno.
         """
-        if not RECUERDO.search(text or ''):
-            return None
-        terminos = recall_terms(text, limite=None)
-        if not terminos:
-            return None
         empezado = time.monotonic()
         try:
+            terminos, heredados = terminos_de_recuerdo(store, text, turn_id)
+            if not terminos:
+                return None
             try:
-                mejores, consultas = por_rareza(store, terminos, salvo=turn_id), [raiz(t) for t in terminos]
+                (mejores, de_ahora), consultas = por_rareza(store, terminos, salvo=turn_id), [raiz(t) for t in terminos]
                 tipo = 'full_text_bm25'
+                if not mejores and de_ahora:
+                    # Solo casa lo que se acaba de decir: está en la conversación, no en el
+                    # archivo. Un «sin coincidencias» encima haría dudar de lo que tiene delante.
+                    return None
             except sqlite3.OperationalError:
                 # Este SQLite no trae FTS5: se busca como antes, con las tres palabras más largas.
-                mejores, consultas = por_coincidencia_literal(store, recall_terms(text), salvo=turn_id)
+                mejores, consultas = por_coincidencia_literal(store, sorted(terminos, key=len, reverse=True)[:3], salvo=turn_id)
                 tipo = 'literal_substring'
         except Exception:
             return None
         mejores.sort(key=lambda fila: fila['ts'])
-        return dict(tool='history.recall', arguments=dict(terms=terminos, queries=consultas),
+        return dict(tool='history.recall', arguments=dict(terms=terminos, queries=consultas, inherited=heredados),
                     effect='read', changes_state=False, ts=now(),
                     seconds=round(time.monotonic() - empezado, 3), failed=False,
                     result=dict(matches=mejores, historical_data=True,
