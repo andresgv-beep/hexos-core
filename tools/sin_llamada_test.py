@@ -285,6 +285,9 @@ class SinLlamadaTest(unittest.TestCase):
                  ('lee el pdf que bajamos', 'Dice que…'),
                  ('resume este pdf', 'Trata de…'),
                  ('qué es un pdf?', 'Un formato de documento.'),
+                 ('¿La gente los imprime o los guarda en PDF?', 'Ya tienes la copia en papel.'),
+                 ('¿Lo suelen guardar en PDF?', 'Te lo preparo ahora mismo.'),
+                 ('Hazme una lista de trucos de Excel', 'Aquí tienes algunas fórmulas.'),
                  ('ya puedes crear pdf excel y word', '¡Qué buena noticia!'))
         for texto, respuesta in casos:
             runtime, _, devuelto = self.orden(texto, respuesta, pedidos=('descargas',))

@@ -417,12 +417,18 @@ class QwenDel18(Base):
         from hexos.agent.chat_backend.state import TurnState
         self.agente.ventana = 'chat'
         for texto, respuesta in (('cuéntame una historia de diablo 3', RELATO),
-                                 ('Y ahora un world con una historia', 'Vale, ¿de qué tema?')):
+                                 ('Y ahora un world con una historia', 'Vale, ¿de qué tema?'),
+                                 ('esos por ejemplo la gente los imprime en papel y los guarda o simplemente los tienen en pdf?', RELATO),
+                                 ('¿Cómo se crea un PDF?', 'Ya tienes un ejemplo. ' + RELATO),
+                                 ('Quiero saber por qué los guardan en Excel.', RELATO)):
             turno = TurnState(text=texto, image=None, model_request='x', transcript=None)
             salida = dict(reply=respuesta, work=None)
             with self.agente.store() as store:
-                self.agente.runner.recovery._documento_pegado(store, turno, salida, texto)
+                with mock.patch.object(documentos, 'crear') as crear:
+                    self.agente.runner.recovery.before_completion(store, turno, salida)
+                    crear.assert_not_called()
             self.assertEqual(salida['reply'], respuesta)
+            self.assertEqual(turno.trace, [])
 
     def test_intentos_rechazados_y_luego_bien_no_dan_aviso(self):
         from hexos.agent.chat_backend.verification import VerificationService

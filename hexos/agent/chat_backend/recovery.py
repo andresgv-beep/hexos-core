@@ -85,32 +85,43 @@ MIRA_Y_BORRA = ('AVISO DE HEXOS (no es la persona): no se ha descartado ninguna 
 BORRALA = ('AVISO DE HEXOS (no es la persona): la nota sigue ahí, todavía no se ha descartado. '
            'Descártala ahora: n es su número en la lista que acabas de ver y state es descartada. '
            'Después confírmaselo en una frase. No menciones este aviso.')
-# Pedir un documento: nombra el formato y lo ordena («hazme un PDF», «pásalo a Excel»), o
-# lo nombra y la respuesta dice haberlo hecho. El 18/11 el Qwen3.6 35B contestó a «primero
-# el PDF, invéntate lo que sea» con «¡Hecho! He creado un documento PDF…» sin llamar a
-# document_create, con la herramienta declarada. Bajar, leer o resumir un PDF no es esto.
-# «world» por «Word», que se escribe así a menudo (Andrés, 18/11: «puedes hacer un world bien currado?»).
-DOCUMENTO = re.compile(r'\b(?:pdf|excel|word|docx|xlsx|hojas? de c[aá]lculo)\b|\b(?:un|el|en|a)\s+world\b', re.I)
-# Uno concreto («un Word», «en PDF»), no hablar de ellos en general («¿sabes hacer PDFs?»).
+# Ambas recuperaciones que crean un fichero exigen un encargo en el mensaje de la persona.
+# El texto (o la longitud) de la respuesta del modelo no concede permiso para escribir.
+FORMATO_PEDIDO = ((re.compile(r'\bword\b|\bdocx\b|\b(?:un|el|en|a)\s+world\b', re.I), 'docx'),
+                  (re.compile(r'\bpdf\b', re.I), 'pdf'),
+                  (re.compile(r'\b(?:excel|xlsx|hojas? de c[aá]lculo)\b', re.I), 'xlsx'))
 DOCUMENTO_CONCRETO = re.compile(r'\b(?:un|una|el|la|en|a)\s+(?:pdf|excel|word|world|docx|xlsx|hoja de c[aá]lculo)\b',
                                 re.I)
-# Pedirlo como pregunta: «¿puedes hacer un Word…?», «¿me haces un Excel…?».
 ORDEN_PREGUNTA = re.compile(r'\b(?:puedes|podr[ií]as|me)\s+(?:hacer|crear|generar|preparar|pasar|montar|escribir|'
                             r'haces|creas|generas|preparas|pasas|montas|escribes)\w*\b', re.I)
-# La respuesta lo deja para luego: «Dame un segundo que lo redacto», «Te voy a escribir un relato…».
-ANUNCIA = re.compile(r'\b(?:te (?:lo |la )?(?:voy a|preparo|hago|redacto|escribo|monto|genero|creo)'
-                     r'|voy a (?:crear|generar|preparar|hacer|escribir|redactar|montar)'
-                     r'|dame un (?:segundo|momento)|ahora mismo|enseguida|lo redacto|me pongo)\b', re.I)
-ORDEN_DE_DOCUMENTO = re.compile(r'\b(?:h[aá]z(?:me|lo|la)?|cr[eé]a(?:me|lo|la)?|gen[eé]ra(?:me|lo|la)?'
-                                r'|prep[aá]ra(?:me|lo|la)?|p[aá]sa(?:me|lo|la)?|conv[ií]erte(?:lo|la)?'
-                                r'|exp[oó]rta(?:lo|la)?|d[aá]me|quiero)\b', re.I)
+# Con pronombre («oye, hazme…») la orden puede ir en medio de una frase. Con formas
+# como «crea» o «genera» importa que abran la petición: también se usan en tercera persona.
+_ACCION = r'(?:h[aá]z|cr[eé]a|gen[eé]ra|prep[aá]ra|p[aá]sa|conv[ií]erte|exp[oó]rta)'
+_INICIO_PETICION = r'(?:^\W*|[,;.!:]\s*|\b(?:y|por favor)\s+)'
+ORDEN_DE_DOCUMENTO = re.compile(
+    rf'\b{_ACCION}(?:me|lo|la)\b|{_INICIO_PETICION}{_ACCION}\b'
+    r'|\binv[eé]ntate\b|(?<!no )\b(?:d[aá]me|quiero)\s+(?:un|una|el|la|en)\b', re.I)
 NO_ES_CREAR = re.compile(r'\b(?:b[aá]j|descarg|le[eé]r?\b|lee(?:me|lo)|res[uú]m|abre|https?:)', re.I)
-DICE_HECHO = re.compile(r'\b(?:he (?:creado|generado|preparado|hecho)|(?:est[aá]|queda) (?:listo|creado|generado)'
-                        r'|ya (?:tienes|lo tienes))', re.I)
-# «Y ahora un Word con…»: la orden sin verbo, detrás de otro documento.
-ORDEN_ELIPTICA = re.compile(r'^\W*(?:y\s+)?(?:ahora|otro|otra)\b', re.I)
-FORMATO_PEDIDO = ((re.compile(r'\b(?:word|world|docx)\b', re.I), 'docx'), (re.compile(r'\bpdf\b', re.I), 'pdf'),
-                  (re.compile(r'\b(?:excel|xlsx|hojas? de c[aá]lculo)\b', re.I), 'xlsx'))
+# Un pedido sin verbo, como «Y ahora un Word con una historia» u «otro PDF».
+ORDEN_ELIPTICA = re.compile(r'^\W*(?:y\s+)?(?:ahora\s+(?:un|una|el|la)|otr[oa])\s+'
+                            r'(?:pdf|word|world|docx|excel|xlsx|hoja de c[aá]lculo)\b', re.I)
+
+
+def formato_encargado(texto):
+    formato = next((f for patron, f in FORMATO_PEDIDO if patron.search(texto)), None)
+    if not formato or NO_ES_CREAR.search(texto):
+        return None
+    if ORDEN_ELIPTICA.search(texto):
+        return formato
+    orden = ORDEN_DE_DOCUMENTO.search(texto)
+    if DOCUMENTO_CONCRETO.search(texto) and (orden or ORDEN_PREGUNTA.search(texto)):
+        return formato
+    # También «genera PDF». En preguntas de capacidad exigimos un documento concreto.
+    if orden and any(patron.match(texto[orden.end():].lstrip()) for patron, _ in FORMATO_PEDIDO):
+        return formato
+    return None
+
+
 # A partir de aquí una respuesta es el documento pegado, no una frase sobre él.
 PEGADO = 1500
 HAZ_DOCUMENTO = ('AVISO DE HEXOS (no es la persona): todavía no existe ningún fichero, en este turno no se ha '
@@ -262,16 +273,14 @@ class RecoveryController:
             return RETRY
         return output
 
-    def _documento_pegado(self, store, turn: TurnState, output: dict, texto: str) -> bool:
+    def _documento_pegado(self, store, turn: TurnState, output: dict, formato: str) -> bool:
         """Si la respuesta es el documento que la persona pidió, pegado en el chat, lo crea con ese
         texto y deja en el chat una línea con su tarjeta. Es la única acción que se hace aquí: es
         exactamente lo pedido, no sale del PC y la persona lo ve antes de bajarlo."""
         from .. import documentos
         respuesta = output.get('reply') or ''
-        formato = next((f for patron, f in FORMATO_PEDIDO if patron.search(texto)), None)
-        if (store is None or not formato or len(respuesta) < PEGADO
+        if (store is None or len(respuesta) < PEGADO
                 or getattr(self.agent, 'ventana', None) != catalog.DEFAULT_WINDOW
-                or not DOCUMENTO_CONCRETO.search(texto) or NO_ES_CREAR.search(texto)
                 or any(p.get('tool') == 'document.create' and not p.get('failed') for p in turn.trace)):
             return False
         contenido = re.sub(r'(?im)^\s*\[\[matrix\]\]\s*$', '', respuesta).strip()
@@ -441,17 +450,14 @@ class RecoveryController:
         # crea HexOS con ese texto, sin otra generación. El 18/11 el Qwen3.6 35B pegó un relato
         # de 7.600 tokens en el chat; pedirle que lo repitiera eran otros dos minutos.
         texto = turn.text or ''
-        if self._documento_pegado(store, turn, output, texto):
+        formato = formato_encargado(texto)
+        if formato and self._documento_pegado(store, turn, output, formato):
             return False
         # Pidió un PDF, un Word o un Excel y el turno acaba sin crearlo: se arranca en la
         # llamada. Avisarle sin forzarla no bastó: contestó «Me adelanté al baile».
         if (not turn.retries.sin_llamada_devuelto
                 and getattr(self.agent, 'ventana', None) == catalog.DEFAULT_WINDOW
-                and DOCUMENTO.search(texto) and not NO_ES_CREAR.search(texto)
-                and (ORDEN_DE_DOCUMENTO.search(texto) or DICE_HECHO.search(output.get('reply') or '')
-                     or (DOCUMENTO_CONCRETO.search(texto) and (ORDEN_PREGUNTA.search(texto)
-                                                               or ORDEN_ELIPTICA.search(texto)
-                                                               or ANUNCIA.search(output.get('reply') or ''))))
+                and formato
                 and not any(paso.get('tool') == 'document.create' for paso in turn.trace)
                 and hasattr(self.agent.runtime, 'require_note')):
             if hasattr(self.agent.runtime, 'active_groups'):
