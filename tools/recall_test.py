@@ -260,5 +260,60 @@ class RecallTest(unittest.TestCase):
             self.assertIsNone(self.agent.recall_history(store, '¿te acuerdas del synology?', 'x'))
 
 
+    # --- La herramienta que llama el modelo: la misma búsqueda ---
+
+    def buscar(self, consulta):
+        with self.agent.store() as store:
+            return self.agent.tool(store, 'history.search', {'query': consulta})
+
+    def test_la_herramienta_busca_por_palabras_y_no_por_la_frase_entera(self):
+        # El modelo escribe varias palabras; seguidas no están en ningún mensaje.
+        self.poblar(('assistant', 'Podemos echar un Akinator a la inversa: tú piensas en un personaje y yo lo adivino'),
+                    ('user', 'revisa el estado del synology'))
+        hallado = self.buscar('juego akinator personajes')
+        self.assertEqual(hallado['search_type'], 'full_text_bm25')
+        self.assertEqual(len(hallado['matches']), 1)
+        self.assertIn('Akinator', hallado['matches'][0]['excerpt'])
+
+    def test_la_herramienta_no_trae_lo_que_se_acaba_de_decir(self):
+        self.poblar(('user', 'Empezamos por akinator te parece?'))
+        self.poblar(('user', 'Nooo, akinator socio akinator fue el juego que jugamos'), hace=60)
+        self.poblar(('user', 'busca en el historial lo del akinator'), hace=0)
+        self.assertEqual([fila['excerpt'] for fila in self.buscar('akinator')['matches']],
+                         ['Empezamos por akinator te parece?'])
+
+    def test_la_herramienta_da_pocos_y_del_mas_antiguo_al_mas_nuevo(self):
+        for n in range(12):
+            self.poblar(('user', 'el kernel numero %d del router' % n), hace=3600 * (20 - n))
+        hallado = self.buscar('kernel router')
+        fechas = [fila['ts'] for fila in hallado['matches']]
+        self.assertEqual(len(fechas), 8)
+        self.assertEqual(fechas, sorted(fechas))
+
+    def test_la_herramienta_conserva_la_cadena_literal(self):
+        # Un trozo de palabra no es una palabra del índice: sale por la búsqueda de siempre.
+        self.poblar(('user', 'el fichero se llama m0001_resumen'))
+        hallado = self.buscar('m000')
+        self.assertEqual(hallado['search_type'], 'literal_substring')
+        self.assertEqual(len(hallado['matches']), 1)
+        self.assertEqual(self.buscar('%')['matches'], [])
+
+    def test_la_herramienta_sin_fts5_busca_como_antes(self):
+        import sqlite3
+        from hexos.agent import continuity
+        self.poblar(('user', 'revisa el estado de los contenedores del synology'))
+        original = continuity.por_rareza
+
+        def sin_fts5(*_, **__):
+            raise sqlite3.OperationalError('no such module: fts5')
+        continuity.por_rareza = sin_fts5
+        try:
+            hallado = self.buscar('contenedores')
+        finally:
+            continuity.por_rareza = original
+        self.assertEqual(hallado['search_type'], 'literal_substring')
+        self.assertEqual(len(hallado['matches']), 1)
+
+
 if __name__ == '__main__':
     unittest.main()

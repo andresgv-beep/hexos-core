@@ -1,9 +1,13 @@
-"""Recuperación explícita: historial literal y perfil confirmado por HERA."""
+"""Recuperación explícita: historial y perfil confirmado por HERA."""
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
 import re
+import sqlite3
 import subprocess
+
+from .busqueda_archivo import por_rareza, recall_terms
 
 
 class HeraProfile:
@@ -124,24 +128,57 @@ class HeraProfile:
         return salida
 
 
+# Cuántos mensajes devuelve history.search. Con la cadena literal eran hasta 20, pero casi
+# nunca casaban tantos; por palabras sueltas siempre hay de sobra y cada uno ocupa contexto.
+RESULTADOS_DE_BUSQUEDA = 8
+
+
+def busqueda_literal(store, query):
+    """Los 20 mensajes más recientes de esta ventana que contienen la cadena tal cual, el
+    más antiguo primero. Es la búsqueda de siempre: sirve para un trozo de palabra, una ruta
+    o un código, y para un SQLite sin FTS5."""
+    # LIKE literal: ni comodines ni SQL aportado por el modelo.
+    query = query.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+    rows = store.db.execute("SELECT id,ts,role,text FROM esta_ventana "
+        "WHERE text LIKE ? ESCAPE '\\' ORDER BY rowid DESC LIMIT 20",
+        ('%' + query + '%',)).fetchall()[::-1]
+    return [dict(id=r['id'], ts=r['ts'], role=r['role'], excerpt=r['text'][:500]) for r in rows]
+
+
+def buscar_en_el_archivo(store, query):
+    """Lo que devuelve history.search y con qué búsqueda salió.
+
+    Primero por palabras y rareza, igual que el recuerdo que HexOS pone solo: el modelo
+    escribe «juego akinator personajes» y eso no está seguido en ningún mensaje. Lo dicho
+    en los últimos minutos no cuenta: está en la conversación. Si así
+    no sale nada (la consulta no trae palabras, es un trozo de palabra, o no hay FTS5), la
+    cadena literal de siempre.
+    """
+    terminos = recall_terms(query, None)
+    if terminos:
+        try:
+            mejores, _ = por_rareza(store, terminos, limite=RESULTADOS_DE_BUSQUEDA,
+                                    ahora=datetime.now(timezone.utc))
+        except (sqlite3.OperationalError, TypeError, ValueError):
+            # Sin FTS5, o una fecha del archivo que no se deja comparar: la búsqueda de siempre.
+            mejores = []
+        if mejores:
+            return sorted(mejores, key=lambda fila: fila['ts']), 'full_text_bm25'
+    return busqueda_literal(store, query)[-RESULTADOS_DE_BUSQUEDA:], 'literal_substring'
+
+
 def history_tool(store, name, args):
     if name == 'history.recent':
         rows = store.db.execute('SELECT id,ts,role,text FROM esta_ventana ORDER BY rowid DESC LIMIT 20').fetchall()[::-1]
         return {'messages': [dict(id=r['id'], ts=r['ts'], role=r['role'], excerpt=r['text'][:500])
                              for r in rows], 'historical_data': True, 'order':'oldest_to_newest'}
     if name == 'history.search':
-        query = args['query']
-        # LIKE literal: ni comodines ni SQL aportado por el modelo.
-        query = query.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
-        rows = store.db.execute("SELECT id,ts,role,text FROM esta_ventana "
-            "WHERE text LIKE ? ESCAPE '\\' ORDER BY rowid DESC LIMIT 20",
-            ('%' + query + '%',)).fetchall()[::-1]
-        return {'matches': [dict(id=r['id'], ts=r['ts'], role=r['role'],
-                                  excerpt=r['text'][:500]) for r in rows],
-                'historical_data': True, 'limit': 20,
-                'order': 'oldest_to_newest',
-                'search_type': 'literal_substring',
-                'note': 'Cero coincidencias no demuestra ausencia. Prueba una palabra más corta o history.recent.'}
+        encontrados, tipo = buscar_en_el_archivo(store, args['query'])
+        return {'matches': encontrados, 'historical_data': True, 'limit': RESULTADOS_DE_BUSQUEDA,
+                'order': 'oldest_to_newest', 'search_type': tipo,
+                'note': 'Cero coincidencias no demuestra ausencia: prueba otra palabra. Lo dicho en los '
+                        'últimos minutos no sale aquí; está en history.recent. Para leer entero un '
+                        'mensaje, history.read con su id.'}
     row = store.db.execute('SELECT id,ts,role,text FROM esta_ventana WHERE id=?',
                            (args['id'],)).fetchone()
     if row is None:
