@@ -296,6 +296,17 @@ class RecoveryController:
     def before_completion(self, store, turn: TurnState, output: dict) -> bool:
         """True pide otra generación. La única acción que hace por su cuenta es guardar como
         documento el que el modelo pegó en el chat (`_documento_pegado`)."""
+        # history.recall se añade al preparar el contexto, aunque el modelo no llame a nada.
+        # Una búsqueda automática de HexOS sí cuenta y conserva su ruta de lectura o error.
+        if (turn.busqueda_web_pedida and not turn.retries.busqueda_web_devuelta
+                and all(paso['tool'] == 'history.recall' for paso in turn.trace)):
+            turn.retries.busqueda_web_devuelta = True
+            if hasattr(self.agent.runtime, 'require_read'):
+                self.agent.runtime.require_read('web.search')
+            turn.messages = [dict(role='user', content='AVISO DE HEXOS (no es la persona): '
+                'La búsqueda web que pidió la persona sigue pendiente. Llama ahora a web_search '
+                'con la consulta correspondiente y usa el resultado para continuar el encargo.')]
+            return True
         # «He revisado» sin haber mirado nada: la siguiente generación empieza en una
         # lectura, como tras un reproche. Avisarle no basta, y una sola vez: si tras
         # mirar sigue afirmando algo, ya hay traza con la que contrastarlo.

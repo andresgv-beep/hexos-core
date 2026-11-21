@@ -19,6 +19,9 @@ class InterpretarTest(unittest.TestCase):
     def test_vacio_es_una_respuesta_valida(self):
         """Conversar sin herramientas es legítimo: [] no es lo mismo que no saber."""
         self.assertEqual(tool_groups.interpretar('[]'), [])
+        self.assertEqual(tool_groups.interpretar('[].', 'chat'), [])
+        self.assertIsNone(tool_groups.interpretar('[inventado].', 'chat'))
+        self.assertIsNone(tool_groups.interpretar('[]. Hay más.', 'chat'))
 
     def test_sin_comillas_tambien_se_entiende_y_se_valida_igual(self):
         # El E4B contesta a veces `[sistema]`: correcto, pero no es JSON y se tiraba.
@@ -122,6 +125,39 @@ class SelectorTest(unittest.TestCase):
             self.assertEqual(len(datos[campo]), limite)
             self.assertTrue(datos[campo].startswith('Empieza aquí.'))
             self.assertTrue(datos[campo].endswith('Guárdalo en una nota.'))
+
+    def test_buscar_web_es_una_senal_de_chat_solo_para_el_turno(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock, patch
+        from hexos.agent.chat_backend.context import ContextManager
+        from hexos.agent.chat_backend.state import TurnState
+
+        web = catalog.BUSCAR_WEB
+        self.assertEqual(tool_groups.interpretar('[buscar_web, notas]', 'chat'), [web, 'notas'])
+        self.assertIsNone(tool_groups.interpretar('[buscar_web]', 'agente'))
+        runtime = SimpleNamespace(active_groups=[], messages=[], elegir_grupos=Mock(),
+                                  elegir_registro=Mock(return_value='broma'))
+        agent = SimpleNamespace(runtime=runtime, ventana='chat')
+        context = ContextManager(agent)
+        with patch('hexos.agent.registro.activo', return_value=True):
+            for elegidos in ([web], [web, 'notas'], []):
+                with self.subTest(elegidos=elegidos):
+                    runtime.elegir_grupos.return_value = elegidos
+                    turn = TurnState(text='Petición', prompt_text='Petición')
+                    context._elegir_grupos(turn)
+                    self.assertEqual(turn.busqueda_web_pedida, web in elegidos)
+                    if web in elegidos:
+                        runtime.elegir_registro.assert_not_called()
+                        self.assertIsNone(turn.registro)
+                        self.assertEqual(runtime.temperatura, 0)
+                        grupos = [g for g in elegidos if g != web]
+                        self.assertEqual(turn.grupos_pedidos, grupos)
+                        self.assertEqual(runtime.active_groups, grupos)
+                        self.assertEqual(catalog.tools_for(grupos, 'chat'), agent.grupos.herramientas('chat'))
+                    else:
+                        runtime.elegir_registro.assert_called_once()
+                        self.assertEqual(turn.registro, 'broma')
+                        self.assertEqual(runtime.active_groups, ['notas'])
 
     def test_un_grupo_de_la_otra_ventana_no_cuela(self):
         """Por defecto se conversa: pedir el NAS en charla no se da por bueno."""

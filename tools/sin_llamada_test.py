@@ -56,6 +56,29 @@ class SinLlamadaTest(unittest.TestCase):
         self.assertEqual(salida['reply'], 'Por ejemplo, una herramienta para cambiar un servicio.')
         self.assertIn({'type': 'reset'}, llamadas)
 
+    def test_busqueda_web_del_chat_se_devuelve_una_vez_incluso_con_recuerdo_automatico(self):
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime = Runtime()
+            runtime.require_read = Mock(return_value=True)
+            agent = Agent(tmp, runtime)
+            agent.ventana = 'chat'
+            turn = TurnState(text='Busca', busqueda_web_pedida=True)
+            turn.trace = [dict(tool='history.recall', result={'matches': []})]
+            recovery = agent.runner.recovery
+            salida = dict(reply='Dame un segundo.', work=None)
+            self.assertTrue(recovery.before_completion(None, turn, salida))
+            self.assertIn('web_search', turn.messages[0]['content'])
+            self.assertFalse(recovery.before_completion(None, turn, salida))
+            runtime.require_read.assert_called_once_with('web.search')
+
+            # Una búsqueda automática ya ejecutada sigue la ruta habitual de lectura de fuentes.
+            turn = TurnState(text='Busca', busqueda_web_pedida=True)
+            turn.trace = [dict(tool='web.search', arguments={}, result={'items': []}, failed=False)]
+            self.assertTrue(recovery.before_completion(None, turn, salida))
+            self.assertFalse(turn.retries.busqueda_web_devuelta)
+            runtime.require_read.assert_called_once()
+
     def test_no_depende_de_lo_que_diga_la_respuesta(self):
         # Las frases no cuentan, ni para bien ni para mal: es una señal de estructura.
         for respuesta in ('Claro.', '¿De qué equipo hablas?', 'Voy a mirarlo ahora mismo.'):

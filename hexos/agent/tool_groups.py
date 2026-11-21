@@ -7,7 +7,7 @@ haya usado hace poco, y lo que entre por la vía de escape.
 Dos reglas que no se pueden romper:
 
 - **Un fallo del selector nunca deja al modelo sin herramientas.** Si la salida no es una
-  lista de grupos conocidos, `elegir` devuelve None y quien llama ofrece el catálogo
+  lista de opciones conocidas, `elegir` devuelve None y quien llama ofrece el catálogo
   entero en ese turno.
 - **El conjunto se fija al empezar el turno.** Cambiarlo a mitad invalida el prefijo KV
   de todo lo que viene detrás, que es el 86% del coste del turno.
@@ -45,8 +45,15 @@ def _extracto(texto, limite):
     return texto[:limite - final - len(separador)] + separador + texto[-final:]
 
 
+def _opciones(ventana):
+    grupos = catalog.groups_in(ventana)
+    if ventana == 'chat' and catalog.BUSCAR_WEB in catalog.GROUP_GUIDANCE:
+        return (*grupos, catalog.BUSCAR_WEB)
+    return grupos
+
+
 def _prompt(runtime, ultimo_asistente, mensaje, ventana):
-    permitidos = catalog.groups_in(ventana)
+    permitidos = _opciones(ventana)
     grupos = '\n'.join(f'- {g}: {catalog.GROUP_GUIDANCE[g]}' for g in permitidos)
     messages = [
         {'role': 'system', 'content': INSTRUCCION + '\n\nGrupos:\n' + grupos},
@@ -59,7 +66,7 @@ def _prompt(runtime, ultimo_asistente, mensaje, ventana):
 
 
 def interpretar(raw, ventana=None):
-    """La salida del selector a lista de grupos, o None si no vale.
+    """Grupos pedidos y, en Chat, la intención de búsqueda web. None si la salida no vale.
 
     None significa «no sé»: quien llama ofrece todo lo que la ventana permite. Un grupo
     inventado, o uno de la otra ventana, invalida la respuesta completa en vez de
@@ -68,6 +75,9 @@ def interpretar(raw, ventana=None):
     if not isinstance(raw, str):
         return None
     texto = raw.strip()
+    # El E4B a veces puntúa el array como una oración («[].»).
+    if texto.endswith('].'):
+        texto = texto[:-1]
     if texto.startswith('```'):
         texto = texto.strip('`').lstrip('json').strip()
     try:
@@ -82,8 +92,7 @@ def interpretar(raw, ventana=None):
         elegidos = [nombre.strip() for nombre in sin_comillas.group(1).split(',')]
     if not isinstance(elegidos, list) or len(elegidos) > len(catalog.GROUPS):
         return None
-    permitidos = catalog.groups_in(ventana) if ventana else tuple(
-        g for g in catalog.GROUPS if g != catalog.ALWAYS)
+    permitidos = _opciones(ventana) if ventana else (set(catalog.GROUPS) - {catalog.ALWAYS}) | {catalog.BUSCAR_WEB}
     limpio = []
     for g in elegidos:
         if not isinstance(g, str) or g not in permitidos:

@@ -88,8 +88,22 @@ CASOS = [
     ('chat', 'guarda esos planos en mi PC', ['descargas']),
     ('chat', '¿qué ficheros me he descargado?', ['descargas']),
     ('chat', 'léete el PDF que bajaste antes y resúmemelo', ['descargas']),
-    ('chat', 'busca en la web los planos del Apple 1', []),
+    ('chat', 'busca en la web los planos del Apple 1', ['buscar_web']),
     ('chat', 'hola', []),
+]
+
+
+# Mismo recordatorio, pero el turno anterior decide dónde había que buscar.
+# (último asistente, mensaje, selección esperada en Chat).
+SEGUIMIENTOS_CHAT = [
+    ('', 'Coño pues busca por la web que para eso tienes hereamientas', ['buscar_web']),
+    ('', 'Ibas a buscar por internet socio sobre los slm', ['buscar_web']),
+    ('Voy a buscar por internet los modelos pequeños.', 'No estás buscando macho', ['buscar_web']),
+    ('Voy a mirar en internet qué modelos hay.', 'Busca', ['buscar_web']),
+    ('Voy a buscar esa dirección en tus notas.', 'Busca', ['notas']),
+    ('', 'Busca el precio en la web y guárdalo en una nota', ['buscar_web', 'notas']),
+    ('', 'Explícame cómo funciona un buscador web', []),
+    ('', 'Sin buscar en internet, dime qué es un SLM', []),
 ]
 
 
@@ -118,10 +132,12 @@ def main():
     with tempfile.TemporaryDirectory(prefix='hexos-banco-selector-') as tmp:
         runtime = NativeRuntime(args.runtime, args.model, args.ctx, tmp, args.template)
         try:
-            for ventana, frase, esperado in CASOS:
+            casos = [(ventana, '', frase, esperado) for ventana, frase, esperado in CASOS]
+            casos.extend(('chat', ultimo, frase, esperado) for ultimo, frase, esperado in SEGUIMIENTOS_CHAT)
+            for ventana, ultimo, frase, esperado in casos:
                 # Lo mismo que `tool_groups.elegir`, guardando la salida cruda: cuando no vale
                 # hace falta ver qué contestó, no solo que se descartó.
-                runtime.send(tool_groups._prompt(runtime, '', frase, ventana), auxiliar=True)
+                runtime.send(tool_groups._prompt(runtime, ultimo, frase, ventana), auxiliar=True)
                 cabecera, crudo = runtime.event()
                 elegido = tool_groups.interpretar(crudo, ventana) if cabecera[4] == 'eos' else None
                 if elegido is None:
@@ -131,7 +147,7 @@ def main():
                 else:
                     acierta = all(g in elegido for g in esperado)
                     sobra = [g for g in elegido if g not in esperado]
-                filas.append(dict(ventana=ventana, frase=frase, esperado=esperado, elegido=elegido,
+                filas.append(dict(ventana=ventana, ultimo_asistente=ultimo, frase=frase, esperado=esperado, elegido=elegido,
                                   acierta=acierta, sobra=sobra, crudo=crudo, fin=cabecera[4]))
                 if not acierta or sobra:
                     print(('FALLA ' if not acierta else 'sobra ') + json.dumps(

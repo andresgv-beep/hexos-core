@@ -322,9 +322,11 @@ class ContextManager:
         if ('notas' not in elegidos and getattr(turn, 'contenido_de_nota', None)
                 and 'notas' in catalog.groups_in(ventana)):
             elegidos = [*elegidos, 'notas']
-        turn.grupos_pedidos = list(elegidos)
+        turn.busqueda_web_pedida = catalog.BUSCAR_WEB in elegidos
+        turn.grupos_pedidos = [g for g in elegidos if g != catalog.BUSCAR_WEB]
         from ..native import temperatura_del_turno
-        runtime.temperatura = temperatura_del_turno(ventana, elegidos, turn.prompt_text)
+        if not turn.busqueda_web_pedida:
+            runtime.temperatura = temperatura_del_turno(ventana, elegidos, turn.prompt_text)
         # Solo en una charla del Chat, que es donde el tono importa: ni con herramientas
         # de por medio ni en el Agente. Otra generación auxiliar corta, sin azar.
         from .. import registro
@@ -338,7 +340,7 @@ class ContextManager:
             turn.registro = (por_capa(ultimo, turn.text or '') if por_capa
                              else registro.elegir(runtime, ultimo, turn.text or ''))
             runtime.temperatura = registro.temperatura(turn.registro, runtime.temperatura)
-        pegajosos.pedir(elegidos)
+        pegajosos.pedir(turn.grupos_pedidos)
         runtime.active_groups = [g for g in pegajosos.activos()
                                  if g in catalog.groups_in(ventana)]
         # Con un proyecto puesto sus herramientas van siempre declaradas, las pida el selector o

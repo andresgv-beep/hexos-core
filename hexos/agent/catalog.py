@@ -570,8 +570,14 @@ GROUP_REQUIRES = {'multimedia': ('archivos',), 'descargas': ('informes',)}
 # Una línea por grupo, que es lo que ve el selector. No describe herramientas: describe
 # para qué sirve el grupo, porque elegir por nombres de función es lo que hacía fallar al
 # modelo pequeño.
+# Señal del selector de Chat. Las dos herramientas web siguen declaradas en el núcleo.
+BUSCAR_WEB = 'buscar_web'
+
 GROUP_GUIDANCE = {
-    'nucleo': 'Conversar, recordar lo hablado y buscar en la web.',
+    BUSCAR_WEB: ('Consultar internet por encargo de la persona. También cuando el último asistente anunció '
+                 'esa consulta y el mensaje actual insiste, reclama que falta o pide que se ponga a ello. '
+                 'Ejemplo: tras ofrecer mirar precios en línea, «todavía estoy esperando» requiere buscar_web. '
+                 'Para explicar qué es un buscador basta con conversar.'),
     # Cada cambio aquí se mide con tools/banco_selector.py, que guarda las frases: el 13/11,
     # 40 de 40 con el E4B y con el 26B (la redacción del 12/11 daba 35 y 39). Nombrar
     # «¿tengo instalado X?» tal cual y
