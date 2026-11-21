@@ -79,6 +79,21 @@ class SinLlamadaTest(unittest.TestCase):
             self.assertFalse(turn.retries.busqueda_web_devuelta)
             runtime.require_read.assert_called_once()
 
+    def test_mostrar_el_fichero_recupera_la_peticion_aunque_el_selector_marque_web(self):
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime = Runtime()
+            runtime.require_read = Mock(return_value=True)
+            agent = Agent(tmp, runtime)
+            agent.ventana = 'chat'
+            turn = TurnState(text='Saca el del Apple 2', mostrar_fichero=True, busqueda_web_pedida=True)
+            salida = dict(reply='Aquí tienes el manual.', work=None)
+            recovery = agent.runner.recovery
+            self.assertTrue(recovery.before_completion(None, turn, salida))
+            self.assertIn(turn.text, turn.messages[0]['content'])
+            self.assertFalse(recovery.before_completion(None, turn, salida))
+            runtime.require_read.assert_called_once_with('file.list')
+
     def test_no_depende_de_lo_que_diga_la_respuesta(self):
         # Las frases no cuentan, ni para bien ni para mal: es una señal de estructura.
         for respuesta in ('Claro.', '¿De qué equipo hablas?', 'Voy a mirarlo ahora mismo.'):

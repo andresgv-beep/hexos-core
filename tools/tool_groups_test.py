@@ -126,6 +126,28 @@ class SelectorTest(unittest.TestCase):
             self.assertTrue(datos[campo].startswith('Empieza aquí.'))
             self.assertTrue(datos[campo].endswith('Guárdalo en una nota.'))
 
+    def test_selector_con_el_modelo_recien_cargado_lee_la_ultima_respuesta_visible(self):
+        import tempfile
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from hexos.agent.chat import Agent
+        from hexos.agent.chat_backend.state import TurnState
+
+        runtime = SimpleNamespace(native=True, ctx=16384, messages=[], active_groups=[],
+                                  elegir_grupos=Mock(), call=Mock())
+        runtime.elegir_grupos.return_value = [catalog.MOSTRAR_FICHERO]
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(tmp, runtime)
+            agent.ventana = 'chat'
+            with agent.store() as store:
+                store.db.execute('INSERT INTO conversation VALUES (?,?,?,?,?)',
+                                 ('anterior', '2026-11-21', 'assistant', 'Tengo el manual.', 'Texto para el modelo'))
+                turn = TurnState(text='Pásamelo')
+                agent.context.prepare(store, turn)
+                runtime.elegir_grupos.assert_called_once_with('Tengo el manual.', 'Pásamelo', 'chat')
+                self.assertEqual(turn.grupos_pedidos, ['descargas'])
+                self.assertTrue(turn.mostrar_fichero)
+
     def test_buscar_web_es_una_senal_de_chat_solo_para_el_turno(self):
         from types import SimpleNamespace
         from unittest.mock import Mock, patch

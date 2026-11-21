@@ -307,14 +307,23 @@ class RecoveryController:
         documento el que el modelo pegó en el chat (`_documento_pegado`)."""
         # history.recall se añade al preparar el contexto, aunque el modelo no llame a nada.
         # Una búsqueda automática de HexOS sí cuenta y conserva su ruta de lectura o error.
-        if (turn.busqueda_web_pedida and not turn.retries.busqueda_web_devuelta
+        if (turn.mostrar_fichero and not turn.retries.fichero_devuelto
+                and all(paso['tool'] == 'history.recall' for paso in turn.trace)):
+            turn.retries.fichero_devuelto = True
+            if hasattr(self.agent.runtime, 'require_read'):
+                self.agent.runtime.require_read('file.list')
+            turn.messages = [dict(role='user', content='AVISO DE HEXOS: La persona pidió este fichero: '
+                + turn.text + '\nUsa file_list con show para entregar el original. Si desconoces su nombre, '
+                'lista primero las descargas y elige el que se pidió.')]
+            return True
+        if (turn.busqueda_web_pedida and not turn.mostrar_fichero and not turn.retries.busqueda_web_devuelta
                 and all(paso['tool'] == 'history.recall' for paso in turn.trace)):
             turn.retries.busqueda_web_devuelta = True
             if hasattr(self.agent.runtime, 'require_read'):
                 self.agent.runtime.require_read('web.search')
             turn.messages = [dict(role='user', content='AVISO DE HEXOS (no es la persona): '
                 'La búsqueda web que pidió la persona sigue pendiente. Llama ahora a web_search '
-                'con la consulta correspondiente y usa el resultado para continuar el encargo.')]
+                'para resolver este mensaje de la persona: ' + turn.text)]
             return True
         # «He revisado» sin haber mirado nada: la siguiente generación empieza en una
         # lectura, como tras un reproche. Avisarle no basta, y una sola vez: si tras

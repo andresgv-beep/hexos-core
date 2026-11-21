@@ -286,7 +286,7 @@ class ContextManager:
                               efectos={nombre: definicion.get('effect') for nombre, definicion in catalog.TOOLS.items()},
                               con_peticiones=not turn.history and not turn.handoff)
 
-    def _elegir_grupos(self, turn) -> None:
+    def _elegir_grupos(self, turn, ultimo='') -> None:
         """Qué grupos de herramientas se declaran en este turno.
 
         Al empezar el turno y nunca a mitad: el conjunto va en el bloque de sistema, y
@@ -304,8 +304,6 @@ class ContextManager:
             pegajosos = self.agent.grupos = tool_groups.Pegajosos()
         pegajosos.nuevo_turno()
         ventana = getattr(self.agent, 'ventana', None) or catalog.DEFAULT_WINDOW
-        ultimo = next((m.get('content') or '' for m in reversed(getattr(runtime, 'messages', []) or [])
-                       if m.get('role') == 'assistant' and m.get('content')), '')
         propio = getattr(runtime, 'elegir_grupos', None)
         elegidos = (propio(ultimo, turn.prompt_text or '', ventana) if propio else
                     tool_groups.elegir(runtime, ultimo, turn.prompt_text or '', ventana))
@@ -323,7 +321,10 @@ class ContextManager:
                 and 'notas' in catalog.groups_in(ventana)):
             elegidos = [*elegidos, 'notas']
         turn.busqueda_web_pedida = catalog.BUSCAR_WEB in elegidos
-        turn.grupos_pedidos = [g for g in elegidos if g != catalog.BUSCAR_WEB]
+        turn.mostrar_fichero = catalog.MOSTRAR_FICHERO in elegidos
+        turn.grupos_pedidos = [g for g in elegidos if g not in (catalog.BUSCAR_WEB, catalog.MOSTRAR_FICHERO)]
+        if turn.mostrar_fichero and 'descargas' not in turn.grupos_pedidos:
+            turn.grupos_pedidos.append('descargas')
         from ..native import temperatura_del_turno
         if not turn.busqueda_web_pedida:
             runtime.temperatura = temperatura_del_turno(ventana, elegidos, turn.prompt_text)
@@ -376,7 +377,14 @@ class ContextManager:
                          and pide_extraccion(turn.text))
         if hasattr(self.agent.runtime, 'harvest_pending') or cosechara:
             self.agent.runtime.harvest_pending = cosechara
-        self._elegir_grupos(turn)
+        # El KV puede estar vacío al cargar el modelo. El referente de «pásamelo»
+        # es la última respuesta visible de esta conversación, incluso tras reiniciar.
+        limite = store.db.execute('SELECT value FROM agent_state WHERE key=?',
+                                  (clave(store, LIMPIEZA),)).fetchone()
+        desde_limpieza = int(limite[0]) if limite else 0
+        anterior = store.db.execute("SELECT text FROM esta_ventana WHERE role='assistant' AND rowid>? "
+                                    "ORDER BY rowid DESC LIMIT 1", (desde_limpieza,)).fetchone()
+        self._elegir_grupos(turn, anterior[0] if anterior else '')
         nota_imagen = ''
         if isinstance(turn.image, AudioClip):
             if not hasattr(self.agent.runtime, 'attach_audio'):
@@ -563,11 +571,9 @@ class ContextManager:
             # «¿te acuerdas del libro?» de antes, y Helios contestó a eso en vez de al
             # saludo. El archivo sigue ahí y se puede consultar; lo que no hace es
             # ponérsele delante sin que nadie lo pida.
-            limpio = store.db.execute('SELECT value FROM agent_state WHERE key=?',
-                                      (clave(store, LIMPIEZA),)).fetchone()
             turn.memory_evidence = store.db.execute(
                 "SELECT id,model_text AS text FROM esta_ventana WHERE role='user' AND id<>? AND rowid>? "
-                'ORDER BY rowid DESC LIMIT 8', (turn.uid, int(limpio[0]) if limpio else 0)).fetchall()[::-1]
+                'ORDER BY rowid DESC LIMIT 8', (turn.uid, desde_limpieza)).fetchall()[::-1]
             # Mientras el prefijo siga vivo se añaden solo los datos de ESTE
             # turno. Volver a pasar el historial entero lo duplicaba en el
             # adaptador y obligaba a reconstruirlo cada vez. Al cortar o al

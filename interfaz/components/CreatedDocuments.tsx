@@ -14,21 +14,21 @@ export const ABRIR_DESCARGAS = "helios:abrir-descargas";
  *  quien no conoce el botón de la cabecera no sabría dónde buscarlo. */
 export function CreatedDocuments({ documents }: { documents: CreatedDocument[] }) {
   return <div className="reply-documents">
-  <p className="reply-documents-head">{documents.length === 1 ? "Documento creado" : `${documents.length} documentos creados`}
+  <p className="reply-documents-head">{documents.some(doc => doc.existing) ? "Archivos" : documents.length === 1 ? "Documento creado" : `${documents.length} documentos creados`}
     <button type="button" onClick={() => window.dispatchEvent(new Event(ABRIR_DESCARGAS))}>
       <FolderDown size={15} aria-hidden="true" /> Abrir Descargas</button></p>
-  <ul className="downloads-list" aria-label="Documentos creados">
+  <ul className="downloads-list" aria-label="Archivos">
     {documents.map(doc => {
       const Icono = doc.kind === "Excel" ? FileSpreadsheet : FileText;
       return <li key={doc.id} className="downloads-row">
         <Icono size={20} aria-hidden="true" />
         <div className="downloads-what">
-          <a href={doc.viewUrl} target="_blank" rel="noreferrer">{doc.name}</a>
-          <small>{[doc.kind, peso(doc.bytes), "hecho por Helios"].join(" · ")}</small>
+          <a href={doc.viewUrl || doc.saveUrl} target="_blank" rel="noreferrer">{doc.name}</a>
+          <small>{[doc.kind, peso(doc.bytes), doc.source ?? "hecho por Helios"].join(" · ")}</small>
         </div>
         <div className="downloads-actions">
-          <a href={doc.viewUrl} target="_blank" rel="noreferrer" aria-label={`Ver ${doc.name}`}>
-            <Eye size={16} aria-hidden="true" /> Ver</a>
+          {doc.viewUrl && <a href={doc.viewUrl} target="_blank" rel="noreferrer" aria-label={`Ver ${doc.name}`}>
+            <Eye size={16} aria-hidden="true" /> Ver</a>}
           <a href={doc.saveUrl} download={doc.name} aria-label={`Descargar ${doc.name}`}>
             <Download size={16} aria-hidden="true" /> Descargar</a>
         </div>

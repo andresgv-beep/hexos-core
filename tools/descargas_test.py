@@ -132,6 +132,18 @@ class AplicarTest(Base):
         self.assertEqual((lista['count'], lista['downloads'][0]['name'], lista['downloads'][0]['document'],
                           lista['downloads'][0]['on_disk']), (1, 'manual.pdf', hecho['document']['id'], True))
 
+    def test_volver_a_mostrar_el_original_por_nombre_o_id(self):
+        self.bajar(descargas.mirar(URL, 'manual.pdf', asomar=asomar()))
+        agente = self.agente()
+        with agente.store() as store:
+            fila = agente.tool(store, 'file.list', {})['downloads'][0]
+            for referencia in ('manual.pdf', fila['id']):
+                tarjeta = agente.tool(store, 'file.list', {'show': referencia})
+                self.assertEqual((tarjeta['status'], tarjeta['id'], tarjeta['viewable'], tarjeta['preview']),
+                                 ('shown', fila['id'], True, False))
+            (self.carpeta / 'manual.pdf').unlink()
+            self.assertIn('error', agente.tool(store, 'file.list', {'show': fila['id']}))
+
     def test_un_nombre_repetido_no_pisa_el_anterior(self):
         plan = descargas.mirar(URL, 'manual.pdf', asomar=asomar())
         self.bajar(plan)

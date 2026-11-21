@@ -47,8 +47,9 @@ def _extracto(texto, limite):
 
 def _opciones(ventana):
     grupos = catalog.groups_in(ventana)
-    if ventana == 'chat' and catalog.BUSCAR_WEB in catalog.GROUP_GUIDANCE:
-        return (*grupos, catalog.BUSCAR_WEB)
+    if ventana == 'chat':
+        acciones = (catalog.BUSCAR_WEB, catalog.MOSTRAR_FICHERO)
+        return (*grupos, *(a for a in acciones if a in catalog.GROUP_GUIDANCE))
     return grupos
 
 
@@ -92,7 +93,7 @@ def interpretar(raw, ventana=None):
         elegidos = [nombre.strip() for nombre in sin_comillas.group(1).split(',')]
     if not isinstance(elegidos, list) or len(elegidos) > len(catalog.GROUPS):
         return None
-    permitidos = _opciones(ventana) if ventana else (set(catalog.GROUPS) - {catalog.ALWAYS}) | {catalog.BUSCAR_WEB}
+    permitidos = _opciones(ventana) if ventana else catalog.GROUP_GUIDANCE
     limpio = []
     for g in elegidos:
         if not isinstance(g, str) or g not in permitidos:

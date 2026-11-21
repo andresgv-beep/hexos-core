@@ -246,7 +246,7 @@ def listado(store, limit=30):
     filas = store.db.execute('SELECT * FROM downloads ORDER BY ts DESC LIMIT ?', (limit,)).fetchall()
     total = store.db.execute('SELECT count(*) FROM downloads').fetchone()[0]
     return dict(folder=_corta(raiz()), count=total, downloads=[
-        dict(name=f['name'], kind=_clase(f['content_type'], f['name']), size=tamano(f['bytes']), when=f['ts'][:10],
+        dict(id=f['id'], name=f['name'], kind=_clase(f['content_type'], f['name']), size=tamano(f['bytes']), when=f['ts'][:10],
              source=_fuente(f['url']), document=f['document'], on_disk=Path(f['path']).exists())
         for f in filas],
         note='Los que traen document se leen con document_read usando ese id. Lo que no esté en disco '
@@ -280,6 +280,33 @@ def panel(store, limit=200):
         for f in filas])
 
 
+def _ruta_disponible(fila):
+    from . import documentos
+    ruta = Path(fila['path']) if fila else None
+    carpeta = (documentos.raiz() if fila and documentos.es_suyo(fila) else raiz()).resolve()
+    if (ruta is None or ruta.is_symlink() or not ruta.is_file()
+            or carpeta not in ruta.resolve().parents or ruta.stat().st_size > MAX_BYTES):
+        return None
+    return ruta
+
+
+def mostrar(store, referencia):
+    """Recupera la tarjeta del fichero registrado por su id o su nombre exacto."""
+    from . import documentos
+    initialize(store)
+    filas = store.db.execute('SELECT * FROM downloads WHERE id=? OR name=?', (referencia, referencia)).fetchall()
+    if len(filas) > 1:
+        return dict(error='Hay varios ficheros con ese nombre. Elige su id en file_list.')
+    if not filas or _ruta_disponible(filas[0]) is None:
+        return dict(error='Ese fichero no está disponible en Descargas.')
+    fila = filas[0]
+    preview = documentos.con_vista(fila)
+    return dict(status='shown', id=fila['id'], name=fila['name'], kind=_clase(fila['content_type'], fila['name']),
+                bytes=fila['bytes'], source=_fuente(fila['url']), preview=preview,
+                viewable=preview or _visible(fila['content_type']) is not None,
+                note='La tarjeta del fichero original aparece en esta respuesta.')
+
+
 def servir(handler, store):
     """GET /api/downloads, /api/downloads/<id> (verlo), /api/downloads/<id>/download (guardarlo)
     y /api/downloads/<id>/preview (la vista previa de un Word o un Excel hecho por Helios).
@@ -299,10 +326,8 @@ def servir(handler, store):
     guardar = accion == 'download'
     initialize(store)
     fila = store.db.execute('SELECT * FROM downloads WHERE id=?', (partes[3],)).fetchone()
-    ruta = Path(fila['path']) if fila else None
-    carpeta = (documentos.raiz() if fila and documentos.es_suyo(fila) else raiz()).resolve()
-    if (ruta is None or ruta.is_symlink() or not ruta.is_file()
-            or carpeta not in ruta.resolve().parents or ruta.stat().st_size > MAX_BYTES):
+    ruta = _ruta_disponible(fila)
+    if ruta is None:
         handler.respond(404, {'error': 'ese fichero ya no está entre las descargas'})
         return
     if accion == 'preview':

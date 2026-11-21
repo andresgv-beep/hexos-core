@@ -381,7 +381,9 @@ TOOLS = {
                           'entero con document_read. No baja programas ni páginas web.',
                           {'url':'str'}, {'name':'str'}),
     'file.list': spec('Listar los ficheros ya descargados a este PC, del más reciente al más antiguo, con el '
-                      'documento con el que se lee cada uno. Sin argumentos.'),
+                      'documento con el que se lee cada uno. Si pide que le pases un fichero existente, usa show '
+                      'con su nombre exacto o su id de descarga para mostrar su tarjeta en el chat. Si desconoces '
+                      'el nombre o id, lista primero sin argumentos.', optional={'show': 'str'}),
     'document.create': spec('Crear para la persona un documento PDF, Word (docx) o Excel (xlsx) y dejárselo para ver y '
                             'descargar. format: pdf, docx o xlsx. name: el nombre del fichero, sin extensión. content: '
                             'el documento ENTERO en markdown (# títulos, párrafos, listas, **negrita**, tablas). '
@@ -572,8 +574,12 @@ GROUP_REQUIRES = {'multimedia': ('archivos',), 'descargas': ('informes',)}
 # modelo pequeño.
 # Señal del selector de Chat. Las dos herramientas web siguen declaradas en el núcleo.
 BUSCAR_WEB = 'buscar_web'
+MOSTRAR_FICHERO = 'mostrar_fichero'
 
 GROUP_GUIDANCE = {
+    MOSTRAR_FICHERO: ('Volver a entregar en el chat un archivo del que ya se estaba hablando: abrirlo, pasarlo '
+                      'o sacar uno de los documentos conocidos para que la persona lo vea o descargue. Si pide que tú '
+                      'lo leas o resumas, corresponde descargas.'),
     BUSCAR_WEB: ('Consultar internet por encargo de la persona. También cuando el último asistente anunció '
                  'esa consulta y el mensaje actual insiste, reclama que falta o pide que se ponga a ello. '
                  'Ejemplo: tras ofrecer mirar precios en línea, «todavía estoy esperando» requiere buscar_web. '

@@ -9,14 +9,18 @@ def _documentos(store, mensajes):
     for mensaje in mensajes:
         if mensaje['role'] == 'user':
             filas = store.db.execute(
-                "SELECT body FROM tool_events WHERE turn_id=? AND body LIKE '%document.create%' ORDER BY seq",
+                "SELECT body FROM tool_events WHERE turn_id=? AND (body LIKE '%document.create%' OR body LIKE '%file.list%') ORDER BY seq",
                 (mensaje['id'],)).fetchall()
             pendientes = []
             for (cuerpo,) in filas:
                 paso = json.loads(cuerpo)
                 hecho = paso.get('result')
-                if paso.get('tool') == 'document.create' and not paso.get('failed') and isinstance(hecho, dict) \
-                        and hecho.get('id'):
+                if paso.get('failed') or not isinstance(hecho, dict) or not hecho.get('id'):
+                    continue
+                if paso.get('tool') == 'file.list' and hecho.get('status') == 'shown':
+                    pendientes.append({k: hecho.get(k) for k in
+                                       ('id', 'name', 'kind', 'bytes', 'status', 'source', 'viewable', 'preview')})
+                elif paso.get('tool') == 'document.create':
                     pendientes.append(dict(id=hecho['id'], name=hecho.get('name'), kind=hecho.get('kind'),
                                            bytes=hecho.get('bytes')))
         elif pendientes:

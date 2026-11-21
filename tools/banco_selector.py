@@ -96,6 +96,9 @@ CASOS = [
 # Mismo recordatorio, pero el turno anterior decide dónde había que buscar.
 # (último asistente, mensaje, selección esperada en Chat).
 SEGUIMIENTOS_CHAT = [
+    ('Hablábamos de conservar los manuales de Apple. ¿Piensas montar una biblioteca o es curiosidad?',
+     'curiosidad jajaj nada mas, por cierto saca el del apple 2', ['mostrar_fichero']),
+    ('El Redbook del Apple II está en Descargas.', 'pásamelo', ['mostrar_fichero']),
     ('', 'Coño pues busca por la web que para eso tienes hereamientas', ['buscar_web']),
     ('', 'Ibas a buscar por internet socio sobre los slm', ['buscar_web']),
     ('Voy a buscar por internet los modelos pequeños.', 'No estás buscando macho', ['buscar_web']),

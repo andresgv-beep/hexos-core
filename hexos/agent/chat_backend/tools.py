@@ -252,6 +252,8 @@ class ToolDispatcher:
                              'propuesto bajar y que lo apruebe en la tarjeta. Cuando lo haga te llegará una nota '
                              '«La persona aprobó en la interfaz…» con el resultado.')
         if name == 'file.list':
+            if 'show' in args:
+                return descargas.mostrar(store, args['show'])
             return descargas.listado(store)
         if name == 'document.create':
             from .. import documentos

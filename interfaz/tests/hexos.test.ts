@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createHexosTransport } from '../lib/helios/hexos';
+import { createdDocuments, createHexosTransport } from '../lib/helios/hexos';
 import { clampEnergy, phaseFromHexos } from '../lib/helios/state';
 import { mergeToolActivities } from '../lib/helios/tools';
 
@@ -505,4 +505,16 @@ test('a reloaded conversation keeps each reply\'s documents', async () => {
     viewUrl: `/api/helios/downloads/${id}/preview`, saveUrl: `/api/helios/downloads/${id}/download` }]);
   assert.equal(page.messages[0].documents, undefined);
   assert.deepEqual(page.messages[2].documents, []);
+});
+
+test('showing a saved file returns its original card, listing files returns none', () => {
+  const id = 'a'.repeat(32);
+  const shown = { id, status: 'shown', name: 'Apple.pdf', kind: 'PDF', bytes: 200, source: 'archive.org',
+    viewable: true, preview: false };
+  const cards = createdDocuments([
+    { tool: 'file.list', result: { downloads: [shown] } },
+    { tool: 'file.list', result: shown },
+  ], '/api');
+  assert.deepEqual(cards, [{ id, name: 'Apple.pdf', kind: 'PDF', bytes: 200, existing: true, source: 'archive.org',
+    viewUrl: `/api/downloads/${id}`, saveUrl: `/api/downloads/${id}/download` }]);
 });

@@ -63,12 +63,13 @@ export function parseDownloadRequest(dr: unknown): DownloadRequest | null {
 export interface DownloadedFile { id: string; name: string; kind: string; bytes: number; ts: string; source: string;
   onDisk: boolean; viewable: boolean; readable: boolean; preview?: boolean }
 /** Un documento que Helios acaba de crear en este turno (document.create), con sus dos enlaces. */
-export interface CreatedDocument { id: string; name: string; kind: string; bytes: number; viewUrl: string; saveUrl: string }
+export interface CreatedDocument { id: string; name: string; kind: string; bytes: number; viewUrl: string; saveUrl: string; source?: string; existing?: boolean }
 /** Los documentos creados en un turno, sacados de su traza de herramientas. */
 export function createdDocuments(tools: unknown, endpoint: string): CreatedDocument[] {
   if (!Array.isArray(tools)) return [];
   return documentLinks(tools.filter(isRecord)
-    .filter(t => t.tool === "document.create" && t.failed !== true && isRecord(t.result))
+    .filter(t => t.failed !== true && isRecord(t.result) && (t.tool === "document.create" ||
+      (t.tool === "file.list" && t.result.status === "shown")))
     .map(t => t.result), endpoint);
 }
 /** Cada documento con su enlace para verlo (el PDF tal cual; Word y Excel, su vista previa) y para bajarlo. */
@@ -80,7 +81,9 @@ export function documentLinks(items: unknown, endpoint: string): CreatedDocument
       const base = `${endpoint}/downloads/${r.id as string}`;
       const kind = String(r.kind ?? "");
       return { id: r.id as string, name: r.name as string, kind, bytes: typeof r.bytes === "number" ? r.bytes : 0,
-               viewUrl: kind === "PDF" ? base : `${base}/preview`, saveUrl: `${base}/download` };
+               ...(r.status === "shown" ? { existing: true, source: String(r.source ?? "") } : {}),
+               viewUrl: r.viewable === false ? "" : (r.preview ?? (kind !== "PDF")) ? `${base}/preview` : base,
+               saveUrl: `${base}/download` };
     });
 }
 export interface Downloads { folder: string; files: DownloadedFile[] }

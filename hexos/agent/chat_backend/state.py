@@ -131,6 +131,7 @@ class TurnState:
     # Grupos que el selector pidió para ESTE mensaje, sin los que se arrastran de antes.
     grupos_pedidos: list = field(default_factory=list)
     busqueda_web_pedida: bool = False
+    mostrar_fichero: bool = False
     registro: str | None = None      # broma, charla, tecnico o reflexion: ver agent/registro.py
     decidido_en_tarjeta: bool = False    # en este turno se le ha contado una decisión de una tarjeta
     nota_sin_contenido: bool = False     # pide una nota y el mensaje acaba en dos puntos: aún no hay qué apuntar
