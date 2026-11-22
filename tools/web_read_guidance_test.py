@@ -54,6 +54,24 @@ class GuidanceTest(unittest.TestCase):
         RecoveryController(SimpleNamespace(runtime=rt)).generate(None, turn)
         return rt, turn
 
+    def test_explicit_search_starts_before_streaming_an_answer(self):
+        rt = SimpleNamespace(require_read=Mock(return_value=True), generate=Mock(return_value={}))
+        turn = TurnState('Busca en internet', native=True, busqueda_web_pedida=True)
+        recovery = RecoveryController(SimpleNamespace(runtime=rt))
+        recovery.generate(None, turn)
+        recovery.generate(None, turn)
+        rt.require_read.assert_called_once_with('web.search')
+
+    def test_failed_source_is_handled_before_the_next_answer(self):
+        url = 'https://example.org/manual'
+        trace = [dict(tool='web.search', result={'items': [{'url': url}]}),
+                 dict(tool='web.read', failed=True, arguments={'url': url + ': un título'},
+                      result={'error': 'URL inválida'})]
+        rt, turn = self.run_gate(trace)
+        self.assertIn(url, rt.generate.call_args.args[0][0]['content'])
+        self.assertEqual(turn.retries.recovery_requests, 1)
+        self.assertEqual(len(turn.retries.recovery_errors), 1)
+
     def test_search_guides_once_but_empty_failed_or_read_does_not(self):
         search = {'tool':'web.search', 'result':{'items':[{'url':'https://example.org/'}]}}
         rt, turn = self.run_gate([search])

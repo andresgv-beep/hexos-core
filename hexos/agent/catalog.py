@@ -580,9 +580,10 @@ GROUP_GUIDANCE = {
     MOSTRAR_FICHERO: ('Volver a entregar en el chat un archivo del que ya se estaba hablando: abrirlo, pasarlo '
                       'o sacar uno de los documentos conocidos para que la persona lo vea o descargue. Si pide que tú '
                       'lo leas o resumas, corresponde descargas.'),
-    BUSCAR_WEB: ('Consultar internet por encargo de la persona. También cuando el último asistente anunció '
-                 'esa consulta y el mensaje actual insiste, reclama que falta o pide que se ponga a ello. '
-                 'Ejemplo: tras ofrecer mirar precios en línea, «todavía estoy esperando» requiere buscar_web. '
+    BUSCAR_WEB: ('La persona te encarga explícitamente buscar en internet, o reclama una búsqueda en internet '
+                 'que le acabas de prometer. Tras ofrecer mirar precios en línea, «todavía estoy esperando» '
+                 'reclama esa búsqueda. Una consulta ya respondida se da por terminada. Si después pregunta una '
+                 'característica del producto o cómo se vende, responde [] salvo que pida buscarlo en la web. '
                  'Para explicar qué es un buscador basta con conversar.'),
     # Cada cambio aquí se mide con tools/banco_selector.py, que guarda las frases: el 13/11,
     # 40 de 40 con el E4B y con el 26B (la redacción del 12/11 daba 35 y 39). Nombrar

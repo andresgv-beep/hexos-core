@@ -518,3 +518,8 @@ test('showing a saved file returns its original card, listing files returns none
   assert.deepEqual(cards, [{ id, name: 'Apple.pdf', kind: 'PDF', bytes: 200, existing: true, source: 'archive.org',
     viewUrl: `/api/downloads/${id}`, saveUrl: `/api/downloads/${id}/download` }]);
 });
+
+test('an empty gateway response reports the HTTP error in chat', async () => {
+  const transport = createHexosTransport('/api', async () => new Response(null, { status: 502 }));
+  await assert.rejects(transport.send('hola'), /HexOS.*HTTP 502/);
+});

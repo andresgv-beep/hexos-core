@@ -341,7 +341,14 @@ export function createHexosTransport(base = "/api", fetcher: typeof fetch = fetc
   const endpoint = base.replace(/\/$/, "");
   async function request(path: string, init: RequestInit) {
     const response = await fetcher(`${endpoint}/${path}`, { ...init, cache: "no-store" });
-    const data: unknown = await response.json();
+    let data: unknown;
+    try {
+      data = await response.json();
+    } catch (error) {
+      if (!(error instanceof SyntaxError)) throw error;
+      throw new Error(response.ok ? "HexOS devolvió una respuesta incompleta" :
+        `No se recibió la respuesta de HexOS (HTTP ${response.status})`);
+    }
     if (!response.ok) throw new Error(isRecord(data) && typeof data.error === "string" ? data.error : `HexOS: HTTP ${response.status}`);
     if (!data || typeof data !== "object") throw new Error("Respuesta de HexOS no válida");
     return data;

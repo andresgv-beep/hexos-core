@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import date
 from html.parser import HTMLParser
+from http.client import HTTPException
 import ipaddress
 import json
 import re
@@ -15,7 +16,7 @@ import shutil
 import socket
 import subprocess
 from urllib.error import HTTPError
-from urllib.parse import parse_qs, urlencode, unquote, urljoin, urlparse
+from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
@@ -190,14 +191,17 @@ def _duck_url(value):
     if parsed.hostname and parsed.hostname.endswith('duckduckgo.com'):
         target = parse_qs(parsed.query).get('uddg', [None])[0]
         if target:
-            return unquote(target)
+            return target  # parse_qs ya retiró la codificación del enlace de redirección.
     return value
 
 
 def _public_url(value, resolver=socket.getaddrinfo):
     if not isinstance(value, str) or not value.strip():
         raise ValueError('URL web vacía')
-    parsed = urlparse(value.strip())
+    value = value.strip()
+    if any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in value):
+        raise ValueError('URL web inválida: copia solo la dirección exacta del resultado, sin el título')
+    parsed = urlparse(value)
     if parsed.scheme not in ('http', 'https') or not parsed.hostname:
         raise ValueError('web.read solo acepta URL http o https públicas')
     if parsed.username is not None or parsed.password is not None:
@@ -440,7 +444,10 @@ def _pdf_text(data, lanzar=subprocess.run, paginas=PDF_PAGINAS, segundos=PDF_SEG
 
 def read(url, *, opener=None, resolver=socket.getaddrinfo, today=None, pdf=_pdf_text):
     """Lee texto de una URL pública, sin persistirlo ni seguir enlaces internos."""
-    final, content_type, body, cut = _request(url, opener=opener, resolver=resolver)
+    try:
+        final, content_type, body, cut = _request(url, opener=opener, resolver=resolver)
+    except (HTTPException, OSError) as exc:
+        raise ValueError(f'no se pudo leer la fuente web: {exc}') from exc
     publicada = modificada = None
     if content_type in ('text/html', 'application/xhtml+xml'):
         publicada, modificada = _page_date(_FECHA_META, body), _page_date(_FECHA_MOD, body)

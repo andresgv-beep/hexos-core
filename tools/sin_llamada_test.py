@@ -72,10 +72,10 @@ class SinLlamadaTest(unittest.TestCase):
             self.assertFalse(recovery.before_completion(None, turn, salida))
             runtime.require_read.assert_called_once_with('web.search')
 
-            # Una búsqueda automática ya ejecutada sigue la ruta habitual de lectura de fuentes.
+            # Sin enlaces, no hay una fuente que abrir ni una búsqueda pendiente.
             turn = TurnState(text='Busca', busqueda_web_pedida=True)
             turn.trace = [dict(tool='web.search', arguments={}, result={'items': []}, failed=False)]
-            self.assertTrue(recovery.before_completion(None, turn, salida))
+            self.assertFalse(recovery.before_completion(None, turn, salida))
             self.assertFalse(turn.retries.busqueda_web_devuelta)
             runtime.require_read.assert_called_once()
 

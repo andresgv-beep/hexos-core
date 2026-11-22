@@ -43,6 +43,11 @@ def web_links(trace):
     return links, [url for url in links if url not in tried], failed
 
 
+def _error_key(step):
+    return (step.get('tool'), json.dumps(step.get('arguments'), sort_keys=True, ensure_ascii=False),
+            str(step['result'].get('error')))
+
+
 def web_read_notice(trace):
     # Un 403 no tiene argumentos que corregir: «corrige sus argumentos» empujó al
     # modelo a releer la misma URL. Lo útil es saber qué falló y qué queda.
@@ -183,6 +188,23 @@ class RecoveryController:
         self.agent = agent
 
     def generate(self, store, turn: TurnState):
+        # Si la búsqueda es el único encargo, ejecutarla antes de redactar evita
+        # emitir por streaming una respuesta que before_completion descartaría.
+        if (turn.native and turn.busqueda_web_pedida and not turn.grupos_pedidos
+                and not turn.retries.busqueda_web_devuelta and not turn.reproche
+                and all(s.get('tool') == 'history.recall' for s in turn.trace)
+                and hasattr(self.agent.runtime, 'require_read')):
+            turn.retries.busqueda_web_devuelta = self.agent.runtime.require_read('web.search')
+        # Tras un fallo de lectura el motor ya dispone del resultado. Darle ahora
+        # las alternativas evita publicar una respuesta y pedirle que la rehaga.
+        last = turn.trace[-1] if turn.trace else {}
+        if (turn.native and last.get('tool') == 'web.read' and last.get('failed')
+                and last.get('result', {}).get('error') and turn.retries.recovery_requests < 3):
+            key = _error_key(last)
+            if key not in turn.retries.recovery_errors:
+                turn.retries.recovery_errors.add(key)
+                turn.retries.recovery_requests += 1
+                turn.messages = [*turn.messages, dict(role='user', content=web_read_notice(turn.trace))]
         # Evitar generar y mostrar una respuesta basada solo en fragmentos para
         # descartarla después. No elige URL ni ejecuta herramientas fuera del
         # bucle: el modelo completa la llamada y el ejecutor la valida como siempre.
@@ -514,8 +536,7 @@ class RecoveryController:
         last = turn.trace[-1] if turn.trace else {}
         # Con los argumentos: dos URL distintas que dan el mismo 403 son dos
         # fallos distintos, y el segundo también merece saber qué queda.
-        error_key = (last.get('tool'), json.dumps(last.get('arguments'), sort_keys=True, ensure_ascii=False),
-                     str((last.get('result') or {}).get('error'))) if isinstance(last.get('result'), dict) else None
+        error_key = _error_key(last) if isinstance(last.get('result'), dict) else None
         if (turn.trace and isinstance(turn.trace[-1]['result'], dict) and
                 turn.trace[-1]['result'].get('error') and turn.trace[-1]['tool'] in recoverable and
                 turn.retries.recovery_requests < 3 and error_key not in turn.retries.recovery_errors):
@@ -545,10 +566,10 @@ class RecoveryController:
                       if step.get('tool') == 'web.search' and not step.get('failed')), None)
         attempted = first is not None and any(step.get('tool') == 'web.read'
                                               for step in turn.trace[first + 1:])
-        if first is not None and not attempted and not turn.retries.web_evidence_retries:
+        links, untried, failed = web_links(turn.trace)
+        if links and not attempted and not turn.retries.web_evidence_retries:
             turn.retries.web_evidence_retries += 1
             turn.previous_reply = output['reply']
-            _, untried, failed = web_links(turn.trace)
             evitar = ('Ya fallaron, no las repitas: ' + ', '.join(failed) + '. Sin probar: ' +
                       ', '.join(untried[:5]) + '. ') if failed else ''
             turn.messages = [dict(role='user', content=

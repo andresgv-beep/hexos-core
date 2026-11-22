@@ -64,6 +64,17 @@ def public_resolver(host, port):
 
 
 class WebBoundaryTest(unittest.TestCase):
+    def test_url_con_titulo_es_un_error_de_lectura_antes_de_salir_a_la_red(self):
+        from unittest.mock import Mock
+        resolver = Mock()
+        with self.assertRaisesRegex(ValueError, 'dirección exacta'):
+            web.read('https://versus.com/en/intel-n100: What is the difference?', resolver=resolver)
+        resolver.assert_not_called()
+
+    def test_enlace_del_buscador_conserva_los_espacios_codificados(self):
+        url = web._duck_url('//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fdos%2520palabras')
+        self.assertEqual(url, 'https://example.com/dos%20palabras')
+
     def test_catalogo_expone_dos_lecturas_sin_escritura(self):
         self.assertEqual(catalog.TOOLS['web.search']['effect'], 'read')
         self.assertEqual(catalog.TOOLS['web.read']['effect'], 'read')
@@ -240,6 +251,25 @@ class WebBoundaryTest(unittest.TestCase):
                 self.assertEqual(agent.tool(store, 'web.read', {'url':'https://example.com'}), {'text':'dato'})
                 self.assertEqual(store.db.execute('select count(*) from network_devices').fetchone()[0], 0)
         self.assertEqual(calls, [('search','hoy',3), ('read','https://example.com')])
+
+    def test_una_url_con_el_titulo_no_aborta_el_turno(self):
+        url = 'https://example.com/n100'
+        runtime = ScriptedRuntime([
+            {'tool': 'web.search', 'arguments': {'query': 'N100'}},
+            {'tool': 'web.read', 'arguments': {'url': url + ': What is the difference?'}},
+            {'reply': 'Falló el enlace.', 'work': None},
+            {'tool': 'web.read', 'arguments': {'url': url}},
+            {'reply': 'Ya pude leer la ficha.', 'work': None},
+        ])
+        dependencies = AgentDependencies(
+            web_search=lambda *a, **k: {'items': [{'url': url}]},
+            web_read=lambda link: web.read(link, resolver=public_resolver, opener=Opener(
+                Response('<p>Ficha técnica de prueba.</p>', url=url))))
+        with tempfile.TemporaryDirectory() as tmp:
+            result = Agent(tmp, runtime, dependencies=dependencies).chat('Consulta la ficha del N100')
+        self.assertTrue(result['tools'][1]['failed'])
+        self.assertFalse(result['tools'][2]['failed'])
+        self.assertIn('Ya pude leer la ficha.', result['reply'])
 
     def test_buscar_no_puede_cerrar_sin_leer_y_la_fuente_se_hace_visible(self):
         runtime = ScriptedRuntime([

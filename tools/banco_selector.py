@@ -96,6 +96,9 @@ CASOS = [
 # Mismo recordatorio, pero el turno anterior decide dónde había que buscar.
 # (último asistente, mensaje, selección esperada en Chat).
 SEGUIMIENTOS_CHAT = [
+    ('He consultado fuentes para comparar el consumo del i9 y los Intel N100 y N150. '
+     'Para un servidor de bajo consumo elegiría uno de los N.',
+     'pero no se vende la cpu sulta no?', []),
     ('Hablábamos de conservar los manuales de Apple. ¿Piensas montar una biblioteca o es curiosidad?',
      'curiosidad jajaj nada mas, por cierto saca el del apple 2', ['mostrar_fichero']),
     ('El Redbook del Apple II está en Descargas.', 'pásamelo', ['mostrar_fichero']),
