@@ -61,6 +61,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   // null = el motor no tiene canal de pensamiento; entonces no se ofrece el botón.
   const [thinking, setThinking] = useState<boolean | null>(null);
   const [thinkingBusy, setThinkingBusy] = useState(false);
+  const thinkingRevision = useRef(0);
   // El espacio de trabajo: decide qué herramientas se le declaran al modelo.
   const [ventana, setVentana] = useState<"chat" | "agente" | null>(null);
   const [ventanaBusy, setVentanaBusy] = useState(false);
@@ -403,10 +404,10 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
     let timer: ReturnType<typeof setTimeout>;
-    const mirar = () => transport.status(controller.signal).then(estado => {
+    const mirar = (revision = thinkingRevision.current) => transport.status(controller.signal).then(estado => {
       if (disposed) return;
       setConnection("ready");
-      setThinking(estado.thinking);
+      if (revision === thinkingRevision.current && revision % 2 === 0) setThinking(estado.thinking);
       setVentana(estado.window);
       // Si la cambió otro dispositivo, lo que hay en pantalla es de la otra ventana:
       // sin recargar, el siguiente mensaje caía debajo de una conversación ajena.
@@ -750,6 +751,8 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
 
   async function toggleThinking() {
     if (thinking === null || thinkingBusy) return;
+    // Las consultas de estado anteriores o simultáneas al cambio pueden llegar después.
+    thinkingRevision.current++;
     setThinkingBusy(true);
     try {
       setThinking(await transport.setThinking(!thinking));
@@ -757,6 +760,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       // Si HexOS no lo confirma, el botón no debe mentir sobre el estado real.
       try { setThinking((await transport.status()).thinking); } catch { setThinking(null); }
     } finally {
+      thinkingRevision.current++;
       setThinkingBusy(false);
     }
   }
@@ -1081,7 +1085,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         <div className="vision-brand"><strong>HELIOS</strong><span role="status">{estado}</span></div>
         <span className="vision-header-gap" />
         {mobile && ventana === "agente" && proyecto !== undefined && transport.projects && <button className="vision-chip" type="button"
-          aria-pressed={projectsOpen} title="Cambiar de proyecto o crear uno" onClick={() => void abrirProyectos()}>
+          aria-expanded={projectsOpen} title="Cambiar de proyecto o crear uno" onClick={() => void abrirProyectos()}>
           <FolderOpen size={15} aria-hidden="true" /> {proyecto === null ? "Sin proyecto"
             : proyectos.find(p => p.id === proyecto)?.name ?? proyecto}
         </button>}
@@ -1089,12 +1093,12 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
             siempre se ve por el final: no lo encontraba nadie. Va en la cabecera, y solo en el
             Chat, que es donde se descarga; en el Agente la cabecera ya lleva el proyecto. */}
         {mobile && ventana !== "agente" && transport.downloads && <button className="vision-chip" type="button"
-          aria-label="Descargas" onClick={() => setDownloadsOpen(true)}><Download size={15} aria-hidden="true" /> Descargas</button>}
-        {mobile && transport.settings && <button className="vision-chip" type="button" aria-label="Ajustes"
+          aria-label="Descargas" aria-expanded={downloadsOpen} onClick={() => setDownloadsOpen(true)}><Download size={15} aria-hidden="true" /> Descargas</button>}
+        {mobile && transport.settings && <button className="vision-chip" type="button" aria-label="Ajustes" aria-expanded={settingsOpen}
           onClick={() => setSettingsOpen(true)}><Settings size={15} aria-hidden="true" /> Ajustes</button>}
         {/* En el Agente de escritorio estos tres viven en el lateral: la cabecera queda limpia. */}
         {!lateralAgente && <>
-        {thinking !== null && <button className="vision-chip" type="button" aria-pressed={thinking}
+        {thinking !== null && <button className="vision-chip thinking-toggle" type="button" aria-label="Razonamiento automático" aria-busy={thinkingBusy} aria-pressed={thinking}
           disabled={thinkingBusy} onClick={() => void toggleThinking()}>
           <Brain size={15} aria-hidden="true" /> Razonamiento: {thinkingBusy ? "…" : thinking ? "automático" : "apagado"}
         </button>}
@@ -1104,7 +1108,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
           onClick={() => void limpiarContexto()}>
           <Eraser size={15} aria-hidden="true" /> {limpiando ? "Limpiando…" : limpio ? "Contexto limpio" : "Limpiar contexto"}
         </button>}
-        <button ref={historyButton} className="vision-chip" type="button" onClick={() => setHistoryOpen(true)}>
+        <button ref={historyButton} className="vision-chip" type="button" aria-expanded={historyOpen} onClick={() => setHistoryOpen(true)}>
           <History size={15} aria-hidden="true" /> Historial</button>
         </>}
       </header>
@@ -1165,7 +1169,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       root={raizProyectos}
       fixed={!mobile} metrics={connection === "ready" ? metrics : undefined}
       controls={<>
-        {thinking !== null && <button type="button" className="vision-side-button" aria-pressed={thinking} disabled={thinkingBusy}
+        {thinking !== null && <button type="button" className="vision-side-button thinking-toggle" aria-busy={thinkingBusy} aria-pressed={thinking} disabled={thinkingBusy}
           aria-label={`Razonamiento: ${thinking ? "automático" : "apagado"}`}
           title={`Razonamiento: ${thinkingBusy ? "…" : thinking ? "automático" : "apagado"}`}
           onClick={() => void toggleThinking()}><Brain size={18} aria-hidden="true" /></button>}

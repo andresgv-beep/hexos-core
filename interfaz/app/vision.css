@@ -296,6 +296,18 @@ body { background: var(--v-bg); color: var(--v-text); }
 .vision-layout.mobile-layout .vision-header { height: 64px; padding: 0 14px; }
 .vision-layout.mobile-layout .vision-header .vision-chip { margin-left: auto; }
 .vision-layout.mobile-layout .vision-header .vision-chip ~ .vision-chip { margin-left: 0; }
+/* Los controles compactos pierden su texto en móvil. El relleno distingue el estado
+   incluso con el tema hueso y el contorno discreto. */
+.mobile-layout :is(.vision-chip, .vision-side-button, .viewer-filter):is([aria-pressed="true"], [aria-expanded="true"]) {
+  background: var(--v-gold); border-color: var(--v-gold); color: var(--v-on-gold);
+}
+.mobile-layout .vision-chip[aria-pressed="true"] svg { color: inherit; }
+.mobile-layout .thinking-toggle { position: relative; }
+.mobile-layout .thinking-toggle[aria-pressed="true"]::after {
+  content: ""; position: absolute; right: 3px; bottom: 5px; width: 6px; height: 3px;
+  border: solid currentColor; border-width: 0 0 2px 2px; transform: rotate(-45deg);
+}
+.mobile-layout .settings-nav button[aria-current="page"] { box-shadow: inset 0 -2px var(--v-gold); }
 /* Cinco iconos en un móvil de 375: se aprietan lo justo para que al estado («Ejecutando…») le
    quede el mismo ancho que con cuatro, y si no cabe se corta antes que empujarlos fuera. */
 @media (max-width: 900px) {
