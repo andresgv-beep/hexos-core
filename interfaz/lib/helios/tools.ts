@@ -5,6 +5,7 @@ export interface ToolActivity {
   name: string;
   status: ToolActivityStatus;
   seconds: number | null;
+  detail?: string;
 }
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -35,9 +36,19 @@ export function parseToolActivities(value: unknown, defaultStatus: ToolActivityS
     const explicit = entry.status;
     const status: ToolActivityStatus = explicit === "running" || explicit === "done" || explicit === "failed"
       ? explicit : entry.failed === true ? "failed" : defaultStatus;
+    let detail = "";
+    const args = record(entry.arguments) ? entry.arguments : {};
+    if (entry.tool === "web.search" && typeof args.query === "string") detail = args.query.slice(0, 180);
+    if (entry.tool === "web.read" && typeof args.url === "string") {
+      try { detail = new URL(args.url).hostname; } catch { /* La URL fallida puede ser inválida. */ }
+      const error = record(entry.result) && typeof entry.result.error === "string" ? entry.result.error : "";
+      const http = error.match(/\bHTTP \d{3}\b/i);
+      if (http) detail = [detail, http[0]].filter(Boolean).join(" · ");
+    }
     return [{
       id: `${index}-${entry.tool}`,
       name: entry.tool,
+      ...(detail ? { detail } : {}),
       status,
       seconds: typeof entry.seconds === "number" && Number.isFinite(entry.seconds) && entry.seconds >= 0 ? entry.seconds : null,
     }];

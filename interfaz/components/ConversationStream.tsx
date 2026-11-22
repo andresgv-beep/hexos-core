@@ -22,6 +22,7 @@ export interface Turn {
   preview?: string;
   streamed?: boolean;
   generationStatus?: string;
+  contextProgress?: { processed: number; total: number };
   /** Lo que Helios anuncia que va a hacer, mientras lo hace. Palabras suyas. */
   progress?: string[];
   /** Las herramientas que el turno ha llamado, en el orden en que empezaron. */
@@ -78,16 +79,19 @@ export function TurnoVisible({ turn, saliendo, settled = false, extra, onReplyCo
   return <article className={`stream-turn${saliendo ? " leaving" : ""}`} aria-hidden={saliendo || undefined}>
     {turn.text && turn.text !== AUTO_CHECK_LABEL && <p className="stream-question"><span className="message-author">TÚ</span>{turn.text}</p>}
     <div className="stream-body">
-      {/* Se pliega cuando empieza a llegar la respuesta, no al terminar: así el
-          salto ocurre una vez, antes del texto, y no bajo lo que se está leyendo. */}
-      {!!turn.tools?.length && <ToolTerminal tools={turn.tools} live={Boolean(turn.pending) && !turn.preview} />}
-      {!!turn.progress?.length && <ul className="reply-progress">
+      {!!turn.tools?.length && <ToolTerminal tools={turn.tools} live={Boolean(turn.pending)} progress={turn.progress} />}
+      {!turn.tools?.length && !!turn.progress?.length && <ul className="reply-progress">
         {turn.progress.map((linea, i) => <li key={i}>{linea}</li>)}
       </ul>}
-      {/* El estado se ve hasta que llega el primer texto; después lo dice el emblema. */}
-      {turn.pending && !turn.preview && <p className="reply-status" role="status">
-        {turn.generationStatus || (turn.progress?.length ? "Helios está en ello…" : "Helios está pensando…")}
-      </p>}
+      {turn.pending && !turn.preview && !turn.tools?.some(tool => tool.status === "running") &&
+        <div className="turn-wait" role="status">
+          <span className="activity-emblem" data-busy={!turn.contextProgress || undefined} aria-hidden="true" />
+          {turn.contextProgress ? <div className="context-reading">
+            <span>Leyendo contexto</span>
+            <small>{turn.contextProgress.processed.toLocaleString("es-ES")} / {turn.contextProgress.total.toLocaleString("es-ES")} tokens</small>
+            <progress aria-label="Lectura del contexto" value={turn.contextProgress.processed} max={turn.contextProgress.total} />
+          </div> : <span>{turn.generationStatus || (turn.progress?.length ? "Helios está en ello…" : "Helios está pensando…")}</span>}
+        </div>}
       {(turn.preview || turn.reply) && (saliendo || settled
         ? <ReplyMarkdown text={turn.reply || turn.preview || ""} onPreviewCode={onPreviewCode} previewHtmlOnly={previewHtmlOnly} />
         : conCascada(turn) && matrixAllowed(turn.id, turn.text)

@@ -371,6 +371,8 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
             const progress = isNewGeneration(previo, generation.text)
               ? addStep(item.progress, stepFromDiscarded(previo)) : item.progress;
             return { ...item, progress, preview: generation.text,
+                     contextProgress: !generation.cancelling && generation.phase === "prefill" && generation.total > 0
+                       ? { processed: generation.processed, total: generation.total } : undefined,
                      streamed: item.streamed || Boolean(generation.text), generationStatus: label };
           }));
         }
@@ -901,7 +903,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
         // Se cortó la red, no Helios: el turno sigue en el PC. Se espera a que acabe y se trae
         // su respuesta guardada. Lo que se veía llegando puede ser un borrador que HexOS descartó.
         setTurns(items => items.map(item => item.id === id ? { ...item, preview: undefined, error: undefined,
-          generationStatus: "Se cortó la conexión con el PC. Helios sigue allí: recojo su respuesta…" } : item));
+          contextProgress: undefined, generationStatus: "Se cortó la conexión con el PC. Helios sigue allí: recojo su respuesta…" } : item));
         const recogida = await recogerRespuesta(transport, visibleQuestion);
         setTurns(items => items.map(item => item.id !== id ? item : recogida
           ? { ...item, pending: false, generationStatus: undefined, reply: recogida.text, documents: recogida.documents }
