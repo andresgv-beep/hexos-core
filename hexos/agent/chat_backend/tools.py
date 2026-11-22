@@ -12,7 +12,7 @@ from ..work import now
 from .state import Environment, SessionState, TurnState
 from .document_reading import document_lines
 from .reading_budget import exhausted, READ_TOOLS
-from .ledger import blocked_search, completed_call, completed_registration, failed_call
+from .ledger import blocked_search, completed_call, completed_registration, failed_call, last_web_search
 from .file_requests import validate_file_request
 
 if TYPE_CHECKING:
@@ -207,7 +207,11 @@ class ToolDispatcher:
             buscador = ajustes.buscador(self.env.workspace)
             if buscador:
                 opciones['proveedor'] = buscador
-            return self.env.dependencies.web_search(args['query'], **opciones)
+            return web.numbered_results(self.env.dependencies.web_search(args['query'], **opciones))
+        if name == 'web.read_result':
+            if args['n'] == 0:
+                return dict(status='no_source', note='Ningún resultado elegido. Reformula la búsqueda si hace falta.')
+            raise ValueError('Ese número no está en la última lista de resultados del turno.')
         if name == 'web.read':
             return self.env.dependencies.web_read(args['url'])
         if name == 'file.download':
@@ -386,6 +390,17 @@ class ToolExecutor:
         """Validar → anunciar → ejecutar → verificar → registrar → devolver al modelo."""
         if set(output) != {'tool', 'arguments'}:
             raise ValueError('Llamada de herramienta inválida')
+        # Resolver en el turno, antes de verificar o reutilizar lecturas por URL.
+        # La llamada nativa sigue siendo read_result para el motor.
+        if output['tool'] == 'web.read_result':
+            search = last_web_search(turn.trace) or {}
+            items = search.get('result', {}).get('items', [])
+            args = output['arguments']
+            if (isinstance(args, dict) and set(args) == {'n'} and type(args['n']) is int
+                    and 1 <= args['n'] <= len(items)):
+                output = dict(tool='web.read', arguments={'url': items[args['n'] - 1]['url']})
+        if output['tool'] == 'web.search':
+            turn.retries.web_read_guided = False
         self.agent.state = 'tool'
         # Vía de escape de los grupos: si llama a una herramienta de un grupo que ya no
         # se declara —pasa, porque el historial reinyecta llamadas viejas— su grupo

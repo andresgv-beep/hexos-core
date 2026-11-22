@@ -6,6 +6,7 @@ import json
 import re
 import sqlite3
 import time
+from ..web import numbered_results
 from ..native_transport import TurnCancelled
 from ..work import now, string
 from ..continuity import busqueda_literal
@@ -369,7 +370,7 @@ class MemoryService:
         Misma figura que recall_history: lo consulta HexOS, entra como dato, y un
         fallo aquí —sin red, sin salida— no puede tumbar el turno. No lee las
         fuentes: solo deja los resultados delante para que el modelo abra la que
-        le sirva con web_read, que es la puerta que ya existe.
+        le sirva con web_read_result, que es la puerta que ya existe.
         """
         if not pide_dato_de_ahora(text):
             return None
@@ -387,10 +388,10 @@ class MemoryService:
         return dict(tool='web.search', arguments=dict(query=text.strip()[:200]),
                     effect='read', changes_state=False, ts=now(),
                     seconds=round(time.monotonic() - empezado, 3), failed=False,
-                    result=dict(encontrados, requested_by='hexos',
+                    result=dict(numbered_results(encontrados), requested_by='hexos',
                                 note='Lo buscó HexOS al ver que la pregunta pide un dato de ahora; '
                                      'el modelo no lo pidió. Son titulares y fragmentos: para '
-                                     'afirmar algo hay que abrir la fuente con web_read.'))
+                                     'afirmar algo hay que abrir la fuente con web_read_result.'))
 
     def recall_history(self, store, text, turn_id):
         """Buscar en el archivo cuando la pregunta apunta al pasado, sin esperar a

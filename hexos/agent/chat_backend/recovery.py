@@ -13,7 +13,7 @@ from ..work import now
 from .settings import PROMPT
 from .state import TurnState
 from .persistence import clave
-from .ledger import checkpoint_messages
+from .ledger import checkpoint_messages, last_web_search
 from .completion import ReplyPolicy
 
 if TYPE_CHECKING:
@@ -25,14 +25,10 @@ RETRY = object()
 
 
 def web_links(trace):
-    """Enlaces de las búsquedas del turno, los que nadie ha intentado leer y las lecturas fallidas."""
-    links = []
-    for step in trace:
-        if (step.get('tool') == 'web.search' and not step.get('failed')
-                and isinstance(step.get('result'), dict)):
-            for item in step['result'].get('items', []):
-                if isinstance(item, dict) and item.get('url') and item['url'] not in links:
-                    links.append(item['url'])
+    """Enlaces de la última búsqueda, los que nadie ha intentado leer y las lecturas fallidas."""
+    search = last_web_search(trace) or {}
+    items = search.get('result', {}).get('items', [])
+    links = [item['url'] for item in items]
     tried, failed = set(), {}
     for step in trace:
         if step.get('tool') == 'web.read':
@@ -51,7 +47,7 @@ def _error_key(step):
 def web_read_notice(trace):
     # Un 403 no tiene argumentos que corregir: «corrige sus argumentos» empujó al
     # modelo a releer la misma URL. Lo útil es saber qué falló y qué queda.
-    _, untried, failed = web_links(trace)
+    links, untried, failed = web_links(trace)
     fallidas = '; '.join(url + ' (' + error[:120] + ')' for url, error in failed.items())
     searched = any(step.get('tool') == 'web.search' and not step.get('failed') for step in trace)
     if not searched:
@@ -59,8 +55,9 @@ def web_read_notice(trace):
         siguiente = ('Si la persona necesita el dato, busca otra fuente con web_search; si no, '
                      'explica el bloqueo sin inventar el contenido de la página. ')
     elif untried:
-        siguiente = ('Enlaces de la búsqueda que aún no has probado: ' + ', '.join(untried[:5]) +
-                     '. Lee con web_read el más útil para la petición. Si ninguno se puede leer, ' +
+        siguiente = ('Enlaces de la búsqueda que aún no has probado: ' + ', '.join(
+                         f'{n}. {url}' for n, url in enumerate(links, 1) if url in untried) +
+                     '. Abre con web_read_result el número de otra fuente pertinente de la última lista. Si ninguna sirve, ' +
                      FRAGMENTOS)
     else:
         siguiente = 'No quedan enlaces de la búsqueda sin probar: ' + FRAGMENTOS
@@ -211,13 +208,9 @@ class RecoveryController:
         # El catálogo permanece estable para conservar el prefijo KV.
         if (turn.native and not turn.retries.web_read_guided
                 and hasattr(self.agent.runtime, 'require_read')
-                and not any(s.get('tool') == 'web.read' for s in turn.trace)):
-            has_links = any(s.get('tool') == 'web.search' and not s.get('failed')
-                and isinstance(s.get('result'), dict)
-                and any(isinstance(i, dict) and i.get('url')
-                        for i in s['result'].get('items', [])) for s in turn.trace)
-            if has_links:
-                turn.retries.web_read_guided = self.agent.runtime.require_read('web.read')
+                and last.get('tool') == 'web.search' and not last.get('failed')
+                and last.get('result', {}).get('items')):
+            turn.retries.web_read_guided = self.agent.runtime.require_read('web.read_result')
         try:
             try:
                 if turn.native:
@@ -562,10 +555,9 @@ class RecoveryController:
         # responder con fragmentos: volver a exigir «abre un enlace» le hizo
         # repetir la URL con 403. Una lectura fallida anterior a buscar no cuenta,
         # aunque la búsqueda devuelva esa misma URL (pasó en vivo el 29/10).
-        first = next((i for i, step in enumerate(turn.trace)
-                      if step.get('tool') == 'web.search' and not step.get('failed')), None)
-        attempted = first is not None and any(step.get('tool') == 'web.read'
-                                              for step in turn.trace[first + 1:])
+        last_web_step = next((step for step in reversed(turn.trace)
+                              if step.get('tool') in ('web.search', 'web.read', 'web.read_result')), {})
+        attempted = last_web_step.get('tool') != 'web.search'
         links, untried, failed = web_links(turn.trace)
         if links and not attempted and not turn.retries.web_evidence_retries:
             turn.retries.web_evidence_retries += 1
@@ -575,7 +567,7 @@ class RecoveryController:
             turn.messages = [dict(role='user', content=
                 'AVISO DE HEXOS (no es la persona): solo has visto fragmentos del buscador. '
                 'No son fuentes leídas y no sostienen todavía una respuesta factual. Abre '
-                'AHORA al menos uno de los enlaces devueltos por web_search mediante web_read; '
+                'AHORA al menos uno de los enlaces devueltos por web_search mediante web_read_result y su número; '
                 'elige el más directo o autorizado para la pregunta. ' + evitar +
                 'Después responde usando solo lo que la fuente realmente diga. No menciones este aviso.')]
             return True

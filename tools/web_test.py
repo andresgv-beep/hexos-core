@@ -252,6 +252,36 @@ class WebBoundaryTest(unittest.TestCase):
                 self.assertEqual(store.db.execute('select count(*) from network_devices').fetchone()[0], 0)
         self.assertEqual(calls, [('search','hoy',3), ('read','https://example.com')])
 
+    def test_resultados_numerados_cambian_con_la_busqueda_y_conservan_las_fuentes(self):
+        from hexos.agent.chat_backend.state import TurnState
+        from unittest.mock import Mock
+        urls = ['https://example.org/a', 'https://example.org/b']
+        reader = Mock(side_effect=lambda url: {'url': url, 'text': 'contenido'})
+        search = Mock(side_effect=[{'items': [{'url': url} for url in urls]},
+                                   {'items': [{'url': urls[1]}]}, {'items': []}])
+        dependencies = AgentDependencies(web_search=search, web_read=reader)
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Agent(tmp, FakeRuntime(), dependencies=dependencies)
+            turn = TurnState('consulta', uid='test', budget=20)
+            with agent.store() as store:
+                def call(tool, **args):
+                    agent.runner.executor.execute(store, turn, dict(tool=tool, arguments=args))
+                    return turn.trace[-1]['result']
+
+                self.assertIn('error', call('web.read_result', n=1))
+                items = call('web.search', query='primera')['items']
+                self.assertEqual(items, [dict(url=url, n=n) for n, url in enumerate(urls, 1)])
+                self.assertEqual(call('web.read_result', n=1)['url'], urls[0])
+                self.assertEqual(turn.trace[-1]['arguments'], {'url': urls[0]})
+                call('web.search', query='segunda')
+                for invalid in (2, -1, True, '1'):
+                    self.assertIn('error', call('web.read_result', n=invalid))
+                self.assertEqual(call('web.read_result', n=0)['status'], 'no_source')
+                self.assertEqual(call('web.read_result', n=1)['url'], urls[1])
+                call('web.search', query='vacía')
+                self.assertIn('error', call('web.read_result', n=1))
+                self.assertEqual([args.args[0] for args in reader.call_args_list], urls)
+
     def test_una_url_con_el_titulo_no_aborta_el_turno(self):
         url = 'https://example.com/n100'
         runtime = ScriptedRuntime([

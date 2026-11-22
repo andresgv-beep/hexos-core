@@ -80,9 +80,9 @@ class BlockedSourcesTest(unittest.TestCase):
                  'la ASUS RTX 5060 Ti 16GB (idealo) y la GIGABYTE RTX 5070 Ti 16G (Amazon).')
         result, runtime, calls = self.chat([
             {'tool': 'web.search', 'arguments': {'query': 'tarjeta nvidia rtx 16gb barata'}},
-            read(PCC), reply('No pude acceder a PcComponentes.'),
+            {'tool': 'web.read_result', 'arguments': {'n': 1}}, reply('No pude acceder a PcComponentes.'),
             read(PCC), reply('Sigue fallando.'),
-            read(IDEALO), reply('Idealo tampoco.'),
+            {'tool': 'web.read_result', 'arguments': {'n': 2}}, reply('Idealo tampoco.'),
             read(AMAZON), reply(final),
         ])
         self.assertEqual(calls, [PCC, IDEALO, AMAZON], 'la segunda lectura de PCC no debe salir a la red')

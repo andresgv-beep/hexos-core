@@ -67,6 +67,7 @@ class ServicioTest(unittest.TestCase):
         self.assertEqual(paso['result']['requested_by'], 'hexos')
         self.assertFalse(paso['failed'])
         # Se conserva la forma que devuelve web.search, sin reinventarla.
+        self.assertEqual(paso['result']['items'][0]['n'], 1)
         self.assertEqual(paso['result']['items'][0]['url'], 'https://ubuntu.com/')
         # Y deja claro que un titular no es una fuente leída.
         self.assertIn('web_read', paso['result']['note'])

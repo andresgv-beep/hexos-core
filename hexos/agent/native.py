@@ -633,7 +633,7 @@ class NativeRuntime:
         # Al descartar por orden, la llamada empieza ya en `n`: la nota es la de la lista
         # que acaba de ver. Dejándole elegir el argumento ponía el id de la última nota
         # que guardó y descartaba esa, que era otra (medido 3 de 3 con el E4B).
-        if nota_ordenada and required_read == 'note_mark':
+        if (nota_ordenada and required_read == 'note_mark') or required_read == 'web_read_result':
             prefix += ('<parameter=n>\n' if qwen_xml else
                        '{"n": ' if getattr(self, 'qwen', False) else '{n:')
         self.repair_call = False

@@ -88,6 +88,10 @@ def checkpoint_messages(trace, budget=6500):
     return messages
 
 
+def last_web_search(trace):
+    return next((step for step in reversed(trace) if step.get('tool') == 'web.search'), None)
+
+
 def completed_call(turn, name, arguments):
     """Llamada del checkpoint cuyo efecto ya consta, si se puede reutilizar."""
     limit = min(turn.checkpointed_steps, len(turn.trace))
@@ -95,6 +99,9 @@ def completed_call(turn, name, arguments):
         step = turn.trace[index]
         if step.get('tool') != name or step.get('arguments') != arguments:
             continue
+        # Volver a mostrar una lista antigua cambiaría el significado de sus números.
+        if name == 'web.search' and step is not last_web_search(turn.trace):
+            return None
         result = step.get('result')
         if step.get('failed') or (isinstance(result, dict) and 'error' in result):
             continue

@@ -389,7 +389,7 @@ def search(query, *, opener=None, limit=5, recency=None, today=None, proveedor=N
     return {'query': query.strip(), 'today': hoy, 'recency': recency, 'recency_auto': automatica,
             'items': items, 'count': len(items),
             'note': 'Hoy es ' + hoy + '. Resultados de búsqueda, no hechos confirmados, y el orden del '
-                    'buscador no dice cuál es el más reciente. Usa web.read para leer las fuentes '
+                    'buscador no dice cuál es el más reciente. Usa web_read_result para leer las fuentes '
                     'necesarias: da la fecha de publicación cuando la página la declara. Si piden lo '
                     'último o lo más actual, compara esas fechas con hoy y, si nada es reciente, repite '
                     'la búsqueda con recency (dia, semana, mes o año).'}
@@ -440,6 +440,13 @@ def _pdf_text(data, lanzar=subprocess.run, paginas=PDF_PAGINAS, segundos=PDF_SEG
     if hecho.returncode != 0:
         raise ValueError('el PDF no se pudo abrir: está dañado o protegido')
     return hecho.stdout.decode('utf-8', errors='replace').replace('\f', '\n')
+
+
+def numbered_results(result):
+    """Conserva los enlaces para citas y descargas; n identifica la fuente en esta lista."""
+    if not result.get('items'):
+        return result
+    return dict(result, items=[dict(item, n=n) for n, item in enumerate(result['items'], 1)])
 
 
 def read(url, *, opener=None, resolver=socket.getaddrinfo, today=None, pdf=_pdf_text):

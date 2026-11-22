@@ -38,6 +38,12 @@ class GuidanceTest(unittest.TestCase):
         self.assertEqual(rt.generate([])['reply'], 'Respuesta final.')
         self.assertEqual(rt._completion_prefix, '')
 
+    def test_number_prefix_only_needs_the_selected_index(self):
+        rt = self.runtime('2}<tool_call|>')
+        rt.names['web_read_result'] = 'web.read_result'
+        self.assertTrue(rt.require_read('web.read_result'))
+        self.assertEqual(rt.generate([]), {'tool': 'web.read_result', 'arguments': {'n': 2}})
+
     def test_cannot_require_write_or_append_extra_calls(self):
         rt = self.runtime('{url:<|"|>https://example.org/<|"|>}<tool_call|>'
             '<|tool_call>call:note_save{title:<|"|>x<|"|>}<tool_call|>')
@@ -75,7 +81,7 @@ class GuidanceTest(unittest.TestCase):
     def test_search_guides_once_but_empty_failed_or_read_does_not(self):
         search = {'tool':'web.search', 'result':{'items':[{'url':'https://example.org/'}]}}
         rt, turn = self.run_gate([search])
-        rt.require_read.assert_called_once_with('web.read')
+        rt.require_read.assert_called_once_with('web.read_result')
         self.assertTrue(turn.retries.web_read_guided)
         for trace, guided, native in [([],False,True), ([search],True,True),
                 ([search],False,False), ([dict(search,failed=True)],False,True),
