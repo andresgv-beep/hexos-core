@@ -80,7 +80,12 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const ventanaVista = useRef<"chat" | "agente" | null>(null);
   const cambiandoVentana = useRef(false);
   const [contextCut, setContextCut] = useState<ContextCut | null>(null);
-  const [access, setAccess] = useState<CredentialRequest | null>(null);
+  const [pendingAccess, setAccess] = useState<CredentialRequest | null>(null);
+  const [accessOpen, setAccessOpen] = useState(false);
+  const agentAccess = ventana === "agente" ? pendingAccess : null;
+  const access = accessOpen ? agentAccess : null;
+  // undefined hasta el primer status: una petición recuperada se ofrece junto al chat.
+  const lastAccess = useRef<string | null | undefined>(undefined);
   // Plan de instalar o quitar un programa que espera tu aprobación (system.package_plan).
   const [systemPlan, setSystemPlan] = useState<SystemRequest | null>(null);
   const [systemBusy, setSystemBusy] = useState(false);
@@ -98,9 +103,7 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
   const [accessForm, setAccessForm] = useState({ user: "", password: "", host: "", port: "22" });
   const [accessError, setAccessError] = useState("");
   const [accessSaving, setAccessSaving] = useState(false);
-  // Qué petición se descartó. Sin esto, «Ahora no» solo limpiaba el estado local
-  // y la consulta siguiente —dos segundos después— la volvía a abrir, en bucle.
-  const accessDismissed = useRef<string | null>(null);
+  const [accessDismissing, setAccessDismissing] = useState(false);
   // Un turno en vuelo, en referencia y no en estado: el reenvío tras guardar el
   // acceso ocurre fuera del render y necesita el valor de AHORA, no el de antes.
   const enVuelo = useRef(false);
@@ -459,18 +462,17 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
       });
       // Helios pide el acceso a mitad de turno, así que hay que seguir mirando;
       // con una sola consulta al montar la ventana no aparecía nunca.
-      setAccess(previo => {
-        const nuevo = estado.credentialRequest;
-        if (!nuevo) { accessDismissed.current = null; return null; }
-        // Solo vuelve si es una petición NUEVA: la descartada sigue descartada
-        // hasta que se pida la conexión otra vez desde el chat.
-        if (accessDismissed.current === (nuevo.requestedAt ?? nuevo.device)) return null;
-        if (previo && previo.device === nuevo.device) return previo;
-        setAccessForm({ user: nuevo.user ?? "", password: "", host: nuevo.host ?? "",
-                        port: String(nuevo.port ?? 22) });
+      const nuevo = estado.window === "agente" ? estado.credentialRequest : null;
+      const key = nuevo ? JSON.stringify([nuevo.device, nuevo.requestedAt]) : null;
+      if (key !== lastAccess.current) {
+        const primeraConsulta = lastAccess.current === undefined;
+        lastAccess.current = key;
+        setAccess(nuevo);
+        setAccessOpen(Boolean(nuevo) && !primeraConsulta);
+        setAccessForm({ user: nuevo?.user ?? "", password: "", host: nuevo?.host ?? "",
+                        port: String(nuevo?.port ?? 22) });
         setAccessError("");
-        return nuevo;
-      });
+      }
     }).catch(() => {
       if (!disposed) setConnection("offline");
     }).finally(() => {
@@ -1120,6 +1122,8 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
     <section className="conversation" aria-label="Chat con Helios">
       {!!attachments.length && <ChatAttachments files={attachments} onRemove={removeAttachment} />}
       {attachmentError && <p className="attachment-error" role="alert">{attachmentError}</p>}
+      {agentAccess && !accessOpen && <button className="history-code-open" type="button"
+        onClick={() => setAccessOpen(true)}>Retomar acceso a {agentAccess.device}</button>}
       <form className="composer" onSubmit={send} onDragOver={event => { if (event.dataTransfer.types.includes("Files")) event.preventDefault(); }} onDrop={event => { event.preventDefault(); if (!sending) void addAttachments(Array.from(event.dataTransfer.files)); }}>
         <AttachmentButton onSelect={files => void addAttachments(files)} disabled={sending} />
         <input ref={inputRef} aria-label="Mensaje para Helios" aria-describedby={connection !== "ready" ? "connection-note" : undefined} placeholder={editingCode ? "Pide un cambio en esta implementación…" : "Escribe a Helios…"} value={draft} maxLength={4000} onChange={event => updateDraft(event.target.value)} />
@@ -1291,18 +1295,22 @@ export function HeliosExperience({ transport = localTransport }: { transport?: H
           conversación ni la ve el modelo.
         </p>
         <div className="access-actions">
-          <button type="button" onClick={() => {
-            // Se recuerda cuál se descartó, y se retira también en el servidor:
-            // si no, volvía a abrirse al recargar la página.
-            accessDismissed.current = access.requestedAt ?? access.device;
-            const equipo = access.device;
-            setAccess(null);
-            setAccessForm({ user: "", password: "", host: "", port: "22" });
-            void transport.dismissAccess(equipo).catch(() => {});
+          <button type="button" disabled={accessSaving || accessDismissing} onClick={async () => {
+            setAccessDismissing(true);
+            setAccessError("");
+            try {
+              await transport.dismissAccess(access.device);
+              setAccess(null);
+              setAccessForm({ user: "", password: "", host: "", port: "22" });
+            } catch (error) {
+              setAccessError(error instanceof Error ? error.message : "No se pudo retirar la solicitud.");
+            } finally {
+              setAccessDismissing(false);
+            }
           }}>
-            Ahora no
+            {accessDismissing ? "Retirando…" : "Ahora no"}
           </button>
-          <button type="button" className="access-save" disabled={accessSaving}
+          <button type="button" className="access-save" disabled={accessSaving || accessDismissing}
             onClick={() => void guardarAcceso()}>
             {accessSaving ? "Guardando…" : "Guardar acceso"}
           </button>

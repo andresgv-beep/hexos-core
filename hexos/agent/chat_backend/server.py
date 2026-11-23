@@ -42,14 +42,15 @@ def make_handler(agent, system_telemetry, allowed_origins, ui_path: Path, *, nat
             elif self.path == '/api/models':
                 self.respond(200, agent.models_snapshot())
             elif self.path == '/api/status':
+                window = getattr(agent, 'ventana', None)
                 self.respond(200, {'state': agent.state, 'progress':agent.progress,
                                    'active_tools':[dict(item) for item in agent.active_tools],
-                                   'credential_request': agent.credential_request,
+                                   'credential_request': agent.credential_request if window == 'agente' else None,
                                    'system_request': agent.system_request,
                                    'project_request': getattr(agent, 'project_request', None),
                                    'download_request': getattr(agent, 'download_request', None),
                                    'thinking': agent.thinking(),
-                                   'window': getattr(agent, 'ventana', None),
+                                   'window': window,
                                    'project': getattr(agent, 'proyecto', None),
                                    'model': dict(agent.runtime.status()
                                                  if hasattr(agent.runtime, 'status') else

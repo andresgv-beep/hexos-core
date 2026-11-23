@@ -212,7 +212,7 @@ class RetomarTrasGuardarTest(unittest.TestCase):
                              ('u1', now(), 'user', peticion, peticion))
             store.db.commit()
             with patch('hexos.agent.chat.nas_read',
-                       side_effect=hosts.AccessNeeded('synology 1', dict(host='casa.ddns.net'))):
+                       side_effect=hosts.AccessNeeded('Synology 1', dict(host='casa.ddns.net'))):
                 agente.tool(store, 'nas.read', {'section': 'diagnosis'}, turn_id='u1')
         self.assertEqual(agente.credential_request['pending_request'], peticion)
         guardado = agente.save_access(dict(device='synology 1', user='helios',
@@ -465,7 +465,7 @@ class DescartarPeticionTest(unittest.TestCase):
             def generate(self, messages): return {'reply': '', 'work': None}
         from hexos.agent.chat import Agent
         self.agente = Agent(self.tmp.name, Runtime())
-        self.agente.credential_request = dict(device='synology 1', requested_at=now())
+        self.agente.credential_request = dict(device='Synology 1', requested_at=now())
 
     def tearDown(self):
         self.tmp.cleanup()

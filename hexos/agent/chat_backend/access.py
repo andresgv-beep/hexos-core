@@ -21,7 +21,7 @@ class CredentialService:
         la persona se quedaba con la ventana delante sin poder escribir.
         """
         device = string(device, 'device', 64)
-        if (self.session.credential_request or {}).get('device') != device.casefold():
+        if (self.session.credential_request or {}).get('device', '').casefold() != device.casefold():
             raise ValueError('No hay ninguna petición de acceso pendiente para ' + repr(device))
         self.session.credential_request = None
         return dict(dismissed=device.casefold(), saved=False,
@@ -49,10 +49,11 @@ class CredentialService:
         if payload.get('host') is not None and not isinstance(payload['host'], str):
             raise ValueError('host debe ser una dirección escrita')
         pending = self.session.credential_request or {}
+        same_device = pending.get('device', '').casefold() == device.casefold()
         original = payload['host'].strip() if payload.get('host') else None
         # El formulario enseña el host SSH normalizado. Si la persona no lo ha
         # cambiado, no debe sustituir la URL literal que originó el registro.
-        if (pending.get('device') == device.casefold() and original and
+        if (same_device and original and
                 pending.get('host') == hosts.endpoint(original)[0] and
                 pending.get('original_address')):
             original = pending['original_address']
@@ -62,7 +63,7 @@ class CredentialService:
         hosts.save(self.env.workspace, device, user, password, port, fijada,
                    original_address=located.get('original_address'))
         retomar = operacion = None
-        if pending.get('device') == device.casefold():
+        if same_device:
             retomar = pending.get('pending_request')
             operacion = pending.get('pending_operation')
             self.session.credential_request = None
