@@ -115,14 +115,43 @@ class ReplyPolicy:
         r'\b(?:si|cuando|aunque|una\s+vez(?:\s+que)?|en\s+cuanto|siempre\s+que|'
         r'a\s+menos\s+que|suponiendo\s+que|en\s+caso\s+de\s+que)\b[^.!?;:,\n]*$', re.I)
 
+    # En una oración de relativo el verbo habla de su antecedente, y casi siempre lo
+    # describe: «HexOS, el sistema operativo en Python que te he creado para interactuar
+    # conmigo» (el 35B contando quién es, 25/11) se llevó el aviso y un turno devuelto
+    # sin que nadie hubiera pedido guardar nada. Ahí solo cuenta si lo nombrado —el
+    # antecedente, o el objeto justo detrás del verbo— es de lo que Helios escribe:
+    # «la nota que te he creado». Se exige un determinante delante para no confundirlo
+    # con el «que» de «te confirmo que he guardado la nota», que sí afirma.
+    RELATIVO = re.compile(
+        r'\b(?:el|la|los|las|un|una|unos|unas|mi|mis|tu|tus|su|sus|este|esta|ese|esa|'
+        r'estos|estas|esos|esas)\s+((?:[\w`*«»"\'-]+\s+){1,6})que\s+'
+        r'(?:(?:me|te|le|les|os|nos)\s+)?$', re.I)
+    ESCRIBIBLE = re.compile(
+        r'\b(?:notas?|perfil|memoria|archivos?|ficheros?|documentos?|pdf|excel|word|'
+        r'configuraci[óo]n|contenedor(?:es)?|equipos?|dispositivos?|acceso|tareas?|'
+        r'procedimiento|informe|lista|recordatorios?|citas?|datos?|resumen)\b', re.I)
+
+    @classmethod
+    def describe_en_relativo(cls, reply, encontrada):
+        """¿El verbo va en una relativa cuyo antecedente no es algo que se guarde?"""
+        relativa = cls.RELATIVO.search(reply[max(0, encontrada.start() - 200):encontrada.start()])
+        if not relativa or cls.ESCRIBIBLE.search(relativa.group(1)):
+            return False
+        # «confirmo el viernes que he guardado la nota»: el objeto va detrás y manda.
+        detras = re.split(r'[.!?;\n]', reply[encontrada.end():encontrada.end() + 120], maxsplit=1)[0]
+        return not cls.ESCRIBIBLE.search(' '.join(detras.split()[:3]))
+
     @classmethod
     def canta_escritura(cls, reply):
         """La primera escritura que la respuesta da por hecha, o None."""
         if not isinstance(reply, str):
             return None
         for encontrada in cls.ESCRITURA_DICHA.finditer(reply):
-            if not cls.SUPUESTO.search(reply[max(0, encontrada.start() - 200):encontrada.start()]):
-                return encontrada
+            if cls.SUPUESTO.search(reply[max(0, encontrada.start() - 200):encontrada.start()]):
+                continue
+            if cls.describe_en_relativo(reply, encontrada):
+                continue
+            return encontrada
         return None
 
     # El 31/10 dijo «he revisado el sistema y los registros» sin llamar a nada, y

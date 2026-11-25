@@ -248,6 +248,30 @@ class Tests(unittest.TestCase):
             self.assertIsNotNone(ReplyPolicy.canta_escritura(dicho), dicho)
             self.assertIn('escritura', ReplyPolicy.unsupported_claim(dicho, []))
 
+    def test_una_relativa_que_describe_no_canta_una_escritura(self):
+        from hexos.agent.chat_backend.completion import ReplyPolicy
+        # La frase del 35B del 25/11, contándole a Andrés quién es: se llevó el aviso
+        # de escritura y un turno devuelto en una charla sin nada que guardar.
+        dicho = ('Todo esto vive dentro de **HexOS**, el sistema operativo en Python que te he '
+                 'creado para interactuar conmigo. HexOS gestiona mis herramientas (como buscar '
+                 'en la web, leer archivos o gestionar notas), mi memoria a largo plazo (HERA, '
+                 'donde guardo datos sobre ti) y las ventanas de Chat y Agente.')
+        self.assertIsNone(ReplyPolicy.canta_escritura(dicho))
+        self.assertIsNone(ReplyPolicy.unsupported_claim(dicho, []))
+        for dicho in ('Me gusta el personaje que hemos creado para la historia.',
+                      'Es el motor que has programado y el formato que hemos creado juntos.',
+                      'Ese es el mundo que te he creado para la partida.'):
+            self.assertIsNone(ReplyPolicy.canta_escritura(dicho), dicho)
+        # Si lo nombrado es de lo que Helios escribe, sigue siendo cantar una escritura.
+        for dicho in ('Aquí tienes la nota que te he creado.',
+                      'Mira el documento Excel que te he creado.',
+                      'Es la cita del viernes que te he apuntado.',
+                      'Te confirmo que he guardado la nota.',
+                      'Sobre el tema del viernes, confirmo que he guardado la nota.',
+                      'Ese es el tema que he guardado en una nota.',
+                      'Ya que lo dices, he creado el archivo.'):
+            self.assertIsNotNone(ReplyPolicy.canta_escritura(dicho), dicho)
+
     def test_decir_que_ha_revisado_sin_mirar_nada_no_pasa(self):
         from hexos.agent.chat_backend.completion import ReplyPolicy
         self.assertIn('terminal_read', ReplyPolicy.unsupported_claim('He revisado el sistema y los registros.', []))
